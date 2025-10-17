@@ -1,0 +1,4 @@
+.specstory/
+.cursorindexingignore
+.env
+.geminiignore

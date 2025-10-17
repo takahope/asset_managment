@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <style>
+        body { background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .portal-container { max-width: 800px; width: 100%; }
+        .card { transition: transform .2s; cursor: pointer; position: relative; }
+        .card:hover { transform: scale(1.05); box-shadow: 0 4px 20px rgba(0,0,0,.12); }
+        .card-title { color: #0056b3; }
+        .card-icon { font-size: 3rem; color: #007bff; }
+        .badge-notify { position: absolute; top: 10px; right: 15px; font-size: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="container portal-container">
+        <div class="text-center mb-5">
+            <h1 class="display-4">財產管理系統</h1>
+            <p class="lead">請選擇您要執行的功能</p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 text-center" onclick="navigateTo('report')">
+                    <div class="card-body">
+                        <div class="card-icon">🖥️</div>
+                        <h5 class="card-title mt-3">電腦狀態回報</h5>
+                        <p class="card-text">回報每月電腦的健康狀況。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 text-center" onclick="navigateTo('apply')">
+                    <div class="card-body">
+                        <div class="card-icon">➡️</div>
+                        <h5 class="card-title mt-3">申請財產轉移</h5>
+                        <p class="card-text">將名下財產轉移給他人。</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <div id="review-card" class="card h-100 text-center" onclick="navigateTo('review')">
+                    <div class="card-body">
+                        <span id="review-badge" class="badge badge-danger badge-notify" style="display: none;"></span>
+                        <div class="card-icon">✔️</div>
+                        <h5 class="card-title mt-3">審核待轉移財產</h5>
+                        <p class="card-text">簽核他人轉移給您的申請。</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 text-center" onclick="navigateTo('lending')">
+                    <div class="card-body">
+                        <div class="card-icon">📤</div>
+                        <h5 class="card-title mt-3">申請財產出借</h5>
+                        <p class="card-text">將名下財產暫時出借給他人。</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 text-center" onclick="navigateTo('return')">
+                    <div class="card-body">
+                        <div class="card-icon">📥</div>
+                        <h5 class="card-title mt-3">歸還作業管理</h5>
+                        <p class="card-text">管理已出借財產並確認歸還。</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 text-center" onclick="navigateTo('scrap')">
+                    <div class="card-body">
+                        <div class="card-icon text-danger">🗑️</div>
+                        <h5 class="card-title mt-3">申請財產報廢</h5>
+                        <p class="card-text">為達年限或損壞財產辦理報廢。</p>
+                    </div>
+                </div>
+            </div>
+
+
+<div class="col-md-4 mb-4">
+    <div class="card h-100 text-center" onclick="navigateTo('printScrap')">
+        <div class="card-body">
+            <div class="card-icon">🖨️</div>
+            <h5 class="card-title mt-3">列印報廢單</h5>
+            <p class="card-text">查詢並列印已提交的報廢申請紀錄。</p>
+        </div>
+    </div>
+</div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 text-center" onclick="navigateTo('update')">
+                    <div class="card-body">
+                        <div class="card-icon">⚙️</div>
+                        <h5 class="card-title mt-3">更新上傳狀態</h5>
+                        <p class="card-text">資產管理員更新財產狀態。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let webAppUrl = '';
+        document.addEventListener("DOMContentLoaded", function() {
+            google.script.run.withSuccessHandler(url => { webAppUrl = url; }).getAppUrl();
+            google.script.run.withSuccessHandler(updateReviewBadge).countPendingApprovals();
+        });
+
+        function navigateTo(page) {
+            if (webAppUrl) {
+                window.open(webAppUrl + '?page=' + page, '_top');
+            } else {
+                alert('頁面載入中，請稍候...');
+            }
+        }
+
+        function updateReviewBadge(count) {
+            const badge = document.getElementById('review-badge');
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

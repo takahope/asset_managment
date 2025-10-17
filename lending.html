@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; }
+        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #3498db; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status-message { margin-top: 15px; font-weight: bold; }
+        .asset-table-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+  <?!= include('shared-nav'); ?>
+    <div id="main-content">
+        <div id="main-form">
+            <h4>申請財產出借 (批次)</h4>
+            <p>請從您名下「在庫」的財產中，勾選要出借的項目。</p>
+            
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="location-filter-select">依地點篩選：</label>
+                    <select id="location-filter-select" class="form-control">
+                        <option value="">-- 顯示全部地點 --</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="search-box">依關鍵字搜尋：</label>
+                    <input type="text" class="form-control" id="search-box" placeholder="輸入產編或地點...">
+                </div>
+            </div>
+
+            <div class="asset-table-container">
+                <table class="table table-hover table-sm">
+                    <thead class="thead-light" style="position: sticky; top: 0;">
+                        <tr>
+                            <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
+                            <th style="width: 55%;">財產編號</th>
+                            <th style="width: 40%;">目前地點</th>
+                        </tr>
+                    </thead>
+                    <tbody id="asset-list"></tbody>
+                </table>
+            </div>
+             <div id="no-data-message" class="alert alert-info" style="display:none;">
+                您目前沒有任何「在庫」狀態的財產可供出借。
+            </div>
+            <p>已勾選 <span id="selected-count" class="font-weight-bold">0</span> 筆財產</p>
+            <hr>
+
+            <div class="form-group">
+                <label for="borrower-select"><b>借用人姓名：</b></label>
+                <select id="borrower-select" class="form-control" required>
+                    <option value="">請選擇借用人...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="return-date"><b>預計歸還日期：</b></label>
+                <input type="date" class="form-control" id="return-date" required>
+            </div>
+            <div class="form-group">
+                <label for="reason">出借事由/備註：</label>
+                <textarea class="form-control" id="reason" rows="2"></textarea>
+            </div>
+            <button id="submit-btn" type="button" class="btn btn-primary" onclick="submitLending()">提交出借申請</button>
+            <button type="button" class="btn btn-secondary" onclick="google.script.host.close()">取消</button>
+        </div>
+        
+        <div id="loading-spinner" style="display:none;">
+            <div class="loader"></div>
+            <p class="text-center">處理中，請稍候...</p>
+        </div>
+        <div id="status-message"></div>
+    </div>
+
+    <script>
+        let allAssets = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            showLoading(true);
+            google.script.run
+                .withSuccessHandler(populateForm)
+                .withFailureHandler(showError)
+                .getLendingData();
+        });
+
+        function populateForm(response) {
+            showLoading(false);
+            if (response.error) {
+                showError({message: response.error});
+                return;
+            }
+            allAssets = response.assets;
+
+            if (!allAssets || allAssets.length === 0) {
+                document.getElementById('asset-table-container').style.display = 'none';
+                document.getElementById('submit-btn').style.display = 'none';
+                document.getElementById('no-data-message').style.display = 'block';
+                return;
+            }
+
+            renderTable(allAssets);
+            populateLocationFilter(allAssets);
+            populateBorrowerSelect(response.borrowers); // ✨ **新增：填充借用人選單**
+
+            // ✨ **新增：為篩選器和全選框加上事件監聽**
+            document.getElementById('location-filter-select').addEventListener('change', filterTable);
+            document.getElementById('search-box').addEventListener('input', filterTable);
+            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+        }
+
+        function renderTable(assets) {
+            const assetListBody = document.getElementById('asset-list');
+            assetListBody.innerHTML = '';
+            assets.forEach(asset => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td><td>${asset.id}</td><td>${asset.location}</td>`;
+                assetListBody.appendChild(row);
+            });
+            document.querySelectorAll('.asset-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedCount));
+            updateSelectedCount();
+        }
+
+        // ✨ **新增：從 apply.html 移植過來的函式**
+        function populateLocationFilter(assets) {
+            const locationFilterSelect = document.getElementById('location-filter-select');
+            const uniqueLocations = [...new Set(assets.map(asset => asset.location))].sort();
+            uniqueLocations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                locationFilterSelect.appendChild(option);
+            });
+        }
+        
+        // ✨ **新增：填充借用人下拉選單的函式**
+        function populateBorrowerSelect(borrowers) {
+            const borrowerSelect = document.getElementById('borrower-select');
+            if (borrowers && borrowers.length > 0) {
+                borrowers.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    borrowerSelect.appendChild(option);
+                });
+            }
+        }
+
+        // ✨ **新增：從 apply.html 移植過來的篩選邏輯**
+        function filterTable() {
+            const locationFilter = document.getElementById('location-filter-select').value.toUpperCase();
+            const searchFilter = document.getElementById('search-box').value.toUpperCase();
+            const filteredAssets = allAssets.filter(asset => {
+                const locationMatch = (locationFilter === '') || (asset.location.toUpperCase() === locationFilter);
+                const searchMatch = asset.id.toUpperCase().includes(searchFilter) || asset.location.toUpperCase().includes(searchFilter);
+                return locationMatch && searchMatch;
+            });
+            renderTable(filteredAssets);
+        }
+        
+        function updateSelectedCount() {
+            const count = document.querySelectorAll('.asset-checkbox:checked').length;
+            document.getElementById('selected-count').textContent = count;
+        }
+
+        function toggleSelectAll(event) {
+            document.querySelectorAll('#asset-list .asset-checkbox').forEach(checkbox => {
+                checkbox.checked = event.target.checked;
+            });
+            updateSelectedCount();
+        }
+
+        function submitLending() {
+            const selectedAssets = Array.from(document.querySelectorAll('.asset-checkbox:checked')).map(cb => cb.value);
+            const borrowerName = document.getElementById('borrower-select').value; // ✨ **修改：從下拉選單取值**
+            const returnDate = document.getElementById('return-date').value;
+            const reason = document.getElementById('reason').value.trim();
+
+            if (selectedAssets.length === 0 || !borrowerName || !returnDate) {
+                showError({message: '請至少勾選一筆財產，並選擇借用人和預計歸還日期。'});
+                return;
+            }
+            
+            showLoading(true, "正在提交出借資料...");
+            
+            const formData = { assetIds: selectedAssets, borrowerName, returnDate, reason };
+            google.script.run
+                .withSuccessHandler(showSuccessAndClose)
+                .withFailureHandler(showError)
+                .processBatchLending(formData);
+        }
+
+        function showLoading(isLoading, text = "正在載入資料...") {
+            const form = document.getElementById('main-form');
+            const loader = document.getElementById('loading-spinner');
+            const status = document.getElementById('status-message');
+            if (isLoading) {
+                form.style.display = 'none';
+                loader.style.display = 'block';
+                loader.querySelector('p').textContent = text;
+                status.innerHTML = '';
+            } else {
+                form.style.display = 'block';
+                loader.style.display = 'none';
+            }
+        }
+
+        function showSuccessAndClose(message) {
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = `<div class="alert alert-success">${message}</div>`;
+            setTimeout(() => google.script.host.close(), 3000);
+        }
+
+        function showError(error) {
+            showLoading(false);
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = 'alert alert-danger';
+            statusMsg.textContent = "錯誤：" + error.message;
+        }
+    </script>
+</body>
+</html>

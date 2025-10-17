@@ -1,0 +1,5 @@
+.specstory/
+.cursorindexingignore
+.git/
+.gitignore
+.env
