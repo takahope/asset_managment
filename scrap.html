@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; }
+        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #dc3545; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status-message { margin-top: 15px; font-weight: bold; }
+        .asset-table-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+        /* ✨ 新增分頁樣式 ✨ */
+        .pagination-controls { margin-top: 15px; user-select: none; }
+        .pagination-controls .page-link { cursor: pointer; }
+    </style>
+</head>
+<body>
+  <?!= include('shared-nav'); ?>
+    <div id="main-content">
+        <div id="main-form">
+            <h4>申請財產報廢 (批次)</h4>
+            <p class="text-danger">請勾選要報廢的項目。注意：此操作將會將財產狀態更新為「報廢中」，待管理員最終確認。</p>
+            
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="location-filter-select">依地點篩選：</label>
+                    <select id="location-filter-select" class="form-control">
+                        <option value="">-- 顯示全部地點 --</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="search-box">依關鍵字搜尋：</label>
+                    <input type="text" class="form-control" id="search-box" placeholder="輸入產編或地點...">
+                </div>
+            </div>
+
+            <div class="asset-table-container">
+                <table class="table table-hover table-sm">
+                    <thead class="thead-light" style="position: sticky; top: 0;">
+                        <tr>
+                            <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
+                            <th style="width: 45%;">財產編號</th>
+                            <th style="width: 30%;">目前地點</th>
+                            <th style="width: 20%;">目前狀態</th>
+                        </tr>
+                    </thead>
+                    <tbody id="asset-list"></tbody>
+                </table>
+            </div>
+            
+            <!-- ✨ 新增分頁控制項的容器 ✨ -->
+            <div id="pagination-controls" class="d-flex justify-content-between align-items-center"></div>
+
+            <p>已勾選 <span id="selected-count" class="font-weight-bold">0</span> 筆財產</p>
+            <hr>
+
+            <div class="form-group">
+                <label for="reason-select"><b>報廢原因：</b></label>
+                <select id="reason-select" class="form-control" onchange="toggleRemarks()">
+                    <option value="">請選擇原因...</option>
+                    <option value="A">A.維修不具效益，且逾使用年限</option>
+                    <option value="B">B.損壞無法修復，且逾使用年限</option>
+                    <option value="C">C.其他</option>
+                </select>
+            </div>
+            <div class="form-group" id="remarks-group" style="display: none;">
+                <label for="remarks">詳細說明 (選擇「其他」時必填)：</label>
+                <textarea class="form-control" id="remarks" rows="2"></textarea>
+            </div>
+            <button id="submit-btn" type="button" class="btn btn-danger" onclick="submitScrapping()">提交報廢申請</button>
+            <button type="button" class="btn btn-secondary" onclick="google.script.host.close()">取消</button>
+        </div>
+        <div id="loading-spinner" style="display:none;">
+            <div class="loader"></div>
+            <p class="text-center">處理中，請稍候...</p>
+        </div>
+        <div id="status-message"></div>
+    </div>
+    <script>
+        // --- ✨ 全局變數用於分頁和篩選管理 ✨ ---
+        let allAssets = [];
+        let filteredAssets = [];
+        let currentPage = 1;
+        const rowsPerPage = 4000; // 每頁顯示 100 筆
+
+        document.addEventListener("DOMContentLoaded", () => {
+            showLoading(true);
+            google.script.run
+                .withSuccessHandler(populateData)
+                .withFailureHandler(showError)
+                .getScrappableAssets();
+        });
+
+        function populateData(response) {
+            showLoading(false);
+            if (response.error) {
+                showError({message: response.error});
+                return;
+            }
+            allAssets = response.assets;
+            filteredAssets = allAssets;
+
+            if (!allAssets || allAssets.length === 0) {
+                 document.getElementById('main-form').innerHTML = '<p class="alert alert-info">您目前沒有可申請報廢的財產 (狀態需為「在庫」或「出借中」)。</p><button class="btn btn-secondary" onclick="google.script.host.close()">關閉</button>';
+                return;
+            }
+            
+            populateLocationFilter(allAssets);
+            currentPage = 1;
+            renderPage(currentPage);
+            
+            document.getElementById('location-filter-select').addEventListener('change', filterTable);
+            document.getElementById('search-box').addEventListener('input', filterTable);
+            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+        }
+
+        function renderPage(page) {
+            currentPage = page;
+            const assetListBody = document.getElementById('asset-list');
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const paginatedItems = filteredAssets.slice(start, end);
+
+            let tableHtml = '';
+            paginatedItems.forEach(asset => {
+                const statusClass = asset.status === '出借中' ? 'badge-warning' : 'badge-success';
+                tableHtml += `<tr>
+                    <td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td>
+                    <td>${asset.id}</td>
+                    <td>${asset.location}</td>
+                    <td><span class="badge ${statusClass}">${asset.status}</span></td>
+                </tr>`;
+            });
+            assetListBody.innerHTML = tableHtml;
+
+            renderPaginationControls();
+            document.querySelectorAll('.asset-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedCount));
+            document.getElementById('select-all').checked = false;
+            updateSelectedCount();
+        }
+
+        function renderPaginationControls() {
+            const controlsContainer = document.getElementById('pagination-controls');
+            const totalPages = Math.ceil(filteredAssets.length / rowsPerPage);
+            
+            if (filteredAssets.length === 0) {
+                controlsContainer.innerHTML = '<span class="text-muted">沒有符合篩選條件的項目。</span>';
+                return;
+            }
+            if (totalPages <= 1) {
+                controlsContainer.innerHTML = `<span class="text-muted">共 ${filteredAssets.length} 筆資料</span>`;
+                return;
+            }
+
+            let paginationHtml = `<span class="text-muted">共 ${filteredAssets.length} 筆資料，第 ${currentPage} / ${totalPages} 頁</span>`;
+            let buttonsHtml = '<ul class="pagination mb-0">';
+            buttonsHtml += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" onclick="renderPage(${currentPage - 1})">上一頁</a></li>`;
+            buttonsHtml += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" onclick="renderPage(${currentPage + 1})">下一頁</a></li>`;
+            buttonsHtml += '</ul>';
+            controlsContainer.innerHTML = paginationHtml + buttonsHtml;
+        }
+
+        function filterTable() {
+            const locationFilter = document.getElementById('location-filter-select').value.toUpperCase();
+            const searchFilter = document.getElementById('search-box').value.toUpperCase();
+            filteredAssets = allAssets.filter(asset => {
+                const locationMatch = (locationFilter === '') || (asset.location.toUpperCase() === locationFilter);
+                const searchMatch = asset.id.toUpperCase().includes(searchFilter) || asset.location.toUpperCase().includes(searchFilter);
+                return locationMatch && searchMatch;
+            });
+            currentPage = 1;
+            renderPage(currentPage);
+        }
+
+        function populateLocationFilter(assets) {
+            const locationFilterSelect = document.getElementById('location-filter-select');
+            const uniqueLocations = [...new Set(assets.map(asset => asset.location))].sort();
+            locationFilterSelect.innerHTML = '<option value="">-- 顯示全部地點 --</option>';
+            uniqueLocations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                locationFilterSelect.appendChild(option);
+            });
+        }
+
+        function toggleRemarks() {
+            const reason = document.getElementById('reason-select').value;
+            document.getElementById('remarks-group').style.display = (reason === '其他' || reason === '損壞') ? 'block' : 'none';
+        }
+
+        function submitScrapping() {
+            const selectedAssets = Array.from(document.querySelectorAll('.asset-checkbox:checked')).map(cb => cb.value);
+            const reason = document.getElementById('reason-select').value;
+            const remarks = document.getElementById('remarks').value.trim();
+            if (selectedAssets.length === 0 || !reason) { showError({message: '請至少勾選一筆財產並選擇報廢原因。'}); return; }
+            if ((reason === '其他' || reason === '損壞') && !remarks) { showError({message: '選擇「損壞」或「其他」原因時，請務必填寫詳細說明。'}); return; }
+            
+            const confirmation = confirm(`您確定要為 ${selectedAssets.length} 筆財產提交報廢申請嗎？`);
+            if (!confirmation) return;
+            
+            showLoading(true, "正在提交報廢申請...");
+            const formData = { assetIds: selectedAssets, reason, remarks };
+            google.script.run
+                .withSuccessHandler(showSuccessAndClose)
+                .withFailureHandler(showError)
+                .processBatchScrapping(formData);
+        }
+
+        function updateSelectedCount() {
+            const count = document.querySelectorAll('.asset-checkbox:checked').length;
+            document.getElementById('selected-count').textContent = count;
+        }
+
+        function toggleSelectAll(event) {
+            document.querySelectorAll('#asset-list .asset-checkbox').forEach(checkbox => {
+                checkbox.checked = event.target.checked;
+            });
+            updateSelectedCount();
+        }
+        
+        function showLoading(isLoading, text = "正在載入資料...") {
+            const form = document.getElementById('main-form');
+            const loader = document.getElementById('loading-spinner');
+            const status = document.getElementById('status-message');
+            if (isLoading) {
+                form.style.display = 'none';
+                loader.style.display = 'block';
+                loader.querySelector('p').textContent = text;
+                status.innerHTML = '';
+            } else {
+                form.style.display = 'block';
+                loader.style.display = 'none';
+            }
+        }
+
+        function showSuccessAndClose(message) {
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = `<div class="alert alert-success">${message}</div>`;
+            setTimeout(() => google.script.host.close(), 3000);
+        }
+
+        function showError(error) {
+            showLoading(false);
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = 'alert alert-danger';
+            statusMsg.textContent = "錯誤：" + error.message;
+        }
+    </script>
+</body>
+</html>

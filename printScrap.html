@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; }
+        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #007bff; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status-message { margin-top: 15px; }
+        .table-container { max-height: 450px; overflow-y: auto; }
+        .btn-print { min-width: 100px; }
+    </style>
+</head>
+<body>
+    <?!= include('shared-nav'); ?>
+
+    <div id="main-content">
+        <h4>列印報廢申請紀錄</h4>
+        <p>此處會依保管人列出所有狀態為「報廢中」的財產。您可以為每位保管人產生一份彙整的報廢報表。</p>
+        
+        <div id="loading-spinner">
+            <div class="loader"></div>
+            <p class="text-center">正在載入待報廢清單...</p>
+        </div>
+        
+        <div id="table-container" class="table-container" style="display:none;">
+            <table class="table table-hover table-sm">
+                <thead class="thead-light" style="position: sticky; top: 0;">
+                    <tr>
+                        <th>保管人</th>
+                        <th>待報廢數量</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="scrap-list">
+                    </tbody>
+            </table>
+        </div>
+        <div id="status-message"></div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", loadScrapData);
+
+        function loadScrapData() {
+            showLoading(true);
+            google.script.run
+                .withSuccessHandler(renderTable)
+                .withFailureHandler(showError)
+                .getScrappingApplicants(); // 呼叫新的後端函式
+        }
+
+        function renderTable(applicants) {
+            const listBody = document.getElementById('scrap-list');
+            listBody.innerHTML = '';
+
+            if (!applicants || applicants.length === 0) {
+                listBody.innerHTML = '<tr><td colspan="3" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
+            } else {
+                applicants.forEach(app => {
+                    const row = document.createElement('tr');
+                    // 為按鈕加上 applicant name 當作 id，方便之後操作
+                    row.innerHTML = `
+                        <td>${app.applicant}</td>
+                        <td>${app.count}</td>
+                        <td>
+                            <button id="btn-${app.applicant}" class="btn btn-primary btn-sm btn-print" onclick="generateDoc('${app.applicant}', this)">
+                                產生報表
+                            </button>
+                        </td>
+                    `;
+                    listBody.appendChild(row);
+                });
+            }
+            showLoading(false);
+            document.getElementById('table-container').style.display = 'block';
+        }
+        
+        function generateDoc(applicantName, btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 產生中`;
+            
+            google.script.run
+                .withSuccessHandler(result => {
+                    // 成功後，整列從表格中移除，並提示使用者
+                    showMessage(`已成功為 ${applicantName} 產生報表！`, 'alert-success');
+                    btn.closest('tr').remove(); // 從表格中移除該列
+                    // 在新分頁中打開文件
+                    window.open(result.fileUrl, '_blank');
+                })
+                .withFailureHandler(error => {
+                    showError(error);
+                    btn.disabled = false;
+                    btn.textContent = '產生報表';
+                })
+                .createScrapDocForApplicant(applicantName); // 呼叫新的後端函式
+        }
+        
+        function showMessage(msg, className) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.className = `alert ${className}`;
+            statusDiv.textContent = msg;
+            // 5秒後自動消失
+            setTimeout(() => { statusDiv.textContent = ''; statusDiv.className = ''; }, 5000);
+        }
+
+        function showLoading(isLoading) {
+            document.getElementById('loading-spinner').style.display = isLoading ? 'block' : 'none';
+        }
+
+        function showError(error) {
+            showLoading(false);
+            showMessage('錯誤：' + error.message, 'alert-danger');
+        }
+    </script>
+</body>
+</html>

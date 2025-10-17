@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        background-color: #f5f7fa;
+        margin: 0;
+        padding: 15px;
+        line-height: 1.5;
+      }
+
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      h1 {
+        text-align: center;
+        color: #2d3748;
+        font-size: 24px;
+        margin-bottom: 20px;
+        font-weight: 700;
+      }
+
+      h2 {
+        color: #4a5568;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 8px;
+        margin: 25px 0 15px 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      form {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+      }
+
+      .form-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 15px;
+      }
+
+      .form-group {
+        flex: 1;
+        min-width: 280px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .form-group.full-width {
+        flex: 1 1 100%;
+        min-width: 100%;
+      }
+
+      label {
+        font-weight: 600;
+        margin-bottom: 8px;
+        display: block;
+        color: #2d3748;
+        font-size: 14px;
+      }
+
+      .required::after {
+        content: " *";
+        color: #e53e3e;
+        font-weight: bold;
+      }
+
+      select, input[type="text"], input[type="date"], textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 2px solid #e2e8f0;
+        font-size: 14px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        background-color: #ffffff;
+      }
+
+      select:focus, input:focus, textarea:focus {
+        outline: none;
+        border-color: #3182ce;
+        box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.15);
+      }
+
+      select:hover, input:hover, textarea:hover {
+        border-color: #a0aec0;
+      }
+
+      input[type="submit"] {
+        background: linear-gradient(135deg, #3182ce, #63b3ed);
+        color: white;
+        padding: 14px 28px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        margin: 25px auto 0;
+        font-size: 16px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        display: block;
+        min-width: 150px;
+        box-shadow: 0 2px 8px rgba(49, 130, 206, 0.3);
+      }
+
+      input[type="submit"]:hover {
+        box-shadow: 0 4px 15px rgba(49, 130, 206, 0.4);
+        transform: translateY(-1px);
+      }
+
+      #status {
+        margin-top: 20px;
+        font-weight: 600;
+        color: #2b6cb0;
+        text-align: center;
+        font-size: 14px;
+        padding: 10px;
+        border-radius: 8px;
+        background-color: rgba(43, 108, 176, 0.1);
+      }
+
+      /* 勾選框樣式 */
+      .checkbox-container {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 15px;
+        gap: 10px;
+      }
+
+      .checkbox-container input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        margin: 2px 0 0 0;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .checkbox-container label {
+        margin-bottom: 0;
+        font-weight: 500;
+        cursor: pointer;
+        flex-grow: 1;
+      }
+
+      /* 平板響應式 */
+      @media screen and (max-width: 1024px) {
+        .container {
+          max-width: 100%;
+          padding: 0 10px;
+        }
+        
+        .form-group {
+          min-width: 45%;
+        }
+      }
+
+      /* 手機響應式 */
+      @media screen and (max-width: 768px) {
+        body {
+          padding: 10px;
+        }
+        
+        .container {
+          padding: 0;
+        }
+        
+        h1 {
+          font-size: 20px;
+          margin-bottom: 15px;
+        }
+        
+        h2 {
+          font-size: 16px;
+          margin: 20px 0 10px 0;
+        }
+        
+        form {
+          padding: 15px;
+        }
+        
+        .form-grid {
+          flex-direction: column;
+          gap: 10px;
+        }
+        
+        .form-group {
+          min-width: 100%;
+          flex: none;
+        }
+        
+        select, input[type="text"], input[type="date"], textarea {
+          font-size: 16px; /* 防止 iOS 縮放 */
+          padding: 12px;
+        }
+        
+        input[type="submit"] {
+          width: 100%;
+          margin: 20px 0 0;
+          padding: 16px;
+          font-size: 16px;
+        }
+        
+        .checkbox-container {
+          gap: 8px;
+        }
+        
+        .checkbox-container input[type="checkbox"] {
+          width: 20px;
+          height: 20px;
+        }
+        
+        label {
+          font-size: 15px;
+        }
+        
+        #status {
+          font-size: 15px;
+          margin-top: 15px;
+        }
+      }
+
+      /* 小手機響應式 */
+      @media screen and (max-width: 480px) {
+        body {
+          padding: 8px;
+        }
+        
+        form {
+          padding: 12px;
+        }
+        
+        h1 {
+          font-size: 18px;
+        }
+        
+        h2 {
+          font-size: 15px;
+        }
+        
+        .checkbox-container {
+          align-items: center;
+          gap: 6px;
+        }
+        
+        .version-input {
+          margin-top: 10px;
+          padding-top: 10px;
+        }
+      }
+
+      /* 大螢幕優化 */
+      @media screen and (min-width: 1200px) {
+        .container {
+          max-width: 900px;
+        }
+        
+        .form-group {
+          min-width: 42%;
+        }
+      }
+
+      /* 橫向模式 */
+      @media screen and (max-height: 500px) and (orientation: landscape) {
+        h1 {
+          margin-bottom: 10px;
+          font-size: 18px;
+        }
+        
+        h2 {
+          margin: 15px 0 10px 0;
+          font-size: 16px;
+        }
+        
+        form {
+          padding: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>電腦狀態回報表單</h1>
+      <form id="myForm">
+        <h2>基本資料</h2>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="groupSelect" class="required">請選擇您的駐站</label>
+            <select id="groupSelect" name="group" onchange="updateComputerOptions(this.value)" required>
+              <option value="">載入中...</option>
+            </select>
+          </div>
+          <div class="form-group full-width">
+            <label for="computerSelect" class="required">請選擇電腦產編</label>
+            <select id="computerSelect" name="computer" required>
+              <option value="">載入中...</option>
+            </select>
+          </div>
+        </div>
+
+        <h2>軟體資訊回報</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <div class="checkbox-container">
+              <input type="checkbox" id="winUpdateCheck" required>
+              <label for="winUpdateCheck" class="required">Windows 是否更新至最新版本</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="checkbox-container">
+              <input type="checkbox" id="chromeUpdateCheck" required>
+              <label for="chromeUpdateCheck" class="required">Chrome 是否新增至最新版本</label>
+            </div>
+          </div>
+          <div class="form-group full-width">
+            <div class="checkbox-container">
+              <input type="checkbox" id="antivirusDefCheck" required>
+              <label for="antivirusDefCheck" class="required">防毒軟體病毒碼是否為最新版本</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="sevenZipVersion" class="required">7-Zip 版本</label>
+            <select id="sevenZipVersion" name="sevenZipVersion" required>
+              <option value="">載入中...</option>
+            </select>
+          </div>
+        </div>
+        
+        <h2>其他</h2>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="notes">備註</label>
+            <textarea id="notes" name="notes" rows="4"></textarea>
+          </div>
+        </div>
+
+        <input type="submit" value="提交回報">
+      </form>
+      <div id="status"></div>
+    </div>
+
+    <script>
+      let dataMap = {};
+      let sevenZipVersions = [];
+
+      document.addEventListener("DOMContentLoaded", function() {
+        // 同時載入組別資料和 7-Zip 版本清單
+        google.script.run.withSuccessHandler(populateGroupSelect).getSelectData();
+        google.script.run.withSuccessHandler(populateSevenZipVersions).getSevenZipVersions();
+      });
+      
+      function populateGroupSelect(data) {
+        dataMap = data;
+        const groupSelect = document.getElementById("groupSelect");
+        
+        // 清空載入中的選項
+        groupSelect.innerHTML = '';
+        
+        // 添加預設選項
+        groupSelect.add(new Option("請選擇...", ""));
+        
+        // 添加組別選項
+        const groups = Object.keys(dataMap).sort();
+        groups.forEach(group => {
+          const option = new Option(group, group);
+          groupSelect.add(option);
+        });
+        
+        // 更新電腦選單為初始狀態
+        const computerSelect = document.getElementById("computerSelect");
+        computerSelect.innerHTML = '';
+        computerSelect.add(new Option("--請先選擇駐站--", ""));
+      }
+
+      function populateSevenZipVersions(versions) {
+        sevenZipVersions = versions;
+        const sevenZipSelect = document.getElementById("sevenZipVersion");
+        
+        // 清空載入中的選項
+        sevenZipSelect.innerHTML = '';
+        
+        // 添加預設選項
+        sevenZipSelect.add(new Option("請選擇版本...", ""));
+        sevenZipSelect.add(new Option("無安裝", "無"));
+        
+        // 添加版本選項
+        versions.forEach(version => {
+          const option = new Option(version, version);
+          sevenZipSelect.add(option);
+        });
+      }
+
+      function updateComputerOptions(selectedGroup) {
+        const computerSelect = document.getElementById("computerSelect");
+        computerSelect.innerHTML = '';
+        
+        if (selectedGroup && dataMap[selectedGroup]) {
+          // 有選擇組別時，先添加預設選項再添加電腦清單
+          computerSelect.add(new Option("請選擇...", ""));
+          const computers = dataMap[selectedGroup].sort();
+          computers.forEach(computer => {
+            const option = new Option(computer, computer);
+            computerSelect.add(option);
+          });
+        } else {
+          // 沒有選擇組別時，顯示提示訊息
+          computerSelect.add(new Option("--請先選擇組別--", ""));
+        }
+      }
+
+      // 改良版表單提交處理
+      document.getElementById("myForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        
+        // 手動建立表單物件，確保勾選狀態正確傳送
+        const formObject = {
+          group: document.getElementById("groupSelect").value,
+          computer: document.getElementById("computerSelect").value,
+          notes: document.getElementById("notes").value,
+          sevenZipVersion: document.getElementById("sevenZipVersion").value,
+          // 明確設定勾選狀態
+          winUpdated: document.getElementById("winUpdateCheck").checked,
+          chromeUpdated: document.getElementById("chromeUpdateCheck").checked,
+          antivirusUpdated: document.getElementById("antivirusDefCheck").checked
+        };
+        
+        // 調試：在瀏覽器控制台顯示要送出的資料
+        console.log("準備送出的表單資料：", formObject);
+        console.log("Windows 勾選狀態：", formObject.winUpdated);
+        console.log("Chrome 勾選狀態：", formObject.chromeUpdated);
+        console.log("防毒軟體勾選狀態：", formObject.antivirusUpdated);
+        console.log("7-Zip 版本：", formObject.sevenZipVersion);
+        
+        document.getElementById("status").textContent = "提交中...";
+        
+        google.script.run
+          .withSuccessHandler(function(response) {
+            document.getElementById("status").textContent = response;
+            if (response.startsWith("回報成功")) {
+              document.getElementById("myForm").reset();
+              updateComputerOptions('');
+            }
+          })
+          .withFailureHandler(function(error) {
+            document.getElementById("status").textContent = "提交失敗：" + error.message;
+            console.error("提交錯誤：", error);
+          })
+          .processFormData(formObject);
+      });
+      // 當頁面載入完成後執行
+      document.addEventListener("DOMContentLoaded", function() {
+        // 呼叫後端的 getAppUrl() 函式
+        google.script.run.withSuccessHandler(function(url) {
+          // 成功取得 URL 後，在後面加上 ?page=test 參數
+          var testPageUrl = url + "?page=test";
+          // 將產生的 URL 設定到 <a> 標籤的 href 屬性
+          document.getElementById("testLink").href = testPageUrl;
+        }).getAppUrl();
+      });
+    </script>
+  </body>
+</html>

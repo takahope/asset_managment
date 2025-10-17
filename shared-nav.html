@@ -1,0 +1,134 @@
+<style>
+  .portal-nav {
+    padding: 8px 15px;
+    background-color: #e9ecef;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .portal-nav-brand {
+    font-weight: 600;
+    color: #495057;
+  }
+</style>
+
+<div class="portal-nav">
+  <span class="portal-nav-brand">財產管理系統</span>
+   <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goToApply()">
+      ➡️ 轉移
+    </button>
+  <button type="button" class="btn btn-sm btn-outline-primary" onclick="goToReview()">
+      ✔️ 接收
+    </button>
+  
+   <button type="button" class="btn btn-sm btn-outline-info" onclick="goToLending()">
+      📤 出借
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-success" onclick="goToReturn()">
+      📥 歸還
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="goToScrap()">
+      🗑️ 報廢
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="goToprintScrap()">
+      🖨️ 列印報廢申請
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-dark" onclick="goToUpdate()">
+      ⚙️ 更新
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goToPortal()">
+    &#8617; 返回系統入口
+  </button>
+</div>
+
+<script>
+  // 這個小腳本會被嵌入到所有頁面，提供 goToPortal 功能
+  let _portalWebAppUrl = ''; // 使用底線避免與頁面自身變數衝突
+
+  function goToPortal() {
+    if (_portalWebAppUrl) {
+      window.open(_portalWebAppUrl, '_top');
+    } else {
+      // 如果 URL 還沒載入好，先顯示提示
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 apply.html 的函式** ✨
+  function goToApply() {
+    if (_portalWebAppUrl) {
+      const applyUrl = _portalWebAppUrl + '?page=apply';
+      window.open(applyUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 review.html 的函式** ✨
+  function goToReview() {
+    if (_portalWebAppUrl) {
+      // 組合出 review 頁面的完整網址
+      const reviewUrl = _portalWebAppUrl + '?page=review';
+      window.open(reviewUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 lending.html 的函式** ✨
+  function goToLending() {
+    if (_portalWebAppUrl) {
+      const lendingUrl = _portalWebAppUrl + '?page=lending';
+      window.open(lendingUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 return.html 的函式** ✨
+  function goToReturn() {
+    if (_portalWebAppUrl) {
+      const returnUrl = _portalWebAppUrl + '?page=return';
+      window.open(returnUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 scrap.html 的函式** ✨
+  function goToScrap() {
+    if (_portalWebAppUrl) {
+      const updateUrl = _portalWebAppUrl + '?page=scrap';
+      window.open(updateUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 printScrap.html 的函式** ✨
+  function goToprintScrap() {
+    if (_portalWebAppUrl) {
+      const updateUrl = _portalWebAppUrl + '?page=printScrap';
+      window.open(updateUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 update.html 的函式** ✨
+  function goToUpdate() {
+    if (_portalWebAppUrl) {
+      const updateUrl = _portalWebAppUrl + '?page=update';
+      window.open(updateUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // 自動在背景獲取一次 Portal 的 URL
+  google.script.run.withSuccessHandler(url => {
+    _portalWebAppUrl = url;
+  }).getAppUrl();
+</script>
