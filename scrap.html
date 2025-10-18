@@ -22,13 +22,21 @@
             <p class="text-danger">請勾選要報廢的項目。注意：此操作將會將財產狀態更新為「報廢中」，待管理員最終確認。</p>
             
             <div class="form-row">
-                <div class="form-group col-md-6">
+                <div class="form-group col-md-4">
                     <label for="location-filter-select">依地點篩選：</label>
                     <select id="location-filter-select" class="form-control">
                         <option value="">-- 顯示全部地點 --</option>
                     </select>
                 </div>
-                <div class="form-group col-md-6">
+                <div class="form-group col-md-4">
+                    <label for="category-filter-select">依財產類別篩選：</label>
+                    <select id="category-filter-select" class="form-control">
+                        <option value="">-- 顯示全部類別 --</option>
+                        <option value="財產">財產</option>
+                        <option value="非消耗品">非消耗品</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-4">
                     <label for="search-box">依關鍵字搜尋：</label>
                     <input type="text" class="form-control" id="search-box" placeholder="輸入產編或地點...">
                 </div>
@@ -110,6 +118,7 @@
             renderPage(currentPage);
             
             document.getElementById('location-filter-select').addEventListener('change', filterTable);
+            document.getElementById('category-filter-select').addEventListener('change', filterTable);
             document.getElementById('search-box').addEventListener('input', filterTable);
             document.getElementById('select-all').addEventListener('change', toggleSelectAll);
         }
@@ -162,11 +171,13 @@
 
         function filterTable() {
             const locationFilter = document.getElementById('location-filter-select').value.toUpperCase();
+            const categoryFilter = document.getElementById('category-filter-select').value.toUpperCase();
             const searchFilter = document.getElementById('search-box').value.toUpperCase();
             filteredAssets = allAssets.filter(asset => {
                 const locationMatch = (locationFilter === '') || (asset.location.toUpperCase() === locationFilter);
+                const categoryMatch = (categoryFilter === '') || (asset.category.toUpperCase() === categoryFilter);
                 const searchMatch = asset.id.toUpperCase().includes(searchFilter) || asset.location.toUpperCase().includes(searchFilter);
-                return locationMatch && searchMatch;
+                return locationMatch && categoryMatch && searchMatch;
             });
             currentPage = 1;
             renderPage(currentPage);

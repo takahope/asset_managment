@@ -18,6 +18,20 @@
     <div id="main-content">
         <h4>列印報廢申請紀錄</h4>
         <p>此處會依保管人列出所有狀態為「報廢中」的財產。您可以為每位保管人產生一份彙整的報廢報表。</p>
+
+        <div class="form-group">
+            <label><b>請選擇要列印的財產類別：</b></label>
+            <div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="assetCategory" id="categoryProperty" value="財產" checked>
+                    <label class="form-check-label" for="categoryProperty">財產</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="assetCategory" id="categoryNonConsumable" value="非消耗品">
+                    <label class="form-check-label" for="categoryNonConsumable">非消耗品</label>
+                </div>
+            </div>
+        </div>
         
         <div id="loading-spinner">
             <div class="loader"></div>
@@ -41,14 +55,20 @@
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", loadScrapData);
+        document.addEventListener("DOMContentLoaded", () => {
+            loadScrapData();
+            document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
+                radio.addEventListener('change', loadScrapData);
+            });
+        });
 
         function loadScrapData() {
             showLoading(true);
+            const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
             google.script.run
                 .withSuccessHandler(renderTable)
                 .withFailureHandler(showError)
-                .getScrappingApplicants(); // 呼叫新的後端函式
+                .getScrappingApplicants(assetCategory); // 呼叫新的後端函式
         }
 
         function renderTable(applicants) {
@@ -81,6 +101,7 @@
             btn.disabled = true;
             btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 產生中`;
             
+            const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
             google.script.run
                 .withSuccessHandler(result => {
                     // 成功後，整列從表格中移除，並提示使用者
@@ -94,7 +115,7 @@
                     btn.disabled = false;
                     btn.textContent = '產生報表';
                 })
-                .createScrapDocForApplicant(applicantName); // 呼叫新的後端函式
+                .createScrapDocForApplicant(applicantName, assetCategory); // 呼叫新的後端函式
         }
         
         function showMessage(msg, className) {
