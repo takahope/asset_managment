@@ -1299,6 +1299,56 @@ function getReportAdmins() {
   return emails;
 }
 
+function checkAdminPermissions() {
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const adminEmails = getAdminEmails().map(email => email.toLowerCase());
+  return adminEmails.includes(currentUserEmail);
+}
+
+function getScrappingDataForAdmin(assetCategory) {
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const adminEmails = getAdminEmails().map(email => email.toLowerCase());
+
+  if (!adminEmails.includes(currentUserEmail)) {
+    Logger.log(`權限阻擋：使用者 ${currentUserEmail} 嘗試存取管理員報廢清單。`);
+    return { error: "權限不足，您無法存取此功能。" };
+  }
+
+  try {
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
+    if (!sheet) return [];
+    
+    const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(MASTER_ASSET_STATUS_COLUMN_INDEX, MASTER_ASSET_CATEGORY_COLUMN_INDEX));
+    const values = dataRange.getValues();
+    
+    const applicants = {}; // 使用物件來分組
+
+    values.forEach(row => {
+      const status = row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1];
+      const applicantName = row[MASTER_LEADER_NAME_COLUMN_INDEX - 1];
+      const category = row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1];
+      
+      if (status === '報廢中' && applicantName && category === assetCategory) {
+        if (applicants[applicantName]) {
+          applicants[applicantName]++;
+        } else {
+          applicants[applicantName] = 1;
+        }
+      }
+    });
+
+    // 將物件轉換為前端需要的陣列格式
+    return Object.keys(applicants).map(name => ({
+      applicant: name,
+      count: applicants[name]
+    }));
+    
+  } catch (e) {
+    Logger.log("getScrappingDataForAdmin 失敗: " + e.message);
+    throw new Error("讀取待報廢清單時發生錯誤。");
+  }
+}
+
 /**
  * [供 printScrap.html 呼叫] 取得所有狀態為「報廢中」的財產，並按保管人分組
  * @returns {Array<Object>} 回傳一個陣列，包含 { applicant: '保管人名稱', count: 報廢數量 }

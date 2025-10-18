@@ -56,10 +56,20 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            loadScrapData();
-            document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
-                radio.addEventListener('change', loadScrapData);
-            });
+            google.script.run
+                .withSuccessHandler(hasPermission => {
+                    if (hasPermission) {
+                        loadScrapData(); // 如果有權限，才載入資料
+                        document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
+                            radio.addEventListener('change', loadScrapData);
+                        });
+                    } else {
+                        showError({ message: "權限不足，只有資產管理員才能存取此頁面。" });
+                        document.getElementById('main-content').style.display = 'none'; // 隱藏主要內容
+                    }
+                })
+                .withFailureHandler(showError)
+                .checkAdminPermissions();
         });
 
         function loadScrapData() {
@@ -68,7 +78,7 @@
             google.script.run
                 .withSuccessHandler(renderTable)
                 .withFailureHandler(showError)
-                .getScrappingApplicants(assetCategory); // 呼叫新的後端函式
+                .getScrappingDataForAdmin(assetCategory); // 呼叫新的後端函式
         }
 
         function renderTable(applicants) {
