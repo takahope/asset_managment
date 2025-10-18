@@ -18,6 +18,12 @@ const ADMIN_LIST_SHEET_NAME = "管理員名單"; // ✨ **新增：管理員權�
 // --- 欄位索引設定 (A欄是1, B欄是2, ...) ---
 
 // --- 「財產總表」工作表中的欄位索引 (A欄是1, B欄是2, ...) ---
+// --- 「財產總表」工作表中的欄位索引 (用於生成報表) ---
+const MASTER_ASSET_ID_COLUMN_INDEX = 1;     // A欄: 財產編號(含分號)
+const MASTER_ASSET_NAME_COLUMN_INDEX = 2;   // B欄: 財產名稱
+const MASTER_PURCHASE_DATE_COLUMN_INDEX = 5;// E欄: 取得日期購置日期
+const MASTER_USE_LIFE_COLUMN_INDEX = 6;     // F欄: 使用年限
+const MASTER_ASSET_CATEGORY_COLUMN_INDEX = 10; // J欄: 財產類別
 const MASTER_LOCATION_COLUMN_INDEX = 14;      // 保管位置
 const MASTER_LEADER_EMAIL_COLUMN_INDEX = 15;  // 駐管電子郵件
 const MASTER_LEADER_NAME_COLUMN_INDEX = 16;   // 駐管
@@ -30,12 +36,6 @@ const MASTER_IS_COMPUTER_COLUMN_INDEX = 22;   // ✨ **新增這一行 (是否�
 const MASTER_LAST_MODIFIED_COLUMN_INDEX = 23; // K欄
 const MASTER_REMARKS_COLUMN_INDEX = 24;         // L欄
 const MASTER_DOC_URL_COLUMN_INDEX = 25;        // M欄: ✨ **新增** 文件連結欄位
-
-// --- 「財產總表」工作表中的欄位索引 (用於生成報表) ---
-const MASTER_ASSET_ID_COLUMN_INDEX = 1;     // A欄: 財產編號(含分號)
-const MASTER_ASSET_NAME_COLUMN_INDEX = 2;   // B欄: 財產名稱
-const MASTER_PURCHASE_DATE_COLUMN_INDEX = 5;// E欄: 取得日期購置日期
-const MASTER_USE_LIFE_COLUMN_INDEX = 6;     // H欄: 使用年限
 
 
 // --- 「申請紀錄」工作表中的欄位索引 ---
@@ -1121,7 +1121,8 @@ function getScrappableAssets() {
       .map(row => ({
         id: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
         location: row[MASTER_LOCATION_COLUMN_INDEX - 1],
-        status: row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1]
+        status: row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1],
+        category: row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1]
       }));
       
     return { assets: availableAssets };
@@ -1302,12 +1303,12 @@ function getReportAdmins() {
  * [供 printScrap.html 呼叫] 取得所有狀態為「報廢中」的財產，並按保管人分組
  * @returns {Array<Object>} 回傳一個陣列，包含 { applicant: '保管人名稱', count: 報廢數量 }
  */
-function getScrappingApplicants() {
+function getScrappingApplicants(assetCategory) {
   try {
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
     if (!sheet) return [];
     
-    const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, MASTER_ASSET_STATUS_COLUMN_INDEX);
+    const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(MASTER_ASSET_STATUS_COLUMN_INDEX, MASTER_ASSET_CATEGORY_COLUMN_INDEX));
     const values = dataRange.getValues();
     
     const applicants = {}; // 使用物件來分組
@@ -1315,8 +1316,9 @@ function getScrappingApplicants() {
     values.forEach(row => {
       const status = row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1];
       const applicantName = row[MASTER_LEADER_NAME_COLUMN_INDEX - 1];
+      const category = row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1];
       
-      if (status === '報廢中' && applicantName) {
+      if (status === '報廢中' && applicantName && category === assetCategory) {
         if (applicants[applicantName]) {
           applicants[applicantName]++;
         } else {
@@ -1343,7 +1345,7 @@ function getScrappingApplicants() {
  * @param {string} applicantName 要處理的保管人名稱
  * @returns {object} 包含新文件 URL 的物件 { fileUrl: '...' }
  */
-function createScrapDocForApplicant(applicantName) {
+function createScrapDocForApplicant(applicantName, assetCategory) {
   const now = new Date();
   try {
 
@@ -1356,7 +1358,7 @@ function createScrapDocForApplicant(applicantName) {
     const assetsToScrap = [];
     for (let i = 1; i < computerListData.length; i++) {
       const row = computerListData[i];
-      if (row[MASTER_LEADER_NAME_COLUMN_INDEX - 1] === applicantName && row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '報廢中') {
+      if (row[MASTER_LEADER_NAME_COLUMN_INDEX - 1] === applicantName && row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '報廢中' && row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1] === assetCategory) {
         assetsToScrap.push({
           assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
           rowIndex: i + 1,
@@ -1371,8 +1373,10 @@ function createScrapDocForApplicant(applicantName) {
     const masterDataMap = new Map(masterData.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], row]));
 
     // --- 3. 複製與替換表頭 (邏輯不變) ---
-    const docName = `財產報廢單_${applicantName}_${Utilities.formatDate(now, "GMT+8", "yyyyMMdd")}`;
-    const templateFile = DriveApp.getFileById(SCRAP_TEMPLATE_DOC_ID);
+    const templateId = assetCategory === '財產' ? SCRAP_TEMPLATE_DOC_ID_PROPERTY : SCRAP_TEMPLATE_DOC_ID_NON_CONSUMABLE;
+    const categoryName = assetCategory === '財產' ? '財產' : '非消耗品';
+    const docName = `財產報廢單_${categoryName}_${applicantName}_${Utilities.formatDate(now, "GMT+8", "yyyyMMdd")}`;
+    const templateFile = DriveApp.getFileById(templateId);
     const outputFolder = DriveApp.getFolderById(SCRAP_OUTPUT_FOLDER_ID);
     const newFile = templateFile.makeCopy(docName, outputFolder);
     const newDoc = DocumentApp.openById(newFile.getId());
@@ -1389,7 +1393,12 @@ function createScrapDocForApplicant(applicantName) {
     const insertIndex = body.getChildIndex(placeholderParagraph);
     placeholderParagraph.removeFromParent();
       
-    const tableHeader = ['序號', '財產編號', '財產名稱', '購置日期', '使用年限', '已使用期間', '報廢原因'];
+    let tableHeader;
+    if (assetCategory === '非消耗品') {
+      tableHeader = ['序號', '物品編號', '物品名稱', '購置日期', '使用年限', '已使用期間', '報廢原因'];
+    } else {
+      tableHeader = ['序號', '財產編號', '財產名稱', '購置日期', '使用年限', '已使用期間', '報廢原因'];
+    }
     const tableValues = [tableHeader];
       
     assetsToScrap.forEach((asset, index) => {
@@ -1398,6 +1407,7 @@ function createScrapDocForApplicant(applicantName) {
         
         // --- ✨ 核心修正點 2：處理民國年日期 & 計算已使用期間 ---
         let purchaseDateStr = (assetInfo[MASTER_PURCHASE_DATE_COLUMN_INDEX - 1] || '').toString();
+        Logger.log('Original purchaseDateStr: ' + purchaseDateStr);
         purchaseDateStr = purchaseDateStr.split('\n')[0].trim(); // 清理可能的換行符
 
         let purchaseDate = null;
@@ -1405,13 +1415,19 @@ function createScrapDocForApplicant(applicantName) {
         let months = 'N/A';
         let purchaseDateFormatted = '無日期資料';
 
-        const dateParts = purchaseDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
-        if (dateParts) {
-            const minguoYear = parseInt(dateParts[1], 10);
-            const gregorianYear = minguoYear + 1911;
-            const monthJs = parseInt(dateParts[2], 10) - 1; // JavaScript 的月份是 0-11
-            const day = parseInt(dateParts[3], 10);
-            purchaseDate = new Date(gregorianYear, monthJs, day);
+        if (purchaseDateStr.includes('GMT')) {
+            purchaseDate = new Date(purchaseDateStr);
+            const originalYear = purchaseDate.getFullYear();
+            purchaseDate.setFullYear(originalYear + 11);
+        } else {
+            const dateParts = purchaseDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
+            if (dateParts) {
+                const minguoYear = parseInt(dateParts[1], 10);
+                const gregorianYear = minguoYear + 1911;
+                const monthJs = parseInt(dateParts[2], 10) - 1; // JavaScript 的月份是 0-11
+                const day = parseInt(dateParts[3], 10);
+                purchaseDate = new Date(gregorianYear, monthJs, day);
+            }
         }
 
         if (purchaseDate && !isNaN(purchaseDate.getTime())) {
