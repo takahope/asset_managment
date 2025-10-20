@@ -254,7 +254,8 @@ function getUserStateData() {
     assetName: row[MASTER_ASSET_NAME_COLUMN_INDEX - 1],
     leader: row[MASTER_LEADER_NAME_COLUMN_INDEX - 1],
     location: row[MASTER_LOCATION_COLUMN_INDEX - 1],
-    status: row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1]
+    status: row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1],
+    category: row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1]
   }));
 
   // 同時回傳是否為管理員的標記，方便前端顯示額外功能

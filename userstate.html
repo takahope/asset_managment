@@ -18,19 +18,25 @@
         <h4>財產狀態查詢</h4>
         
         <div class="form-row">
-            <div class="form-group col-md-4">
+            <div class="form-group col-md-3">
                 <label for="status-filter">依狀態篩選：</label>
                 <select id="status-filter" class="form-control">
                     <option value="">-- 顯示全部 --</option>
                 </select>
             </div>
-            <div id="leader-filter-container" class="form-group col-md-4" style="display: none;">
+            <div class="form-group col-md-3">
+                <label for="category-filter">依財產類別篩選：</label>
+                <select id="category-filter" class="form-control">
+                    <option value="">-- 顯示全部 --</option>
+                </select>
+            </div>
+            <div id="leader-filter-container" class="form-group col-md-3" style="display: none;">
                 <label for="leader-filter">依保管人篩選：</label>
                 <select id="leader-filter" class="form-control">
                     <option value="">-- 顯示全部 --</option>
                 </select>
             </div>
-            <div class="form-group col-md-4">
+            <div class="form-group col-md-3">
                 <label for="search-box">關鍵字搜尋：</label>
                 <input type="text" id="search-box" class="form-control" placeholder="搜尋產編、名稱、保管人...">
             </div>
@@ -87,6 +93,7 @@
             }
 
             document.getElementById('status-filter').addEventListener('change', filterAndRender);
+            document.getElementById('category-filter').addEventListener('change', filterAndRender);
             document.getElementById('leader-filter').addEventListener('change', filterAndRender);
             document.getElementById('search-box').addEventListener('input', filterAndRender);
 
@@ -97,44 +104,62 @@
 
         function populateFilters(assets) {
             const statusSet = new Set();
+            const categorySet = new Set();
             const leaderSet = new Set();
             assets.forEach(asset => {
                 statusSet.add(asset.status);
+                categorySet.add(asset.category);
                 if (isAdmin) leaderSet.add(asset.leader);
             });
 
             const statusFilter = document.getElementById('status-filter');
             statusSet.forEach(status => {
-                const option = document.createElement('option');
-                option.value = status;
-                option.textContent = status;
-                statusFilter.appendChild(option);
+                if(status) {
+                    const option = document.createElement('option');
+                    option.value = status;
+                    option.textContent = status;
+                    statusFilter.appendChild(option);
+                }
+            });
+
+            const categoryFilter = document.getElementById('category-filter');
+            categorySet.forEach(category => {
+                if(category) {
+                    const option = document.createElement('option');
+                    option.value = category;
+                    option.textContent = category;
+                    categoryFilter.appendChild(option);
+                }
             });
 
             if (isAdmin) {
                 const leaderFilter = document.getElementById('leader-filter');
                 leaderSet.forEach(leader => {
-                    const option = document.createElement('option');
-                    option.value = leader;
-                    option.textContent = leader;
-                    leaderFilter.appendChild(option);
+                    if(leader) {
+                        const option = document.createElement('option');
+                        option.value = leader;
+                        option.textContent = leader;
+                        leaderFilter.appendChild(option);
+                    }
                 });
             }
         }
 
         function filterAndRender() {
             const statusFilterValue = document.getElementById('status-filter').value;
+            const categoryFilterValue = document.getElementById('category-filter').value;
             const leaderFilterValue = isAdmin ? document.getElementById('leader-filter').value : '';
             const searchValue = document.getElementById('search-box').value.toUpperCase();
 
             const filteredAssets = allAssets.filter(asset => {
                 const statusMatch = !statusFilterValue || asset.status === statusFilterValue;
+                const categoryMatch = !categoryFilterValue || asset.category === categoryFilterValue;
                 const leaderMatch = !leaderFilterValue || asset.leader === leaderFilterValue;
                 const searchMatch = !searchValue || 
                                     asset.assetId.toUpperCase().includes(searchValue) ||
                                     asset.assetName.toUpperCase().includes(searchValue) ||
                                     asset.leader.toUpperCase().includes(searchValue);
-                return statusMatch && leaderMatch && searchMatch;
+                return statusMatch && categoryMatch && leaderMatch && searchMatch;
             });
 
             renderTable(filteredAssets);
