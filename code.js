@@ -644,6 +644,7 @@ function processBatchApproval(appIds) {
             const computerRowIndex = computerDetails.index;
             const newLocation = appDetails.row[AL_NEW_LOCATION_COLUMN_INDEX - 1];
             computerListSheet.getRange(computerRowIndex, MASTER_LOCATION_COLUMN_INDEX).setValue(newLocation);
+            computerListSheet.getRange(computerRowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("在庫");
             computerListSheet.getRange(computerRowIndex, MASTER_TRANSFER_TIME_COLUMN_INDEX).setValue(now);
             
             successCount++;
