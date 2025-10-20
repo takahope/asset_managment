@@ -17,7 +17,10 @@
 
     <div id="main-content">
         <h4>列印報廢申請紀錄</h4>
-        <p>此處會依保管人列出所有狀態為「報廢中」的財產。您可以為每位保管人產生一份彙整的報廢報表。</p>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <p>此處會依保管人列出所有狀態為「報廢中」的財產。您可以為每位保管人產生一份彙整的報廢報表。</p>
+            <button id="view-toggle-btn" class="btn btn-outline-secondary" onclick="toggleView()">切換詳細模式</button>
+        </div>
 
         <div class="form-group">
             <label><b>請選擇要列印的財產類別：</b></label>
@@ -38,31 +41,57 @@
             <p class="text-center">正在載入待報廢清單...</p>
         </div>
         
-        <div id="table-container" class="table-container" style="display:none;">
-            <table class="table table-hover table-sm">
-                <thead class="thead-light" style="position: sticky; top: 0;">
-                    <tr>
-                        <th>保管人</th>
-                        <th>待報廢數量</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="scrap-list">
+        <div id="simple-view">
+            <div id="table-container" class="table-container">
+                <table class="table table-hover table-sm">
+                    <thead class="thead-light" style="position: sticky; top: 0;">
+                        <tr>
+                            <th>保管人</th>
+                            <th>待報廢數量</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scrap-list">
                     </tbody>
-            </table>
+                </table>
+            </div>
         </div>
+
+        <div id="detailed-view" style="display: none;">
+            <div class="d-flex justify-content-end mb-2">
+                <button class="btn btn-success" onclick="generateConsolidatedDoc()">產生彙總報表</button>
+            </div>
+            <div id="detailed-table-container" class="table-container">
+                <table class="table table-hover table-sm">
+                    <thead class="thead-light" style="position: sticky; top: 0;">
+                        <tr>
+                            <th><input type="checkbox" id="select-all-detailed"></th>
+                            <th>財產編號</th>
+                            <th>財產名稱</th>
+                            <th>原保管人</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailed-scrap-list">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div id="status-message"></div>
     </div>
 
     <script>
+        let isDetailedView = false;
+
         document.addEventListener("DOMContentLoaded", () => {
             google.script.run
                 .withSuccessHandler(hasPermission => {
                     if (hasPermission) {
-                        loadScrapData(); // 如果有權限，才載入資料
+                        loadData(); // 如果有權限，才載入資料
                         document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
-                            radio.addEventListener('change', loadScrapData);
+                            radio.addEventListener('change', loadData);
                         });
+                        document.getElementById('select-all-detailed').addEventListener('change', toggleSelectAll);
                     } else {
                         showError({ message: "權限不足，只有資產管理員才能存取此頁面。" });
                         document.getElementById('main-content').style.display = 'none'; // 隱藏主要內容
@@ -72,16 +101,42 @@
                 .checkAdminPermissions();
         });
 
-        function loadScrapData() {
-            showLoading(true);
-            const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
-            google.script.run
-                .withSuccessHandler(renderTable)
-                .withFailureHandler(showError)
-                .getScrappingDataForAdmin(assetCategory); // 呼叫新的後端函式
+        function toggleView() {
+            isDetailedView = !isDetailedView;
+            const simpleView = document.getElementById('simple-view');
+            const detailedView = document.getElementById('detailed-view');
+            const toggleBtn = document.getElementById('view-toggle-btn');
+
+            if (isDetailedView) {
+                simpleView.style.display = 'none';
+                detailedView.style.display = 'block';
+                toggleBtn.textContent = '切換簡易模式';
+            } else {
+                simpleView.style.display = 'block';
+                detailedView.style.display = 'none';
+                toggleBtn.textContent = '切換詳細模式';
+            }
+            loadData();
         }
 
-        function renderTable(applicants) {
+        function loadData() {
+            showLoading(true);
+            const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
+
+            if (isDetailedView) {
+                google.script.run
+                    .withSuccessHandler(renderDetailedTable)
+                    .withFailureHandler(showError)
+                    .getAllScrappableItems(assetCategory);
+            } else {
+                google.script.run
+                    .withSuccessHandler(renderSimpleTable)
+                    .withFailureHandler(showError)
+                    .getScrappingDataForAdmin(assetCategory);
+            }
+        }
+
+        function renderSimpleTable(applicants) {
             const listBody = document.getElementById('scrap-list');
             listBody.innerHTML = '';
 
@@ -90,7 +145,6 @@
             } else {
                 applicants.forEach(app => {
                     const row = document.createElement('tr');
-                    // 為按鈕加上 applicant name 當作 id，方便之後操作
                     row.innerHTML = `
                         <td>${app.applicant}</td>
                         <td>${app.count}</td>
@@ -104,9 +158,35 @@
                 });
             }
             showLoading(false);
-            document.getElementById('table-container').style.display = 'block';
         }
-        
+
+        function renderDetailedTable(items) {
+            const listBody = document.getElementById('detailed-scrap-list');
+            listBody.innerHTML = '';
+
+            if (!items || items.length === 0) {
+                listBody.innerHTML = '<tr><td colspan="4" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
+            } else {
+                items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><input type="checkbox" class="detailed-checkbox" value="${item.assetId}"></td>
+                        <td>${item.assetId}</td>
+                        <td>${item.assetName}</td>
+                        <td>${item.originalKeeper}</td>
+                    `;
+                    listBody.appendChild(row);
+                });
+            }
+            showLoading(false);
+        }
+
+        function toggleSelectAll(event) {
+            document.querySelectorAll('.detailed-checkbox').forEach(checkbox => {
+                checkbox.checked = event.target.checked;
+            });
+        }
+
         function generateDoc(applicantName, btn) {
             btn.disabled = true;
             btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 產生中`;
@@ -114,10 +194,8 @@
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
             google.script.run
                 .withSuccessHandler(result => {
-                    // 成功後，整列從表格中移除，並提示使用者
                     showMessage(`已成功為 ${applicantName} 產生報表！`, 'alert-success');
-                    btn.closest('tr').remove(); // 從表格中移除該列
-                    // 在新分頁中打開文件
+                    loadData(); // 重新載入資料
                     window.open(result.fileUrl, '_blank');
                 })
                 .withFailureHandler(error => {
@@ -125,19 +203,57 @@
                     btn.disabled = false;
                     btn.textContent = '產生報表';
                 })
-                .createScrapDocForApplicant(applicantName, assetCategory); // 呼叫新的後端函式
+                .createScrapDoc(applicantName, assetCategory, null); // 最後一個參數傳 null
+        }
+
+        function generateConsolidatedDoc() {
+            const selectedIds = Array.from(document.querySelectorAll('.detailed-checkbox:checked')).map(cb => cb.value);
+            if (selectedIds.length === 0) {
+                showMessage('請至少勾選一個項目來產生報表。', 'alert-warning');
+                return;
+            }
+
+            const btn = document.querySelector('.btn-success');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 產生中`;
+
+            google.script.run
+                .withSuccessHandler(adminName => {
+                    const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
+                    google.script.run
+                        .withSuccessHandler(result => {
+                            showMessage(`已成功產生彙總報表！`, 'alert-success');
+                            loadData(); // 重新載入資料
+                            window.open(result.fileUrl, '_blank');
+                            btn.disabled = false;
+                            btn.textContent = '產生彙總報表';
+                        })
+                        .withFailureHandler(error => {
+                            showError(error);
+                            btn.disabled = false;
+                            btn.textContent = '產生彙總報表';
+                        })
+                        .createScrapDoc(adminName, assetCategory, selectedIds);
+                })
+                .withFailureHandler(error => {
+                    showError(error);
+                    btn.disabled = false;
+                    btn.textContent = '產生彙總報表';
+                })
+                .getAdminName();
         }
         
         function showMessage(msg, className) {
             const statusDiv = document.getElementById('status-message');
             statusDiv.className = `alert ${className}`;
             statusDiv.textContent = msg;
-            // 5秒後自動消失
             setTimeout(() => { statusDiv.textContent = ''; statusDiv.className = ''; }, 5000);
         }
 
         function showLoading(isLoading) {
             document.getElementById('loading-spinner').style.display = isLoading ? 'block' : 'none';
+            document.getElementById('simple-view').style.display = isLoading ? 'none' : (isDetailedView ? 'none' : 'block');
+            document.getElementById('detailed-view').style.display = isLoading ? 'none' : (isDetailedView ? 'block' : 'none');
         }
 
         function showError(error) {
