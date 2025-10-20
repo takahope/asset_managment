@@ -442,7 +442,7 @@ function processBatchTransferApplication(formData) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    const mappingSheet = ss.getSheetByName(CUSTODIAN_MAPPING_SHEET_NAME);
+    const mappingSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
     
     // 1. 一次性讀取所有需要的資料到記憶體中
     const computerListRange = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn());
@@ -472,6 +472,7 @@ function processBatchTransferApplication(formData) {
 
         // 3. ✨ **執行精準的單點更新**
         // 使用 .setValue() 直接更新目標儲存格，而不是修改記憶體中的陣列
+        computerListSheet.getRange(sheetRow, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("待接收");
         computerListSheet.getRange(sheetRow, MASTER_APPLICATION_TIME_COLUMN_INDEX).setValue(now);
         computerListSheet.getRange(sheetRow, MASTER_IS_UPLOADED_COLUMN_INDEX).setValue('');
         computerListSheet.getRange(sheetRow, MASTER_UPLOAD_TIME_COLUMN_INDEX).setValue('');
@@ -927,8 +928,8 @@ function getLendingData() {
       }));
       
     // ✨ **新增：獲取所有可能的借用人名單**
-    // 我們從 CUSTODIAN_MAPPING_SHEET_NAME (駐站/信箱/駐管) 來取得最完整的人員名單
-    const mappingSheet = ss.getSheetByName(CUSTODIAN_MAPPING_SHEET_NAME);
+    // 我們從 KEEPER_LOCATION_MAP_SHEET_NAME (駐站/信箱/駐管) 來取得最完整的人員名單
+    const mappingSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
     const mappingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, 3).getValues();
     
     const borrowers = {}; // 使用物件來自動處理重複的名字
