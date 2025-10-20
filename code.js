@@ -9,7 +9,8 @@ const MASTER_ASSET_LIST_SHEET_NAME = "財產總表"; // **所有資料的唯一�
 const RESPONSE_SHEET_NAME = "表單回應 1"; // Web App 回報結果寫入的工作表
 const SOFTWARE_VERSIONS_SHEET_NAME = "軟體版本清單"; // 軟體版本清單工作表
 const APPLICATION_LOG_SHEET_NAME = "轉移申請紀錄";
-const CUSTODIAN_MAPPING_SHEET_NAME = "保管人/信箱";
+const KEEPER_EMAIL_MAP_SHEET_NAME = "保管人/信箱";
+const KEEPER_LOCATION_MAP_SHEET_NAME = "存放位置/信箱/保管人";
 const LENDING_LOG_SHEET_NAME = "出借紀錄"; // ✨ **新增：出借紀錄工作表**
 const ADMIN_LIST_SHEET_NAME = "管理員名單"; // ✨ **新增：管理員權限列表**
 
@@ -396,7 +397,7 @@ function processFormData(formObject) {
 function getTransferData() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const currentUserEmail = Session.getActiveUser().getEmail();
-  const mappingSheet = ss.getSheetByName(CUSTODIAN_MAPPING_SHEET_NAME);
+  const mappingSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
   const mappingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, 3).getValues();
   const custodianMap = {};
   mappingData.forEach(row => {
@@ -419,7 +420,9 @@ function getTransferData() {
     .filter(row => row[MASTER_LEADER_EMAIL_COLUMN_INDEX - 1] === currentUserEmail && row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '在庫')
     .map(row => ({
       id: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
-      location: row[MASTER_LOCATION_COLUMN_INDEX - 1]
+      assetName: row[MASTER_ASSET_NAME_COLUMN_INDEX - 1],
+      location: row[MASTER_LOCATION_COLUMN_INDEX - 1],
+      category: row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1]
     }));
   
   return { userEmail: currentUserEmail, assets: myAssets, custodianMap: custodianMap };
@@ -1371,7 +1374,7 @@ function getAllScrappableItems(assetCategory) {
 
 function getAdminName() {
   const currentUserEmail = Session.getActiveUser().getEmail();
-  const mappingSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CUSTODIAN_MAPPING_SHEET_NAME);
+  const mappingSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
   const data = mappingSheet.getRange("A2:B" + mappingSheet.getLastRow()).getValues();
   const mapping = new Map(data.map(row => [row[1], row[0]])); // Email -> Name
   return mapping.get(currentUserEmail) || currentUserEmail; // 如果找不到，就回傳 Email
