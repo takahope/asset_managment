@@ -9,7 +9,7 @@ const MASTER_ASSET_LIST_SHEET_NAME = "財產總表"; // **所有資料的唯一�
 const RESPONSE_SHEET_NAME = "表單回應 1"; // Web App 回報結果寫入的工作表
 const SOFTWARE_VERSIONS_SHEET_NAME = "軟體版本清單"; // 軟體版本清單工作表
 const APPLICATION_LOG_SHEET_NAME = "轉移申請紀錄";
-const CUSTODIAN_MAPPING_SHEET_NAME = "存放位置/信箱/保管人";
+const CUSTODIAN_MAPPING_SHEET_NAME = "保管人/信箱";
 const LENDING_LOG_SHEET_NAME = "出借紀錄"; // ✨ **新增：出借紀錄工作表**
 const ADMIN_LIST_SHEET_NAME = "管理員名單"; // ✨ **新增：管理員權限列表**
 
@@ -216,6 +216,10 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('printScrap');
       title = "列印報廢申請單";
       break;
+    case 'userstate':
+      template = HtmlService.createTemplateFromFile('userstate');
+      title = "個人財產狀態查詢";
+      break;
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('portal');
@@ -227,6 +231,39 @@ function doGet(e) {
   html.setTitle(title);
   return html;
 }
+function getUserStateData() {
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const isAdmin = checkAdminPermissions(); // 重複使用我們之前建立的權限檢查函式
+
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
+  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+
+  let filteredData;
+
+  if (isAdmin) {
+    // 管理員：回傳所有資料
+    filteredData = allData;
+  } else {
+    // 一般使用者：只回傳自己的資料
+    filteredData = allData.filter(row => row[MASTER_LEADER_EMAIL_COLUMN_INDEX - 1] === currentUserEmail);
+  }
+
+  // 將資料整理成物件陣列回傳給前端
+  const results = filteredData.map(row => ({
+    assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
+    assetName: row[MASTER_ASSET_NAME_COLUMN_INDEX - 1],
+    leader: row[MASTER_LEADER_NAME_COLUMN_INDEX - 1],
+    location: row[MASTER_LOCATION_COLUMN_INDEX - 1],
+    status: row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1]
+  }));
+
+  // 同時回傳是否為管理員的標記，方便前端顯示額外功能
+  return {
+    isAdmin: isAdmin,
+    assets: results
+  };
+}
+
 function getAppUrl() {
   return ScriptApp.getService().getUrl();
 }
@@ -1305,6 +1342,40 @@ function checkAdminPermissions() {
   return adminEmails.includes(currentUserEmail);
 }
 
+function getAllScrappableItems(assetCategory) {
+  if (!checkAdminPermissions()) {
+    return { error: "權限不足，您無法存取此功能。" };
+  }
+  try {
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
+    const values = sheet.getDataRange().getValues();
+    const items = [];
+    values.forEach(row => {
+      const status = row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1];
+      const category = row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1];
+      if (status === '報廢中' && category === assetCategory) {
+        items.push({
+          assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
+          assetName: row[MASTER_ASSET_NAME_COLUMN_INDEX - 1],
+          originalKeeper: row[MASTER_LEADER_NAME_COLUMN_INDEX - 1]
+        });
+      }
+    });
+    return items;
+  } catch (e) {
+    Logger.log("getAllScrappableItems 失敗: " + e.message);
+    throw new Error("讀取所有待報廢項目時發生錯誤。");
+  }
+}
+
+function getAdminName() {
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const mappingSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CUSTODIAN_MAPPING_SHEET_NAME);
+  const data = mappingSheet.getRange("A2:B" + mappingSheet.getLastRow()).getValues();
+  const mapping = new Map(data.map(row => [row[1], row[0]])); // Email -> Name
+  return mapping.get(currentUserEmail) || currentUserEmail; // 如果找不到，就回傳 Email
+}
+
 function getScrappingDataForAdmin(assetCategory) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
   const adminEmails = getAdminEmails().map(email => email.toLowerCase());
@@ -1395,7 +1466,7 @@ function getScrappingApplicants(assetCategory) {
  * @param {string} applicantName 要處理的保管人名稱
  * @returns {object} 包含新文件 URL 的物件 { fileUrl: '...' }
  */
-function createScrapDocForApplicant(applicantName, assetCategory) {
+function createScrapDoc(applicantName, assetCategory, assetIds) {
   const now = new Date();
   try {
 
@@ -1406,15 +1477,29 @@ function createScrapDocForApplicant(applicantName, assetCategory) {
 
     const computerListData = computerListSheet.getDataRange().getValues();
     const assetsToScrap = [];
-    for (let i = 1; i < computerListData.length; i++) {
-      const row = computerListData[i];
-      if (row[MASTER_LEADER_NAME_COLUMN_INDEX - 1] === applicantName && row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '報廢中' && row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1] === assetCategory) {
-        assetsToScrap.push({
-          assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
-          rowIndex: i + 1,
-          // 直接讀取 L 欄的報廢原因備註
-          scrapReason: row[MASTER_REMARKS_COLUMN_INDEX - 1] 
-        });
+
+    if (assetIds && assetIds.length > 0) {
+      const assetIdSet = new Set(assetIds);
+      for (let i = 1; i < computerListData.length; i++) {
+        const row = computerListData[i];
+        if (assetIdSet.has(row[MASTER_ASSET_ID_COLUMN_INDEX - 1])) {
+          assetsToScrap.push({
+            assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
+            rowIndex: i + 1,
+            scrapReason: row[MASTER_REMARKS_COLUMN_INDEX - 1]
+          });
+        }
+      }
+    } else {
+      for (let i = 1; i < computerListData.length; i++) {
+        const row = computerListData[i];
+        if (row[MASTER_LEADER_NAME_COLUMN_INDEX - 1] === applicantName && row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '報廢中' && row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1] === assetCategory) {
+          assetsToScrap.push({
+            assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
+            rowIndex: i + 1,
+            scrapReason: row[MASTER_REMARKS_COLUMN_INDEX - 1]
+          });
+        }
       }
     }
     if (assetsToScrap.length === 0) throw new Error(`找不到 ${applicantName} 的待報廢財產。`);
@@ -1470,7 +1555,7 @@ function createScrapDocForApplicant(applicantName, assetCategory) {
             const originalYear = purchaseDate.getFullYear();
             purchaseDate.setFullYear(originalYear + 11);
         } else {
-            const dateParts = purchaseDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
+            const dateParts = purchaseDateStr.match(/(0?\d+)\/(\d+)\/(\d+)/);
             if (dateParts) {
                 const minguoYear = parseInt(dateParts[1], 10);
                 const gregorianYear = minguoYear + 1911;

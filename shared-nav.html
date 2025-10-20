@@ -35,6 +35,9 @@
     <button type="button" class="btn btn-sm btn-outline-danger" onclick="goToprintScrap()">
       🖨️ 列印報廢申請
     </button>
+    <button type="button" class="btn btn-sm btn-outline-info" onclick="goToUserState()">
+      📊 財產狀態
+    </button>
     <button type="button" class="btn btn-sm btn-outline-dark" onclick="goToUpdate()">
       ⚙️ 更新
     </button>
@@ -122,6 +125,15 @@
     if (_portalWebAppUrl) {
       const updateUrl = _portalWebAppUrl + '?page=update';
       window.open(updateUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  function goToUserState() {
+    if (_portalWebAppUrl) {
+      const userStateUrl = _portalWebAppUrl + '?page=userstate';
+      window.open(userStateUrl, '_top');
     } else {
       alert('頁面初始化中，請稍候...');
     }
