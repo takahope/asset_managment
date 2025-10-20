@@ -32,13 +32,19 @@
         <h4>財產轉移申請 (批次)</h4>
         
         <div class="form-row">
-            <div class="form-group col-md-6">
+            <div class="form-group col-md-4">
                 <label for="location-filter-select">依地點篩選：</label>
                 <select id="location-filter-select" class="form-control">
                     <option value="">-- 顯示全部地點 --</option>
                 </select>
             </div>
-            <div class="form-group col-md-6">
+            <div class="form-group col-md-4">
+                <label for="category-filter-select">依財產類別篩選：</label>
+                <select id="category-filter-select" class="form-control">
+                    <option value="">-- 顯示全部類別 --</option>
+                </select>
+            </div>
+            <div class="form-group col-md-4">
                 <label for="search-box">依關鍵字搜尋：</label>
                 <input type="text" class="form-control" id="search-box" placeholder="輸入產編或地點...">
             </div>
@@ -49,8 +55,10 @@
                 <thead class="thead-light" style="position: sticky; top: 0;">
                     <tr>
                         <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
-                        <th style="width: 55%;">財產編號</th>
-                        <th style="width: 40%;">目前地點</th>
+                        <th style="width: 30%;">財產編號</th>
+                        <th style="width: 35%;">財產名稱</th>
+                        <th style="width: 15%;">目前地點</th>
+                        <th style="width: 15%;">財產類別</th>
                     </tr>
                 </thead>
                 <tbody id="asset-list"></tbody>
@@ -105,6 +113,7 @@
             
             document.getElementById('search-box').addEventListener('input', filterTable);
             document.getElementById('location-filter-select').addEventListener('change', filterTable);
+            document.getElementById('category-filter-select').addEventListener('change', filterTable);
             document.getElementById('select-all').addEventListener('change', toggleSelectAll);
         });
 
@@ -120,6 +129,7 @@
             
             displayPage(currentPage); // ✨ 修改：不再直接渲染表格，而是呼叫分頁顯示函式
             populateLocationFilter(allAssets);
+            populateCategoryFilter(allAssets);
             
             const keeperSelect = document.getElementById('keeper-select');
             const sortedKeepers = Object.entries(custodianDataMap).map(([email, info]) => ({ email, ...info })).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
@@ -151,6 +161,19 @@
             });
         }
 
+        function populateCategoryFilter(assets) {
+            const categoryFilterSelect = document.getElementById('category-filter-select');
+            const uniqueCategories = [...new Set(assets.map(asset => asset.category))].sort();
+            uniqueCategories.forEach(cat => {
+                if (cat) { // 過濾掉可能是 null 或 undefined 的值
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    categoryFilterSelect.appendChild(option);
+                }
+            });
+        }
+
         // ✨ **核心修改：重構 renderTable 函式，使其只渲染特定頁面的資料**
         function renderTableForPage(assets, rows, page) {
             const assetListBody = document.getElementById('asset-list');
@@ -163,7 +186,7 @@
 
             paginatedItems.forEach(asset => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td><td>${asset.id}</td><td>${asset.location}</td>`;
+                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td><td>${asset.id}</td><td>${asset.assetName}</td><td>${asset.location}</td><td>${asset.category}</td>`;
                 assetListBody.appendChild(row);
             });
             
@@ -215,12 +238,16 @@
         // ✨ **修改：篩選邏輯更新後，重新渲染第一頁和分頁控制項**
         function filterTable() {
             const locationFilter = document.getElementById('location-filter-select').value.toUpperCase();
+            const categoryFilter = document.getElementById('category-filter-select').value.toUpperCase();
             const searchFilter = document.getElementById('search-box').value.toUpperCase();
 
             filteredAssets = allAssets.filter(asset => {
                 const locationMatch = (locationFilter === '') || (asset.location.toUpperCase() === locationFilter);
-                const searchMatch = asset.id.toUpperCase().includes(searchFilter) || asset.location.toUpperCase().includes(searchFilter);
-                return locationMatch && searchMatch;
+                const categoryMatch = (categoryFilter === '') || (asset.category && asset.category.toUpperCase() === categoryFilter);
+                const searchMatch = asset.id.toUpperCase().includes(searchFilter) || 
+                                    (asset.assetName && asset.assetName.toUpperCase().includes(searchFilter)) || 
+                                    asset.location.toUpperCase().includes(searchFilter);
+                return locationMatch && categoryMatch && searchMatch;
             });
             
             displayPage(1); // 從第一頁開始顯示篩選結果
