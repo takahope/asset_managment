@@ -37,6 +37,7 @@ const MASTER_IS_COMPUTER_COLUMN_INDEX = 22;   // ✨ **新增這一行 (是否�
 const MASTER_LAST_MODIFIED_COLUMN_INDEX = 23; // K欄
 const MASTER_REMARKS_COLUMN_INDEX = 24;         // L欄
 const MASTER_DOC_URL_COLUMN_INDEX = 25;        // M欄: ✨ **新增** 文件連結欄位
+const MASTER_IS_ACTUALLY_COMPUTER_COLUMN_INDEX = 27; // AA欄: 是否為電腦
 
 
 // --- 「申請紀錄」工作表中的欄位索引 ---
@@ -651,7 +652,9 @@ function processBatchApproval(appIds) {
             computerListSheet.getRange(computerRowIndex, MASTER_TRANSFER_TIME_COLUMN_INDEX).setValue(now);
 
             const isStation = locationIsStationMap.get(newLocation) === '是';
-            computerListSheet.getRange(computerRowIndex, MASTER_IS_COMPUTER_COLUMN_INDEX).setValue(isStation ? '是' : '');
+            const isActuallyComputer = computerDetails.row[MASTER_IS_ACTUALLY_COMPUTER_COLUMN_INDEX - 1] === '是';
+            const shouldBeMarked = isStation && isActuallyComputer;
+            computerListSheet.getRange(computerRowIndex, MASTER_IS_COMPUTER_COLUMN_INDEX).setValue(shouldBeMarked ? '是' : '');
             
             successCount++;
             approvedAssetIds.push(assetId);
