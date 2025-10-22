@@ -145,6 +145,7 @@
 
             } else {
                 console.log("[FRONTEND] 沒有待審核資料，顯示提示訊息。");
+                document.getElementById('approval-list').innerHTML = '';
                 document.getElementById('no-data-message').style.display = 'block';
             }
         }
@@ -237,6 +238,7 @@
                 return;
             }
             
+            document.getElementById('status-message').innerHTML = ''; // Clear message before new submission
             console.log("[FRONTEND] 開始呼叫後端 processBatchApproval 函式...");
             showLoading(true, '正在批次處理核准作業...');
             google.script.run
@@ -270,7 +272,6 @@
                 loader.querySelector('p').textContent = text;
                 loader.style.display = 'block';
                 content.style.display = 'none';
-                document.getElementById('status-message').innerHTML = '';
             } else {
                 loader.style.display = 'none';
                 content.style.display = 'block';
