@@ -591,6 +591,9 @@ function processBatchApproval(appIds) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
     const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
+    const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+    const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
+    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[3]])); // Map<地點, 是否為駐站>
     
     Logger.log("步驟 1: 開始一次性讀取所有資料...");
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow(), appLogSheet.getLastColumn()).getValues();
@@ -646,6 +649,9 @@ function processBatchApproval(appIds) {
             computerListSheet.getRange(computerRowIndex, MASTER_LOCATION_COLUMN_INDEX).setValue(newLocation);
             computerListSheet.getRange(computerRowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("在庫");
             computerListSheet.getRange(computerRowIndex, MASTER_TRANSFER_TIME_COLUMN_INDEX).setValue(now);
+
+            const isStation = locationIsStationMap.get(newLocation) === '是';
+            computerListSheet.getRange(computerRowIndex, MASTER_IS_COMPUTER_COLUMN_INDEX).setValue(isStation ? '是' : '');
             
             successCount++;
             approvedAssetIds.push(assetId);
