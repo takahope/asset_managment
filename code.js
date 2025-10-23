@@ -5,7 +5,7 @@
 
 // --- 工作表名稱設定 ---
 // const COMPUTER_DATA_SHEET_NAME = "電腦資料財產總表"; // 這個工作表已不再需要
-const MASTER_ASSET_LIST_SHEET_NAME = "財產總表"; // **所有資料的唯一來源**
+// const MASTER_ASSET_LIST_SHEET_NAME = "財產總表"; // **所有資料的唯一來源 (已由 PROPERTY_MASTER_SHEET_NAME 和 ITEM_MASTER_SHEET_NAME 取代)**
 const RESPONSE_SHEET_NAME = "表單回應 1"; // Web App 回報結果寫入的工作表
 const SOFTWARE_VERSIONS_SHEET_NAME = "軟體版本清單"; // 軟體版本清單工作表
 const APPLICATION_LOG_SHEET_NAME = "轉移申請紀錄";
@@ -60,6 +60,69 @@ const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
 const LL_LEND_ID_COLUMN_INDEX = 1;
 const LL_STATUS_COLUMN_INDEX = 9;
 const LL_RETURN_DATE_COLUMN_INDEX = 7;
+
+const PROPERTY_MASTER_SHEET_NAME = "財產總表"; // ✨ **拆分後：財產總表**
+const ITEM_MASTER_SHEET_NAME = "物品總表";   // ✨ **拆分後：物品總表**
+
+// =================================================================
+// --- ✨ 全新：資料抽象層 (Data Access Layer) ---
+// --- 透過此層存取資料，隱藏兩個總表的複雜性 ---
+// =================================================================
+
+/**
+ * 從「財產總表」和「物品總表」讀取所有資產資料並合併。
+ * @returns {Array<Array<any>>} 包含所有資產的二維陣列。
+ */
+function getAllAssets() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const propertySheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+  const itemSheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
+
+  let allData = [];
+
+  // 讀取財產總表 (如果存在且有資料)
+  if (propertySheet && propertySheet.getLastRow() > 1) {
+    const propertyData = propertySheet.getRange(2, 1, propertySheet.getLastRow() - 1, propertySheet.getLastColumn()).getValues();
+    allData = allData.concat(propertyData);
+  } else {
+    Logger.log(`警告：找不到工作表 "${PROPERTY_MASTER_SHEET_NAME}" 或其中沒有資料。`);
+  }
+
+  // 讀取物品總表 (如果存在且有資料)
+  if (itemSheet && itemSheet.getLastRow() > 1) {
+    const itemData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, itemSheet.getLastColumn()).getValues();
+    allData = allData.concat(itemData);
+  } else {
+    Logger.log(`警告：找不到工作表 "${ITEM_MASTER_SHEET_NAME}" 或其中沒有資料。`);
+  }
+  
+  Logger.log(`getAllAssets: 共讀取 ${allData.length} 筆資產。`);
+  return allData;
+}
+
+/**
+ * 查找指定 assetId 所在的實際工作表及列號。
+ * @param {string} assetId - 要查找的資產ID。
+ * @returns {object|null} - 如果找到，回傳 { sheet: Sheet, rowIndex: number }，否則回傳 null。
+ */
+function findAssetLocation(assetId) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheetsToSearch = [ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME), ss.getSheetByName(ITEM_MASTER_SHEET_NAME)];
+
+  for (const sheet of sheetsToSearch) {
+    if (sheet) {
+      const idColumnValues = sheet.getRange(2, MASTER_ASSET_ID_COLUMN_INDEX, sheet.getLastRow() - 1, 1).getValues();
+      for (let i = 0; i < idColumnValues.length; i++) {
+        if (idColumnValues[i][0].toString().trim() === assetId.toString().trim()) {
+          return { sheet: sheet, rowIndex: i + 2 }; // i + 2 to account for 0-based index and header row
+        }
+      }
+    }
+  }
+
+  Logger.log(`findAssetLocation: 找不到資產ID "${assetId}"。`);
+  return null;
+}
 
 // =================================================================
 // --- 試算表 UI 功能 (自訂選單) ---
@@ -237,8 +300,7 @@ function getUserStateData() {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions(); // 重複使用我們之前建立的權限檢查函式
 
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const allData = getAllAssets(); // ✨ 使用代理函式讀取資料
 
   let filteredData;
 
@@ -275,8 +337,7 @@ function getAppUrl() {
  * [供 Index.html 呼叫] 獲取駐站與電腦的二級下拉選單資料 (修正並清理版)
  */
 function getSelectData() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, MASTER_IS_COMPUTER_COLUMN_INDEX).getValues();
+  const data = getAllAssets(); // ✨ 使用代理函式讀取資料
   
   const dataMap = {};
 
@@ -412,9 +473,8 @@ function getTransferData() {
       }
     }
   });
-  // ✨ **修改點**
-  const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-  const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn()).getValues();
+  
+  const computerData = getAllAssets(); // ✨ 使用代理函式讀取資料
   
   const myAssets = computerData
     // ✨ 核心修改：狀態必須為「在庫」，排除「出借中」與「已報廢」
@@ -441,21 +501,15 @@ function processBatchTransferApplication(formData) {
     }
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
     const mappingSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
     
     // 1. 一次性讀取所有需要的資料到記憶體中
-    const computerListRange = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn());
-    const computerData = computerListRange.getValues();
+    const allAssets = getAllAssets(); // ✨ 使用代理函式讀取資料
     const mappingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, 3).getValues();
     
     // 2. 在記憶體中進行資料查找與準備
-    // 建立一個 Map，方便快速透過 assetId 找到其在 computerData 陣列中的索引和原始列號
-    const computerDataMap = new Map(computerData.map((row, index) => [
-      row[MASTER_ASSET_ID_COLUMN_INDEX - 1].toString(), 
-      { row, memoryIndex: index, sheetRowIndex: index + 2 } // 記住陣列索引和工作表列號
-    ]));
+    const computerDataMap = new Map(allAssets.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1].toString(), { row }]));
     const newKeeperInfo = mappingData.find(row => row[1] === newKeeperEmail);
     if (!newKeeperInfo) throw new Error("在保管人清單中找不到 Email: " + newKeeperEmail);
     const newKeeperName = newKeeperInfo[2];
@@ -464,20 +518,23 @@ function processBatchTransferApplication(formData) {
     const newLogsToAdd = []; // 用於存放準備要新增到「申請紀錄」的所有新資料列
     const createdApplications = [];
 
-    // ✨ **修改核心：不再直接修改 computerData 陣列，而是使用精準更新**
     assetIds.forEach(assetId => {
       const assetDetails = computerDataMap.get(assetId.toString());
       // 確保財產存在且狀態為「在庫」
       if (assetDetails && assetDetails.row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '在庫') {
-        const sheetRow = assetDetails.sheetRowIndex; // 取得該財產在工作表中的實際列號
-
-        // 3. ✨ **執行精準的單點更新**
-        // 使用 .setValue() 直接更新目標儲存格，而不是修改記憶體中的陣列
-        computerListSheet.getRange(sheetRow, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("待接收");
-        computerListSheet.getRange(sheetRow, MASTER_APPLICATION_TIME_COLUMN_INDEX).setValue(now);
-        computerListSheet.getRange(sheetRow, MASTER_IS_UPLOADED_COLUMN_INDEX).setValue('');
-        computerListSheet.getRange(sheetRow, MASTER_UPLOAD_TIME_COLUMN_INDEX).setValue('');
-        computerListSheet.getRange(sheetRow, MASTER_TRANSFER_TIME_COLUMN_INDEX).setValue(''); 
+        
+        // ✨ 使用新的代理函式來定位資產在哪個工作表
+        const location = findAssetLocation(assetId);
+        if (location) {
+          location.sheet.getRange(location.rowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("待接收");
+          location.sheet.getRange(location.rowIndex, MASTER_APPLICATION_TIME_COLUMN_INDEX).setValue(now);
+          location.sheet.getRange(location.rowIndex, MASTER_IS_UPLOADED_COLUMN_INDEX).setValue('');
+          location.sheet.getRange(location.rowIndex, MASTER_UPLOAD_TIME_COLUMN_INDEX).setValue('');
+          location.sheet.getRange(location.rowIndex, MASTER_TRANSFER_TIME_COLUMN_INDEX).setValue(''); 
+        } else {
+          Logger.log(`processBatchTransferApplication: 找不到資產 ${assetId} 的位置，跳過更新。`);
+          return; // 跳過此筆 assetId
+        }
         
         // --- 以下準備「申請紀錄」資料的邏輯不變 ---
         const assetRow = assetDetails.row;
@@ -500,9 +557,6 @@ function processBatchTransferApplication(formData) {
     if (createdApplications.length === 0) {
       throw new Error("處理失敗，勾選的財產可能已不存在或狀態不符 (非在庫)。");
     }
-
-    // 4. ✨ **移除原本複寫整張表的 setValues**
-    // computerListRange.setValues(computerData); // <--- 這行危險的程式碼已被移除並替換為上面的迴圈內更新
     
     // 新增所有「申請紀錄」
     if (newLogsToAdd.length > 0) {
@@ -538,7 +592,7 @@ function processBatchTransferApplication(formData) {
  * [供 review.html 呼叫] 獲取當前使用者所有待審核的申請 (附有詳細日誌的偵錯版)
  */
 function getPendingApprovals() {
-  Logger.log("--- getPendingApprovals 函式開始執行 (v2) ---");
+  Logger.log("--- getPendingApprovals 函式開始執行 (v3) ---");
   const startTime = new Date();
 
   try {
@@ -547,12 +601,11 @@ function getPendingApprovals() {
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    const masterAssetSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    Logger.log(`步驟 2: 連接到 "${APPLICATION_LOG_SHEET_NAME}" 和 "${MASTER_ASSET_LIST_SHEET_NAME}" 工作表。`);
+    Logger.log(`步驟 2: 連接到 "${APPLICATION_LOG_SHEET_NAME}" 工作表。`);
 
-    // 步驟 3: 讀取財產總表並建立 Map
-    const masterAssetData = masterAssetSheet.getRange(2, 1, masterAssetSheet.getLastRow() - 1, MASTER_ASSET_NAME_COLUMN_INDEX).getValues();
-    const assetIdToNameMap = new Map(masterAssetData.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], row[MASTER_ASSET_NAME_COLUMN_INDEX - 1]]));
+    // 步驟 3: 使用代理函式讀取所有資產並建立 Map
+    const allAssetsData = getAllAssets();
+    const assetIdToNameMap = new Map(allAssetsData.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], row[MASTER_ASSET_NAME_COLUMN_INDEX - 1]]));
     Logger.log(` -> 財產總表對照 Map 建立完成，共 ${assetIdToNameMap.size} 筆。`);
     
     // 步驟 4: 讀取申請紀錄
@@ -592,8 +645,8 @@ function getPendingApprovals() {
  * 這個版本包含了極其詳細的日誌，用於找出為何處理會失敗或跳過。
  */
 function processBatchApproval(appIds) {
-  Logger.log("\n\n--- processBatchApproval (終極偵錯版) 開始執行 ---");
-  Logger.log(`接收到 ${appIds.length} 個待處理 AppID: [${appIds.slice(0, 5).join(", ")}...]`); // 只顯示前5個，避免日誌過長
+  Logger.log("\n\n--- processBatchApproval (v2) 開始執行 ---");
+  Logger.log(`接收到 ${appIds.length} 個待處理 AppID: [${appIds.slice(0, 5).join(", ")},...]`);
 
   if (!appIds || appIds.length === 0) { 
     Logger.log("錯誤：appIds 陣列為空，提前終止。");
@@ -601,123 +654,75 @@ function processBatchApproval(appIds) {
   }
 
   try {
-    // --- 準備階段 ---
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
     const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
     const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
-    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[3]])); // Map<地點, 是否為駐站>
+    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[3]]));
     
-    Logger.log("步驟 1: 開始一次性讀取所有資料...");
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow(), appLogSheet.getLastColumn()).getValues();
-    const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow(), computerListSheet.getLastColumn()).getValues();
-    Logger.log(` -> 「申請紀錄」讀取了 ${appLogData.length} 筆。`);
-    Logger.log(` -> 「應回報電腦清單」讀取了 ${computerData.length} 筆。`);
-
-    Logger.log("\n步驟 2: 建立 Map 查找表 (強制將 Key 轉為字串)...");
+    const allAssets = getAllAssets();
     
-    // ✨ **核心修正點 1：建立 Map 時，將所有 Key 都轉換為字串**
-    const computerDataMap = new Map(computerData.map((row, index) => [
-      row[MASTER_ASSET_ID_COLUMN_INDEX - 1].toString(), 
-      { row, index: index + 2 }
-    ]));
-    
-    // (appLogMap 保持原樣，因為我們是從中讀取而不是用它來查找)
+    const computerDataMap = new Map(allAssets.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1].toString(), { row }]));
     const appLogMap = new Map(appLogData.map((row, index) => [row[AL_APP_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
-    Logger.log(` -> computerDataMap 建立完成，大小為: ${computerDataMap.size}`);
 
-    // --- 處理階段 ---
     const now = new Date();
     let successCount = 0;
-    const approvedAssetIds = [];
     const errors = [];
 
-    Logger.log("\n步驟 3: === 開始遍歷從前端傳來的 appIds 陣列 ===");
     appIds.forEach(appId => {
-      // 為每一次迴圈印出詳細的檢查過程
-      Logger.log(`\n  [處理中] 前端傳來的 AppID: "${appId}" (類型: ${typeof appId})`);
-      
       const appDetails = appLogMap.get(appId);
-      
-      // ✨ 核心偵錯點：我們將在這裡看到所有關鍵資訊
-      if (appDetails) {
-        Logger.log(`    -> ✅ 匹配成功! 在 Map 中找到了這筆申請。`);
-        const statusInSheet = appDetails.row[AL_STATUS_COLUMN_INDEX - 1];
-        Logger.log(`    -> 其在工作表中的狀態為: "${statusInSheet}" (類型: ${typeof statusInSheet})`);
+      if (appDetails && appDetails.row[AL_STATUS_COLUMN_INDEX - 1] === "待接收") {
+        const assetId = appDetails.row[AL_ASSET_ID_COLUMN_INDEX - 1].toString();
+        const computerDetails = computerDataMap.get(assetId);
+        const location = findAssetLocation(assetId);
 
-        if (statusInSheet === "待接收") {
-          Logger.log(`    -> ✅ 狀態匹配成功! 準備開始更新工作表...`);
+        if (computerDetails && location) {
+          const appRowIndex = appDetails.index;
+          appLogSheet.getRange(appRowIndex, AL_STATUS_COLUMN_INDEX).setValue("已完成");
+          appLogSheet.getRange(appRowIndex, AL_REVIEW_TIME_COLUMN_INDEX).setValue(now);
           
-          const assetId = appDetails.row[AL_ASSET_ID_COLUMN_INDEX - 1];
-          const computerDetails = computerDataMap.get(assetId);
+          const newLocation = appDetails.row[AL_NEW_LOCATION_COLUMN_INDEX - 1];
+          location.sheet.getRange(location.rowIndex, MASTER_LOCATION_COLUMN_INDEX).setValue(newLocation);
+          location.sheet.getRange(location.rowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("在庫");
+          location.sheet.getRange(location.rowIndex, MASTER_TRANSFER_TIME_COLUMN_INDEX).setValue(now);
 
-          if (computerDetails) {
-            // 這是成功的路徑
-            const appRowIndex = appDetails.index;
-            appLogSheet.getRange(appRowIndex, AL_STATUS_COLUMN_INDEX).setValue("已完成");
-            appLogSheet.getRange(appRowIndex, AL_REVIEW_TIME_COLUMN_INDEX).setValue(now);
-            
-            const computerRowIndex = computerDetails.index;
-            const newLocation = appDetails.row[AL_NEW_LOCATION_COLUMN_INDEX - 1];
-            computerListSheet.getRange(computerRowIndex, MASTER_LOCATION_COLUMN_INDEX).setValue(newLocation);
-            computerListSheet.getRange(computerRowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("在庫");
-            computerListSheet.getRange(computerRowIndex, MASTER_TRANSFER_TIME_COLUMN_INDEX).setValue(now);
-
-            const isStation = locationIsStationMap.get(newLocation) === '是';
-            const isActuallyComputer = computerDetails.row[MASTER_IS_ACTUALLY_COMPUTER_COLUMN_INDEX - 1] === '是';
-            const shouldBeMarked = isStation && isActuallyComputer;
-            computerListSheet.getRange(computerRowIndex, MASTER_IS_COMPUTER_COLUMN_INDEX).setValue(shouldBeMarked ? '是' : '');
-            
-            successCount++;
-            approvedAssetIds.push(assetId);
-            Logger.log(`    -> [成功] 此筆 ${appId} 已更新完畢。`);
-          } else {
-             const errorMessage = `找不到財產編號 ${assetId}`;
-             errors.push(errorMessage);
-             Logger.log(`    -> [錯誤] 雖然找到申請紀錄，但在財產總表中找不到財產 ${assetId}。`);
-          }
+          const isStation = locationIsStationMap.get(newLocation) === '是';
+          const isActuallyComputer = computerDetails.row[MASTER_IS_ACTUALLY_COMPUTER_COLUMN_INDEX - 1] === '是';
+          const shouldBeMarked = isStation && isActuallyComputer;
+          location.sheet.getRange(location.rowIndex, MASTER_IS_COMPUTER_COLUMN_INDEX).setValue(shouldBeMarked ? '是' : '');
+          
+          successCount++;
         } else {
-          const errorMessage = `申請ID ${appId} 的狀態不符`;
-          errors.push(errorMessage);
-          Logger.log(`    -> [跳過] 狀態為 "${statusInSheet}"，不為 "待接收"，因此無法處理。`);
+          errors.push(`找不到資產 ${assetId} 或其位置`);
         }
       } else {
-        const errorMessage = `申請ID ${appId} 可能已被處理或不存在`;
-        errors.push(errorMessage);
-        Logger.log(`    -> [錯誤] 匹配失敗! 在 appLogMap 中找不到 AppID: "${appId}"。`);
+        errors.push(`申請ID ${appId} 狀態不符或不存在`);
       }
     });
-    Logger.log("=== 迴圈處理結束 ===");
-    
-    // --- 結果回報階段 ---
-    // (後續寄信和回傳邏輯不變，僅加上日誌)
+
     if (successCount > 0) {
-        const adminEmails = getAdminEmails();
-        if (adminEmails && adminEmails.length > 0) {
-            Logger.log(`\n步驟 4: 準備寄送通知信給 ${adminEmails.length} 位管理員...`);
-      const subject = `[系統通知] 有 ${successCount} 筆已完成轉移的財產待您更新`;
-      let body = `您好，\n\n系統剛剛有 ${successCount} 筆財產轉移申請已被核准，請您執行後續的上傳更新作業。\n\n`;
-      body += `您可以從試算表的「財產管理系統」選單進入「更新已轉移財產」頁面進行操作。\n\n此為系統自動發送郵件。`;
-      MailApp.sendEmail(adminEmails.join(','), subject, body); // ✨ **修改點**
-      Logger.log(" -> 通知信已寄送。");
-        }
+      const adminEmails = getAdminEmails();
+      if (adminEmails && adminEmails.length > 0) {
+        const subject = `[系統通知] 有 ${successCount} 筆已完成轉移的財產待您更新`;
+        let body = `您好，\n\n系統剛剛有 ${successCount} 筆財產轉移申請已被核准，請您執行後續的上傳更新作業。\n\n`;
+        body += `您可以從試算表的「財產管理系統」選單進入「更新已轉移財產」頁面進行操作。\n\n此為系統自動發送郵件。`;
+        MailApp.sendEmail(adminEmails.join(','), subject, body);
+      }
     }
 
     let message = `成功核准 ${successCount} 筆申請。`;
     if (errors.length > 0) {
-      message += `\n失敗或跳過 ${errors.length} 筆。`;
+      message += `\n失敗或跳過 ${errors.length} 筆 (${errors.join('; ')})。`;
     }
-    Logger.log(`\n--- processBatchApproval 函式執行完畢，最終回傳訊息: "${message.replace(/\n/g, " ")}" ---`);
     return message;
 
   } catch (e) {
-    Logger.log(`!!!!!! processBatchApproval 發生嚴重錯誤 !!!!!!`);
-    Logger.log(`錯誤訊息: ${e.message}`);
-    Logger.log(`錯誤堆疊: ${e.stack}`);
+    Logger.log(`!!!!!! processBatchApproval 發生嚴重錯誤: ${e.message} at ${e.stack}`);
     return "批次核准過程中發生嚴重錯誤: " + e.message;
   }
 }
+
 // =================================================================
 // --- 資產管理員更新功能 (後端) ---
 // =================================================================
@@ -736,8 +741,7 @@ function getAssetsForUpdate() {
     return { error: "權限不足，您無法存取此功能。" };
   }
 
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const values = getAllAssets(); // ✨ 使用代理函式讀取資料
   
   const assetsForUpload = [];
   const assetsForScrap = [];
@@ -783,23 +787,14 @@ function processUploadConfirmation(assetIds) {
   }
 
   try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
     const now = new Date();
     let updatedCount = 0;
 
-    // 建立一個資產編號到列索引的映射，以提高效率
-    const assetIdToRowIndex = {};
-    data.forEach((row, index) => {
-      assetIdToRowIndex[row[MASTER_ASSET_ID_COLUMN_INDEX - 1]] = index + 2; // +2 for 1-based index and header
-    });
-
     assetIds.forEach(id => {
-      const rowIndex = assetIdToRowIndex[id];
-      if (rowIndex) {
-        // 更新 "是否上傳" 和 "上傳時間" 兩個欄位
-        sheet.getRange(rowIndex, MASTER_IS_UPLOADED_COLUMN_INDEX).setValue('V');
-        sheet.getRange(rowIndex, MASTER_UPLOAD_TIME_COLUMN_INDEX).setValue(now);
+      const location = findAssetLocation(id);
+      if (location) {
+        location.sheet.getRange(location.rowIndex, MASTER_IS_UPLOADED_COLUMN_INDEX).setValue('V');
+        location.sheet.getRange(location.rowIndex, MASTER_UPLOAD_TIME_COLUMN_INDEX).setValue(now);
         updatedCount++;
       }
     });
@@ -827,11 +822,10 @@ function processUploadConfirmation(assetIds) {
  */
 function checkComputerReportsAndNotify() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
   const responseSheet = ss.getSheetByName(RESPONSE_SHEET_NAME);
 
-  // 讀取範圍擴大到 I 欄
-  const allRequiredData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, MASTER_IS_COMPUTER_COLUMN_INDEX).getValues();
+  // ✨ 使用代理函式讀取所有資產資料
+  const allRequiredData = getAllAssets();
   
   // ✨ **新增的過濾條件：只篩選出需要回報的電腦**
   const requiredComputers = allRequiredData.filter(row => row[MASTER_IS_COMPUTER_COLUMN_INDEX - 1] === '是');
@@ -941,8 +935,7 @@ function getLendingData() {
     const currentUserEmail = Session.getActiveUser().getEmail();
     
     // 1. 獲取使用者名下「在庫」的資產清單 (邏輯不變)
-    const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn()).getValues();
+    const computerData = getAllAssets(); // ✨ 使用代理函式讀取資料
     const availableAssets = computerData
       .filter(row => row[MASTER_LEADER_EMAIL_COLUMN_INDEX - 1] === currentUserEmail && row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '在庫')
       .map(row => ({
@@ -989,24 +982,27 @@ function processBatchLending(formData) {
     }
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
     const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
     
-    const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn()).getValues();
-    const computerDataMap = new Map(computerData.map((row, index) => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
+    const allAssets = getAllAssets();
+    const computerDataMap = new Map(allAssets.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1].toString(), { row }]));
 
     const now = new Date();
-    const currentUser = Session.getActiveUser().getEmail();
     let successCount = 0;
 
     assetIds.forEach(assetId => {
       const assetDetails = computerDataMap.get(assetId);
       // 雙重確認該資產仍為「在庫」狀態
       if (assetDetails && assetDetails.row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '在庫') {
-        const assetRowIndex = assetDetails.index;
         
-        // 1. 更新「應回報電腦清單」的財產狀態
-        computerListSheet.getRange(assetRowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('出借中');
+        // 1. 更新財產總表的狀態
+        const location = findAssetLocation(assetId);
+        if (location) {
+          location.sheet.getRange(location.rowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('出借中');
+        } else {
+          Logger.log(`processBatchLending: 找不到資產 ${assetId}，跳過。`);
+          return; // continue to next assetId
+        }
 
         // 2. 在「出借紀錄」中新增一筆紀錄
         const lendId = `LEND-${now.getTime()}-${successCount}`;
@@ -1042,8 +1038,7 @@ function getLentOutAssets() {
         const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(LENDING_LOG_SHEET_NAME);
         const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
 
-        const computerListSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-        const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, MASTER_LEADER_EMAIL_COLUMN_INDEX).getValues();
+        const computerData = getAllAssets(); // ✨ 使用代理函式讀取資料
         const computerKeeperMap = new Map(computerData.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], row[MASTER_LEADER_EMAIL_COLUMN_INDEX - 1]]));
 
         const lentAssets = data
@@ -1079,14 +1074,10 @@ function processBatchReturn(lendIds) {
 
     try {
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-        const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
         const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
         
         const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, lendingLogSheet.getLastColumn()).getValues();
         const lendingMap = new Map(lendingData.map((row, index) => [row[LL_LEND_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
-
-        const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn()).getValues();
-        const computerDataMap = new Map(computerData.map((row, index) => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
 
         const now = new Date();
         let successCount = 0;
@@ -1095,17 +1086,16 @@ function processBatchReturn(lendIds) {
             const lendDetails = lendingMap.get(lendId);
             if (lendDetails && lendDetails.row[LL_STATUS_COLUMN_INDEX - 1] === '出借中') {
                 const assetId = lendDetails.row[2];
-                const computerDetails = computerDataMap.get(assetId);
 
                 // 1. 更新「出借紀錄」
                 const lendRowIndex = lendDetails.index;
                 lendingLogSheet.getRange(lendRowIndex, LL_STATUS_COLUMN_INDEX).setValue('已歸還');
                 lendingLogSheet.getRange(lendRowIndex, LL_RETURN_DATE_COLUMN_INDEX).setValue(now);
                 
-                // 2. 更新「應回報電腦清單」
-                if (computerDetails) {
-                    const computerRowIndex = computerDetails.index;
-                    computerListSheet.getRange(computerRowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('在庫');
+                // 2. 更新財產總表的狀態
+                const location = findAssetLocation(assetId);
+                if (location) {
+                    location.sheet.getRange(location.rowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('在庫');
                 }
                 successCount++;
             }
@@ -1173,9 +1163,8 @@ function showScrapDialog() {
  */
 function getScrappableAssets() {
   try {
-    const currentUserEmail = Session.getActiveUser().getEmail();
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+    const currentUserEmail = Session.getActiveUser().getEmail(); // ✨ 修正：補回此行
+    const data = getAllAssets(); // ✨ 使用代理函式讀取資料
 
     const availableAssets = data
       .filter(row => {
@@ -1208,11 +1197,8 @@ function processBatchScrapping(formData) {
       throw new Error("資料不完整，請至少勾選一筆財產並選擇報廢原因。");
     }
 
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    
-    const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn()).getValues();
-    const computerDataMap = new Map(computerData.map((row, index) => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
+    const allAssets = getAllAssets();
+    const computerDataMap = new Map(allAssets.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1].toString(), { row }]));
 
     const now = new Date();
     let successCount = 0;
@@ -1223,14 +1209,15 @@ function processBatchScrapping(formData) {
       const currentStatus = assetDetails ? assetDetails.row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] : '';
 
       if (assetDetails && currentStatus !== '已報廢' && currentStatus !== '報廢中') {
-        const assetRowIndex = assetDetails.index;
-        
-        // ✨ **核心修改點：將狀態更新為「報廢中」**
-        computerListSheet.getRange(assetRowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('報廢中');
-        computerListSheet.getRange(assetRowIndex, MASTER_LAST_MODIFIED_COLUMN_INDEX).setValue(now);
-        computerListSheet.getRange(assetRowIndex, MASTER_REMARKS_COLUMN_INDEX).setValue(fullReason);
-        
-        successCount++;
+        const location = findAssetLocation(assetId);
+        if (location) {
+          location.sheet.getRange(location.rowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('報廢中');
+          location.sheet.getRange(location.rowIndex, MASTER_LAST_MODIFIED_COLUMN_INDEX).setValue(now);
+          location.sheet.getRange(location.rowIndex, MASTER_REMARKS_COLUMN_INDEX).setValue(fullReason);
+          successCount++;
+        } else {
+          Logger.log(`processBatchScrapping: 找不到資產 ${assetId}，跳過。`);
+        }
       }
     });
 
@@ -1255,11 +1242,8 @@ function processScrapConfirmation(assetIds) {
   }
 
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    
-    const computerData = computerListSheet.getRange(2, 1, computerListSheet.getLastRow() - 1, computerListSheet.getLastColumn()).getValues();
-    const computerDataMap = new Map(computerData.map((row, index) => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
+    const allAssets = getAllAssets();
+    const computerDataMap = new Map(allAssets.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1].toString(), { row }]));
 
     const now = new Date();
     let successCount = 0;
@@ -1268,15 +1252,15 @@ function processScrapConfirmation(assetIds) {
       const assetDetails = computerDataMap.get(assetId);
       // 確保該資產確實處於「報廢中」狀態
       if (assetDetails && assetDetails.row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '報廢中') {
-        const assetRowIndex = assetDetails.index;
-        
-        // 將狀態從「報廢中」更新為「已報廢」，並更新備註
-        computerListSheet.getRange(assetRowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('已報廢');
-        const originalReason = assetDetails.row[MASTER_REMARKS_COLUMN_INDEX - 1];
-        computerListSheet.getRange(assetRowIndex, MASTER_REMARKS_COLUMN_INDEX).setValue(originalReason.replace('[報廢申請]', '[報廢完成]'));
-        computerListSheet.getRange(assetRowIndex, MASTER_LAST_MODIFIED_COLUMN_INDEX).setValue(now); // 再次更新異動日期
-        
-        successCount++;
+        const location = findAssetLocation(assetId);
+        if (location) {
+          // 將狀態從「報廢中」更新為「已報廢」，並更新備註
+          location.sheet.getRange(location.rowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue('已報廢');
+          const originalReason = assetDetails.row[MASTER_REMARKS_COLUMN_INDEX - 1];
+          location.sheet.getRange(location.rowIndex, MASTER_REMARKS_COLUMN_INDEX).setValue(originalReason.replace('[報廢申請]', '[報廢完成]'));
+          location.sheet.getRange(location.rowIndex, MASTER_LAST_MODIFIED_COLUMN_INDEX).setValue(now); // 再次更新異動日期
+          successCount++;
+        }
       }
     });
 
@@ -1375,8 +1359,7 @@ function getAllScrappableItems(assetCategory) {
     return { error: "權限不足，您無法存取此功能。" };
   }
   try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    const values = sheet.getDataRange().getValues();
+    const values = getAllAssets(); // ✨ 使用代理函式讀取資料
     const items = [];
     values.forEach(row => {
       const status = row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1];
@@ -1414,11 +1397,7 @@ function getScrappingDataForAdmin(assetCategory) {
   }
 
   try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    if (!sheet) return [];
-    
-    const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(MASTER_ASSET_STATUS_COLUMN_INDEX, MASTER_ASSET_CATEGORY_COLUMN_INDEX));
-    const values = dataRange.getValues();
+    const values = getAllAssets(); // ✨ 使用代理函式讀取資料
     
     const applicants = {}; // 使用物件來分組
 
@@ -1454,11 +1433,7 @@ function getScrappingDataForAdmin(assetCategory) {
  */
 function getScrappingApplicants(assetCategory) {
   try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    if (!sheet) return [];
-    
-    const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, Math.max(MASTER_ASSET_STATUS_COLUMN_INDEX, MASTER_ASSET_CATEGORY_COLUMN_INDEX));
-    const values = dataRange.getValues();
+    const values = getAllAssets(); // ✨ 使用代理函式讀取資料
     
     const applicants = {}; // 使用物件來分組
 
@@ -1497,43 +1472,33 @@ function getScrappingApplicants(assetCategory) {
 function createScrapDoc(applicantName, assetCategory, assetIds) {
   const now = new Date();
   try {
-
-    // --- 2. 取得資料 (邏輯不變) ---
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const computerListSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-    const masterSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-
-    const computerListData = computerListSheet.getDataRange().getValues();
+    // --- 2. 取得資料 ---
+    const allAssets = getAllAssets();
     const assetsToScrap = [];
 
     if (assetIds && assetIds.length > 0) {
       const assetIdSet = new Set(assetIds);
-      for (let i = 1; i < computerListData.length; i++) {
-        const row = computerListData[i];
+      allAssets.forEach(row => {
         if (assetIdSet.has(row[MASTER_ASSET_ID_COLUMN_INDEX - 1])) {
           assetsToScrap.push({
             assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
-            rowIndex: i + 1,
             scrapReason: row[MASTER_REMARKS_COLUMN_INDEX - 1]
           });
         }
-      }
+      });
     } else {
-      for (let i = 1; i < computerListData.length; i++) {
-        const row = computerListData[i];
+      allAssets.forEach(row => {
         if (row[MASTER_LEADER_NAME_COLUMN_INDEX - 1] === applicantName && row[MASTER_ASSET_STATUS_COLUMN_INDEX - 1] === '報廢中' && row[MASTER_ASSET_CATEGORY_COLUMN_INDEX - 1] === assetCategory) {
           assetsToScrap.push({
             assetId: row[MASTER_ASSET_ID_COLUMN_INDEX - 1],
-            rowIndex: i + 1,
             scrapReason: row[MASTER_REMARKS_COLUMN_INDEX - 1]
           });
         }
-      }
+      });
     }
     if (assetsToScrap.length === 0) throw new Error(`找不到 ${applicantName} 的待報廢財產。`);
 
-    const masterData = masterSheet.getRange(2, 1, masterSheet.getLastRow() - 1, Math.max(MASTER_USE_LIFE_COLUMN_INDEX, MASTER_PURCHASE_DATE_COLUMN_INDEX)).getValues();
-    const masterDataMap = new Map(masterData.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], row]));
+    const masterDataMap = new Map(allAssets.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], row]));
 
     // --- 3. 複製與替換表頭 (邏輯不變) ---
     const templateId = assetCategory === '財產' ? SCRAP_TEMPLATE_DOC_ID_PROPERTY : SCRAP_TEMPLATE_DOC_ID_NON_CONSUMABLE;
@@ -1568,10 +1533,9 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
       const assetInfo = masterDataMap.get(asset.assetId.trim());
       if (assetInfo) {
         
-        // --- ✨ 核心修正點 2：處理民國年日期 & 計算已使用期間 ---
         let purchaseDateStr = (assetInfo[MASTER_PURCHASE_DATE_COLUMN_INDEX - 1] || '').toString();
         Logger.log('Original purchaseDateStr: ' + purchaseDateStr);
-        purchaseDateStr = purchaseDateStr.split('\n')[0].trim(); // 清理可能的換行符
+        purchaseDateStr = purchaseDateStr.split('\n')[0].trim();
 
         let purchaseDate = null;
         let years = 'N/A';
@@ -1587,7 +1551,7 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
             if (dateParts) {
                 const minguoYear = parseInt(dateParts[1], 10);
                 const gregorianYear = minguoYear + 1911;
-                const monthJs = parseInt(dateParts[2], 10) - 1; // JavaScript 的月份是 0-11
+                const monthJs = parseInt(dateParts[2], 10) - 1;
                 const day = parseInt(dateParts[3], 10);
                 purchaseDate = new Date(gregorianYear, monthJs, day);
             }
@@ -1595,20 +1559,15 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
 
         if (purchaseDate && !isNaN(purchaseDate.getTime())) {
              purchaseDateFormatted = Utilities.formatDate(purchaseDate, "GMT+8", "yyyy/MM/dd");
-             // 重新計算正確的已使用期間
              const monthsUsed = (now.getFullYear() - purchaseDate.getFullYear()) * 12 + (now.getMonth() - purchaseDate.getMonth());
              years = Math.floor(monthsUsed / 12);
              months = monthsUsed % 12;
         }
 
-        // --- ✨ 核心修正點 3：格式化數字為整數字串 ---
-        const serialNumber = (index + 1).toString(); // 序號轉字串
+        const serialNumber = (index + 1).toString();
         const usefulLifeRaw = assetInfo[MASTER_USE_LIFE_COLUMN_INDEX - 1];
-        // 使用 parseInt 確保得到整數，再轉為字串
         const usefulLife = !isNaN(parseInt(usefulLifeRaw)) ? parseInt(usefulLifeRaw).toString() : (usefulLifeRaw || '');
-
-        // ✨ **核心修改點：直接使用從 L 欄讀取到的原因，不再進行任何解析**
-        const reasonCode = asset.scrapReason || ''; // 如果 L 欄是空的，就填入空字串
+        const reasonCode = asset.scrapReason || '';
 
         const rowData = [
           serialNumber,
@@ -1616,8 +1575,8 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
           assetInfo[MASTER_ASSET_NAME_COLUMN_INDEX - 1],
           purchaseDateFormatted,
           usefulLife,
-          `${years}/${months}`, // 正確的已使用期間
-          reasonCode // 直接使用從 L 欄讀取的值
+          `${years}/${months}`,
+          reasonCode
         ];
         tableValues.push(rowData);
       }
@@ -1628,13 +1587,15 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
     headerRowStyle[DocumentApp.Attribute.BOLD] = true;
     newTable.getRow(0).setAttributes(headerRowStyle);
 
-    // --- 5. 儲存並回寫連結 (邏輯不變) ---
+    // --- 5. 儲存並回寫連結 ---
     newDoc.saveAndClose();
     const fileUrl = newFile.getUrl();
     
     assetsToScrap.forEach(asset => {
-    //  computerListSheet.getRange(asset.rowIndex, MASTER_ASSET_STATUS_COLUMN_INDEX).setValue("報廢完成");
-      computerListSheet.getRange(asset.rowIndex, MASTER_DOC_URL_COLUMN_INDEX).setValue(fileUrl);
+      const location = findAssetLocation(asset.assetId);
+      if (location) {
+        location.sheet.getRange(location.rowIndex, MASTER_DOC_URL_COLUMN_INDEX).setValue(fileUrl);
+      }
     });
     
     Logger.log(`成功為 ${applicantName} 產生文件: ${fileUrl}`);
@@ -1650,11 +1611,15 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
 // --- 除錯專用測試函式 ---
 function testMyEmail() {
   const currentUserEmail = Session.getActiveUser().getEmail();
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
-  const firstDataEmail = sheet.getRange("C2").getValue(); // 取得第一筆資料的 Email
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) {
+    Logger.log(`工作表 "${PROPERTY_MASTER_SHEET_NAME}" 不存在或沒有資料。`);
+    return;
+  }
+  const firstDataEmail = sheet.getRange(2, MASTER_LEADER_EMAIL_COLUMN_INDEX).getValue();
 
   Logger.log("系統偵測到您登入的 Email 是：" + currentUserEmail);
-  Logger.log("工作表中第一筆財產的保管人 Email 是：" + firstDataEmail);
+  Logger.log(`工作表 "${PROPERTY_MASTER_SHEET_NAME}" 中第一筆財產的保管人 Email 是：` + firstDataEmail);
 
   if (currentUserEmail === firstDataEmail) {
     Logger.log("比對結果：相符！");
