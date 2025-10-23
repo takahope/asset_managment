@@ -538,34 +538,47 @@ function processBatchTransferApplication(formData) {
  * [供 review.html 呼叫] 獲取當前使用者所有待審核的申請 (附有詳細日誌的偵錯版)
  */
 function getPendingApprovals() {
-  Logger.log("--- getPendingApprovals 函式開始執行 ---");
+  Logger.log("--- getPendingApprovals 函式開始執行 (v2) ---");
   const startTime = new Date();
 
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
     Logger.log(`步驟 1: 獲取當前使用者 Email: ${currentUserEmail}`);
 
-    const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    Logger.log(`步驟 2: 連接到 "${APPLICATION_LOG_SHEET_NAME}" 工作表。`);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    const masterAssetSheet = ss.getSheetByName(MASTER_ASSET_LIST_SHEET_NAME);
+    Logger.log(`步驟 2: 連接到 "${APPLICATION_LOG_SHEET_NAME}" 和 "${MASTER_ASSET_LIST_SHEET_NAME}" 工作表。`);
+
+    // 步驟 3: 讀取財產總表並建立 Map
+    const masterAssetData = masterAssetSheet.getRange(2, 1, masterAssetSheet.getLastRow() - 1, MASTER_ASSET_NAME_COLUMN_INDEX).getValues();
+    const assetIdToNameMap = new Map(masterAssetData.map(row => [row[MASTER_ASSET_ID_COLUMN_INDEX - 1], row[MASTER_ASSET_NAME_COLUMN_INDEX - 1]]));
+    Logger.log(` -> 財產總表對照 Map 建立完成，共 ${assetIdToNameMap.size} 筆。`);
     
+    // 步驟 4: 讀取申請紀錄
     const range = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn());
     const values = range.getValues();
     const readEndTime = new Date();
-    Logger.log(`步驟 3: 一次性讀取 ${values.length} 筆資料完成。耗時: ${(readEndTime - startTime) / 1000} 秒。`);
+    Logger.log(`步驟 5: 一次性讀取 ${values.length} 筆申請紀錄完成。耗時: ${(readEndTime - startTime) / 1000} 秒。`);
 
+    // 步驟 6: 過濾與組合資料
     const pendingApprovals = values
       .filter(row => row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] === currentUserEmail && row[AL_STATUS_COLUMN_INDEX - 1] === "待接收")
-      .map(row => ({
-        appId: row[0],
-        applyTime: new Date(row[1]).toLocaleString('zh-TW'),
-        assetId: row[2],
-        oldKeeper: row[3],
-        oldLocation: row[4],
-        newLocation: row[6]
-      }));
+      .map(row => {
+        const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+        return {
+          appId: row[AL_APP_ID_COLUMN_INDEX - 1],
+          applyTime: new Date(row[AL_APP_TIME_COLUMN_INDEX - 1]).toLocaleString('zh-TW'),
+          assetId: assetId,
+          assetName: assetIdToNameMap.get(assetId) || '（找不到名稱）', // 從 Map 獲取名稱
+          oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
+          oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
+          newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1]
+        };
+      });
     
     const processEndTime = new Date();
-    Logger.log(`步驟 4: 在記憶體中過濾與轉換資料完成，共找到 ${pendingApprovals.length} 筆待審核項目。耗時: ${(processEndTime - readEndTime) / 1000} 秒。`);
+    Logger.log(`步驟 7: 在記憶體中過濾與轉換資料完成，共找到 ${pendingApprovals.length} 筆待審核項目。耗時: ${(processEndTime - readEndTime) / 1000} 秒。`);
     Logger.log(`--- getPendingApprovals 函式執行完畢，總耗時: ${(processEndTime - startTime) / 1000} 秒 ---`);
     
     return { approvals: pendingApprovals };
