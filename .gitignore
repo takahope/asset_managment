@@ -2,3 +2,4 @@
 .cursorindexingignore
 .env
 .geminiignore
+將資料「物件化 (Object-Oriented)」，徹底分離「資料的物理儲存」與「程式的邏輯使用」.md
