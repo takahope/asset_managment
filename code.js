@@ -29,7 +29,7 @@ const PROPERTY_COLUMN_INDICES = {
   PURCHASE_DATE: 5, // E欄: 取得日期
   USE_LIFE: 6,      // F欄: 使用年限
   ASSET_CATEGORY: 10, // J欄: 財產類別
-  LOCATION: 8,      // H欄: 保管地點 (財產)
+  LOCATION: 14,      // H欄: 保管地點 (財產)
   LEADER_EMAIL: 15, // O欄: 駐管電子郵件
   LEADER_NAME: 16,  // P欄: 駐管
   ASSET_STATUS: 17, // Q欄: 財產狀態
@@ -50,7 +50,7 @@ const ITEM_COLUMN_INDICES = {
   PURCHASE_DATE: 5, // E欄: 取得日期
   USE_LIFE: 6,      // F欄: 使用年限
   ASSET_CATEGORY: 10, // J欄: 財產類別
-  LOCATION: 13,     // M欄: 保管地點 (物品)
+  LOCATION: 14,     // M欄: 保管地點 (物品)
   LEADER_EMAIL: 15, // O欄: 駐管電子郵件
   LEADER_NAME: 16,  // P欄: 駐管
   ASSET_STATUS: 17, // Q欄: 財產狀態
@@ -967,33 +967,40 @@ function showReturnDialog() {
  */
 function getLendingData() {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const currentUserEmail = Session.getActiveUser().getEmail();
-    
     const allAssets = getAllAssets();
+
+    // 1. 篩選出當前使用者可出借的資產
     const availableAssets = allAssets
       .filter(asset => asset.leaderEmail === currentUserEmail && asset.assetStatus === '在庫')
       .map(asset => ({
         id: asset.assetId,
+        assetName: asset.assetName,
+        leaderName: asset.leaderName,
         location: asset.location
       }));
-      
-    const mappingSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-    const mappingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, 3).getValues();
-    
-    const borrowers = {};
-    mappingData.forEach(row => {
-        const name = row[2];
-        if (name) {
-            borrowers[name.trim()] = true;
-        }
-    });
-    
-    const borrowerList = Object.keys(borrowers).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 
+    // 2. 從所有資產中，提取不重複的借用人 (姓名) 和地點
+    const uniqueBorrowersSet = new Set();
+    const uniqueLocationsSet = new Set();
+    allAssets.forEach(asset => {
+      if (asset.leaderName) {
+        uniqueBorrowersSet.add(asset.leaderName);
+      }
+      if (asset.location) {
+        uniqueLocationsSet.add(asset.location);
+      }
+    });
+
+    // 3. 將 Set 轉換為排序後的陣列
+    const borrowerList = Array.from(uniqueBorrowersSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    const locationList = Array.from(uniqueLocationsSet).sort();
+
+    // 4. 回傳整合後的資料
     return { 
         assets: availableAssets,
-        borrowers: borrowerList
+        borrowers: borrowerList,
+        locations: locationList
     };
 
   } catch (e) {
@@ -1007,9 +1014,9 @@ function getLendingData() {
  */
 function processBatchLending(formData) {
   try {
-    const { assetIds, borrowerName, returnDate, reason } = formData;
-    if (!assetIds || assetIds.length === 0 || !borrowerName || !returnDate) {
-      throw new Error("資料不完整，請至少勾選一筆財產並填寫借用人和預計歸還日期。");
+    const { assetIds, borrowerName, returnDate, reason, lendingLocation } = formData;
+    if (!assetIds || assetIds.length === 0 || !borrowerName || !returnDate || !lendingLocation) {
+      throw new Error("資料不完整，請填寫所有必填欄位。");
     }
 
     const lendingLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(LENDING_LOG_SHEET_NAME);
@@ -1028,10 +1035,11 @@ function processBatchLending(formData) {
           location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('出借中');
           
           const lendId = `LEND-${now.getTime()}-${successCount}`;
+          // ✨ **核心修改：在 appendRow 中增加 lendingLocation**
           lendingLogSheet.appendRow([
             lendId, now, asset.assetId, asset.leaderName,
-            borrowerName, new Date(returnDate), "",
-            reason, "出借中"
+            borrowerName, new Date(returnDate), "", // 實際歸還日期留空
+            reason, "出借中", lendingLocation // 寫入新的 J 欄
           ]);
           successCount++;
         } else {
