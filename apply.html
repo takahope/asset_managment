@@ -98,12 +98,11 @@
 
     <script>
         let allAssets = [];
-        let filteredAssets = []; // ✨ 新增：用於存放篩選後結果的陣列
-        let custodianDataMap = {};
+        let filteredAssets = [];
+        // custodianDataMap 已不再需要
 
-        // ✨ 新增：分頁狀態變數
         let currentPage = 1;
-        let rowsPerPage = 2000; // 每頁顯示 15 筆
+        let rowsPerPage = 2000;
 
         document.addEventListener("DOMContentLoaded", () => {
             google.script.run
@@ -118,21 +117,24 @@
         });
 
         function populateForm(data) {
-            custodianDataMap = data.custodianMap;
             allAssets = data.assets;
-            filteredAssets = allAssets; // 初始時，篩選結果等於全部資料
+            filteredAssets = allAssets; 
 
             if (!allAssets || allAssets.length === 0) {
                 showError({message: "您目前沒有可轉移的財產。"});
                 return;
             }
             
-            displayPage(currentPage); // ✨ 修改：不再直接渲染表格，而是呼叫分頁顯示函式
+            displayPage(currentPage);
             populateLocationFilter(allAssets);
             populateCategoryFilter(allAssets);
             
+            // ✨ **核心修改：使用新的 keepers 和 locations 資料來填充下拉選單**
             const keeperSelect = document.getElementById('keeper-select');
-            const sortedKeepers = Object.entries(custodianDataMap).map(([email, info]) => ({ email, ...info })).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+            const locationSelect = document.getElementById('location-select');
+
+            // 填充保管人 (顯示姓名，值為 Email)
+            const sortedKeepers = Object.entries(data.keepers).map(([email, name]) => ({ email, name })).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
             sortedKeepers.forEach(keeper => {
                 const option = document.createElement('option');
                 option.value = keeper.email;
@@ -140,7 +142,16 @@
                 option.textContent = displayName;
                 keeperSelect.appendChild(option);
             });
-            keeperSelect.addEventListener('change', updateLocationOptions);
+
+            // 填充地點 (不再與保管人連動)
+            locationSelect.innerHTML = '<option value="">請選擇地點...</option>'; // 清空並加入預設選項
+            data.locations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                locationSelect.appendChild(option);
+            });
+            locationSelect.disabled = false; // 直接啟用
         }
 
         // ✨ **核心修改：此函式負責顯示特定頁面的內容和分頁控制項**
@@ -266,22 +277,9 @@
             });
             updateSelectedCount();
         }
-        function updateLocationOptions() {
-            const keeperSelect = document.getElementById('keeper-select');
-            const locationSelect = document.getElementById('location-select');
-            const selectedEmail = keeperSelect.value;
-            locationSelect.innerHTML = '<option value="">請選擇地點...</option>';
-            locationSelect.disabled = true;
-            if (selectedEmail && custodianDataMap[selectedEmail]) {
-                custodianDataMap[selectedEmail].locations.sort().forEach(loc => {
-                    const option = document.createElement('option');
-                    option.value = loc;
-                    option.textContent = loc;
-                    locationSelect.appendChild(option);
-                });
-                locationSelect.disabled = false;
-            }
-        }
+
+        // ✨ **移除 updateLocationOptions 函式，因為不再需要**
+
         function submitApplication() {
             const selectedAssets = Array.from(document.querySelectorAll('.asset-checkbox:checked')).map(cb => cb.value);
             const keeperSelect = document.getElementById('keeper-select');

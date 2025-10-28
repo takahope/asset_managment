@@ -519,25 +519,10 @@ function processFormData(formObject) {
  * (此函式與前一版相同，為求完整一併提供)
  */
 function getTransferData() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const currentUserEmail = Session.getActiveUser().getEmail();
-  const mappingSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-  const mappingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, 3).getValues();
-  const custodianMap = {};
-  mappingData.forEach(row => {
-    const location = row[0], email = row[1], name = row[2];
-    if (email && name && location) {
-      if (!custodianMap[email]) {
-        custodianMap[email] = { name: name, locations: [] };
-      }
-      if (custodianMap[email].locations.indexOf(location) === -1) {
-         custodianMap[email].locations.push(location);
-      }
-    }
-  });
-  
   const allAssets = getAllAssets();
-  
+
+  // 1. 從所有資產中，篩選出屬於當前使用者的、可轉移的資產
   const myAssets = allAssets
     .filter(asset => asset.leaderEmail === currentUserEmail && asset.assetStatus === '在庫')
     .map(asset => ({
@@ -546,8 +531,37 @@ function getTransferData() {
       location: asset.location,
       category: asset.assetCategory
     }));
-  
-  return { userEmail: currentUserEmail, assets: myAssets, custodianMap: custodianMap };
+
+  // 2. 從所有資產中，提取不重複的保管人 (Email -> Name) 和地點
+  const uniqueKeepersMap = new Map();
+  const uniqueLocationsSet = new Set();
+
+  allAssets.forEach(asset => {
+    if (asset.leaderEmail && asset.leaderName) {
+      if (!uniqueKeepersMap.has(asset.leaderEmail)) {
+        uniqueKeepersMap.set(asset.leaderEmail, asset.leaderName);
+      }
+    }
+    if (asset.location) {
+      uniqueLocationsSet.add(asset.location);
+    }
+  });
+
+  // 3. 將 Map 和 Set 轉換為前端需要的格式
+  const keepers = {};
+  uniqueKeepersMap.forEach((name, email) => {
+    keepers[email] = name;
+  });
+
+  const locations = Array.from(uniqueLocationsSet).sort();
+
+  // 4. 回傳整合後的資料
+  return { 
+    userEmail: currentUserEmail, 
+    assets: myAssets, 
+    keepers: keepers, 
+    locations: locations 
+  };
 }
 
 /**
@@ -561,15 +575,12 @@ function processBatchTransferApplication(formData) {
         throw new Error("提交的資料不完整，請至少勾選一筆財產並選擇保管人與地點。");
     }
 
+    const allAssets = getAllAssets();
+    const emailToNameMap = new Map(allAssets.map(asset => [asset.leaderEmail, asset.leaderName]));
+    const newKeeperName = emailToNameMap.get(newKeeperEmail) || newKeeperEmail.split('@')[0];
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    const mappingSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-    
-    const mappingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, 3).getValues();
-    
-    const newKeeperInfo = mappingData.find(row => row[1] === newKeeperEmail);
-    if (!newKeeperInfo) throw new Error("在保管人清單中找不到 Email: " + newKeeperEmail);
-    const newKeeperName = newKeeperInfo[2];
 
     const now = new Date();
     const newLogsToAdd = [];
@@ -578,7 +589,6 @@ function processBatchTransferApplication(formData) {
     assetIds.forEach(assetId => {
       const location = findAssetLocation(assetId);
       if (location) {
-        // 為了獲取資產的當前狀態，我們需要讀取它
         const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
         const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
         const asset = mapRowToAssetObject(assetRow, indices, location.sheetName);
