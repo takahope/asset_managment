@@ -1067,7 +1067,7 @@ function getLentOutAssets() {
     try {
         const currentUserEmail = Session.getActiveUser().getEmail();
         const lendingLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(LENDING_LOG_SHEET_NAME);
-        const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, lendingLogSheet.getLastColumn()).getValues();
+        const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, 10).getValues(); // ✨ 讀取到 J 欄
 
         const allAssets = getAllAssets();
         const assetKeeperMap = new Map(allAssets.map(asset => [asset.assetId, asset.leaderEmail]));
@@ -1085,7 +1085,8 @@ function getLentOutAssets() {
                 assetId: row[2],
                 borrower: row[4],
                 expectedReturnDate: new Date(row[5]).toLocaleDateString('zh-TW'),
-                reason: row[7]
+                reason: row[7],
+                lendingLocation: row[9] || '' // ✨ 新增：讀取 J 欄 (索引為9) 的出借後地點
             }));
 
         return { assets: lentAssets };
