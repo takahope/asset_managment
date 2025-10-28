@@ -382,6 +382,7 @@ function getUserStateData() {
     assetId: asset.assetId,
     assetName: asset.assetName,
     leader: asset.leaderName,
+    leaderEmail: asset.leaderEmail, // ✨ Add leaderEmail
     location: asset.location,
     status: asset.assetStatus,
     category: asset.assetCategory
@@ -389,6 +390,7 @@ function getUserStateData() {
 
   return {
     isAdmin: isAdmin,
+    userEmail: currentUserEmail, // ✨ Add userEmail
     assets: results
   };
 }
@@ -1177,7 +1179,7 @@ function include(filename) {
 }
 
 // =================================================================
-// --- ✨ 全新功能模組：財產報廢 ✨ ---
+// --- ✨ 全新功能模組：財產報廢 --- ✨
 // =================================================================
 
 /**
@@ -1311,7 +1313,7 @@ function getAdminEmails() {
   // 步驟 1: 嘗試從快取中讀取資料
   const cachedAdmins = cache.get(cacheKey);
   if (cachedAdmins) {
-    Logger.log("從快取中成功讀取管理員名單。");
+    Logger.log("從快取中成功讀取管理員名單。 সনাক্তকরণ");
     return JSON.parse(cachedAdmins); // 將快取的字串轉回陣列
   }
 
@@ -1628,5 +1630,74 @@ function testMyEmail() {
     Logger.log("比對結果：相符！");
   } else {
     Logger.log("比對結果：不相符！請檢查這兩個 Email 是否有差異。");
+  }
+}
+/**
+ * [供 userstate.html 呼叫] 取消「轉移中」或「報廢中」的資產申請
+ * @param {string} assetId - 要取消的財產編號
+ * @returns {object} - 回傳 { success: true } 或 { success: false, error: '...' }
+ */
+function cancelTransferOrScrap(assetId) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const isAdmin = checkAdminPermissions();
+    
+    const allAssets = getAllAssets();
+    const asset = allAssets.find(a => a.assetId === assetId);
+
+    if (!asset) {
+      throw new Error(`找不到財產編號為 ${assetId} 的資料。`);
+    }
+
+    // Security Check: Must be admin or the asset's owner
+    if (!isAdmin && asset.leaderEmail !== currentUserEmail) {
+      throw new Error("權限不足，只有此財產的保管人或管理員才能執行此操作。");
+    }
+
+    const originalStatus = asset.assetStatus;
+
+    if (originalStatus === '轉移中' || originalStatus === '待接收') { 
+      const location = findAssetLocation(assetId);
+      if (!location) throw new Error(`在工作表中找不到資產 ${assetId} 的位置。`);
+
+      // 1. Update asset status in main sheet
+      const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+      location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('在庫');
+      
+      // 2. Update status in APPLICATION_LOG_SHEET
+      const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
+      const logData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+      
+      // Find the last pending application for this asset and cancel it
+      for (let i = logData.length - 1; i >= 0; i--) {
+        const row = logData[i];
+        const logAssetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+        const logStatus = row[AL_STATUS_COLUMN_INDEX - 1];
+        if (logAssetId === assetId && (logStatus === '待接收' || logStatus === '轉移中')) {
+          appLogSheet.getRange(i + 2, AL_STATUS_COLUMN_INDEX).setValue('已取消');
+          break; // Cancel only the most recent one
+        }
+      }
+      
+    } else if (originalStatus === '報廢中') {
+      const location = findAssetLocation(assetId);
+      if (!location) throw new Error(`在工作表中找不到資產 ${assetId} 的位置。`);
+
+      // 1. Update asset status in main sheet
+      const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+      location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('在庫');
+      
+      // 2. Clear the remarks
+      location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue('');
+
+    } else {
+      throw new Error(`此財產的狀態 (${originalStatus}) 無法被取消。`);
+    }
+
+    return { success: true };
+
+  } catch (e) {
+    Logger.log(`取消申請失敗 (assetId: ${assetId}): ${e.message} at ${e.stack}`);
+    return { success: false, error: e.message };
   }
 }
