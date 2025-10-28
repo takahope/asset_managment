@@ -57,6 +57,7 @@
                         <th>保管位置</th>
                         <th>財產類別</th>
                         <th>狀態</th>
+                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="asset-list">
@@ -69,9 +70,12 @@
     <script>
         let allAssets = [];
         let isAdmin = false;
+        let currentUserEmail = '';
+        let webAppUrl = ''; // ✨ 新增：儲存 Web App 的基礎 URL
 
         document.addEventListener("DOMContentLoaded", () => {
             showLoading(true);
+            google.script.run.withSuccessHandler(url => { webAppUrl = url; }).getAppUrl(); // ✨ 新增：獲取 URL
             google.script.run
                 .withSuccessHandler(populatePage)
                 .withFailureHandler(showError)
@@ -86,6 +90,7 @@
 
             isAdmin = response.isAdmin;
             allAssets = response.assets;
+            currentUserEmail = response.userEmail; // ✨ 儲存當前使用者 Email
 
             populateFilters(allAssets);
 
@@ -171,7 +176,7 @@
             listBody.innerHTML = '';
 
             if (!assets || assets.length === 0) {
-                listBody.innerHTML = '<tr><td colspan="6" class="text-center">沒有符合條件的資料。</td></tr>';
+                listBody.innerHTML = '<tr><td colspan="7" class="text-center">沒有符合條件的資料。</td></tr>';
                 return;
             }
 
@@ -179,12 +184,20 @@
                 '在庫': 'badge-success',
                 '出借中': 'badge-warning',
                 '報廢中': 'badge-danger',
-                '已報廢': 'badge-secondary'
+                '已報廢': 'badge-secondary',
+                '轉移中': 'badge-primary'
             };
 
             assets.forEach(asset => {
                 const row = document.createElement('tr');
                 const statusColor = statusColors[asset.status] || 'badge-info';
+                
+                let actionHtml = '';
+                const canCancel = isAdmin || currentUserEmail === asset.leaderEmail;
+                if (canCancel && (asset.status === '轉移中' || asset.status === '報廢中')) {
+                    actionHtml = `<button class="btn btn-sm btn-danger" onclick="promptCancel('${asset.assetId}', '${asset.status}')">取消</button>`;
+                }
+
                 row.innerHTML = `
                     <td>${asset.assetId}</td>
                     <td>${asset.assetName}</td>
@@ -192,9 +205,30 @@
                     <td>${asset.location}</td>
                     <td>${asset.category}</td>
                     <td><span class="badge ${statusColor}">${asset.status}</span></td>
+                    <td>${actionHtml}</td>
                 `;
                 listBody.appendChild(row);
             });
+        }
+
+        // ✨ 新增：取消按鈕的處理函式
+        function promptCancel(assetId, status) {
+            const confirmation = confirm(`您確定要取消這筆 [${status}] 狀態的申請嗎？\n\n財產編號：${assetId}\n\n此操作將會把財產狀態恢復為「在庫」。`);
+            if (confirmation) {
+                showLoading(true);
+                google.script.run
+                    .withSuccessHandler(response => {
+                        if (response.success) {
+                            // 操作成功後，直接重新導向到目前頁面，取代 location.reload()
+                            window.open(webAppUrl + '?page=userstate', '_top');
+                        } else {
+                            showLoading(false);
+                            showError({ message: response.error });
+                        }
+                    })
+                    .withFailureHandler(showError)
+                    .cancelTransferOrScrap(assetId);
+            }
         }
 
         function showLoading(isLoading) {
