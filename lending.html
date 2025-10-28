@@ -27,7 +27,7 @@
                 </div>
                 <div class="form-group col-md-6">
                     <label for="search-box">依關鍵字搜尋：</label>
-                    <input type="text" class="form-control" id="search-box" placeholder="輸入產編或地點...">
+                    <input type="text" class="form-control" id="search-box" placeholder="輸入產編、名稱、保管人...">
                 </div>
             </div>
 
@@ -36,8 +36,10 @@
                     <thead class="thead-light" style="position: sticky; top: 0;">
                         <tr>
                             <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
-                            <th style="width: 55%;">財產編號</th>
-                            <th style="width: 40%;">目前地點</th>
+                            <th style="width: 25%;">財產編號</th>
+                            <th style="width: 30%;">財產名稱</th>
+                            <th style="width: 20%;">目前地點</th>
+                            <th style="width: 20%;">保管人</th>
                         </tr>
                     </thead>
                     <tbody id="asset-list"></tbody>
@@ -49,11 +51,19 @@
             <p>已勾選 <span id="selected-count" class="font-weight-bold">0</span> 筆財產</p>
             <hr>
 
-            <div class="form-group">
-                <label for="borrower-select"><b>借用人姓名：</b></label>
-                <select id="borrower-select" class="form-control" required>
-                    <option value="">請選擇借用人...</option>
-                </select>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label for="borrower-select"><b>借用人姓名：</b></label>
+                    <select id="borrower-select" class="form-control" required>
+                        <option value="">請選擇借用人...</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-6">
+                    <label for="lending-location-select"><b>借出後放置地點：</b></label>
+                    <select id="lending-location-select" class="form-control" required>
+                        <option value="">請選擇地點...</option>
+                    </select>
+                </div>
             </div>
             <div class="form-group">
                 <label for="return-date"><b>預計歸還日期：</b></label>
@@ -94,17 +104,15 @@
             allAssets = response.assets;
 
             if (!allAssets || allAssets.length === 0) {
-                document.getElementById('asset-table-container').style.display = 'none';
-                document.getElementById('submit-btn').style.display = 'none';
-                document.getElementById('no-data-message').style.display = 'block';
+                document.getElementById('main-form').innerHTML = '<div class="alert alert-info">您目前沒有任何「在庫」狀態的財產可供出借。</div>';
                 return;
             }
 
             renderTable(allAssets);
             populateLocationFilter(allAssets);
-            populateBorrowerSelect(response.borrowers); // ✨ **新增：填充借用人選單**
+            populateBorrowerSelect(response.borrowers);
+            populateLendingLocationSelect(response.locations);
 
-            // ✨ **新增：為篩選器和全選框加上事件監聽**
             document.getElementById('location-filter-select').addEventListener('change', filterTable);
             document.getElementById('search-box').addEventListener('input', filterTable);
             document.getElementById('select-all').addEventListener('change', toggleSelectAll);
@@ -115,14 +123,17 @@
             assetListBody.innerHTML = '';
             assets.forEach(asset => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td><td>${asset.id}</td><td>${asset.location}</td>`;
+                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td>` +
+                                `<td>${asset.id}</td>` +
+                                `<td>${asset.assetName}</td>` +
+                                `<td>${asset.location}</td>` +
+                                `<td>${asset.leaderName}</td>`;
                 assetListBody.appendChild(row);
             });
             document.querySelectorAll('.asset-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedCount));
             updateSelectedCount();
         }
 
-        // ✨ **新增：從 apply.html 移植過來的函式**
         function populateLocationFilter(assets) {
             const locationFilterSelect = document.getElementById('location-filter-select');
             const uniqueLocations = [...new Set(assets.map(asset => asset.location))].sort();
@@ -134,7 +145,6 @@
             });
         }
         
-        // ✨ **新增：填充借用人下拉選單的函式**
         function populateBorrowerSelect(borrowers) {
             const borrowerSelect = document.getElementById('borrower-select');
             if (borrowers && borrowers.length > 0) {
@@ -147,13 +157,27 @@
             }
         }
 
-        // ✨ **新增：從 apply.html 移植過來的篩選邏輯**
+        function populateLendingLocationSelect(locations) {
+            const locationSelect = document.getElementById('lending-location-select');
+            if (locations && locations.length > 0) {
+                locations.forEach(loc => {
+                    const option = document.createElement('option');
+                    option.value = loc;
+                    option.textContent = loc;
+                    locationSelect.appendChild(option);
+                });
+            }
+        }
+
         function filterTable() {
             const locationFilter = document.getElementById('location-filter-select').value.toUpperCase();
             const searchFilter = document.getElementById('search-box').value.toUpperCase();
             const filteredAssets = allAssets.filter(asset => {
                 const locationMatch = (locationFilter === '') || (asset.location.toUpperCase() === locationFilter);
-                const searchMatch = asset.id.toUpperCase().includes(searchFilter) || asset.location.toUpperCase().includes(searchFilter);
+                const searchMatch = asset.id.toUpperCase().includes(searchFilter) || 
+                                    (asset.assetName && asset.assetName.toUpperCase().includes(searchFilter)) ||
+                                    (asset.leaderName && asset.leaderName.toUpperCase().includes(searchFilter)) ||
+                                    asset.location.toUpperCase().includes(searchFilter);
                 return locationMatch && searchMatch;
             });
             renderTable(filteredAssets);
@@ -173,18 +197,19 @@
 
         function submitLending() {
             const selectedAssets = Array.from(document.querySelectorAll('.asset-checkbox:checked')).map(cb => cb.value);
-            const borrowerName = document.getElementById('borrower-select').value; // ✨ **修改：從下拉選單取值**
+            const borrowerName = document.getElementById('borrower-select').value;
+            const lendingLocation = document.getElementById('lending-location-select').value;
             const returnDate = document.getElementById('return-date').value;
             const reason = document.getElementById('reason').value.trim();
 
-            if (selectedAssets.length === 0 || !borrowerName || !returnDate) {
-                showError({message: '請至少勾選一筆財產，並選擇借用人和預計歸還日期。'});
+            if (selectedAssets.length === 0 || !borrowerName || !returnDate || !lendingLocation) {
+                showError({message: '請至少勾選一筆財產，並填寫所有必填欄位。'});
                 return;
             }
             
             showLoading(true, "正在提交出借資料...");
             
-            const formData = { assetIds: selectedAssets, borrowerName, returnDate, reason };
+            const formData = { assetIds: selectedAssets, borrowerName, returnDate, reason, lendingLocation };
             google.script.run
                 .withSuccessHandler(showSuccessAndClose)
                 .withFailureHandler(showError)
