@@ -17,7 +17,7 @@
 <body>
     <div class="container portal-container">
         <div class="text-center mb-5">
-            <h1 class="display-4">財產管理系統</h1>
+            <h1 class="display-4">財產管理</h1>
             <p class="lead">請選擇您要執行的功能</p>
         </div>
 
@@ -47,8 +47,8 @@
                     <div class="card-body">
                         <span id="review-badge" class="badge badge-danger badge-notify" style="display: none;"></span>
                         <div class="card-icon">✔️</div>
-                        <h5 class="card-title mt-3">審核待轉移財產</h5>
-                        <p class="card-text">簽核他人轉移給您的申請。</p>
+                        <h5 class="card-title mt-3">接收待轉移財產</h5>
+                        <p class="card-text">接收他人轉移給您的財產。</p>
                     </div>
                 </div>
             </div>
@@ -99,6 +99,16 @@
                         <div class="card-icon">⚙️</div>
                         <h5 class="card-title mt-3">更新上傳狀態</h5>
                         <p class="card-text">資產管理員更新財產狀態。</p>
+                      </div>
+                    </div>
+                </div>
+
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 text-center" onclick="navigateTo('userstate')">
+                    <div class="card-body">
+                        <div class="card-icon">👤</div>
+                        <h5 class="card-title mt-3">查詢名下財產狀態</h5>
+                        <p class="card-text">查詢您名下所有財產的目前狀態。</p>
                     </div>
                 </div>
             </div>
