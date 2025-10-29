@@ -28,7 +28,15 @@
 </head>
 <body>
     <?!= include('shared-nav'); ?>
-    <div id="main-form">
+
+    <div id="loader-container" class="text-center">
+        <div class="progress" style="height: 20px; margin: 50px 20px;">
+            <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <p id="loading-status">正在載入資料，請稍候...</p>
+    </div>
+
+    <div id="main-form" style="display:none;">
         <h4>財產轉移申請 (批次)</h4>
         
         <div class="form-row">
@@ -104,23 +112,73 @@
         let currentPage = 1;
         let rowsPerPage = 2000;
 
+        let progressInterval; // Declare progressInterval globally
+
         document.addEventListener("DOMContentLoaded", () => {
+            // Hide main form and show loader initially
+            document.getElementById('main-form').style.display = 'none';
+            document.getElementById('loader-container').style.display = 'block'; // Ensure loader is visible
+
             google.script.run
-                .withSuccessHandler(populateForm)
-                .withFailureHandler(showError)
+                .withSuccessHandler(onDataLoaded)
+                .withFailureHandler(onDataError)
                 .getTransferData();
             
+            simulateProgress(); // Start progress simulation
+
             document.getElementById('search-box').addEventListener('input', filterTable);
             document.getElementById('location-filter-select').addEventListener('change', filterTable);
             document.getElementById('category-filter-select').addEventListener('change', filterTable);
             document.getElementById('select-all').addEventListener('change', toggleSelectAll);
         });
 
+        function simulateProgress() {
+            const progressBar = document.getElementById('progress-bar');
+            const loadingStatus = document.getElementById('loading-status');
+            let width = 1;
+
+            progressInterval = setInterval(() => {
+                if (width < 90) { // Simulate progress up to 90%
+                    width++;
+                    progressBar.style.width = width + '%';
+                    progressBar.setAttribute('aria-valuenow', width);
+                }
+            }, 20); // Update every 20ms
+        }
+
+        function onDataLoaded(data) {
+            clearInterval(progressInterval); // Stop the simulation
+
+            const progressBar = document.getElementById('progress-bar');
+            const loadingStatus = document.getElementById('loading-status');
+
+            // Complete the progress bar
+            progressBar.style.width = '100%';
+            progressBar.setAttribute('aria-valuenow', 100);
+            loadingStatus.textContent = '資料載入完成！';
+
+            // Hide loader and show form after a brief moment
+            setTimeout(() => {
+                document.getElementById('loader-container').style.display = 'none';
+                document.getElementById('main-form').style.display = 'block';
+                populateForm(data); // Call the original populateForm
+            }, 300);
+        }
+
+        function onDataError(error) {
+            clearInterval(progressInterval); // Stop the simulation
+            // Hide loader and show error message
+            document.getElementById('loader-container').style.display = 'none';
+            document.getElementById('main-form').style.display = 'block'; // Show main form to display error
+            showError(error); // Call the original showError
+        }
+
         function populateForm(data) {
             allAssets = data.assets;
             filteredAssets = allAssets; 
 
             if (!allAssets || allAssets.length === 0) {
+                // If no assets, show error and return. onDataError already handles hiding loader.
                 showError({message: "您目前沒有可轉移的財產。"});
                 return;
             }
@@ -305,8 +363,8 @@
         }
         function showError(error) {
             const statusMsg = document.getElementById('status-message');
-            document.getElementById('main-form').style.display = 'block';
-            document.getElementById('loading-spinner').style.display = 'none';
+            // The loader-container is already hidden by onDataError, so no need to hide it here.
+            // The main-form is already shown by onDataError, so no need to show it here.
             statusMsg.className = 'alert alert-danger';
             statusMsg.textContent = "錯誤：" + error.message;
         }
