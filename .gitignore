@@ -4,7 +4,8 @@
 .geminiignore
 將資料「物件化 (Object-Oriented)」，徹底分離「資料的物理儲存」與「程式的邏輯使用」.md
 修改頁面的下拉選單.md
-template/
+PWD_template/
 解決重新載入後頁面空白.md
 .agent.md
 GEMINI.md
+progress_bar_template/
