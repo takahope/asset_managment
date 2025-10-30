@@ -362,6 +362,7 @@ function doGet(e) {
 
   const html = template.evaluate();
   html.setTitle(title);
+  html.addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   return html;
 }
 function getUserStateData() {
