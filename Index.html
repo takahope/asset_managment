@@ -12,17 +12,15 @@
         font-family: "Roboto", "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif;
         background-color: #f0ebf8;
         margin: 0;
-        padding: 12px;
+        padding: 0;
         line-height: 1.6;
-        /* Mobile-First: 預設使用移動端字體大小 */
-        font-size: 16px;
       }
 
       .container {
         max-width: 760px;
         margin: 0 auto;
         width: 100%;
-        padding: 0;
+        padding: 16px;
       }
 
       /* 標題卡片 */
@@ -35,17 +33,17 @@
       }
 
       .header-banner {
-        height: 10px;
+        height: 12px;
         background: linear-gradient(90deg, #673ab7 0%, #512da8 100%);
       }
 
       .header-content {
-        padding: 28px 20px;
+        padding: 32px 24px;
       }
 
       h1 {
         color: #202124;
-        font-size: 52px;
+        font-size: 32px;
         margin: 0;
         font-weight: 400;
         line-height: 1.25;
@@ -56,16 +54,16 @@
       .question-card {
         background: white;
         border-radius: 8px;
-        padding: 24px 20px;
+        padding: 28px 24px;
         margin-bottom: 16px;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.08);
       }
 
       .question-card h2 {
         color: #202124;
-        font-size: 32px;
+        font-size: 17px;
         font-weight: 400;
-        margin: 0 0 20px 0;
+        margin: 0 0 24px 0;
         padding: 0;
         border: none;
         line-height: 1.4;
@@ -84,13 +82,13 @@
         margin: 0;
       }
 
-      /* 表單輸入欄位 - Mobile First */
+      /* 表單輸入欄位 */
       select, textarea {
         width: 100%;
-        padding: 13px 15px;
+        padding: 14px 16px;
         border-radius: 4px;
         border: 1px solid #dadce0;
-        font-size: 32px;
+        font-size: 17px;
         font-family: inherit;
         transition: border-color 0.2s;
         background-color: #fff;
@@ -106,7 +104,7 @@
         outline: none;
         border-color: #673ab7;
         border-width: 2px;
-        padding: 12px 14px;
+        padding: 13px 15px;
       }
 
       textarea {
@@ -115,7 +113,7 @@
         line-height: 1.6;
       }
 
-      /* 勾選框區域 - Mobile First */
+      /* 勾選框區域 */
       .checkbox-group {
         display: flex;
         flex-direction: column;
@@ -125,15 +123,15 @@
       .checkbox-item {
         display: flex;
         align-items: center;
-        gap: 24px;
-        padding: 18px 0;
+        gap: 16px;
+        padding: 14px 0;
         cursor: pointer;
-        min-height: 66px;
+        min-height: 48px;
       }
 
       .checkbox-item input[type="checkbox"] {
-        width: 44px;
-        height: 44px;
+        width: 24px;
+        height: 24px;
         cursor: pointer;
         flex-shrink: 0;
         accent-color: #673ab7;
@@ -141,7 +139,7 @@
       }
 
       .checkbox-item label {
-        font-size: 32px;
+        font-size: 17px;
         color: #202124;
         cursor: pointer;
         line-height: 1.5;
@@ -149,11 +147,11 @@
         font-weight: 400;
       }
 
-      /* 提交按鈕 - Mobile First */
+      /* 提交按鈕 */
       .submit-card {
         background: white;
         border-radius: 8px;
-        padding: 24px 20px;
+        padding: 28px 24px;
         margin-bottom: 16px;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.08);
       }
@@ -161,17 +159,17 @@
       input[type="submit"] {
         background: #673ab7;
         color: white;
-        padding: 13px 28px;
+        padding: 12px 28px;
         border: none;
         border-radius: 4px;
         cursor: pointer;
-        font-size: 30px;
+        font-size: 15px;
         font-weight: 500;
         transition: background 0.2s, box-shadow 0.2s;
         letter-spacing: 0.5px;
         text-transform: uppercase;
-        min-height: 72px;
-        width: 100%;
+        min-height: 48px;
+        width: auto;
       }
 
       input[type="submit"]:hover {
@@ -186,9 +184,9 @@
 
       #status {
         margin-top: 20px;
-        padding: 12px;
+        padding: 14px;
         border-radius: 4px;
-        font-size: 28px;
+        font-size: 15px;
         text-align: center;
         background-color: #e8f5e9;
         color: #2e7d32;
@@ -200,75 +198,132 @@
         display: block;
       }
 
-      /* 桌面版響應式 - 在大螢幕時縮小字體 */
-      @media screen and (min-width: 769px) {
+      /* 移動版響應式 (≤768px) */
+      @media screen and (max-width: 768px) {
         body {
-          padding: 0;
+          padding: 12px;
         }
 
         .container {
-          padding: 16px;
+          padding: 0;
         }
 
         .header-banner {
-          height: 12px;
+          height: 10px;
         }
 
         .header-content {
-          padding: 32px 24px;
+          padding: 28px 20px;
         }
 
         h1 {
-          font-size: 32px;
+          font-size: 26px;
         }
 
         .question-card {
-          padding: 28px 24px;
+          padding: 24px 20px;
         }
 
         .question-card h2 {
-          font-size: 17px;
-          margin-bottom: 24px;
+          font-size: 16px;
+          margin-bottom: 20px;
+        }
+
+        .checkbox-item {
+          padding: 16px 0;
+          min-height: 56px;
+          gap: 20px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+          width: 22px;
+          height: 22px;
+        }
+
+        .checkbox-item label {
+          font-size: 16px;
+        }
+
+        select, textarea {
+          font-size: 16px;
+          padding: 13px 15px;
+        }
+
+        select:focus, textarea:focus {
+          padding: 12px 14px;
+        }
+
+        .submit-card {
+          padding: 24px 20px;
+        }
+
+        input[type="submit"] {
+          width: 100%;
+          padding: 13px 28px;
+          font-size: 15px;
+          min-height: 56px;
+        }
+
+        #status {
+          font-size: 14px;
+          padding: 12px;
+        }
+      }
+
+      /* 小螢幕響應式 (≤400px) */
+      @media screen and (max-width: 400px) {
+        body {
+          padding: 8px;
+        }
+
+        .header-content {
+          padding: 24px 16px;
+        }
+
+        h1 {
+          font-size: 22px;
+        }
+
+        .question-card {
+          padding: 20px 16px;
+        }
+
+        .question-card h2 {
+          font-size: 15px;
+          margin-bottom: 16px;
         }
 
         .checkbox-item {
           padding: 14px 0;
-          min-height: 48px;
+          min-height: 52px;
           gap: 16px;
         }
 
-        .checkbox-item input[type="checkbox"] {
-          width: 24px;
-          height: 24px;
-        }
-
         .checkbox-item label {
-          font-size: 17px;
+          font-size: 15px;
         }
 
         select, textarea {
-          font-size: 17px;
-          padding: 14px 16px;
+          font-size: 15px;
+          padding: 12px 14px;
         }
 
         select:focus, textarea:focus {
-          padding: 13px 15px;
+          padding: 11px 13px;
         }
 
         .submit-card {
-          padding: 28px 24px;
+          padding: 20px 16px;
         }
 
         input[type="submit"] {
-          width: auto;
-          padding: 12px 28px;
-          font-size: 15px;
-          min-height: 48px;
+          padding: 12px 24px;
+          min-height: 52px;
         }
 
         #status {
-          font-size: 15px;
-          padding: 14px;
+          font-size: 13px;
+          padding: 10px;
         }
       }
     </style>
