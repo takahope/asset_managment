@@ -326,6 +326,54 @@
           padding: 10px;
         }
       }
+
+      /* ==================== 進度條樣式 ==================== */
+
+      /* 遮罩層 */
+      .loader-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.75);
+        z-index: 9999;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+      }
+
+      /* 進度條容器 */
+      .progress-bar-container {
+        width: 80%;
+        max-width: 400px;
+        background-color: #555;
+        border-radius: 10px;
+        border: 1px solid #777;
+        overflow: hidden;
+      }
+
+      /* 進度條本身 */
+      .progress-bar {
+        width: 0%;
+        height: 20px;
+        background-color: #673ab7;
+        text-align: center;
+        line-height: 20px;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        transition: width 0.3s ease-in-out;
+      }
+
+      /* 提示文字 */
+      .loading-text {
+        margin-top: 15px;
+        font-size: 18px;
+        letter-spacing: 1px;
+      }
     </style>
   </head>
   <body>
@@ -400,7 +448,71 @@
       let dataMap = {};
       let sevenZipVersions = [];
 
+      // ==================== 進度條控制變數 ====================
+      let _loaderIntervalId;
+      let _dataLoadStatus = {
+        selectData: false,
+        sevenZipData: false
+      };
+
+      /**
+       * 顯示進度條載入動畫
+       * @param {string} text - 顯示的載入訊息（選填，預設為「頁面載入中...」）
+       */
+      function showLoader(text = '頁面載入中...') {
+        const _loaderOverlay = document.getElementById('loaderOverlay');
+        const _progressBar = document.getElementById('progressBar');
+        const _loadingText = document.getElementById('loadingText');
+
+        let progress = 0;
+        _progressBar.style.width = '0%';
+        _progressBar.textContent = '0%';
+        _loadingText.textContent = text;
+        _loaderOverlay.style.display = 'flex';
+
+        // 模擬一個平滑的進度條，直到 90%
+        _loaderIntervalId = setInterval(() => {
+          if (progress < 90) {
+            progress += Math.floor(Math.random() * 5) + 1;
+            if (progress > 90) progress = 90;
+            _progressBar.style.width = progress + '%';
+            _progressBar.textContent = progress + '%';
+          }
+        }, 200);
+      }
+
+      /**
+       * 隱藏進度條載入動畫
+       * @param {string} text - 顯示的完成訊息（選填，預設為「載入完成！」）
+       */
+      function hideLoader(text = '載入完成！') {
+        const _loaderOverlay = document.getElementById('loaderOverlay');
+        const _progressBar = document.getElementById('progressBar');
+        const _loadingText = document.getElementById('loadingText');
+
+        clearInterval(_loaderIntervalId); // 停止模擬進度
+
+        _progressBar.style.width = '100%';
+        _progressBar.textContent = '100%';
+        _loadingText.textContent = text;
+
+        setTimeout(() => {
+          _loaderOverlay.style.display = 'none';
+        }, 500);
+      }
+
+      /**
+       * 檢查所有資料是否載入完成
+       */
+      function checkDataLoadComplete() {
+        if (_dataLoadStatus.selectData && _dataLoadStatus.sevenZipData) {
+          hideLoader('載入完成！');
+        }
+      }
+
       document.addEventListener("DOMContentLoaded", function() {
+        // 立即顯示進度條
+        showLoader('正在載入表單資料...');
         // 同時載入組別資料和 7-Zip 版本清單
         google.script.run.withSuccessHandler(populateGroupSelect).getSelectData();
         google.script.run.withSuccessHandler(populateSevenZipVersions).getSevenZipVersions();
@@ -409,42 +521,50 @@
       function populateGroupSelect(data) {
         dataMap = data;
         const groupSelect = document.getElementById("groupSelect");
-        
+
         // 清空載入中的選項
         groupSelect.innerHTML = '';
-        
+
         // 添加預設選項
         groupSelect.add(new Option("請選擇...", ""));
-        
+
         // 添加組別選項
         const groups = Object.keys(dataMap).sort();
         groups.forEach(group => {
           const option = new Option(group, group);
           groupSelect.add(option);
         });
-        
+
         // 更新電腦選單為初始狀態
         const computerSelect = document.getElementById("computerSelect");
         computerSelect.innerHTML = '';
         computerSelect.add(new Option("--請先選擇駐站--", ""));
+
+        // 標記此資料已載入完成
+        _dataLoadStatus.selectData = true;
+        checkDataLoadComplete();
       }
 
       function populateSevenZipVersions(versions) {
         sevenZipVersions = versions;
         const sevenZipSelect = document.getElementById("sevenZipVersion");
-        
+
         // 清空載入中的選項
         sevenZipSelect.innerHTML = '';
-        
+
         // 添加預設選項
         sevenZipSelect.add(new Option("請選擇版本...", ""));
         sevenZipSelect.add(new Option("無安裝", "無"));
-        
+
         // 添加版本選項
         versions.forEach(version => {
           const option = new Option(version, version);
           sevenZipSelect.add(option);
         });
+
+        // 標記此資料已載入完成
+        _dataLoadStatus.sevenZipData = true;
+        checkDataLoadComplete();
       }
 
       function updateComputerOptions(selectedGroup) {
@@ -468,7 +588,7 @@
       // 改良版表單提交處理
       document.getElementById("myForm").addEventListener("submit", function(e) {
         e.preventDefault();
-        
+
         // 手動建立表單物件，確保勾選狀態正確傳送
         const formObject = {
           group: document.getElementById("groupSelect").value,
@@ -480,18 +600,23 @@
           chromeUpdated: document.getElementById("chromeUpdateCheck").checked,
           antivirusUpdated: document.getElementById("antivirusDefCheck").checked
         };
-        
+
         // 調試：在瀏覽器控制台顯示要送出的資料
         console.log("準備送出的表單資料：", formObject);
         console.log("Windows 勾選狀態：", formObject.winUpdated);
         console.log("Chrome 勾選狀態：", formObject.chromeUpdated);
         console.log("防毒軟體勾選狀態：", formObject.antivirusUpdated);
         console.log("7-Zip 版本：", formObject.sevenZipVersion);
-        
+
+        // 顯示進度條
+        showLoader('正在提交表單...');
         document.getElementById("status").textContent = "提交中...";
-        
+
         google.script.run
           .withSuccessHandler(function(response) {
+            // 隱藏進度條
+            hideLoader('提交完成！');
+
             const statusEl = document.getElementById("status");
             statusEl.textContent = response;
             statusEl.className = response.startsWith("回報成功") ? "show success" : "show";
@@ -505,6 +630,9 @@
             }
           })
           .withFailureHandler(function(error) {
+            // 隱藏進度條
+            hideLoader('提交失敗！');
+
             const statusEl = document.getElementById("status");
             statusEl.textContent = "提交失敗：" + error.message;
             statusEl.className = "show error";
@@ -525,5 +653,13 @@
         }).getAppUrl();
       });
     </script>
+
+    <!-- ==================== 進度條 HTML 結構 ==================== -->
+    <div class="loader-overlay" id="loaderOverlay">
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar">0%</div>
+      </div>
+      <div class="loading-text" id="loadingText">頁面載入中...</div>
+    </div>
   </body>
 </html>
