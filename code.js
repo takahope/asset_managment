@@ -736,6 +736,18 @@ function processBatchApproval(appIds) {
           location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue("在庫");
           location.sheet.getRange(location.rowIndex, indices.TRANSFER_TIME).setValue(now);
 
+          // ✨ 新增：更新保管人姓名和Email
+          const newKeeperEmail = appDetails.row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
+          let newKeeperName = appDetails.row[AL_NEW_LEADER_COLUMN_INDEX - 1];
+
+          // 如果姓名為空，從Email推算
+          if (!newKeeperName || newKeeperName.toString().trim() === '') {
+            newKeeperName = newKeeperEmail ? newKeeperEmail.split('@')[0] : '';
+          }
+
+          location.sheet.getRange(location.rowIndex, indices.LEADER_NAME).setValue(newKeeperName);
+          location.sheet.getRange(location.rowIndex, indices.LEADER_EMAIL).setValue(newKeeperEmail);
+
           const isStation = locationIsStationMap.get(newLocation) === '是';
           // IS_ACTUALLY_COMPUTER 欄位可能不存在於所有物件中，需要安全檢查
           const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
