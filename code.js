@@ -26,22 +26,22 @@ const ADMIN_LIST_SHEET_NAME = "管理員名單"; // ✨ **新增：管理員權�
 const PROPERTY_COLUMN_INDICES = {
   ASSET_ID: 1,      // A欄: 財產編號
   ASSET_NAME: 2,    // B欄: 財產名稱
-  PURCHASE_DATE: 5, // E欄: 取得日期
-  USE_LIFE: 6,      // F欄: 使用年限
-  ASSET_CATEGORY: 10, // J欄: 財產類別
-  LOCATION: 14,      // H欄: 保管地點 (財產)
-  LEADER_EMAIL: 15, // O欄: 駐管電子郵件
-  LEADER_NAME: 16,  // P欄: 駐管
-  ASSET_STATUS: 17, // Q欄: 財產狀態
-  APPLICATION_TIME: 18, // R欄
-  TRANSFER_TIME: 19,    // S欄
-  IS_UPLOADED: 20,      // T欄
-  UPLOAD_TIME: 21,      // U欄
-  IS_COMPUTER: 22,      // V欄
-  LAST_MODIFIED: 23,    // W欄
-  REMARKS: 24,          // X欄
-  DOC_URL: 25,          // Y欄
-  IS_ACTUALLY_COMPUTER: 27 // AA欄
+  PURCHASE_DATE: 6, // F欄: 取得日期
+  USE_LIFE: 7,      // G欄: 使用年限
+  ASSET_CATEGORY: 12, // L欄: 財產類別
+  LOCATION: 8,      // H欄: 保管地點 (財產)
+  LEADER_EMAIL: 13, // M欄: 保管人電子郵件
+  LEADER_NAME: 10,  // J欄: 保管人
+  ASSET_STATUS: 14, // N欄: 財產狀態
+  APPLICATION_TIME: 15, // o欄 申請時間
+  TRANSFER_TIME: 16,    // p欄 接收時間
+  IS_UPLOADED: 17,      // q欄 是否上傳
+  UPLOAD_TIME: 18,      // r欄 上傳時間
+  IS_COMPUTER: 19,      // s欄 是否為駐站電腦
+  LAST_MODIFIED: 20,    // t欄 報廢日期
+  REMARKS: 21,          //u欄  報廢原因
+  DOC_URL: 22,          // v欄 報廢申請文件
+  IS_ACTUALLY_COMPUTER: 24 // X欄 是否為電腦
 };
 
 const ITEM_COLUMN_INDICES = {
@@ -50,19 +50,19 @@ const ITEM_COLUMN_INDICES = {
   PURCHASE_DATE: 5, // E欄: 取得日期
   USE_LIFE: 6,      // F欄: 使用年限
   ASSET_CATEGORY: 10, // J欄: 財產類別
-  LOCATION: 14,     // M欄: 保管地點 (物品)
-  LEADER_EMAIL: 15, // O欄: 駐管電子郵件
-  LEADER_NAME: 16,  // P欄: 駐管
-  ASSET_STATUS: 17, // Q欄: 財產狀態
-  APPLICATION_TIME: 18, // R欄
-  TRANSFER_TIME: 19,    // S欄
-  IS_UPLOADED: 20,      // T欄
-  UPLOAD_TIME: 21,      // U欄
-  IS_COMPUTER: 22,      // V欄
-  LAST_MODIFIED: 23,    // W欄
-  REMARKS: 24,          // X欄
-  DOC_URL: 25,          // Y欄
-  IS_ACTUALLY_COMPUTER: 27 // AA欄
+  LOCATION: 13,     // M欄: 保管地點 (物品)
+  LEADER_EMAIL: 14, // N欄: 保管人電子郵件
+  LEADER_NAME: 11,  // k欄: 保管人
+  ASSET_STATUS: 15, // o欄: 財產狀態
+  APPLICATION_TIME: 16, // P欄 申請時間
+  TRANSFER_TIME: 17,    // Q欄 接收時間
+  IS_UPLOADED: 18,      // R欄 是否上傳
+  UPLOAD_TIME: 19,      // S欄 上傳時間
+  IS_COMPUTER: 20,      // T欄 是否為駐站電腦
+  LAST_MODIFIED: 21,    // U欄 報廢日期
+  REMARKS: 22,          // V欄 報廢原因
+  DOC_URL: 23,          // W欄 報廢申請文件
+  IS_ACTUALLY_COMPUTER: 25 // Y欄 是否為電腦
 };
 
 
