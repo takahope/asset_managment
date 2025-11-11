@@ -10,7 +10,7 @@ const RESPONSE_SHEET_NAME = "表單回應 1"; // Web App 回報結果寫入的�
 const SOFTWARE_VERSIONS_SHEET_NAME = "軟體版本清單"; // 軟體版本清單工作表
 const APPLICATION_LOG_SHEET_NAME = "轉移申請紀錄";
 const KEEPER_EMAIL_MAP_SHEET_NAME = "保管人/信箱";
-const KEEPER_LOCATION_MAP_SHEET_NAME = "存放位置/信箱/保管人";
+const KEEPER_LOCATION_MAP_SHEET_NAME = "存置地點列表";
 const LENDING_LOG_SHEET_NAME = "出借紀錄"; // ✨ **新增：出借紀錄工作表**
 const ADMIN_LIST_SHEET_NAME = "管理員名單"; // ✨ **新增：管理員權限列表**
 
@@ -709,7 +709,7 @@ function processBatchApproval(appIds) {
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
     const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
     const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
-    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[3]]));
+    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[1]]));
     
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow(), appLogSheet.getLastColumn()).getValues();
     const appLogMap = new Map(appLogData.map((row, index) => [row[AL_APP_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
