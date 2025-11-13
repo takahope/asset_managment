@@ -388,7 +388,8 @@ function getUserStateData() {
     leaderEmail: asset.leaderEmail, // ✨ Add leaderEmail
     location: asset.location,
     status: asset.assetStatus,
-    category: asset.assetCategory
+    category: asset.assetCategory,
+    userName: asset.userName || '無' // 使用者名稱，物品總表顯示「無」
   }));
 
   return {
@@ -862,6 +863,7 @@ function getAssetsForUpdate() {
         assetId: asset.assetId,
         location: asset.location,
         leader: asset.leaderName,
+        userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
         transferDate: new Date(asset.transferTime).toLocaleDateString('zh-TW')
       });
     }
@@ -872,6 +874,7 @@ function getAssetsForUpdate() {
         assetId: asset.assetId,
         location: asset.location,
         leader: asset.leaderName,
+        userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
         scrapReason: asset.remarks
       });
     }
@@ -1038,7 +1041,8 @@ function getLendingData() {
         id: asset.assetId,
         assetName: asset.assetName,
         leaderName: asset.leaderName,
-        location: asset.location
+        location: asset.location,
+        userName: asset.userName || '無' // 使用者名稱，物品總表顯示「無」
       }));
 
     // 2. 從所有資產中，提取不重複的借用人 (姓名) 和地點
@@ -1267,7 +1271,8 @@ function getScrappableAssets() {
         id: asset.assetId,
         location: asset.location,
         status: asset.assetStatus,
-        category: asset.assetCategory
+        category: asset.assetCategory,
+        userName: asset.userName || '無' // 使用者名稱，物品總表顯示「無」
       }));
       
     return { assets: availableAssets };
