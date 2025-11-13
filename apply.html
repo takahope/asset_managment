@@ -63,9 +63,10 @@
                 <thead class="thead-light" style="position: sticky; top: 0;">
                     <tr>
                         <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
-                        <th style="width: 30%;">財產編號</th>
-                        <th style="width: 35%;">財產名稱</th>
-                        <th style="width: 15%;">目前地點</th>
+                        <th style="width: 25%;">財產編號</th>
+                        <th style="width: 30%;">財產名稱</th>
+                        <th style="width: 12%;">使用者</th>
+                        <th style="width: 13%;">目前地點</th>
                         <th style="width: 15%;">財產類別</th>
                     </tr>
                 </thead>
@@ -255,7 +256,7 @@
 
             paginatedItems.forEach(asset => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td><td>${asset.id}</td><td>${asset.assetName}</td><td>${asset.location}</td><td>${asset.category}</td>`;
+                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td><td>${asset.id}</td><td>${asset.assetName}</td><td>${asset.userName}</td><td>${asset.location}</td><td>${asset.category}</td>`;
                 assetListBody.appendChild(row);
             });
             

@@ -32,6 +32,7 @@ const PROPERTY_COLUMN_INDICES = {
   LOCATION: 8,      // H欄: 保管地點 (財產)
   LEADER_EMAIL: 13, // M欄: 保管人電子郵件
   LEADER_NAME: 10,  // J欄: 保管人
+  USER_NAME: 11,    // K欄: 使用者
   ASSET_STATUS: 14, // N欄: 財產狀態
   APPLICATION_TIME: 15, // o欄 申請時間
   TRANSFER_TIME: 16,    // p欄 接收時間
@@ -112,6 +113,7 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
       location: row[indices.LOCATION - 1],
       leaderEmail: row[indices.LEADER_EMAIL - 1],
       leaderName: row[indices.LEADER_NAME - 1],
+      userName: indices.USER_NAME ? row[indices.USER_NAME - 1] : null, // 使用者 (僅財產總表有此欄位)
       assetStatus: row[indices.ASSET_STATUS - 1],
       applicationTime: row[indices.APPLICATION_TIME - 1],
       transferTime: row[indices.TRANSFER_TIME - 1],
@@ -532,7 +534,9 @@ function getTransferData() {
       id: asset.assetId,
       assetName: asset.assetName,
       location: asset.location,
-      category: asset.assetCategory
+      category: asset.assetCategory,
+      userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
+      sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
   // 2. 從所有資產中，提取不重複的保管人 (Email -> Name) 和地點
@@ -627,10 +631,44 @@ function processBatchTransferApplication(formData) {
                  .setValues(newLogsToAdd);
     }
 
+    // ✨ 新增：檢查轉移的資產中是否有使用者與保管人不同的情況，需要發送額外通知
+    const assetsWithDifferentUser = [];
+    assetIds.forEach(assetId => {
+      const location = findAssetLocation(assetId);
+      if (location) {
+        const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
+        const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+        const asset = mapRowToAssetObject(assetRow, indices, location.sheetName);
+        
+        // 只有財產總表有使用者欄位，且使用者和保管人不同時才需要記錄
+        if (asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME && 
+            asset.userName && 
+            asset.userName.trim() !== '' && 
+            asset.userName !== asset.leaderName) {
+          assetsWithDifferentUser.push({
+            assetId: asset.assetId,
+            assetName: asset.assetName,
+            userName: asset.userName,
+            keeperName: asset.leaderName
+          });
+        }
+      }
+    });
+
     const webAppUrl = getAppUrl();
     const reviewLink = `${webAppUrl}?page=review`;
     const subject = `[財產轉移通知] 您有 ${createdApplications.length} 筆待接收的財產`;
     let body = `您好 ${newKeeperName}，\n\n${Session.getActiveUser().getEmail()} 已申請將 ${createdApplications.length} 筆財產轉移給您。\n\n`;
+    
+    // ✨ 新增：如果有使用者與保管人不同的資產，在通知中說明
+    if (assetsWithDifferentUser.length > 0) {
+      body += `提醒：其中有 ${assetsWithDifferentUser.length} 筆財產的使用者與保管人不同，請注意協調：\n`;
+      assetsWithDifferentUser.forEach(asset => {
+        body += `  - ${asset.assetId}: ${asset.assetName} (使用者: ${asset.userName})\n`;
+      });
+      body += `\n`;
+    }
+    
     body += `請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
     body += `${reviewLink}\n\n`;
     body += `此為系統自動發送郵件。`;
@@ -662,7 +700,13 @@ function getPendingApprovals() {
     const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
     
     const allAssets = getAllAssets();
-    const assetIdToNameMap = new Map(allAssets.map(asset => [asset.assetId, asset.assetName]));
+    const assetIdToInfoMap = new Map(allAssets.map(asset => [
+      asset.assetId, 
+      { 
+        assetName: asset.assetName, 
+        userName: asset.userName || '無' 
+      }
+    ]));
     
     const range = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn());
     const values = range.getValues();
@@ -675,11 +719,13 @@ function getPendingApprovals() {
       })
       .map(row => {
         const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+        const assetInfo = assetIdToInfoMap.get(assetId) || { assetName: '（找不到名稱）', userName: '無' };
         return {
           appId: row[AL_APP_ID_COLUMN_INDEX - 1],
           applyTime: new Date(row[AL_APP_TIME_COLUMN_INDEX - 1]).toLocaleString('zh-TW'),
           assetId: assetId,
-          assetName: assetIdToNameMap.get(assetId) || '（找不到名稱）',
+          assetName: assetInfo.assetName,
+          userName: assetInfo.userName,
           oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
           oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
           newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1]
