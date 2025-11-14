@@ -80,18 +80,46 @@
 
         <hr>
 
+        <!-- ✨ 新增：轉移選項 -->
         <div class="form-group">
-            <label for="keeper-select">將勾選的財產轉移給：</label>
-            <select class="form-control" id="keeper-select" name="newKeeperEmail" required>
+            <label><b>請選擇轉移項目：</b></label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="change-location" checked>
+                <label class="form-check-label" for="change-location">變更地點</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="change-keeper" checked>
+                <label class="form-check-label" for="change-keeper">變更保管人（需審核）</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="change-user">
+                <label class="form-check-label" for="change-user">變更使用人（需審核，僅適用財產總表）</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="keeper-select">新保管人：</label>
+            <select class="form-control" id="keeper-select" name="newKeeperEmail">
                 <option value="">請選擇新保管人...</option>
             </select>
+            <small class="form-text text-muted">若不變更保管人，請留空</small>
         </div>
         
         <div class="form-group">
-            <label for="location-select">並轉移到地點：</label>
-            <select class="form-control" id="location-select" name="newLocation" required disabled>
-                <option value="">請先選擇保管人...</option>
+            <label for="location-select">新地點：</label>
+            <select class="form-control" id="location-select" name="newLocation">
+                <option value="">請選擇地點...</option>
             </select>
+            <small class="form-text text-muted">若不變更地點，請留空</small>
+        </div>
+
+        <!-- ✨ 新增：使用人選擇 -->
+        <div class="form-group" id="user-select-group" style="display:none;">
+            <label for="user-select">新使用人：</label>
+            <select class="form-control" id="user-select" name="newUserName">
+                <option value="">請選擇新使用人...</option>
+            </select>
+            <small class="form-text text-muted">僅適用於財產總表的資產</small>
         </div>
 
         <button type="button" class="btn btn-primary" onclick="submitApplication()">提交申請</button>
@@ -131,7 +159,17 @@
             document.getElementById('location-filter-select').addEventListener('change', filterTable);
             document.getElementById('category-filter-select').addEventListener('change', filterTable);
             document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+            
+            // ✨ 新增：轉移選項切換監聽
+            document.getElementById('change-user').addEventListener('change', toggleUserSelect);
         });
+        
+        // ✨ 新增：切換使用人選擇框顯示/隱藏
+        function toggleUserSelect() {
+            const changeUser = document.getElementById('change-user').checked;
+            const userSelectGroup = document.getElementById('user-select-group');
+            userSelectGroup.style.display = changeUser ? 'block' : 'none';
+        }
 
         function simulateProgress() {
             const progressBar = document.getElementById('progress-bar');
@@ -211,6 +249,16 @@
                 locationSelect.appendChild(option);
             });
             locationSelect.disabled = false; // 直接啟用
+            
+            // ✨ 新增：填充使用人下拉選單（與保管人相同的列表）
+            const userSelect = document.getElementById('user-select');
+            sortedKeepers.forEach(keeper => {
+                const option = document.createElement('option');
+                option.value = keeper.name; // 使用人使用姓名而非Email
+                const displayName = (keeper.email === data.userEmail) ? `${keeper.name} (自己)` : keeper.name;
+                option.textContent = displayName;
+                userSelect.appendChild(option);
+            });
         }
 
         // ✨ **核心修改：此函式負責顯示特定頁面的內容和分頁控制項**
@@ -343,16 +391,60 @@
             const selectedAssets = Array.from(document.querySelectorAll('.asset-checkbox:checked')).map(cb => cb.value);
             const keeperSelect = document.getElementById('keeper-select');
             const locationSelect = document.getElementById('location-select');
+            const userSelect = document.getElementById('user-select');
             const statusMsg = document.getElementById('status-message');
-            if (selectedAssets.length === 0 || !keeperSelect.value || !locationSelect.value) {
+            
+            // ✨ 新增：檢查轉移選項
+            const changeLocation = document.getElementById('change-location').checked;
+            const changeKeeper = document.getElementById('change-keeper').checked;
+            const changeUser = document.getElementById('change-user').checked;
+            
+            // 驗證：至少要選擇一項變更
+            if (!changeLocation && !changeKeeper && !changeUser) {
                 statusMsg.className = 'alert alert-warning';
-                statusMsg.textContent = '請至少勾選一筆財產，並選擇新的保管人與地點！';
+                statusMsg.textContent = '請至少選擇一項要變更的項目！';
                 return;
             }
+            
+            // 驗證：至少要勾選一筆財產
+            if (selectedAssets.length === 0) {
+                statusMsg.className = 'alert alert-warning';
+                statusMsg.textContent = '請至少勾選一筆財產！';
+                return;
+            }
+            
+            // 驗證：如果要變更保管人，必須選擇新保管人
+            if (changeKeeper && !keeperSelect.value) {
+                statusMsg.className = 'alert alert-warning';
+                statusMsg.textContent = '您選擇了變更保管人，請選擇新保管人！';
+                return;
+            }
+            
+            // 驗證：如果要變更地點，必須選擇新地點
+            if (changeLocation && !locationSelect.value) {
+                statusMsg.className = 'alert alert-warning';
+                statusMsg.textContent = '您選擇了變更地點，請選擇新地點！';
+                return;
+            }
+            
+            // 驗證：如果要變更使用人，必須選擇新使用人
+            if (changeUser && !userSelect.value) {
+                statusMsg.className = 'alert alert-warning';
+                statusMsg.textContent = '您選擇了變更使用人，請選擇新使用人！';
+                return;
+            }
+            
             document.getElementById('main-form').style.display = 'none';
             document.getElementById('loading-spinner').style.display = 'block';
             statusMsg.textContent = '';
-            const formData = { assetIds: selectedAssets, newKeeperEmail: keeperSelect.value, newLocation: locationSelect.value };
+            
+            const formData = { 
+                assetIds: selectedAssets, 
+                newKeeperEmail: changeKeeper ? keeperSelect.value : null,
+                newLocation: changeLocation ? locationSelect.value : null,
+                newUserName: changeUser ? userSelect.value : null
+            };
+            
             google.script.run.withSuccessHandler(showSuccessAndClose).withFailureHandler(showError).processBatchTransferApplication(formData);
         }
         function showSuccessAndClose(message) {

@@ -581,14 +581,20 @@ function getTransferData() {
  */
 function processBatchTransferApplication(formData) {
   try {
-    const { assetIds, newKeeperEmail, newLocation } = formData;
-    if (!assetIds || assetIds.length === 0 || !newKeeperEmail || !newLocation) {
-        throw new Error("提交的資料不完整，請至少勾選一筆財產並選擇保管人與地點。");
+    const { assetIds, newKeeperEmail, newLocation, newUserName } = formData;
+    
+    // ✨ 改進：支援選擇性參數（可以只變更其中一項）
+    if (!assetIds || assetIds.length === 0) {
+        throw new Error("請至少勾選一筆財產。");
+    }
+    
+    if (!newKeeperEmail && !newLocation && !newUserName) {
+        throw new Error("請至少選擇一項要變更的項目（保管人、地點或使用人）。");
     }
 
     const allAssets = getAllAssets();
     const emailToNameMap = new Map(allAssets.map(asset => [asset.leaderEmail, asset.leaderName]));
-    const newKeeperName = emailToNameMap.get(newKeeperEmail) || newKeeperEmail.split('@')[0];
+    const newKeeperName = newKeeperEmail ? (emailToNameMap.get(newKeeperEmail) || newKeeperEmail.split('@')[0]) : null;
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
@@ -606,43 +612,63 @@ function processBatchTransferApplication(formData) {
 
         if (asset.assetStatus === '在庫') {
           const indicesToUpdate = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
-          location.sheet.getRange(location.rowIndex, indicesToUpdate.ASSET_STATUS).setValue("待接收");
-          location.sheet.getRange(location.rowIndex, indicesToUpdate.APPLICATION_TIME).setValue(now);
-          location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_UPLOADED).setValue('');
-          location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
-          location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue('');
-
-          const appId = `APP-${now.getTime()}-${createdApplications.length}`;
           
-          // ✨ 判斷轉移類型
-          let transferType = '';
-          const isKeeperChange = asset.leaderEmail !== newKeeperEmail;
+          // ✨ 改進：判斷轉移類型並決定需要審核的項目
           const oldUserName = asset.userName || '';
-          const newUserName = newKeeperName; // 預設新使用人等於新保管人
-          const isUserChange = oldUserName && oldUserName !== newUserName;
+          const finalNewKeeperEmail = newKeeperEmail || asset.leaderEmail;
+          const finalNewKeeperName = newKeeperName || asset.leaderName;
+          const finalNewLocation = newLocation || asset.location;
+          const finalNewUserName = newUserName || (newKeeperName || asset.userName || asset.leaderName);
           
+          const isKeeperChange = newKeeperEmail && asset.leaderEmail !== newKeeperEmail;
+          const isLocationChange = newLocation && asset.location !== newLocation;
+          const isUserChange = newUserName && oldUserName !== newUserName;
+          
+          // 判斷轉移類型
+          let transferType = '';
           if (isKeeperChange && isUserChange) {
             transferType = '保管人+使用人';
           } else if (isKeeperChange) {
             transferType = '保管人';
           } else if (isUserChange) {
             transferType = '使用人';
-          } else {
+          } else if (isLocationChange) {
             transferType = '地點';
+          } else {
+            // 沒有實際變更，跳過此資產
+            return;
           }
+          
+          // 只有變更保管人或使用人時才需要設為「待接收」狀態
+          const needsApproval = isKeeperChange || isUserChange;
+          
+          if (needsApproval) {
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.ASSET_STATUS).setValue("待接收");
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.APPLICATION_TIME).setValue(now);
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_UPLOADED).setValue('');
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue('');
+          } else {
+            // 僅變更地點，直接更新無需審核
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.LOCATION).setValue(finalNewLocation);
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue(now);
+          }
+
+          const appId = `APP-${now.getTime()}-${createdApplications.length}`;
           
           const newLogRow = [
             appId, now, asset.assetId,
             asset.leaderName, asset.location,
-            newKeeperName, newLocation,
-            "待接收", newKeeperEmail,
-            "", "", // REVIEW_TIME and REVIEW_LINK
+            finalNewKeeperName, finalNewLocation,
+            needsApproval ? "待接收" : "已完成", finalNewKeeperEmail,
+            needsApproval ? "" : now, // REVIEW_TIME
+            "", // REVIEW_LINK
             oldUserName, // AL_OLD_USER_COLUMN_INDEX (12)
-            newUserName, // AL_NEW_USER_COLUMN_INDEX (13)
+            finalNewUserName, // AL_NEW_USER_COLUMN_INDEX (13)
             transferType // AL_TRANSFER_TYPE_COLUMN_INDEX (14)
           ];
           newLogsToAdd.push(newLogRow);
-          createdApplications.push({ id: asset.assetId, transferType: transferType });
+          createdApplications.push({ id: asset.assetId, transferType: transferType, needsApproval: needsApproval });
         }
       }
     });
@@ -680,10 +706,11 @@ function processBatchTransferApplication(formData) {
       }
     });
 
-    const webAppUrl = getAppUrl();
-    const reviewLink = `${webAppUrl}?page=review`;
+    // ✨ 改進：統計需要審核和不需要審核的項目
+    const needsApprovalApps = createdApplications.filter(app => app.needsApproval);
+    const autoCompletedApps = createdApplications.filter(app => !app.needsApproval);
     
-    // ✨ 改進：根據轉移類型產生更精確的通知
+    // 根據轉移類型產生摘要
     const transferTypeSummary = {};
     createdApplications.forEach(app => {
       const type = app.transferType || '地點';
@@ -696,26 +723,40 @@ function processBatchTransferApplication(formData) {
       typeDescription += `${type}(${transferTypeSummary[type]}筆)`;
     });
     
-    const subject = `[財產轉移通知] 您有 ${createdApplications.length} 筆待接收的財產`;
-    let body = `您好 ${newKeeperName}，\n\n${Session.getActiveUser().getEmail()} 已申請將 ${createdApplications.length} 筆財產轉移給您。\n\n`;
-    body += `轉移類型：${typeDescription}\n\n`;
+    let resultMessage = '';
     
-    // ✨ 新增：如果有使用者與保管人不同的資產，在通知中說明
-    if (assetsWithDifferentUser.length > 0) {
-      body += `提醒：其中有 ${assetsWithDifferentUser.length} 筆財產的使用者與保管人不同，請注意協調：\n`;
-      assetsWithDifferentUser.forEach(asset => {
-        body += `  - ${asset.assetId}: ${asset.assetName} (使用者: ${asset.userName})\n`;
-      });
-      body += `\n`;
+    // ✨ 改進：只有在需要審核時才發送郵件通知
+    if (needsApprovalApps.length > 0 && newKeeperEmail) {
+      const webAppUrl = getAppUrl();
+      const reviewLink = `${webAppUrl}?page=review`;
+      
+      const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產`;
+      let body = `您好 ${newKeeperName}，\n\n${Session.getActiveUser().getEmail()} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您。\n\n`;
+      body += `轉移類型：${typeDescription}\n\n`;
+      
+      // ✨ 新增：如果有使用者與保管人不同的資產，在通知中說明
+      if (assetsWithDifferentUser.length > 0) {
+        body += `提醒：其中有 ${assetsWithDifferentUser.length} 筆財產的使用者與保管人不同，請注意協調：\n`;
+        assetsWithDifferentUser.forEach(asset => {
+          body += `  - ${asset.assetId}: ${asset.assetName} (使用者: ${asset.userName})\n`;
+        });
+        body += `\n`;
+      }
+      
+      body += `請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
+      body += `${reviewLink}\n\n`;
+      body += `此為系統自動發送郵件。`;
+      
+      MailApp.sendEmail(newKeeperEmail, subject, body);
+      resultMessage = `成功提交 ${needsApprovalApps.length} 筆需要審核的申請！`;
     }
     
-    body += `請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
-    body += `${reviewLink}\n\n`;
-    body += `此為系統自動發送郵件。`;
-    
-    MailApp.sendEmail(newKeeperEmail, subject, body);
+    if (autoCompletedApps.length > 0) {
+      if (resultMessage) resultMessage += '\n';
+      resultMessage += `${autoCompletedApps.length} 筆僅變更地點的財產已直接完成（無需審核）！`;
+    }
 
-    return `成功為 ${createdApplications.length} 筆財產提交申請！`;
+    return resultMessage || `成功處理 ${createdApplications.length} 筆財產！`;
 
   } catch (e) {
     Logger.log("高效能批次申請失敗: " + e.message + " at " + e.stack);
