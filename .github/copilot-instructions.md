@@ -120,19 +120,29 @@ Pages like `apply.html` and `lending.html` dynamically populate dropdowns from l
 // Backend extracts unique values from asset list
 function getTransferData() {
     const allAssets = getAllAssets();
-    
+
     // Extract unique keepers (Email → Name mapping)
     const keepersMap = new Map();
+    const usersMap = new Map();
     allAssets.forEach(asset => {
         if (asset.leaderEmail && asset.leaderName) {
             keepersMap.set(asset.leaderEmail, asset.leaderName);
         }
+        // ✨ User field only exists in 財產總表
+        if (asset.userEmail && asset.userName) {
+            usersMap.set(asset.userEmail, asset.userName);
+        }
     });
-    
+
     // Extract unique locations
     const locations = [...new Set(allAssets.map(a => a.location))].sort();
-    
-    return { assets: myAssets, keepers: Object.fromEntries(keepersMap), locations };
+
+    return {
+        assets: myAssets,
+        keepers: Object.fromEntries(keepersMap),
+        users: Object.fromEntries(usersMap), // ✨ New
+        locations
+    };
 }
 ```
 
@@ -140,14 +150,14 @@ This eliminates need for separate mapping sheets - UI always reflects current da
 
 ## Key Files & Their Responsibilities
 
-- **code.js** (1700 lines): All backend logic
-  - Lines 1-92: Global config (sheet names, column indices)
-  - Lines 94-193: Data abstraction layer (`getAllAssets`, `findAssetLocation`, `mapRowToAssetObject`)
-  - Lines 196-295: Custom menu handlers
-  - Lines 297-396: Web app routing (`doGet`)
-  - Lines 514-774: Transfer workflows
-  - Lines 942-1144: Lending/return workflows
-  - Lines 1182-1613: Scrapping workflows
+- **code.js** (1990 lines): All backend logic
+  - Lines 1-98: Global config (sheet names, column indices)
+  - Lines 100-207: Data abstraction layer (`getAllAssets`, `findAssetLocation`, `mapRowToAssetObject`)
+  - Lines 210-303: Custom menu handlers
+  - Lines 319-404: Web app routing (`doGet`)
+  - Lines 533-878: Transfer workflows
+  - Lines 1256-1435: Lending/return workflows
+  - Lines 1485-1926: Scrapping workflows
 
 - **portal.html**: Main landing page with feature cards and pending approval badge
 - **shared-nav.html**: Shared navigation component (included via `include()` function)
@@ -206,6 +216,13 @@ if (location) {
 5. **Status Dependencies**: Operations like transfer require `status === '在庫'`. Operations like return require `status === '出借中'`.
 
 6. **Lending Location Field**: When creating lending records, include the `lendingLocation` parameter (Column J in LENDING_LOG).
+
+7. **User Field Availability**: The `userName` and `userEmail` fields only exist in 財產總表 (PROPERTY_MASTER_SHEET). Always check for null when using these fields.
+
+8. **Transfer Type Logic**: The system supports flexible transfer options:
+   - Location-only changes don't require approval (status stays '在庫')
+   - Keeper or user changes require approval (status becomes '待接收')
+   - Transfer type is tracked in APPLICATION_LOG Column 15 (地點/保管人/使用人/保管人+使用人)
 
 ## Deployment & Testing
 
