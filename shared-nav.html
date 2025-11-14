@@ -38,6 +38,9 @@
     <button type="button" class="btn btn-sm btn-outline-info" onclick="goToUserState()">
       📊 狀態
     </button>
+    <button type="button" class="btn btn-sm btn-outline-warning" onclick="goToInventory()">
+      📋 盤點
+    </button>
     <button type="button" class="btn btn-sm btn-outline-dark" onclick="goToUpdate()">
       ⚙️ 更新
     </button>
@@ -134,6 +137,16 @@
     if (_portalWebAppUrl) {
       const userStateUrl = _portalWebAppUrl + '?page=userstate';
       window.open(userStateUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 inventory.html 的函式** ✨
+  function goToInventory() {
+    if (_portalWebAppUrl) {
+      const inventoryUrl = _portalWebAppUrl + '?page=inventory';
+      window.open(inventoryUrl, '_top');
     } else {
       alert('頁面初始化中，請稍候...');
     }
