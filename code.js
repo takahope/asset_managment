@@ -33,16 +33,17 @@ const PROPERTY_COLUMN_INDICES = {
   LEADER_EMAIL: 13, // M欄: 保管人電子郵件
   LEADER_NAME: 10,  // J欄: 保管人
   USER_NAME: 11,    // K欄: 使用者
-  ASSET_STATUS: 14, // N欄: 財產狀態
-  APPLICATION_TIME: 15, // o欄 申請時間
-  TRANSFER_TIME: 16,    // p欄 接收時間
-  IS_UPLOADED: 17,      // q欄 是否上傳
-  UPLOAD_TIME: 18,      // r欄 上傳時間
-  IS_COMPUTER: 19,      // s欄 是否為駐站電腦
-  LAST_MODIFIED: 20,    // t欄 報廢日期
-  REMARKS: 21,          //u欄  報廢原因
-  DOC_URL: 22,          // v欄 報廢申請文件
-  IS_ACTUALLY_COMPUTER: 24 // X欄 是否為電腦
+  USER_EMAIL: 14,   // N欄: 使用者電子郵件 ✨ 新增
+  ASSET_STATUS: 15, // O欄: 財產狀態 (原N欄)
+  APPLICATION_TIME: 16, // P欄: 申請時間 (原O欄)
+  TRANSFER_TIME: 17,    // Q欄: 接收時間 (原P欄)
+  IS_UPLOADED: 18,      // R欄: 是否上傳 (原Q欄)
+  UPLOAD_TIME: 19,      // S欄: 上傳時間 (原R欄)
+  IS_COMPUTER: 20,      // T欄: 是否為駐站電腦 (原S欄)
+  LAST_MODIFIED: 21,    // U欄: 報廢日期 (原T欄)
+  REMARKS: 22,          // V欄: 報廢原因 (原U欄)
+  DOC_URL: 23,          // W欄: 報廢申請文件 (原V欄)
+  IS_ACTUALLY_COMPUTER: 25 // Y欄: 是否為電腦 (原X欄)
 };
 
 const ITEM_COLUMN_INDICES = {
@@ -81,7 +82,8 @@ const AL_REVIEW_TIME_COLUMN_INDEX = 10;      // ✨ 更新欄位號碼
 const AL_REVIEW_LINK_COLUMN_INDEX = 11;      // ✨ 更新欄位號碼
 const AL_OLD_USER_COLUMN_INDEX = 12;         // ✨ 新增：原使用人
 const AL_NEW_USER_COLUMN_INDEX = 13;         // ✨ 新增：新使用人
-const AL_TRANSFER_TYPE_COLUMN_INDEX = 14;    // ✨ 新增：轉移類型（地點/保管人/使用人）
+const AL_NEW_USER_EMAIL_COLUMN_INDEX = 14;   // ✨ 新增：新使用人Email
+const AL_TRANSFER_TYPE_COLUMN_INDEX = 15;    // ✨ 新增：轉移類型（地點/保管人/使用人）
 
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
@@ -117,6 +119,7 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
       leaderEmail: row[indices.LEADER_EMAIL - 1],
       leaderName: row[indices.LEADER_NAME - 1],
       userName: indices.USER_NAME ? row[indices.USER_NAME - 1] : null, // 使用者 (僅財產總表有此欄位)
+      userEmail: indices.USER_EMAIL ? row[indices.USER_EMAIL - 1] : null, // 使用者Email (僅財產總表有此欄位)
       assetStatus: row[indices.ASSET_STATUS - 1],
       applicationTime: row[indices.APPLICATION_TIME - 1],
       transferTime: row[indices.TRANSFER_TIME - 1],
@@ -543,14 +546,21 @@ function getTransferData() {
       sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
-  // 2. 從所有資產中，提取不重複的保管人 (Email -> Name) 和地點
+  // 2. 從所有資產中，提取不重複的保管人 (Email -> Name)、使用人 (Email -> Name) 和地點
   const uniqueKeepersMap = new Map();
+  const uniqueUsersMap = new Map(); // ✨ 新增：使用人列表
   const uniqueLocationsSet = new Set();
 
   allAssets.forEach(asset => {
     if (asset.leaderEmail && asset.leaderName) {
       if (!uniqueKeepersMap.has(asset.leaderEmail)) {
         uniqueKeepersMap.set(asset.leaderEmail, asset.leaderName);
+      }
+    }
+    // ✨ 新增：收集使用人資訊
+    if (asset.userEmail && asset.userName) {
+      if (!uniqueUsersMap.has(asset.userEmail)) {
+        uniqueUsersMap.set(asset.userEmail, asset.userName);
       }
     }
     if (asset.location) {
@@ -563,6 +573,12 @@ function getTransferData() {
   uniqueKeepersMap.forEach((name, email) => {
     keepers[email] = name;
   });
+  
+  // ✨ 新增：使用人列表
+  const users = {};
+  uniqueUsersMap.forEach((name, email) => {
+    users[email] = name;
+  });
 
   const locations = Array.from(uniqueLocationsSet).sort();
 
@@ -571,6 +587,7 @@ function getTransferData() {
     userEmail: currentUserEmail, 
     assets: myAssets, 
     keepers: keepers, 
+    users: users, // ✨ 新增：使用人列表
     locations: locations 
   };
 }
@@ -581,20 +598,29 @@ function getTransferData() {
  */
 function processBatchTransferApplication(formData) {
   try {
-    const { assetIds, newKeeperEmail, newLocation, newUserName } = formData;
+    const { assetIds, newKeeperEmail, newLocation, newUserName, newUserEmail } = formData;
     
     // ✨ 改進：支援選擇性參數（可以只變更其中一項）
     if (!assetIds || assetIds.length === 0) {
         throw new Error("請至少勾選一筆財產。");
     }
     
-    if (!newKeeperEmail && !newLocation && !newUserName) {
+    if (!newKeeperEmail && !newLocation && !newUserName && !newUserEmail) {
         throw new Error("請至少選擇一項要變更的項目（保管人、地點或使用人）。");
     }
 
     const allAssets = getAllAssets();
     const emailToNameMap = new Map(allAssets.map(asset => [asset.leaderEmail, asset.leaderName]));
     const newKeeperName = newKeeperEmail ? (emailToNameMap.get(newKeeperEmail) || newKeeperEmail.split('@')[0]) : null;
+    
+    // ✨ 新增：處理使用人Email
+    const userEmailToNameMap = new Map();
+    allAssets.forEach(asset => {
+      if (asset.userEmail && asset.userName) {
+        userEmailToNameMap.set(asset.userEmail, asset.userName);
+      }
+    });
+    const finalNewUserName = newUserEmail ? (userEmailToNameMap.get(newUserEmail) || newUserName || newUserEmail.split('@')[0]) : newUserName;
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
@@ -615,14 +641,16 @@ function processBatchTransferApplication(formData) {
           
           // ✨ 改進：判斷轉移類型並決定需要審核的項目
           const oldUserName = asset.userName || '';
+          const oldUserEmail = asset.userEmail || '';
           const finalNewKeeperEmail = newKeeperEmail || asset.leaderEmail;
           const finalNewKeeperName = newKeeperName || asset.leaderName;
           const finalNewLocation = newLocation || asset.location;
-          const finalNewUserName = newUserName || (newKeeperName || asset.userName || asset.leaderName);
+          const finalNewUserEmail = newUserEmail || asset.userEmail || '';
+          const finalNewUserName = finalNewUserName || (newKeeperName || asset.userName || asset.leaderName);
           
           const isKeeperChange = newKeeperEmail && asset.leaderEmail !== newKeeperEmail;
           const isLocationChange = newLocation && asset.location !== newLocation;
-          const isUserChange = newUserName && oldUserName !== newUserName;
+          const isUserChange = (newUserEmail && oldUserEmail !== newUserEmail) || (newUserName && oldUserName !== newUserName);
           
           // 判斷轉移類型
           let transferType = '';
@@ -665,10 +693,20 @@ function processBatchTransferApplication(formData) {
             "", // REVIEW_LINK
             oldUserName, // AL_OLD_USER_COLUMN_INDEX (12)
             finalNewUserName, // AL_NEW_USER_COLUMN_INDEX (13)
-            transferType // AL_TRANSFER_TYPE_COLUMN_INDEX (14)
+            finalNewUserEmail, // AL_NEW_USER_EMAIL_COLUMN_INDEX (14)
+            transferType // AL_TRANSFER_TYPE_COLUMN_INDEX (15)
           ];
           newLogsToAdd.push(newLogRow);
-          createdApplications.push({ id: asset.assetId, transferType: transferType, needsApproval: needsApproval });
+          createdApplications.push({ 
+            id: asset.assetId, 
+            transferType: transferType, 
+            needsApproval: needsApproval,
+            oldKeeperEmail: asset.leaderEmail,
+            oldUserEmail: oldUserEmail,
+            newKeeperEmail: finalNewKeeperEmail,
+            newUserEmail: finalNewUserEmail,
+            assetName: asset.assetName
+          });
         }
       }
     });
@@ -724,36 +762,103 @@ function processBatchTransferApplication(formData) {
     });
     
     let resultMessage = '';
+    const webAppUrl = getAppUrl();
+    const reviewLink = `${webAppUrl}?page=review`;
+    const currentUserEmail = Session.getActiveUser().getEmail();
     
-    // ✨ 改進：只有在需要審核時才發送郵件通知
-    if (needsApprovalApps.length > 0 && newKeeperEmail) {
-      const webAppUrl = getAppUrl();
-      const reviewLink = `${webAppUrl}?page=review`;
-      
-      const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產`;
-      let body = `您好 ${newKeeperName}，\n\n${Session.getActiveUser().getEmail()} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您。\n\n`;
-      body += `轉移類型：${typeDescription}\n\n`;
-      
-      // ✨ 新增：如果有使用者與保管人不同的資產，在通知中說明
-      if (assetsWithDifferentUser.length > 0) {
-        body += `提醒：其中有 ${assetsWithDifferentUser.length} 筆財產的使用者與保管人不同，請注意協調：\n`;
-        assetsWithDifferentUser.forEach(asset => {
-          body += `  - ${asset.assetId}: ${asset.assetName} (使用者: ${asset.userName})\n`;
+    // ✨ 改進：根據不同情況發送不同的通知
+    // 情況1：只變更使用人（change-user 勾選，其他未勾）
+    if (newUserEmail && !newKeeperEmail && !newLocation) {
+      // 通知新使用人
+      if (newUserEmail) {
+        const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（使用人變更）`;
+        let body = `您好 ${finalNewUserName}，\n\n${currentUserEmail} 已申請將您設為 ${needsApprovalApps.length} 筆財產的使用人。\n\n`;
+        body += `財產清單：\n`;
+        needsApprovalApps.forEach(app => {
+          body += `  - ${app.id}: ${app.assetName}\n`;
         });
-        body += `\n`;
+        body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
+        body += `${reviewLink}\n\n此為系統自動發送郵件。`;
+        MailApp.sendEmail(newUserEmail, subject, body);
       }
       
-      body += `請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
-      body += `${reviewLink}\n\n`;
-      body += `此為系統自動發送郵件。`;
+      // 通知原保管人
+      const oldKeepers = new Set(needsApprovalApps.map(app => app.oldKeeperEmail).filter(e => e));
+      oldKeepers.forEach(keeperEmail => {
+        const keeperAssets = needsApprovalApps.filter(app => app.oldKeeperEmail === keeperEmail);
+        const subject = `[財產通知] 您保管的 ${keeperAssets.length} 筆財產的使用人已變更`;
+        let body = `您好，\n\n您保管的以下財產的使用人已變更：\n\n`;
+        keeperAssets.forEach(app => {
+          body += `  - ${app.id}: ${app.assetName} → 新使用人: ${finalNewUserName}\n`;
+        });
+        body += `\n此為系統自動發送郵件。`;
+        MailApp.sendEmail(keeperEmail, subject, body);
+      });
       
+      resultMessage = `成功提交 ${needsApprovalApps.length} 筆使用人變更申請！已通知新使用人和原保管人。`;
+    }
+    // 情況2：只變更保管人（change-keeper 勾選，其他未勾）
+    else if (newKeeperEmail && !newUserEmail && !newLocation) {
+      // 通知新保管人
+      const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（保管人變更）`;
+      let body = `您好 ${newKeeperName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您保管。\n\n`;
+      body += `財產清單：\n`;
+      needsApprovalApps.forEach(app => {
+        body += `  - ${app.id}: ${app.assetName}\n`;
+      });
+      body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
+      body += `${reviewLink}\n\n此為系統自動發送郵件。`;
       MailApp.sendEmail(newKeeperEmail, subject, body);
+      
+      // 通知原使用人
+      const oldUsers = new Set(needsApprovalApps.map(app => app.oldUserEmail).filter(e => e));
+      oldUsers.forEach(userEmail => {
+        const userAssets = needsApprovalApps.filter(app => app.oldUserEmail === userEmail);
+        const subject = `[財產通知] 您使用的 ${userAssets.length} 筆財產的保管人已變更`;
+        let body = `您好，\n\n您使用的以下財產的保管人已變更：\n\n`;
+        userAssets.forEach(app => {
+          body += `  - ${app.id}: ${app.assetName} → 新保管人: ${newKeeperName}\n`;
+        });
+        body += `\n此為系統自動發送郵件。`;
+        MailApp.sendEmail(userEmail, subject, body);
+      });
+      
+      resultMessage = `成功提交 ${needsApprovalApps.length} 筆保管人變更申請！已通知新保管人和原使用人。`;
+    }
+    // 情況3：只變更地點（change-location 勾選，其他未勾）
+    else if (newLocation && !newKeeperEmail && !newUserEmail) {
+      // 通知管理員
+      const adminEmails = getAdminEmails();
+      if (adminEmails && adminEmails.length > 0) {
+        const subject = `[財產通知] ${autoCompletedApps.length} 筆財產地點已變更`;
+        let body = `您好，\n\n${currentUserEmail} 已變更以下財產的地點：\n\n`;
+        autoCompletedApps.forEach(app => {
+          body += `  - ${app.id}: ${app.assetName} → 新地點: ${newLocation}\n`;
+        });
+        body += `\n此為系統自動發送郵件。`;
+        MailApp.sendEmail(adminEmails.join(','), subject, body);
+      }
+      resultMessage = `${autoCompletedApps.length} 筆財產地點已變更！已通知財產管理人員。`;
+    }
+    // 情況4：組合變更（其他情況）
+    else if (needsApprovalApps.length > 0) {
+      // 通知新保管人或新使用人
+      const recipientEmail = newKeeperEmail || newUserEmail;
+      const recipientName = newKeeperName || finalNewUserName;
+      
+      if (recipientEmail) {
+        const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產`;
+        let body = `您好 ${recipientName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您。\n\n`;
+        body += `轉移類型：${typeDescription}\n\n`;
+        body += `請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
+        body += `${reviewLink}\n\n此為系統自動發送郵件。`;
+        MailApp.sendEmail(recipientEmail, subject, body);
+      }
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆需要審核的申請！`;
     }
     
-    if (autoCompletedApps.length > 0) {
-      if (resultMessage) resultMessage += '\n';
-      resultMessage += `${autoCompletedApps.length} 筆僅變更地點的財產已直接完成（無需審核）！`;
+    if (autoCompletedApps.length > 0 && !resultMessage) {
+      resultMessage = `${autoCompletedApps.length} 筆財產已直接完成（無需審核）！`;
     }
 
     return resultMessage || `成功處理 ${createdApplications.length} 筆財產！`;
@@ -888,6 +993,9 @@ function processBatchApproval(appIds) {
             const newUserName = appDetails.row.length > AL_NEW_USER_COLUMN_INDEX - 1 
               ? appDetails.row[AL_NEW_USER_COLUMN_INDEX - 1] 
               : '';
+            const newUserEmail = appDetails.row.length > AL_NEW_USER_EMAIL_COLUMN_INDEX - 1 
+              ? appDetails.row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1] 
+              : '';
             
             // 如果有新使用人資訊，則更新；否則保持與保管人同步
             if (newUserName && newUserName.toString().trim() !== '') {
@@ -895,6 +1003,14 @@ function processBatchApproval(appIds) {
             } else {
               // 預設使用人等於保管人
               location.sheet.getRange(location.rowIndex, indices.USER_NAME).setValue(newKeeperName);
+            }
+            
+            // ✨ 新增：更新使用人Email
+            if (newUserEmail && newUserEmail.toString().trim() !== '') {
+              location.sheet.getRange(location.rowIndex, indices.USER_EMAIL).setValue(newUserEmail);
+            } else {
+              // 預設使用人Email等於保管人Email
+              location.sheet.getRange(location.rowIndex, indices.USER_EMAIL).setValue(newKeeperEmail);
             }
           }
 
@@ -917,9 +1033,14 @@ function processBatchApproval(appIds) {
     if (successCount > 0) {
       const adminEmails = getAdminEmails();
       if (adminEmails && adminEmails.length > 0) {
+        const webAppUrl = getAppUrl();
+        const updateLink = `${webAppUrl}?page=update`; // ✨ 新增：更新頁面連結
+        
         const subject = `[系統通知] 有 ${successCount} 筆已完成轉移的財產待您更新`;
         let body = `您好，\n\n系統剛剛有 ${successCount} 筆財產轉移申請已被核准，請您執行後續的上傳更新作業。\n\n`;
-        body += `您可以從試算表的「財產管理系統」選單進入「更新已轉移財產」頁面進行操作。\n\n此為系統自動發送郵件。`;
+        body += `請點擊下方連結，前往更新頁面進行操作：\n`;
+        body += `${updateLink}\n\n`; // ✨ 新增：直接連結
+        body += `您也可以從試算表的「財產管理系統」選單進入「更新已轉移財產」頁面進行操作。\n\n此為系統自動發送郵件。`;
         MailApp.sendEmail(adminEmails.join(','), subject, body);
       }
     }

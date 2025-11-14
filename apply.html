@@ -250,12 +250,13 @@
             });
             locationSelect.disabled = false; // 直接啟用
             
-            // ✨ 新增：填充使用人下拉選單（與保管人相同的列表）
+            // ✨ 新增：填充使用人下拉選單（使用Email作為value）
             const userSelect = document.getElementById('user-select');
-            sortedKeepers.forEach(keeper => {
+            const sortedUsers = Object.entries(data.users || data.keepers).map(([email, name]) => ({ email, name })).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+            sortedUsers.forEach(user => {
                 const option = document.createElement('option');
-                option.value = keeper.name; // 使用人使用姓名而非Email
-                const displayName = (keeper.email === data.userEmail) ? `${keeper.name} (自己)` : keeper.name;
+                option.value = user.email; // ✨ 改用Email作為value
+                const displayName = (user.email === data.userEmail) ? `${user.name} (自己)` : user.name;
                 option.textContent = displayName;
                 userSelect.appendChild(option);
             });
@@ -442,7 +443,7 @@
                 assetIds: selectedAssets, 
                 newKeeperEmail: changeKeeper ? keeperSelect.value : null,
                 newLocation: changeLocation ? locationSelect.value : null,
-                newUserName: changeUser ? userSelect.value : null
+                newUserEmail: changeUser ? userSelect.value : null // ✨ 改為傳送Email
             };
             
             google.script.run.withSuccessHandler(showSuccessAndClose).withFailureHandler(showError).processBatchTransferApplication(formData);
