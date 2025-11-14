@@ -79,6 +79,9 @@ const AL_STATUS_COLUMN_INDEX = 8;
 const AL_NEW_LEADER_EMAIL_COLUMN_INDEX = 9; // ✨ 新增：新保管人Email
 const AL_REVIEW_TIME_COLUMN_INDEX = 10;      // ✨ 更新欄位號碼
 const AL_REVIEW_LINK_COLUMN_INDEX = 11;      // ✨ 更新欄位號碼
+const AL_OLD_USER_COLUMN_INDEX = 12;         // ✨ 新增：原使用人
+const AL_NEW_USER_COLUMN_INDEX = 13;         // ✨ 新增：新使用人
+const AL_TRANSFER_TYPE_COLUMN_INDEX = 14;    // ✨ 新增：轉移類型（地點/保管人/使用人）
 
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
@@ -610,15 +613,36 @@ function processBatchTransferApplication(formData) {
           location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue('');
 
           const appId = `APP-${now.getTime()}-${createdApplications.length}`;
+          
+          // ✨ 判斷轉移類型
+          let transferType = '';
+          const isKeeperChange = asset.leaderEmail !== newKeeperEmail;
+          const oldUserName = asset.userName || '';
+          const newUserName = newKeeperName; // 預設新使用人等於新保管人
+          const isUserChange = oldUserName && oldUserName !== newUserName;
+          
+          if (isKeeperChange && isUserChange) {
+            transferType = '保管人+使用人';
+          } else if (isKeeperChange) {
+            transferType = '保管人';
+          } else if (isUserChange) {
+            transferType = '使用人';
+          } else {
+            transferType = '地點';
+          }
+          
           const newLogRow = [
             appId, now, asset.assetId,
             asset.leaderName, asset.location,
             newKeeperName, newLocation,
             "待接收", newKeeperEmail,
-            "", ""
+            "", "", // REVIEW_TIME and REVIEW_LINK
+            oldUserName, // AL_OLD_USER_COLUMN_INDEX (12)
+            newUserName, // AL_NEW_USER_COLUMN_INDEX (13)
+            transferType // AL_TRANSFER_TYPE_COLUMN_INDEX (14)
           ];
           newLogsToAdd.push(newLogRow);
-          createdApplications.push({ id: asset.assetId });
+          createdApplications.push({ id: asset.assetId, transferType: transferType });
         }
       }
     });
@@ -658,8 +682,23 @@ function processBatchTransferApplication(formData) {
 
     const webAppUrl = getAppUrl();
     const reviewLink = `${webAppUrl}?page=review`;
+    
+    // ✨ 改進：根據轉移類型產生更精確的通知
+    const transferTypeSummary = {};
+    createdApplications.forEach(app => {
+      const type = app.transferType || '地點';
+      transferTypeSummary[type] = (transferTypeSummary[type] || 0) + 1;
+    });
+    
+    let typeDescription = '';
+    Object.keys(transferTypeSummary).forEach(type => {
+      if (typeDescription) typeDescription += '、';
+      typeDescription += `${type}(${transferTypeSummary[type]}筆)`;
+    });
+    
     const subject = `[財產轉移通知] 您有 ${createdApplications.length} 筆待接收的財產`;
     let body = `您好 ${newKeeperName}，\n\n${Session.getActiveUser().getEmail()} 已申請將 ${createdApplications.length} 筆財產轉移給您。\n\n`;
+    body += `轉移類型：${typeDescription}\n\n`;
     
     // ✨ 新增：如果有使用者與保管人不同的資產，在通知中說明
     if (assetsWithDifferentUser.length > 0) {
@@ -721,6 +760,12 @@ function getPendingApprovals() {
       .map(row => {
         const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
         const assetInfo = assetIdToInfoMap.get(assetId) || { assetName: '（找不到名稱）', userName: '無' };
+        
+        // ✨ 讀取轉移類型資訊（如果有的話）
+        const transferType = row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1 
+          ? row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] 
+          : '地點';
+        
         return {
           appId: row[AL_APP_ID_COLUMN_INDEX - 1],
           applyTime: new Date(row[AL_APP_TIME_COLUMN_INDEX - 1]).toLocaleString('zh-TW'),
@@ -729,7 +774,8 @@ function getPendingApprovals() {
           userName: assetInfo.userName,
           oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
           oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
-          newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1]
+          newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
+          transferType: transferType // ✨ 新增：轉移類型
         };
       });
     
@@ -794,6 +840,22 @@ function processBatchApproval(appIds) {
 
           location.sheet.getRange(location.rowIndex, indices.LEADER_NAME).setValue(newKeeperName);
           location.sheet.getRange(location.rowIndex, indices.LEADER_EMAIL).setValue(newKeeperEmail);
+
+          // ✨ 新增：同時更新使用人欄位（僅財產總表有此欄位）
+          if (location.sheetName === PROPERTY_MASTER_SHEET_NAME) {
+            // 讀取新使用人資訊（如果有在申請記錄中）
+            const newUserName = appDetails.row.length > AL_NEW_USER_COLUMN_INDEX - 1 
+              ? appDetails.row[AL_NEW_USER_COLUMN_INDEX - 1] 
+              : '';
+            
+            // 如果有新使用人資訊，則更新；否則保持與保管人同步
+            if (newUserName && newUserName.toString().trim() !== '') {
+              location.sheet.getRange(location.rowIndex, indices.USER_NAME).setValue(newUserName);
+            } else {
+              // 預設使用人等於保管人
+              location.sheet.getRange(location.rowIndex, indices.USER_NAME).setValue(newKeeperName);
+            }
+          }
 
           const isStation = locationIsStationMap.get(newLocation) === '是';
           // IS_ACTUALLY_COMPUTER 欄位可能不存在於所有物件中，需要安全檢查
