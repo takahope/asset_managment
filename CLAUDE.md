@@ -26,17 +26,17 @@ This architecture means you should:
 ### Key Components
 
 **Backend (`code.js`)**:
-- Single file containing all server-side logic (~1700 lines)
+- Single file containing all server-side logic (~1990 lines)
 - All comments and variable names in Traditional Chinese
 - Organized into functional modules:
-  - Global configuration (lines 1-92)
-  - Data abstraction layer (lines 94-193)
-  - UI menu handlers (lines 196-295)
-  - Web app routing (lines 297-396)
-  - Asset transfer workflows (lines 514-774)
-  - Lending/return workflows (lines 942-1144)
-  - Scrapping workflows (lines 1182-1613)
-  - Admin functions (lines 1309-1451)
+  - Global configuration (lines 1-98)
+  - Data abstraction layer (lines 100-207)
+  - UI menu handlers (lines 210-303)
+  - Web app routing (lines 319-404)
+  - Asset transfer workflows (lines 533-878)
+  - Lending/return workflows (lines 1256-1435)
+  - Scrapping workflows (lines 1485-1926)
+  - Admin functions (lines 1597-1704)
 
 **Frontend (HTML files)**:
 - `portal.html`: Main landing page with feature cards
@@ -55,11 +55,12 @@ This architecture means you should:
 
 The system eliminates the need for separate mapping sheets by dynamically extracting reference data:
 
-- **Keepers/Borrowers**: Extracted from the asset list's unique `leaderName` and `leaderEmail` combinations
+- **Keepers**: Extracted from the asset list's unique `leaderName` and `leaderEmail` combinations
+- **Users**: Extracted from the asset list's unique `userName` and `userEmail` combinations (from 財產總表)
 - **Locations**: Extracted from unique `location` values in asset records
 - **Software Versions**: Stored in dedicated `軟體版本清單` sheet
 
-Functions like `getTransferData()` and `getLendingData()` return not just assets but also all available options for dropdowns, ensuring UI always reflects current data.
+Functions like `getTransferData()` and `getLendingData()` return not just assets but also all available options for dropdowns (keepers, users, locations), ensuring UI always reflects current data.
 
 ## Development Commands
 
@@ -109,10 +110,18 @@ const ADMIN_LIST_SHEET_NAME = "管理員名單";
 
 ### 1. Asset Transfer (`apply.html` + `processBatchTransferApplication()`)
 - User selects assets they own (status = '在庫')
-- Chooses new keeper and location
-- System updates asset status to '待接收' and logs to APPLICATION_LOG
-- Email notification sent to new keeper
-- New keeper approves via `review.html` → `processBatchApproval()`
+- Chooses transfer options (can select individually or in combination):
+  - Change keeper (保管人)
+  - Change user (使用人)
+  - Change location (地點)
+- System determines transfer type and updates accordingly:
+  - Location-only change → status remains '在庫' (no approval needed)
+  - Keeper or user change → status becomes '待接收' (requires approval)
+- Email notifications sent based on transfer type:
+  - New keeper (if keeper changed)
+  - New user (if user changed and user differs from keeper)
+- Transfer type tracked in APPLICATION_LOG (Column 15: 地點/保管人/使用人/保管人+使用人)
+- New keeper/user approves via `review.html` → `processBatchApproval()`
 
 ### 2. Asset Lending (`lending.html` + `processBatchLending()`)
 - Keeper lends assets temporarily (status → '出借中')
@@ -205,6 +214,10 @@ Navigation: `webAppUrl + '?page=review'`
 6. **Session User Email**: `Session.getActiveUser().getEmail()` returns the executing user's email. For web apps with `executeAs: "USER_ACCESSING"`, this is the accessing user.
 
 7. **Date Formatting**: Scrapping documents parse both GMT timestamps and Minguo calendar dates (e.g., "112/05/15" → 2023/05/15).
+
+8. **User Field Availability**: The `userName` and `userEmail` fields only exist in 財產總表 (PROPERTY_MASTER_SHEET). For 物品總表 (ITEM_MASTER_SHEET), these fields will be null. Always check for null when using these fields.
+
+9. **Transfer Type Logic**: When processing transfers, the system automatically determines the transfer type based on what changed. Only keeper or user changes require approval ('待接收' status); location-only changes are applied immediately.
 
 ## Security Model
 
