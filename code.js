@@ -361,6 +361,11 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('userstate');
       title = "個人財產狀態查詢";
       break;
+    // ✨ **新增的路由：儀表板** ✨
+    case 'dashboard':
+      template = HtmlService.createTemplateFromFile('dashboard');
+      title = "系統儀表板";
+      break;
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('portal');

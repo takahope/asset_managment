@@ -16,6 +16,9 @@
 
 <div class="portal-nav">
   <span class="portal-nav-brand">財產管理</span>
+  <button type="button" class="btn btn-sm btn-outline-info" onclick="goToDashboard()">
+      📊 儀表板
+    </button>
    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goToApply()">
       ➡️ 轉移
     </button>
@@ -55,6 +58,16 @@
       window.open(_portalWebAppUrl, '_top');
     } else {
       // 如果 URL 還沒載入好，先顯示提示
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 dashboard.html 的函式** ✨
+  function goToDashboard() {
+    if (_portalWebAppUrl) {
+      const dashboardUrl = _portalWebAppUrl + '?page=dashboard';
+      window.open(dashboardUrl, '_top');
+    } else {
       alert('頁面初始化中，請稍候...');
     }
   }
