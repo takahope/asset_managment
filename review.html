@@ -3,36 +3,11 @@
 <head>
     <base target="_top">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="shared-styles.css">
     <style>
-        /* ✨ 修改點：移除 body 的特殊背景色，並調整 padding ✨ */
-        body { 
-            padding: 20px;
-        }
-        .loader { 
-            border: 8px solid #f3f3f3; 
-            border-radius: 50%; 
-            border-top: 8px solid #28a745; 
-            width: 60px; 
-            height: 60px; 
-            animation: spin 2s linear infinite; 
-            margin: 50px auto; 
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* ✨ 修改點：移除 .card-main 的樣式定義 ✨ */
-
-        .approval-table-container { 
+        /* Page-specific styles */
+        .approval-table-container {
             max-height: 400px;
-            overflow-y: auto; 
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-        }
-        .pagination-controls { 
-            margin-top: 15px; 
-            user-select: none; 
-        }
-        .pagination-controls .page-link { 
-            cursor: pointer; 
         }
     </style>
 </head>

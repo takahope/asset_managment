@@ -3,15 +3,32 @@
 <head>
     <base target="_top">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="shared-styles.css">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <style>
-        body { background-color: #f4f7f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-        .portal-container { max-width: 800px; width: 100%; }
-        .card { transition: transform .2s; cursor: pointer; position: relative; }
-        .card:hover { transform: scale(1.05); box-shadow: 0 4px 20px rgba(0,0,0,.12); }
-        .card-title { color: #0056b3; }
-        .card-icon { font-size: 3rem; color: #007bff; }
-        .badge-notify { position: absolute; top: 10px; right: 15px; font-size: 1rem; }
+        /* Page-specific styles */
+        body {
+            background-color: var(--bg-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: var(--spacing-lg);
+        }
+        .portal-container {
+            max-width: 800px;
+            width: 100%;
+        }
+        .card-title {
+            color: var(--color-primary-dark);
+        }
+        .card-icon {
+            font-size: 3rem;
+            color: var(--color-primary);
+        }
+        .badge-notify {
+            font-size: 1rem;
+        }
     </style>
 </head>
 <body>

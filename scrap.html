@@ -3,15 +3,18 @@
 <head>
     <base target="_top">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="shared-styles.css">
     <style>
-        body { padding: 20px; }
-        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #dc3545; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #status-message { margin-top: 15px; font-weight: bold; }
-        .asset-table-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
-        /* ✨ 新增分頁樣式 ✨ */
-        .pagination-controls { margin-top: 15px; user-select: none; }
-        .pagination-controls .page-link { cursor: pointer; }
+        /* Page-specific styles */
+        .loader {
+            border-top-color: var(--color-danger);
+        }
+        .asset-table-container {
+            max-height: 250px;
+        }
+        #status-message {
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>

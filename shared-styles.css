@@ -1,0 +1,466 @@
+/**
+ * ============================================
+ * 財產管理系統 - 共用樣式表
+ * Shared Styles for Asset Management System
+ * ============================================
+ */
+
+/* ============================================
+   1. CSS Custom Properties (Design Tokens)
+   ============================================ */
+:root {
+    /* Primary Colors */
+    --color-primary: #007bff;
+    --color-primary-dark: #0056b3;
+    --color-success: #28a745;
+    --color-success-dark: #2e7d32;
+    --color-danger: #dc3545;
+    --color-danger-dark: #c62828;
+    --color-warning: #ffc107;
+    --color-info: #17a2b8;
+
+    /* Neutral Colors */
+    --color-white: #ffffff;
+    --color-gray-50: #f8f9fa;
+    --color-gray-100: #e9ecef;
+    --color-gray-200: #dee2e6;
+    --color-gray-300: #ced4da;
+    --color-gray-400: #adb5bd;
+    --color-gray-500: #6c757d;
+    --color-gray-600: #495057;
+    --color-gray-700: #343a40;
+    --color-gray-800: #212529;
+
+    /* Background Colors */
+    --bg-light: #f4f7f6;
+    --bg-loader: #f3f3f3;
+
+    /* Spacing Scale */
+    --spacing-xs: 8px;
+    --spacing-sm: 12px;
+    --spacing-md: 16px;
+    --spacing-lg: 20px;
+    --spacing-xl: 24px;
+    --spacing-2xl: 40px;
+
+    /* Border Radius */
+    --border-radius: 8px;
+    --border-radius-sm: 4px;
+    --border-radius-lg: 12px;
+    --border-radius-full: 50%;
+
+    /* Loader Colors by Variant */
+    --loader-color-default: var(--color-primary);
+    --loader-color-success: var(--color-success);
+    --loader-color-danger: var(--color-danger);
+    --loader-color-info: var(--color-info);
+
+    /* Z-index Scale */
+    --z-base: 1;
+    --z-dropdown: 100;
+    --z-sticky: 100;
+    --z-modal: 1000;
+    --z-overlay: 9999;
+
+    /* Transitions */
+    --transition-fast: 150ms ease-in-out;
+    --transition-base: 250ms ease-in-out;
+    --transition-slow: 350ms ease-in-out;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================
+   2. Base Styles
+   ============================================ */
+body {
+    padding: var(--spacing-lg);
+}
+
+/* ============================================
+   3. Loading Components
+   ============================================ */
+
+/* Loading Spinner Container */
+.loading-spinner,
+#loading-spinner {
+    text-align: center;
+}
+
+/* Loader Animation */
+.loader {
+    border: 8px solid var(--bg-loader);
+    border-radius: var(--border-radius-full);
+    border-top: 8px solid var(--loader-color-default);
+    width: 60px;
+    height: 60px;
+    animation: spin 2s linear infinite;
+    margin: var(--spacing-lg) auto;
+}
+
+/* Loader Variants */
+.loader--primary {
+    border-top-color: var(--loader-color-default);
+}
+
+.loader--success {
+    border-top-color: var(--loader-color-success);
+}
+
+.loader--danger {
+    border-top-color: var(--loader-color-danger);
+}
+
+.loader--info {
+    border-top-color: var(--loader-color-info);
+}
+
+/* Spin Animation */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Loading Overlay (for modal-style loaders) */
+.loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.9);
+    z-index: var(--z-overlay);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.loader-overlay .loader {
+    margin: 0 0 var(--spacing-md) 0;
+}
+
+/* ============================================
+   4. Table Components
+   ============================================ */
+
+/* Table Container with Scroll */
+.table-container,
+.asset-table-container,
+#table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-md);
+}
+
+/* Table Container Variants */
+.table-container--short {
+    max-height: 250px;
+}
+
+.table-container--medium {
+    max-height: 400px;
+}
+
+.table-container--tall {
+    max-height: 450px;
+}
+
+.table-container--full {
+    max-height: 60vh;
+}
+
+/* Sticky Table Header */
+.table thead.thead-light {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+}
+
+/* Table Responsive */
+@media (max-width: 768px) {
+    .table-container {
+        max-height: 50vh;
+    }
+}
+
+/* ============================================
+   5. Status Messages
+   ============================================ */
+.status-message,
+#status-message,
+#statusMessage {
+    margin-top: var(--spacing-md);
+}
+
+.status-message--bold {
+    font-weight: bold;
+}
+
+/* ============================================
+   6. Pagination Controls
+   ============================================ */
+.pagination-controls {
+    margin-top: var(--spacing-md);
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pagination-controls .page-link {
+    cursor: pointer;
+}
+
+.pagination-controls .page-item.disabled .page-link {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.pagination-info {
+    font-size: 0.9em;
+    color: var(--color-gray-600);
+}
+
+/* ============================================
+   7. Form Components
+   ============================================ */
+
+/* Form Row Spacing */
+.form-row {
+    margin-bottom: var(--spacing-md);
+}
+
+/* Checkbox List */
+.checkbox-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--color-gray-300);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+}
+
+/* ============================================
+   8. Button Components
+   ============================================ */
+
+/* Button Group Spacing */
+.btn-group {
+    margin-top: var(--spacing-md);
+}
+
+.btn + .btn {
+    margin-left: var(--spacing-xs);
+}
+
+/* Export Buttons */
+.export-buttons {
+    margin-bottom: var(--spacing-md);
+}
+
+/* ============================================
+   9. Navigation Components
+   ============================================ */
+
+/* Portal Navigation Bar */
+.portal-nav {
+    padding: var(--spacing-xs) var(--spacing-md);
+    background-color: var(--color-gray-100);
+    border-radius: var(--border-radius);
+    margin-bottom: 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.portal-nav a {
+    text-decoration: none;
+    color: var(--color-primary);
+    font-weight: 500;
+    transition: color var(--transition-fast);
+}
+
+.portal-nav a:hover {
+    color: var(--color-primary-dark);
+    text-decoration: none;
+}
+
+/* ============================================
+   10. Section Dividers
+   ============================================ */
+.section-divider {
+    margin-top: var(--spacing-2xl);
+    margin-bottom: var(--spacing-lg);
+    border-top: 2px solid var(--color-gray-200);
+    padding-top: var(--spacing-lg);
+}
+
+.section-title {
+    margin-bottom: var(--spacing-md);
+    color: var(--color-gray-700);
+    font-weight: 600;
+}
+
+/* ============================================
+   11. Utility Classes
+   ============================================ */
+
+/* Display Utilities */
+.u-hidden {
+    display: none !important;
+}
+
+.u-block {
+    display: block !important;
+}
+
+.u-inline {
+    display: inline !important;
+}
+
+.u-inline-block {
+    display: inline-block !important;
+}
+
+/* Text Utilities */
+.u-text-center {
+    text-align: center !important;
+}
+
+.u-text-left {
+    text-align: left !important;
+}
+
+.u-text-right {
+    text-align: right !important;
+}
+
+.u-text-bold {
+    font-weight: bold !important;
+}
+
+.u-text-muted {
+    color: var(--color-gray-500) !important;
+}
+
+/* Spacing Utilities - Margin Top */
+.u-mt-0 { margin-top: 0 !important; }
+.u-mt-xs { margin-top: var(--spacing-xs) !important; }
+.u-mt-sm { margin-top: var(--spacing-sm) !important; }
+.u-mt-md { margin-top: var(--spacing-md) !important; }
+.u-mt-lg { margin-top: var(--spacing-lg) !important; }
+.u-mt-xl { margin-top: var(--spacing-xl) !important; }
+
+/* Spacing Utilities - Margin Bottom */
+.u-mb-0 { margin-bottom: 0 !important; }
+.u-mb-xs { margin-bottom: var(--spacing-xs) !important; }
+.u-mb-sm { margin-bottom: var(--spacing-sm) !important; }
+.u-mb-md { margin-bottom: var(--spacing-md) !important; }
+.u-mb-lg { margin-bottom: var(--spacing-lg) !important; }
+.u-mb-xl { margin-bottom: var(--spacing-xl) !important; }
+
+/* Spacing Utilities - Margin Left/Right */
+.u-ml-sm { margin-left: var(--spacing-sm) !important; }
+.u-mr-sm { margin-right: var(--spacing-sm) !important; }
+
+/* Spacing Utilities - Padding */
+.u-p-0 { padding: 0 !important; }
+.u-p-sm { padding: var(--spacing-sm) !important; }
+.u-p-md { padding: var(--spacing-md) !important; }
+.u-p-lg { padding: var(--spacing-lg) !important; }
+
+/* ============================================
+   12. Badge Enhancements
+   ============================================ */
+.badge {
+    font-size: 0.85em;
+    padding: 0.35em 0.65em;
+}
+
+/* Badge Position Utilities */
+.badge-notify {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+}
+
+/* ============================================
+   13. Card Enhancements
+   ============================================ */
+.card {
+    border-radius: var(--border-radius);
+    transition: transform var(--transition-base),
+                box-shadow var(--transition-base);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* ============================================
+   14. Responsive Design
+   ============================================ */
+@media (max-width: 768px) {
+    body {
+        padding: var(--spacing-sm);
+    }
+
+    .form-row {
+        flex-direction: column;
+    }
+
+    .portal-nav {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .pagination-controls {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+}
+
+@media (max-width: 480px) {
+    .table-container {
+        font-size: 0.85rem;
+    }
+
+    .btn-sm {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* ============================================
+   15. Print Styles
+   ============================================ */
+@media print {
+    body {
+        padding: 0;
+    }
+
+    .portal-nav,
+    .export-buttons,
+    .pagination-controls,
+    button,
+    .btn {
+        display: none !important;
+    }
+
+    .table-container {
+        max-height: none;
+        overflow: visible;
+        border: none;
+    }
+}
