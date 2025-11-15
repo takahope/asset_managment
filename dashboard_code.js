@@ -107,7 +107,28 @@ function getDashboardData() {
 
     const scrappingUsers = Array.from(scrappingUserMap.values());
 
-    // 3. 統計達到使用年限的資產（排除已報廢和報廢中的資產）
+    // 3. 統計待更新的資產（已轉移但尚未上傳到外部系統）
+    const pendingUploadAssets = allAssets.filter(asset =>
+      asset.transferTime && asset.isUploaded !== 'V'
+    );
+
+    // 整理待更新資產詳細資訊
+    const pendingUploadDetails = pendingUploadAssets.map(asset => {
+      const transferDate = asset.transferTime ?
+        new Date(asset.transferTime).toLocaleDateString('zh-TW') : '-';
+
+      return {
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        leaderName: asset.leaderName,
+        userName: asset.userName,
+        location: asset.location,
+        transferDate: transferDate,
+        status: asset.assetStatus
+      };
+    });
+
+    // 4. 統計達到使用年限的資產（排除已報廢和報廢中的資產）
     const activeAssets = allAssets.filter(asset =>
       asset.assetStatus !== '已報廢' && asset.assetStatus !== '報廢中'
     );
@@ -148,6 +169,10 @@ function getDashboardData() {
         userCount: scrappingUsers.length,
         totalAssets: scrappingAssets.length,
         users: scrappingUsers
+      },
+      pendingUpload: {
+        count: pendingUploadAssets.length,
+        assets: pendingUploadDetails
       },
       expiredAssets: {
         count: expiredAssets.length,
