@@ -30,7 +30,7 @@
 | `userstate.html` | 引入shared-styles.css | ~8行 | 表格容器高度 |
 | `portal.html` | 引入shared-styles.css | ~7行 | Portal特定佈局和卡片樣式 |
 | `shared-nav.html` | 使用CSS變數 | ~8行 | 導航品牌樣式 |
-| `Index.html` | 引入shared-styles.css | 0行 | 保留所有Google Forms風格設計 |
+| `Index.html` | **未修改** - 保持完全獨立 | 0行 | 完全獨立的Google Forms風格設計 |
 
 **總計移除重複CSS：約 120+ 行**
 
@@ -191,10 +191,10 @@ const primaryColor = getComputedStyle(document.documentElement)
 
 ## 特殊處理說明 (Special Considerations)
 
-### Index.html 的獨特設計
-- **保留原因**：Index.html 使用 Google Forms 風格的紫色主題設計，與其他頁面的藍色主題完全不同
-- **處理方式**：引入 `shared-styles.css` 以獲得 CSS 變數支援，但保留所有自定義樣式在頁面內
-- **未來優化**：可考慮將 Index.html 的樣式抽取到 `index-form.css` 獨立檔案
+### Index.html 的獨立設計
+- **保留原因**：Index.html 是專門給特殊人員使用的獨立頁面，使用 Google Forms 風格的紫色主題設計，與系統其他頁面完全獨立
+- **處理方式**：**完全不修改** - 不引入 `shared-styles.css`，保持完全獨立以避免任何樣式衝突
+- **獨立性**：Index.html 在系統外獨立運作，不受其他頁面樣式影響
 
 ### Loader 顏色變體
 不同頁面使用不同的 loader 顏色來反映其功能：
