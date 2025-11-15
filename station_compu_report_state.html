@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <style>
+        body {
+            background-color: #f4f7f6;
+            padding: 20px;
+        }
+        .report-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .stat-card {
+            border-left: 4px solid;
+            margin-bottom: 20px;
+            transition: transform .2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 20px rgba(0,0,0,.12);
+        }
+        .stat-card.total {
+            border-left-color: #007bff;
+        }
+        .stat-card.reported {
+            border-left-color: #28a745;
+        }
+        .stat-card.not-reported {
+            border-left-color: #dc3545;
+        }
+        .stat-card.rate {
+            border-left-color: #17a2b8;
+        }
+        .stat-number {
+            font-size: 3rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .detail-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+        .alert-section {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .critical-section {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .loading-spinner {
+            text-align: center;
+            padding: 50px;
+        }
+        .last-updated {
+            text-align: right;
+            color: #6c757d;
+            font-size: 0.85rem;
+            margin-top: 10px;
+        }
+        .table-sm th {
+            background-color: #f8f9fa;
+        }
+        .progress {
+            height: 25px;
+        }
+        .progress-bar {
+            font-weight: bold;
+        }
+        .month-badge {
+            font-size: 1.1rem;
+            padding: 8px 15px;
+        }
+    </style>
+</head>
+<body>
+    <?!= include('shared-nav'); ?>
+
+    <div class="report-container">
+        <div class="text-center mb-4">
+            <h2>駐站電腦回報統計</h2>
+            <p class="text-muted">電腦狀態回報追蹤與分析</p>
+            <span class="badge badge-primary month-badge" id="current-month"></span>
+        </div>
+
+        <div id="loading" class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="sr-only">載入中...</span>
+            </div>
+            <p class="mt-3">載入回報統計資料中...</p>
+        </div>
+
+        <div id="report-content" style="display: none;">
+            <!-- 統計卡片 -->
+            <div class="row">
+                <!-- 總電腦數 -->
+                <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="card stat-card total">
+                        <div class="card-body text-center">
+                            <div class="stat-number text-primary" id="total-computers">0</div>
+                            <div class="stat-label">應回報電腦總數</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 已回報數 -->
+                <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="card stat-card reported">
+                        <div class="card-body text-center">
+                            <div class="stat-number text-success" id="reported-count">0</div>
+                            <div class="stat-label">已回報電腦數</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 未回報數 -->
+                <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="card stat-card not-reported">
+                        <div class="card-body text-center">
+                            <div class="stat-number text-danger" id="not-reported-count">0</div>
+                            <div class="stat-label">未回報電腦數</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 回報率 -->
+                <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="card stat-card rate">
+                        <div class="card-body text-center">
+                            <div class="stat-number text-info" id="report-rate">0%</div>
+                            <div class="stat-label">本月回報率</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 回報率進度條 -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="progress">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 連續兩個月未回報警告 -->
+            <div id="two-months-alert" style="display: none;">
+                <div class="critical-section">
+                    <h5 class="text-danger">⚠️ 連續兩個月未回報警告</h5>
+                    <p class="mb-2">以下電腦已連續 <strong id="last-month-label"></strong> 及本月未回報：</p>
+                    <div id="two-months-list"></div>
+                </div>
+            </div>
+
+            <!-- 詳細資訊區塊 -->
+            <div class="row">
+                <!-- 本月未回報列表 -->
+                <div class="col-lg-6">
+                    <div class="detail-section">
+                        <h5>本月未回報電腦明細</h5>
+                        <hr>
+                        <div id="current-month-not-reported">
+                            <p class="text-success">✓ 所有電腦都已回報</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 按駐站地點統計 -->
+                <div class="col-lg-6">
+                    <div class="detail-section">
+                        <h5>駐站地點回報統計</h5>
+                        <hr>
+                        <div id="location-stats">
+                            <p class="text-muted">載入中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 保管人統計 -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="detail-section">
+                        <h5>保管人未回報統計（僅顯示有未回報電腦的保管人）</h5>
+                        <hr>
+                        <div id="leader-stats">
+                            <p class="text-muted">載入中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="last-updated" id="last-updated"></div>
+        </div>
+    </div>
+
+    <script>
+        // 頁面載入時獲取統計資料
+        document.addEventListener('DOMContentLoaded', function() {
+            loadReportStats();
+        });
+
+        function loadReportStats() {
+            google.script.run
+                .withSuccessHandler(renderReportStats)
+                .withFailureHandler(handleError)
+                .getComputerReportStats();
+        }
+
+        function renderReportStats(data) {
+            const summary = data.summary;
+
+            // 更新統計數字
+            document.getElementById('current-month').textContent = summary.currentMonth;
+            document.getElementById('total-computers').textContent = summary.totalComputers;
+            document.getElementById('reported-count').textContent = summary.reportedCount;
+            document.getElementById('not-reported-count').textContent = summary.notReportedCount;
+            document.getElementById('report-rate').textContent = summary.reportRate + '%';
+
+            // 更新進度條
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = summary.reportRate + '%';
+            progressBar.textContent = summary.reportRate + '%';
+
+            // 根據回報率設定進度條顏色
+            progressBar.className = 'progress-bar progress-bar-striped';
+            if (summary.reportRate >= 80) {
+                progressBar.classList.add('bg-success');
+            } else if (summary.reportRate >= 50) {
+                progressBar.classList.add('bg-warning');
+            } else {
+                progressBar.classList.add('bg-danger');
+            }
+
+            // 渲染連續兩個月未回報警告
+            if (data.twoMonthsNotReported.length > 0) {
+                document.getElementById('two-months-alert').style.display = 'block';
+                document.getElementById('last-month-label').textContent = summary.lastMonth;
+                renderTwoMonthsList(data.twoMonthsNotReported);
+            }
+
+            // 渲染本月未回報列表
+            renderCurrentMonthNotReported(data.currentMonthNotReported);
+
+            // 渲染地點統計
+            renderLocationStats(data.locationStats);
+
+            // 渲染保管人統計
+            renderLeaderStats(data.leaderStats);
+
+            // 更新時間
+            document.getElementById('last-updated').textContent = '最後更新：' + data.lastUpdated;
+
+            // 隱藏載入中，顯示內容
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('report-content').style.display = 'block';
+        }
+
+        function renderTwoMonthsList(computers) {
+            const container = document.getElementById('two-months-list');
+            let html = '<div class="table-responsive"><table class="table table-sm table-bordered table-hover">';
+            html += '<thead class="thead-dark"><tr><th>電腦編號</th><th>電腦名稱</th><th>駐站地點</th><th>保管人</th></tr></thead><tbody>';
+
+            computers.forEach(computer => {
+                html += `
+                    <tr class="table-danger">
+                        <td><strong>${computer.assetId}</strong></td>
+                        <td>${computer.assetName}</td>
+                        <td>${computer.location || '-'}</td>
+                        <td>${computer.leaderName} (${computer.leaderEmail})</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function renderCurrentMonthNotReported(computers) {
+            const container = document.getElementById('current-month-not-reported');
+
+            if (computers.length === 0) {
+                container.innerHTML = '<p class="text-success">✓ 所有電腦都已回報</p>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+            html += '<thead><tr><th>電腦編號</th><th>電腦名稱</th><th>駐站地點</th><th>保管人</th><th>Email</th></tr></thead><tbody>';
+
+            computers.forEach(computer => {
+                html += `
+                    <tr>
+                        <td><strong>${computer.assetId}</strong></td>
+                        <td>${computer.assetName}</td>
+                        <td>${computer.location || '-'}</td>
+                        <td>${computer.leaderName}</td>
+                        <td><small>${computer.leaderEmail || '-'}</small></td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function renderLocationStats(locationStats) {
+            const container = document.getElementById('location-stats');
+
+            if (locationStats.length === 0) {
+                container.innerHTML = '<p class="text-muted">無資料</p>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+            html += '<thead><tr><th>駐站地點</th><th>總數</th><th>已回報</th><th>未回報</th><th>回報率</th></tr></thead><tbody>';
+
+            locationStats.forEach(stat => {
+                const rateClass = stat.reportRate >= 80 ? 'success' : (stat.reportRate >= 50 ? 'warning' : 'danger');
+                html += `
+                    <tr>
+                        <td><strong>${stat.location}</strong></td>
+                        <td>${stat.total}</td>
+                        <td class="text-success">${stat.reported}</td>
+                        <td class="text-danger">${stat.notReported}</td>
+                        <td><span class="badge badge-${rateClass}">${stat.reportRate}%</span></td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function renderLeaderStats(leaderStats) {
+            const container = document.getElementById('leader-stats');
+
+            if (leaderStats.length === 0) {
+                container.innerHTML = '<p class="text-success">✓ 所有保管人的電腦都已回報</p>';
+                return;
+            }
+
+            let html = '';
+
+            leaderStats.forEach(stat => {
+                html += `
+                    <div class="alert-section mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>${stat.leaderName}</strong>
+                                <span class="badge badge-danger ml-2">${stat.notReported} 台未回報</span>
+                                <span class="badge badge-secondary ml-1">共 ${stat.total} 台</span>
+                            </div>
+                            <div>
+                                <small class="text-muted">${stat.email || ''}</small>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <strong>未回報電腦：</strong>
+                            ${stat.computers.map(c => `<span class="badge badge-warning mr-1">${c.assetId} (${c.location})</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function handleError(error) {
+            document.getElementById('loading').innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <strong>載入失敗：</strong>${error.message}
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

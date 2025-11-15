@@ -41,6 +41,9 @@
     <button type="button" class="btn btn-sm btn-outline-info" onclick="goToUserState()">
       📊 狀態
     </button>
+    <button type="button" class="btn btn-sm btn-outline-success" onclick="goToComputerReportStats()">
+      📈 回報統計
+    </button>
     <button type="button" class="btn btn-sm btn-outline-dark" onclick="goToUpdate()">
       ⚙️ 更新
     </button>
@@ -147,6 +150,16 @@
     if (_portalWebAppUrl) {
       const userStateUrl = _portalWebAppUrl + '?page=userstate';
       window.open(userStateUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 station_compu_report_state.html 的函式** ✨
+  function goToComputerReportStats() {
+    if (_portalWebAppUrl) {
+      const reportStatsUrl = _portalWebAppUrl + '?page=computerReportStats';
+      window.open(reportStatsUrl, '_top');
     } else {
       alert('頁面初始化中，請稍候...');
     }

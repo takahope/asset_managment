@@ -366,6 +366,11 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('dashboard');
       title = "系統儀表板";
       break;
+    // ✨ **新增的路由：駐站電腦回報統計** ✨
+    case 'computerReportStats':
+      template = HtmlService.createTemplateFromFile('station_compu_report_state');
+      title = "駐站電腦回報統計";
+      break;
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('portal');
