@@ -3,3 +3,6 @@
 .git/
 .gitignore
 .env
+*.backup
+code.js.backup
+REFACTORING.md
