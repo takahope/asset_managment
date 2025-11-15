@@ -172,6 +172,56 @@ function getComputerReportStats() {
       }))
       .sort((a, b) => b.notReported - a.notReported); // 按未回報數量降序排列
 
+    // 9. 按使用人分組統計
+    const userStats = {};
+    requiredComputers.forEach(asset => {
+      const userName = asset.userName || '未指定';
+      const userEmail = asset.userEmail || '';
+
+      if (!userStats[userName]) {
+        userStats[userName] = {
+          email: userEmail,
+          total: 0,
+          reported: 0,
+          notReported: 0,
+          computers: []
+        };
+      }
+
+      userStats[userName].total++;
+
+      const computerNameStr = String(asset.assetId).trim();
+      const isReported = currentMonthSubmitted.has(computerNameStr);
+
+      if (isReported) {
+        userStats[userName].reported++;
+      } else {
+        userStats[userName].notReported++;
+        userStats[userName].computers.push({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          location: asset.location,
+          leaderName: asset.leaderName
+        });
+      }
+    });
+
+    // 轉換為陣列，只包含有未回報電腦的使用人
+    const userStatsArray = Object.keys(userStats)
+      .filter(userName => userStats[userName].notReported > 0)
+      .map(userName => ({
+        userName: userName,
+        email: userStats[userName].email,
+        total: userStats[userName].total,
+        reported: userStats[userName].reported,
+        notReported: userStats[userName].notReported,
+        computers: userStats[userName].computers,
+        reportRate: userStats[userName].total > 0
+          ? ((userStats[userName].reported / userStats[userName].total) * 100).toFixed(1)
+          : 0
+      }))
+      .sort((a, b) => b.notReported - a.notReported); // 按未回報數量降序排列
+
     // 返回統計結果
     return {
       summary: {
@@ -186,6 +236,7 @@ function getComputerReportStats() {
       twoMonthsNotReported: twoMonthsNotReported,
       locationStats: locationStatsArray,
       leaderStats: leaderStatsArray,
+      userStats: userStatsArray,
       lastUpdated: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
     };
 

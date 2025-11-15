@@ -208,6 +208,19 @@
                 </div>
             </div>
 
+            <!-- 使用人統計 -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="detail-section">
+                        <h5>使用人未回報統計（僅顯示有未回報電腦的使用人）</h5>
+                        <hr>
+                        <div id="user-stats">
+                            <p class="text-muted">載入中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="last-updated" id="last-updated"></div>
         </div>
     </div>
@@ -265,6 +278,9 @@
 
             // 渲染保管人統計
             renderLeaderStats(data.leaderStats);
+
+            // 渲染使用人統計
+            renderUserStats(data.userStats);
 
             // 更新時間
             document.getElementById('last-updated').textContent = '最後更新：' + data.lastUpdated;
@@ -375,6 +391,45 @@
                         <div class="mt-2">
                             <strong>未回報電腦：</strong>
                             ${stat.computers.map(c => `<span class="badge badge-warning mr-1">${c.assetId} (${c.location})</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function renderUserStats(userStats) {
+            const container = document.getElementById('user-stats');
+
+            if (userStats.length === 0) {
+                container.innerHTML = '<p class="text-success">✓ 所有使用人的電腦都已回報</p>';
+                return;
+            }
+
+            let html = '';
+
+            userStats.forEach(stat => {
+                html += `
+                    <div class="alert-section mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>${stat.userName}</strong>
+                                <span class="badge badge-danger ml-2">${stat.notReported} 台未回報</span>
+                                <span class="badge badge-secondary ml-1">共 ${stat.total} 台</span>
+                            </div>
+                            <div>
+                                <small class="text-muted">${stat.email || ''}</small>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <strong>未回報電腦：</strong>
+                            ${stat.computers.map(c => `
+                                <div class="badge badge-warning mr-1 mb-1" style="white-space: normal; text-align: left;">
+                                    ${c.assetId} (${c.location})<br>
+                                    <small>保管人: ${c.leaderName}</small>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
                 `;
