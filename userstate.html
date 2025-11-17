@@ -76,11 +76,14 @@
 
         document.addEventListener("DOMContentLoaded", () => {
             showLoading(true);
-            google.script.run.withSuccessHandler(url => { webAppUrl = url; }).getAppUrl(); // ✨ 新增：獲取 URL
-            google.script.run
-                .withSuccessHandler(populatePage)
-                .withFailureHandler(showError)
-                .getUserStateData();
+            google.script.run.withSuccessHandler(url => {
+                webAppUrl = url; // ✨ 獲取 URL
+                // 確保先取得 URL 再載入頁面資料
+                google.script.run
+                    .withSuccessHandler(populatePage)
+                    .withFailureHandler(showError)
+                    .getUserStateData();
+            }).getAppUrl();
         });
 
         function populatePage(response) {
@@ -120,6 +123,7 @@
             });
 
             const statusFilter = document.getElementById('status-filter');
+            statusFilter.innerHTML = '<option value="">-- 顯示全部 --</option>'; // 清空舊選項
             statusSet.forEach(status => {
                 if(status) {
                     const option = document.createElement('option');
@@ -130,6 +134,7 @@
             });
 
             const categoryFilter = document.getElementById('category-filter');
+            categoryFilter.innerHTML = '<option value="">-- 顯示全部 --</option>'; // 清空舊選項
             categorySet.forEach(category => {
                 if(category) {
                     const option = document.createElement('option');
@@ -141,6 +146,7 @@
 
             if (isAdmin) {
                 const leaderFilter = document.getElementById('leader-filter');
+                leaderFilter.innerHTML = '<option value="">-- 顯示全部 --</option>'; // 清空舊選項
                 leaderSet.forEach(leader => {
                     if(leader) {
                         const option = document.createElement('option');
@@ -221,8 +227,12 @@
                 google.script.run
                     .withSuccessHandler(response => {
                         if (response.success) {
-                            // 操作成功後，直接重新導向到目前頁面，取代 location.reload()
-                            window.open(webAppUrl + '?page=userstate', '_top');
+                            // 原地更新資料，避免跨域重載問題
+                            alert('申請已成功取消。正在更新資料...');
+                            google.script.run
+                                .withSuccessHandler(populatePage)
+                                .withFailureHandler(showError)
+                                .getUserStateData();
                         } else {
                             showLoading(false);
                             showError({ message: response.error });
