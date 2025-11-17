@@ -732,7 +732,10 @@ function processBatchTransferApplication(formData) {
     });
 
     if (createdApplications.length === 0) {
-      throw new Error("處理失敗，勾選的財產可能已不存在或狀態不符 (非在庫)。");
+      throw new Error("處理失敗：所有勾選的財產都未進行任何變更。請確認：\n" +
+                      "1. 資產狀態為「在庫」\n" +
+                      "2. 保管人、地點或使用人有實際變更（不能選擇相同的值）\n" +
+                      "3. 資產確實存在於系統中");
     }
     
     if (newLogsToAdd.length > 0) {
