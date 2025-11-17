@@ -543,6 +543,7 @@ function getTransferData() {
       location: asset.location,
       category: asset.assetCategory,
       userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
+      leaderName: asset.leaderName, // 保管人姓名
       sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
@@ -1496,7 +1497,8 @@ function getScrappableAssets() {
         location: asset.location,
         status: asset.assetStatus,
         category: asset.assetCategory,
-        userName: asset.userName || '無' // 使用者名稱，物品總表顯示「無」
+        userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
+        leaderName: asset.leaderName // 保管人姓名
       }));
       
     return { assets: availableAssets };
