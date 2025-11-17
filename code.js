@@ -696,6 +696,10 @@ function processBatchTransferApplication(formData) {
             const isActuallyComputer = assetRow[indicesToUpdate.IS_ACTUALLY_COMPUTER - 1] === '是';
             const shouldBeMarked = isStation && isActuallyComputer;
             location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_COMPUTER).setValue(shouldBeMarked ? '是' : '');
+
+            // ✨ 新增：清空上傳狀態，觸發管理員更新
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_UPLOADED).setValue('');
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
           }
 
           const appId = `APP-${now.getTime()}-${createdApplications.length}`;
