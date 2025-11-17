@@ -629,6 +629,11 @@ function processBatchTransferApplication(formData) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
 
+    // ✨ 新增：讀取地點映射，用於判斷是否為駐站
+    const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+    const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
+    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[1]]));
+
     const now = new Date();
     const newLogsToAdd = [];
     const createdApplications = [];
@@ -684,6 +689,13 @@ function processBatchTransferApplication(formData) {
             // 僅變更地點，直接更新無需審核
             location.sheet.getRange(location.rowIndex, indicesToUpdate.LOCATION).setValue(finalNewLocation);
             location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue(now);
+
+            // ✨ 新增：判斷是否為駐站 + 是否為電腦，更新 IS_COMPUTER 欄位
+            const isStation = locationIsStationMap.get(finalNewLocation) === '是';
+            const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
+            const isActuallyComputer = assetRow[indicesToUpdate.IS_ACTUALLY_COMPUTER - 1] === '是';
+            const shouldBeMarked = isStation && isActuallyComputer;
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_COMPUTER).setValue(shouldBeMarked ? '是' : '');
           }
 
           const appId = `APP-${now.getTime()}-${createdApplications.length}`;
