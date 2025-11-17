@@ -1516,6 +1516,7 @@ function getScrappableAssets() {
       })
       .map(asset => ({
         id: asset.assetId,
+        assetName: asset.assetName, // 財產名稱
         location: asset.location,
         status: asset.assetStatus,
         category: asset.assetCategory,
@@ -1998,9 +1999,10 @@ function cancelTransferOrScrap(assetId) {
       // 1. Update asset status in main sheet
       const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
       location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('在庫');
-      
-      // 2. Clear the remarks
+
+      // 2. Clear the remarks and last modified date
       location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue('');
+      location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue('');
 
     } else {
       throw new Error(`此財產的狀態 (${originalStatus}) 無法被取消。`);
