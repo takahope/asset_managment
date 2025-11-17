@@ -547,10 +547,9 @@ function getTransferData() {
       sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
-  // 2. 從所有資產中，提取不重複的保管人 (Email -> Name)、使用人 (Email -> Name) 和地點
+  // 2. 從所有資產中，提取不重複的保管人 (Email -> Name) 和使用人 (Email -> Name)
   const uniqueKeepersMap = new Map();
   const uniqueUsersMap = new Map(); // ✨ 新增：使用人列表
-  const uniqueLocationsSet = new Set();
 
   allAssets.forEach(asset => {
     if (asset.leaderEmail && asset.leaderName) {
@@ -564,10 +563,13 @@ function getTransferData() {
         uniqueUsersMap.set(asset.userEmail, asset.userName);
       }
     }
-    if (asset.location) {
-      uniqueLocationsSet.add(asset.location);
-    }
   });
+
+  // 從「存置地點列表」工作表的 A 欄讀取地點清單
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 1).getValues();
+  const locationList = locationData.map(row => row[0]).filter(loc => loc); // 過濾空值
 
   // 3. 將 Map 和 Set 轉換為前端需要的格式
   const keepers = {};
@@ -581,7 +583,8 @@ function getTransferData() {
     users[email] = name;
   });
 
-  const locations = Array.from(uniqueLocationsSet).sort();
+  // 地點清單已從「存置地點列表」工作表讀取，無需排序（假設工作表已排序）
+  const locations = locationList;
 
   // 4. 回傳整合後的資料
   return { 
@@ -647,7 +650,7 @@ function processBatchTransferApplication(formData) {
           const finalNewKeeperName = newKeeperName || asset.leaderName;
           const finalNewLocation = newLocation || asset.location;
           const finalNewUserEmail = newUserEmail || asset.userEmail || '';
-          const finalNewUserName = finalNewUserName || (newKeeperName || asset.userName || asset.leaderName);
+          const actualNewUserName = finalNewUserName || asset.userName || '';
           
           const isKeeperChange = newKeeperEmail && asset.leaderEmail !== newKeeperEmail;
           const isLocationChange = newLocation && asset.location !== newLocation;
@@ -693,7 +696,7 @@ function processBatchTransferApplication(formData) {
             needsApproval ? "" : now, // REVIEW_TIME
             "", // REVIEW_LINK
             oldUserName, // AL_OLD_USER_COLUMN_INDEX (12)
-            finalNewUserName, // AL_NEW_USER_COLUMN_INDEX (13)
+            actualNewUserName, // AL_NEW_USER_COLUMN_INDEX (13)
             finalNewUserEmail, // AL_NEW_USER_EMAIL_COLUMN_INDEX (14)
             transferType // AL_TRANSFER_TYPE_COLUMN_INDEX (15)
           ];
