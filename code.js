@@ -167,6 +167,24 @@ function getAllAssets() {
 }
 
 /**
+ * ✨ NEW: 獲取當前使用者相關的所有資產 (無論是保管人或使用人)。
+ * @returns {Array<Object>} 包含所有相關資產物件的陣列。
+ */
+function getAssetsForCurrentUser() {
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const allAssets = getAllAssets();
+
+  const userAssets = allAssets.filter(asset => {
+    // 條件：登入者的 email 等於保管人 email 或 使用人 email
+    // 對於沒有 userEmail 欄位的物品總表，asset.userEmail 會是 null，不會造成錯誤
+    return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
+  });
+
+  Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產。`);
+  return userAssets;
+}
+
+/**
  * 查找指定 assetId 所在的實際工作表及列號。
  * @param {string} assetId - 要查找的資產ID。
  * @returns {object|null} - 如果找到，回傳 { sheet: Sheet, rowIndex: number, sheetName: string }，否則回傳 null。
@@ -377,14 +395,12 @@ function getUserStateData() {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
 
-  const allData = getAllAssets();
-
   let filteredData;
 
   if (isAdmin) {
-    filteredData = allData;
+    filteredData = getAllAssets();
   } else {
-    filteredData = allData.filter(asset => asset.leaderEmail === currentUserEmail);
+    filteredData = getAssetsForCurrentUser();
   }
 
   const results = filteredData.map(asset => ({
@@ -532,11 +548,12 @@ function processFormData(formObject) {
  */
 function getTransferData() {
   const currentUserEmail = Session.getActiveUser().getEmail();
-  const allAssets = getAllAssets();
+  const allAssets = getAllAssets(); // Keep this to get all users/keepers for dropdowns
+  const allMyAssets = getAssetsForCurrentUser();
 
   // 1. 從所有資產中，篩選出屬於當前使用者的、可轉移的資產
-  const myAssets = allAssets
-    .filter(asset => asset.leaderEmail === currentUserEmail && asset.assetStatus === '在庫')
+  const myAssets = allMyAssets
+    .filter(asset => asset.assetStatus === '在庫')
     .map(asset => ({
       id: asset.assetId,
       assetName: asset.assetName,
@@ -1279,11 +1296,12 @@ function showReturnDialog() {
 function getLendingData() {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
-    const allAssets = getAllAssets();
+    const allAssets = getAllAssets(); // Keep for borrower/location lists
+    const allMyAssets = getAssetsForCurrentUser();
 
     // 1. 篩選出當前使用者可出借的資產
-    const availableAssets = allAssets
-      .filter(asset => asset.leaderEmail === currentUserEmail && asset.assetStatus === '在庫')
+    const availableAssets = allMyAssets
+      .filter(asset => asset.assetStatus === '在庫')
       .map(asset => ({
         id: asset.assetId,
         assetName: asset.assetName,
@@ -1507,12 +1525,11 @@ function showScrapDialog() {
  */
 function getScrappableAssets() {
   try {
-    const currentUserEmail = Session.getActiveUser().getEmail();
-    const allAssets = getAllAssets();
+    const allMyAssets = getAssetsForCurrentUser();
 
-    const availableAssets = allAssets
+    const availableAssets = allMyAssets
       .filter(asset => {
-        return asset.leaderEmail === currentUserEmail && (asset.assetStatus === '在庫' || asset.assetStatus === '出借中');
+        return (asset.assetStatus === '在庫' || asset.assetStatus === '出借中');
       })
       .map(asset => ({
         id: asset.assetId,
