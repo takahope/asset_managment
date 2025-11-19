@@ -69,15 +69,14 @@
             <table class="table table-hover table-sm">
                 <thead class="thead-light" style="position: sticky; top: 0;">
                     <tr>
-                        <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
-                        <th style="width: 12%;">財產編號</th>
-                        <th style="width: 16%;">財產名稱</th>
-                        <th style="width: 10%;">使用者</th>
-                        <th style="width: 11%;">原保管人</th>
-                        <th style="width: 11%;">原保管地點</th>
-                        <th style="width: 11%;">將移至新地點</th>
-                        <th style="width: 11%;">轉移類型</th>
-                        <th style="width: 13%;">申請時間</th>
+                        <th style="width: 4%;"><input type="checkbox" id="select-all"></th>
+                        <th style="width: 11%;">財產編號</th>
+                        <th style="width: 13%;">財產名稱</th>
+                        <th style="width: 15%;">保管人變更</th>
+                        <th style="width: 15%;">使用人變更</th>
+                        <th style="width: 15%;">地點變更</th>
+                        <th style="width: 13%;">轉移類型</th>
+                        <th style="width: 14%;">申請時間</th>
                     </tr>
                 </thead>
                 <tbody id="approval-list"></tbody>
@@ -205,16 +204,33 @@
                 } else {
                     typeBadge = '<span class="badge badge-secondary">地點</span>';
                 }
-                
+
+                // ✨ 方案B：箭頭式顯示變更
+                // 保管人變更
+                const keeperChange = (item.newKeeper && item.oldKeeper !== item.newKeeper)
+                    ? `${item.oldKeeper} <span class="text-primary">→</span> ${item.newKeeper}`
+                    : item.oldKeeper;
+
+                // 使用人變更
+                const oldUser = item.oldUser || item.userName || '';
+                const newUser = item.newUser || '';
+                const userChange = (newUser && oldUser !== newUser)
+                    ? `${oldUser} <span class="text-primary">→</span> ${newUser}`
+                    : oldUser;
+
+                // 地點變更
+                const locationChange = (item.newLocation && item.oldLocation !== item.newLocation)
+                    ? `${item.oldLocation} <span class="text-primary">→</span> ${item.newLocation}`
+                    : item.oldLocation;
+
                 tableHtml += `
                     <tr>
                         <td><input type="checkbox" class="approval-checkbox" value="${item.appId}"></td>
                         <td>${item.assetId}</td>
                         <td>${item.assetName}</td>
-                        <td>${item.userName}</td>
-                        <td>${item.oldKeeper}</td>
-                        <td>${item.oldLocation}</td>
-                        <td>${item.newLocation}</td>
+                        <td>${keeperChange}</td>
+                        <td>${userChange}</td>
+                        <td>${locationChange}</td>
                         <td>${typeBadge}</td>
                         <td>${item.applyTime}</td>
                     </tr>`;
