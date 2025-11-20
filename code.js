@@ -376,6 +376,11 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('printScrap');
       title = "列印報廢申請單";
       break;
+    // ✨ 新增 case 'printTransfer'
+    case 'printTransfer':
+      template = HtmlService.createTemplateFromFile('printTransfer');
+      title = "列印轉移記錄";
+      break;
     case 'userstate':
       template = HtmlService.createTemplateFromFile('userstate');
       title = "個人財產狀態查詢";
@@ -2178,6 +2183,324 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
   } catch (e) {
     Logger.log(`createScrapDocForApplicant 失敗: ${e.message} at ${e.stack}`);
     throw new Error("產生報表文件時發生錯誤: " + e.message);
+  }
+}
+
+// ========== ✨ 轉移列印功能 ========== //
+
+/**
+ * [供 printTransfer.html 呼叫] 取得已完成轉移的資產統計（按保管人分組）
+ * @param {string} assetCategory - 財產類別：'財產' 或 '物品'
+ * @returns {Array} 返回格式：[{ keeper: '李四', count: 3 }, ...]
+ */
+function getTransferDataForPrint(assetCategory) {
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const adminEmails = getAdminEmails().map(email => email.toLowerCase());
+
+  // 權限檢查：只有管理員可以存取
+  if (!adminEmails.includes(currentUserEmail)) {
+    Logger.log(`權限阻擋：使用者 ${currentUserEmail} 嘗試存取轉移列印頁面。`);
+    return { error: "權限不足，您無法存取此功能。" };
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+
+    // 建立資產ID到最新轉移記錄的映射
+    const assetToLatestTransfer = new Map();
+
+    appLogData.forEach(row => {
+      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
+
+      if (status === '已完成' && reviewTime) {
+        // 比較時間，保留最新的記錄
+        if (!assetToLatestTransfer.has(assetId) ||
+            new Date(reviewTime) > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
+          assetToLatestTransfer.set(assetId, {
+            newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
+            reviewTime: reviewTime
+          });
+        }
+      }
+    });
+
+    // 取得所有資產資料，用於篩選類別
+    const allAssets = getAllAssets();
+    const assetCategoryMap = new Map(allAssets.map(asset => [asset.assetId, asset.assetCategory]));
+
+    // 按新保管人分組計數（同時篩選類別）
+    const keeperCount = {};
+
+    assetToLatestTransfer.forEach((transfer, assetId) => {
+      const category = assetCategoryMap.get(assetId);
+
+      // 只統計指定類別的資產
+      if (category === assetCategory) {
+        const keeperName = transfer.newKeeper;
+        if (keeperCount[keeperName]) {
+          keeperCount[keeperName]++;
+        } else {
+          keeperCount[keeperName] = 1;
+        }
+      }
+    });
+
+    // 轉換為陣列格式並排序
+    const result = Object.keys(keeperCount)
+      .map(name => ({
+        keeper: name,
+        count: keeperCount[name]
+      }))
+      .sort((a, b) => a.keeper.localeCompare(b.keeper, 'zh-Hant'));
+
+    Logger.log(`成功取得 ${assetCategory} 的轉移統計，共 ${result.length} 位保管人`);
+    return result;
+
+  } catch (e) {
+    Logger.log(`getTransferDataForPrint 失敗: ${e.message}`);
+    throw new Error("讀取轉移資料失敗: " + e.message);
+  }
+}
+
+/**
+ * [供 printTransfer.html 呼叫] 取得所有已完成轉移資產的明細清單（詳細模式）
+ * @param {string} assetCategory - 財產類別：'財產' 或 '物品'
+ * @returns {Array} 返回格式：[{ assetId, assetName, oldKeeper, newKeeper, oldLocation, newLocation, transferDate }, ...]
+ */
+function getAllTransferableItems(assetCategory) {
+  // 權限檢查
+  if (!checkAdminPermissions()) {
+    return { error: "權限不足，您無法存取此功能。" };
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+
+    // 建立資產ID到最新轉移記錄的映射
+    const assetToLatestTransfer = new Map();
+
+    appLogData.forEach(row => {
+      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
+
+      if (status === '已完成' && reviewTime) {
+        // 比較時間，保留最新的記錄
+        if (!assetToLatestTransfer.has(assetId) ||
+            new Date(reviewTime) > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
+          assetToLatestTransfer.set(assetId, {
+            oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
+            oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
+            newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
+            newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
+            transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
+            reviewTime: reviewTime
+          });
+        }
+      }
+    });
+
+    // 取得所有資產資料
+    const allAssets = getAllAssets();
+    const items = [];
+
+    allAssets.forEach(asset => {
+      // 篩選條件：資產類別匹配且有轉移記錄
+      if (asset.assetCategory === assetCategory && assetToLatestTransfer.has(asset.assetId)) {
+        const transfer = assetToLatestTransfer.get(asset.assetId);
+        items.push({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          oldKeeper: transfer.oldKeeper,
+          newKeeper: transfer.newKeeper,
+          oldLocation: transfer.oldLocation,
+          newLocation: transfer.newLocation,
+          transferType: transfer.transferType,
+          transferDate: new Date(transfer.reviewTime).toLocaleDateString('zh-TW')
+        });
+      }
+    });
+
+    Logger.log(`成功取得 ${assetCategory} 的轉移明細，共 ${items.length} 筆`);
+    return items;
+
+  } catch (e) {
+    Logger.log(`getAllTransferableItems 失敗: ${e.message}`);
+    throw new Error("讀取轉移明細失敗: " + e.message);
+  }
+}
+
+/**
+ * [供 printTransfer.html 呼叫] 為指定保管人產生一份彙整的轉移記錄文件
+ * @param {string} keeperName - 保管人名稱（簡易模式）或管理員名稱（詳細模式）
+ * @param {string} assetCategory - 財產類別：'財產' 或 '物品'
+ * @param {Array|null} assetIds - 指定的資產ID陣列（詳細模式），或 null（簡易模式）
+ * @returns {Object} { fileUrl: '...' }
+ */
+function createTransferDoc(keeperName, assetCategory, assetIds) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+    const now = new Date();
+
+    // 1️⃣ 建立資產ID到最新轉移記錄的映射
+    const assetToLatestTransfer = new Map();
+
+    appLogData.forEach(row => {
+      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
+
+      if (status === '已完成' && reviewTime) {
+        // 比較時間，保留最新的記錄
+        if (!assetToLatestTransfer.has(assetId) ||
+            new Date(reviewTime) > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
+          assetToLatestTransfer.set(assetId, {
+            oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
+            oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
+            newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
+            newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
+            reviewTime: reviewTime
+          });
+        }
+      }
+    });
+
+    // 2️⃣ 取得所有資產並篩選目標資產
+    const allAssets = getAllAssets();
+    const assetsToTransfer = [];
+
+    if (assetIds && assetIds.length > 0) {
+      // 詳細模式：根據指定的ID陣列篩選
+      const assetIdSet = new Set(assetIds);
+      allAssets.forEach(asset => {
+        if (assetIdSet.has(asset.assetId) && assetToLatestTransfer.has(asset.assetId)) {
+          const transfer = assetToLatestTransfer.get(asset.assetId);
+          assetsToTransfer.push({
+            asset: asset,
+            transfer: transfer
+          });
+        }
+      });
+    } else {
+      // 簡易模式：根據保管人名稱 + 類別篩選
+      allAssets.forEach(asset => {
+        if (assetToLatestTransfer.has(asset.assetId)) {
+          const transfer = assetToLatestTransfer.get(asset.assetId);
+          // 篩選條件：新保管人匹配 + 類別匹配
+          if (transfer.newKeeper === keeperName && asset.assetCategory === assetCategory) {
+            assetsToTransfer.push({
+              asset: asset,
+              transfer: transfer
+            });
+          }
+        }
+      });
+    }
+
+    if (assetsToTransfer.length === 0) {
+      throw new Error(`找不到 ${keeperName} 的已完成轉移記錄。`);
+    }
+
+    // 3️⃣ 選擇模板並複製文件
+    const templateId = assetCategory === '財產'
+        ? TRANSFER_TEMPLATE_DOC_ID_PROPERTY
+        : TRANSFER_TEMPLATE_DOC_ID_ITEM;
+
+    const categoryName = assetCategory === '財產' ? '財產' : '物品';
+    const docName = `${categoryName}轉移記錄_${keeperName}_${Utilities.formatDate(now, "GMT+8", "yyyyMMdd")}`;
+
+    const templateFile = DriveApp.getFileById(templateId);
+    const outputFolder = DriveApp.getFolderById(TRANSFER_OUTPUT_FOLDER_ID);
+    const newFile = templateFile.makeCopy(docName, outputFolder);
+    const newDoc = DocumentApp.openById(newFile.getId());
+
+    // 4️⃣ 填充文字佔位符
+    const body = newDoc.getBody();
+    body.replaceText("{{申請日期}}", Utilities.formatDate(now, "GMT+8", "yyyy/MM/dd"));
+    body.replaceText("{{填表人}}", keeperName);
+
+    // 5️⃣ 準備表格數據
+    const tableHeader = [
+      '序號',
+      '財產編號',
+      '財產名稱',
+      '移出單位',
+      '移出保管人',
+      '移出存置地點',
+      '移入單位',
+      '移入保管人',
+      '移入存置地點'
+    ];
+
+    const tableValues = [tableHeader];
+
+    assetsToTransfer.forEach((item, index) => {
+      const asset = item.asset;
+      const transfer = item.transfer;
+
+      const rowData = [
+        (index + 1).toString(),              // 序號
+        asset.assetId,                       // 財產編號
+        asset.assetName || '',               // 財產名稱
+        '核心設施',                           // 移出單位（固定）
+        transfer.oldKeeper,                  // 移出保管人
+        transfer.oldLocation,                // 移出存置地點
+        '核心設施',                           // 移入單位（固定）
+        transfer.newKeeper,                  // 移入保管人
+        transfer.newLocation                 // 移入存置地點
+      ];
+      tableValues.push(rowData);
+    });
+
+    // 6️⃣ 找到並移除表格佔位符，插入新表格
+    const tablePlaceholder = body.findText("{{轉移項目表格}}");
+    if (!tablePlaceholder) {
+      throw new Error('找不到 "{{轉移項目表格}}" 佔位符！請確認模板格式正確。');
+    }
+
+    const placeholderParagraph = tablePlaceholder.getElement().getParent();
+    const insertIndex = body.getChildIndex(placeholderParagraph);
+    placeholderParagraph.removeFromParent();
+
+    // 插入表格到文件
+    const newTable = body.insertTable(insertIndex, tableValues);
+
+    // 標題列加粗
+    const headerRowStyle = {};
+    headerRowStyle[DocumentApp.Attribute.BOLD] = true;
+    newTable.getRow(0).setAttributes(headerRowStyle);
+
+    // 7️⃣ 保存文件並取得URL
+    newDoc.saveAndClose();
+    const fileUrl = newFile.getUrl();
+
+    // 8️⃣ 回寫 DOC_URL 到資產表
+    assetsToTransfer.forEach(item => {
+      const asset = item.asset;
+      const location = findAssetLocation(asset.assetId);
+      if (location) {
+        const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME
+            ? PROPERTY_COLUMN_INDICES
+            : ITEM_COLUMN_INDICES;
+
+        location.sheet.getRange(location.rowIndex, indices.DOC_URL).setValue(fileUrl);
+      }
+    });
+
+    Logger.log(`成功為 ${keeperName} 產生轉移記錄文件: ${fileUrl}`);
+    return { fileUrl: fileUrl };
+
+  } catch (e) {
+    Logger.log(`createTransferDoc 失敗: ${e.message} at ${e.stack}`);
+    throw new Error("產生轉移記錄文件時發生錯誤: " + e.message);
   }
 }
 
