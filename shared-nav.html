@@ -35,6 +35,9 @@
     <button type="button" class="btn btn-sm btn-outline-danger" onclick="goToprintScrap()">
       🖨️ 列印報廢申請
     </button>
+    <button type="button" class="btn btn-sm btn-outline-success" onclick="goToPrintTransfer()">
+      🖨️ 列印轉移記錄
+    </button>
     <button type="button" class="btn btn-sm btn-outline-info" onclick="goToUserState()">
       📊 狀態
     </button>
@@ -115,6 +118,16 @@
     if (_portalWebAppUrl) {
       const updateUrl = _portalWebAppUrl + '?page=printScrap';
       window.open(updateUrl, '_top');
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  // ✨ **新增：前往 printTransfer.html 的函式** ✨
+  function goToPrintTransfer() {
+    if (_portalWebAppUrl) {
+      const printTransferUrl = _portalWebAppUrl + '?page=printTransfer';
+      window.open(printTransferUrl, '_top');
     } else {
       alert('頁面初始化中，請稍候...');
     }
