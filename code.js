@@ -2612,9 +2612,9 @@ function cancelTransferOrScrap(assetId) {
       throw new Error(`找不到財產編號為 ${assetId} 的資料。`);
     }
 
-    // Security Check: Must be admin or the asset's owner
-    if (!isAdmin && asset.leaderEmail !== currentUserEmail) {
-      throw new Error("權限不足，只有此財產的保管人或管理員才能執行此操作。");
+    // Security Check: Must be admin or the asset's owner (keeper or user)
+    if (!isAdmin && asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
+      throw new Error("權限不足，只有此財產的保管人、使用人或管理員才能執行此操作。");
     }
 
     const originalStatus = asset.assetStatus;
