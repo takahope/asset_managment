@@ -200,7 +200,7 @@
                 const statusColor = statusColors[asset.status] || 'badge-info';
                 
                 let actionHtml = '';
-                const canCancel = isAdmin || currentUserEmail === asset.leaderEmail;
+                const canCancel = isAdmin || currentUserEmail === asset.leaderEmail || currentUserEmail === asset.userEmail;
                 if (canCancel && (asset.status === '轉移中' || asset.status === '報廢中')) {
                     actionHtml = `<button class="btn btn-sm btn-danger" onclick="promptCancel('${asset.assetId}', '${asset.status}')">取消</button>`;
                 }

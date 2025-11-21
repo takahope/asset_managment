@@ -72,6 +72,7 @@
                             <th>原使用人</th>
                             <th>報廢日期</th>
                             <th>報廢原因</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="detailed-scrap-list">
@@ -212,7 +213,7 @@
                 }
 
                 if (items.length === 0) {
-                    listBody.innerHTML = '<tr><td colspan="7" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
+                    listBody.innerHTML = '<tr><td colspan="8" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
                 } else {
                     items.forEach(item => {
                         const row = document.createElement('tr');
@@ -224,13 +225,14 @@
                             <td>${item.originalUser || ''}</td>
                             <td>${item.scrapDate || ''}</td>
                             <td>${item.scrapReason || ''}</td>
+                            <td><button class="btn btn-sm btn-danger" onclick="cancelScrap('${item.assetId}')">取消</button></td>
                         `;
                         listBody.appendChild(row);
                     });
                 }
             } catch (e) {
                 console.error("❌ [renderDetailedTable] 錯誤:", e);
-                listBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">載入失敗：${e.message}</td></tr>`;
+                listBody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">載入失敗：${e.message}</td></tr>`;
                 showError(e);
             } finally {
                 showLoading(false);
@@ -316,6 +318,35 @@
             console.error("❌ [showError]", error);
             showLoading(false);
             showMessage('錯誤：' + (error.message || error), 'alert-danger');
+        }
+
+        /**
+         * 取消報廢申請
+         * @param {string} assetId - 資產編號
+         */
+        function cancelScrap(assetId) {
+            // 顯示確認對話框
+            const confirmation = confirm(`您確定要取消這筆報廢申請嗎？\n\n財產編號：${assetId}\n\n此操作將會把財產狀態恢復為「在庫」。`);
+
+            if (!confirmation) return;
+
+            // 呼叫後端取消函數
+            google.script.run
+                .withSuccessHandler(response => {
+                    if (response.success) {
+                        showMessage('報廢申請已成功取消。正在更新資料...', 'alert-success');
+                        // 延遲 1 秒後重新載入資料
+                        setTimeout(() => {
+                            loadData();
+                        }, 1000);
+                    } else {
+                        showMessage('取消失敗：' + response.error, 'alert-danger');
+                    }
+                })
+                .withFailureHandler(error => {
+                    showMessage('取消失敗：' + error.message, 'alert-danger');
+                })
+                .cancelTransferOrScrap(assetId);
         }
     </script>
 </body>
