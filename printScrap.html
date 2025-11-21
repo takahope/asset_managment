@@ -69,6 +69,9 @@
                             <th>財產編號</th>
                             <th>財產名稱</th>
                             <th>原保管人</th>
+                            <th>原使用人</th>
+                            <th>報廢日期</th>
+                            <th>報廢原因</th>
                         </tr>
                     </thead>
                     <tbody id="detailed-scrap-list">
@@ -81,20 +84,24 @@
     </div>
 
     <script>
+        console.log('🚀 [頁面載入] printScrap.html 開始載入');
         let isDetailedView = false;
 
         document.addEventListener("DOMContentLoaded", () => {
+            console.log('📄 [DOMContentLoaded] DOM 載入完成，開始檢查權限');
             google.script.run
                 .withSuccessHandler(hasPermission => {
                     if (hasPermission) {
-                        loadData(); // 如果有權限，才載入資料
+                        console.log('✅ 權限驗證通過');
+                        loadData(); 
                         document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
                             radio.addEventListener('change', loadData);
                         });
                         document.getElementById('select-all-detailed').addEventListener('change', toggleSelectAll);
                     } else {
+                        console.warn('⛔️ 權限不足');
                         showError({ message: "權限不足，只有資產管理員才能存取此頁面。" });
-                        document.getElementById('main-content').style.display = 'none'; // 隱藏主要內容
+                        document.getElementById('main-content').style.display = 'none';
                     }
                 })
                 .withFailureHandler(showError)
@@ -120,6 +127,7 @@
         }
 
         function loadData() {
+            console.log('🔍 [loadData] 載入資料中... 模式:', isDetailedView ? '詳細' : '簡易');
             showLoading(true);
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
 
@@ -137,48 +145,96 @@
         }
 
         function renderSimpleTable(applicants) {
+            console.log('📦 [renderSimpleTable] 收到資料:', applicants);
             const listBody = document.getElementById('scrap-list');
             listBody.innerHTML = '';
 
-            if (!applicants || applicants.length === 0) {
-                listBody.innerHTML = '<tr><td colspan="3" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
-            } else {
-                applicants.forEach(app => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${app.applicant}</td>
-                        <td>${app.count}</td>
-                        <td>
-                            <button id="btn-${app.applicant}" class="btn btn-primary btn-sm btn-print" onclick="generateDoc('${app.applicant}', this)">
-                                產生報表
-                            </button>
-                        </td>
-                    `;
-                    listBody.appendChild(row);
-                });
+            try {
+                // 🛡️ 檢查 1: 資料是否為 null (序列化失敗常見原因)
+                if (applicants === null) {
+                    throw new Error("接收到的資料為 null。請檢查後端是否回傳了 Map 或 Set (不支援的格式)。");
+                }
+
+                // 🛡️ 檢查 2: 資料是否為陣列
+                if (!Array.isArray(applicants)) {
+                    // 如果是錯誤物件
+                    if (applicants && applicants.error) throw new Error(applicants.error);
+                    throw new Error("資料格式錯誤：預期為陣列，但收到 " + typeof applicants);
+                }
+
+                if (applicants.length === 0) {
+                    listBody.innerHTML = '<tr><td colspan="3" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
+                } else {
+                    applicants.forEach(app => {
+                        const row = document.createElement('tr');
+                        // 安全處理單引號
+                        const safeName = (app.applicant || '').replace(/'/g, "\\'");
+                        row.innerHTML = `
+                            <td>${app.applicant}</td>
+                            <td>${app.count}</td>
+                            <td>
+                                <button id="btn-${app.applicant}" class="btn btn-primary btn-sm btn-print" onclick="generateDoc('${safeName}', this)">
+                                    產生報表
+                                </button>
+                            </td>
+                        `;
+                        listBody.appendChild(row);
+                    });
+                }
+            } catch (e) {
+                console.error("❌ [renderSimpleTable] 錯誤:", e);
+                listBody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">載入失敗：${e.message}</td></tr>`;
+                showError(e);
+            } finally {
+                showLoading(false);
             }
-            showLoading(false);
         }
 
         function renderDetailedTable(items) {
+            console.log('📦 [renderDetailedTable] 收到資料:', items);
             const listBody = document.getElementById('detailed-scrap-list');
             listBody.innerHTML = '';
 
-            if (!items || items.length === 0) {
-                listBody.innerHTML = '<tr><td colspan="4" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
-            } else {
-                items.forEach(item => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><input type="checkbox" class="detailed-checkbox" value="${item.assetId}"></td>
-                        <td>${item.assetId}</td>
-                        <td>${item.assetName}</td>
-                        <td>${item.originalKeeper}</td>
-                    `;
-                    listBody.appendChild(row);
-                });
+            try {
+                // 🛡️ 關鍵檢查：如果後端回傳 Map/Set，這裡會變成 null
+                if (items === null) {
+                    const msg = "接收到的資料為 null。這通常是因為後端回傳了 Google Apps Script 不支援的格式 (例如 Map 或 Set)。請修改後端將其轉換為 Array。";
+                    console.error("❌ " + msg);
+                    throw new Error(msg);
+                }
+
+                if (items && items.error) {
+                    throw new Error(items.error);
+                }
+
+                if (!Array.isArray(items)) {
+                    throw new Error("資料格式錯誤：預期為陣列，但收到 " + typeof items);
+                }
+
+                if (items.length === 0) {
+                    listBody.innerHTML = '<tr><td colspan="7" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
+                } else {
+                    items.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td><input type="checkbox" class="detailed-checkbox" value="${item.assetId}"></td>
+                            <td>${item.assetId}</td>
+                            <td>${item.assetName}</td>
+                            <td>${item.originalKeeper}</td>
+                            <td>${item.originalUser || ''}</td>
+                            <td>${item.scrapDate || ''}</td>
+                            <td>${item.scrapReason || ''}</td>
+                        `;
+                        listBody.appendChild(row);
+                    });
+                }
+            } catch (e) {
+                console.error("❌ [renderDetailedTable] 錯誤:", e);
+                listBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">載入失敗：${e.message}</td></tr>`;
+                showError(e);
+            } finally {
+                showLoading(false);
             }
-            showLoading(false);
         }
 
         function toggleSelectAll(event) {
@@ -195,7 +251,7 @@
             google.script.run
                 .withSuccessHandler(result => {
                     showMessage(`已成功為 ${applicantName} 產生報表！`, 'alert-success');
-                    loadData(); // 重新載入資料
+                    loadData();
                     window.open(result.fileUrl, '_blank');
                 })
                 .withFailureHandler(error => {
@@ -203,7 +259,7 @@
                     btn.disabled = false;
                     btn.textContent = '產生報表';
                 })
-                .createScrapDoc(applicantName, assetCategory, null); // 最後一個參數傳 null
+                .createScrapDoc(applicantName, assetCategory, null);
         }
 
         function generateConsolidatedDoc() {
@@ -223,7 +279,7 @@
                     google.script.run
                         .withSuccessHandler(result => {
                             showMessage(`已成功產生彙總報表！`, 'alert-success');
-                            loadData(); // 重新載入資料
+                            loadData();
                             window.open(result.fileUrl, '_blank');
                             btn.disabled = false;
                             btn.textContent = '產生彙總報表';
@@ -257,8 +313,9 @@
         }
 
         function showError(error) {
+            console.error("❌ [showError]", error);
             showLoading(false);
-            showMessage('錯誤：' + error.message, 'alert-danger');
+            showMessage('錯誤：' + (error.message || error), 'alert-danger');
         }
     </script>
 </body>

@@ -244,3 +244,15 @@ All HTML pages follow this pattern for data fetching and submission.
 - `checkComputerReportsAndNotify()`: Should be set up as a monthly time-driven trigger
 - Checks which computers haven't reported this month
 - Sends reminders to individual keepers and summary to report admins
+
+# Project Knowledge Base & Incident Log
+
+## Recent Incidents
+
+### [2025-11-21] Frontend received `null` from `google.script.run`
+- **Symptom**: The `printScrap.html` page showed a loading spinner indefinitely or threw "received null" errors, even though backend logs showed `getAllScrappableItems` was finding data.
+- **Root Cause**: The backend function was returning raw `Date` objects (from `asset.lastModified`). Google Apps Script's `google.script.run` cannot serialize `Date` objects to JSON for the browser. It silently fails and sends `null` to the client.
+- **Resolution**: Updated `getAllScrappableItems` in `code.js` to explicitly convert dates to strings using `Utilities.formatDate` and ensure all fields are primitives (Strings) before returning.
+- **Lesson**: Never return raw database rows to the frontend. Always use a DTO (Data Transfer Object) pattern to sanitize types.
+
+## Architecture Notes
