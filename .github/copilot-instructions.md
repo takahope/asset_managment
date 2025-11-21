@@ -85,6 +85,30 @@ function processBatchOperation(formData) {
 }
 ```
 
+### 6. Data Serialization for Web App (CRITICAL)
+
+`google.script.run` **fails silently** (returns `null`) if you try to return `Date`, `Map`, or `Set` objects.
+
+**❌ WRONG:**
+```javascript
+function getData() {
+    return data.map(row => ({
+        id: row[0],
+        date: row[1] // If row[1] is a Date object, frontend receives NULL for the whole result!
+    }));
+}
+```
+
+**✅ CORRECT:**
+```javascript
+function getData() {
+    return data.map(row => ({
+        id: String(row[0]),
+        date: Utilities.formatDate(new Date(row[1]), Session.getScriptTimeZone(), "yyyy/MM/dd")
+    }));
+}
+```
+
 ## UI Integration Patterns
 
 ### Frontend-Backend Communication
@@ -206,6 +230,8 @@ if (location) {
 5. **Status Dependencies**: Operations like transfer require `status === '在庫'`. Operations like return require `status === '出借中'`.
 
 6. **Lending Location Field**: When creating lending records, include the `lendingLocation` parameter (Column J in LENDING_LOG).
+
+7. **Frontend Null Data**: If frontend receives `null` but backend logs show data, check for `Date` objects in the return value.
 
 ## Deployment & Testing
 

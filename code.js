@@ -1958,27 +1958,46 @@ function checkAdminPermissions() {
   return adminEmails.includes(currentUserEmail);
 }
 
+/**
+ * 取得所有待報廢的詳細項目 (詳細模式用)
+ * @param {string} assetCategory - 財產類別 (財產/非消耗品)
+ * @returns {Array<Object>} 包含詳細資訊的陣列
+ */
 function getAllScrappableItems(assetCategory) {
+  // 1. 權限檢查
   if (!checkAdminPermissions()) {
-    return { error: "權限不足，您無法存取此功能。" };
+    throw new Error("權限不足，無法存取此資料。");
   }
-  try {
-    const allAssets = getAllAssets();
-    const items = [];
-    allAssets.forEach(asset => {
-      if (asset.assetStatus === '報廢中' && asset.assetCategory === assetCategory) {
-        items.push({
-          assetId: asset.assetId,
-          assetName: asset.assetName,
-          originalKeeper: asset.leaderName
-        });
+
+  const allAssets = getAllAssets();
+  
+  // 2. 篩選符合條件的資產
+  const targetAssets = allAssets.filter(asset => 
+    asset.assetStatus === '報廢中' && 
+    asset.assetCategory === assetCategory
+  );
+
+  // 3. 轉換為前端可用的純物件格式 (關鍵修正：將 Date 轉為 String)
+  return targetAssets.map(asset => {
+    // 處理日期格式化
+    let scrapDateStr = '';
+    if (asset.lastModified) {
+      try {
+        scrapDateStr = Utilities.formatDate(new Date(asset.lastModified), Session.getScriptTimeZone(), "yyyy/MM/dd");
+      } catch (e) {
+        scrapDateStr = ''; // 若日期無效則留空
       }
-    });
-    return items;
-  } catch (e) {
-    Logger.log("getAllScrappableItems 失敗: " + e.message);
-    throw new Error("讀取所有待報廢項目時發生錯誤。");
-  }
+    }
+
+    return {
+      assetId: String(asset.assetId || ''),
+      assetName: String(asset.assetName || ''),
+      originalKeeper: String(asset.leaderName || ''),
+      originalUser: String(asset.userName || ''), // 物品總表可能無此欄位，轉為空字串
+      scrapDate: scrapDateStr,                    // 傳送格式化後的字串，而非 Date 物件
+      scrapReason: String(asset.remarks || '')    // 確保為字串
+    };
+  });
 }
 
 function getAdminName() {
