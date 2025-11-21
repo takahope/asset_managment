@@ -20,7 +20,7 @@
         <h4>列印轉移記錄</h4>
         <div class="d-flex justify-content-between align-items-center mb-3">
             <p>此處會依保管人列出所有已完成轉移的財產。您可以為每位保管人產生一份彙整的轉移報表。</p>
-            <button id="view-toggle-btn" class="btn btn-outline-secondary" onclick="toggleView()">切換詳細模式</button>
+            <button id="view-toggle-btn" class="btn btn-outline-secondary" onclick="toggleView()">切換簡易模式</button>
         </div>
 
         <div class="form-group">
@@ -43,7 +43,7 @@
         </div>
 
         <!-- 簡易模式 -->
-        <div id="simple-view">
+        <div id="simple-view" style="display: none;">
             <div id="table-container" class="table-container">
                 <table class="table table-hover table-sm">
                     <thead class="thead-light">
@@ -60,7 +60,7 @@
         </div>
 
         <!-- 詳細模式 -->
-        <div id="detailed-view" style="display: none;">
+        <div id="detailed-view">
             <div class="d-flex justify-content-end mb-2">
                 <button class="btn btn-success" onclick="generateConsolidatedDoc()">產生彙總報表</button>
             </div>
@@ -86,7 +86,7 @@
     </div>
 
     <script>
-        let isDetailedView = false;
+        let isDetailedView = true;
 
         document.addEventListener("DOMContentLoaded", () => {
             google.script.run
