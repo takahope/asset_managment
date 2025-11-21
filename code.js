@@ -895,11 +895,15 @@ function processBatchTransferApplication(formData) {
       // 通知管理員
       const adminEmails = getAdminEmails();
       if (adminEmails && adminEmails.length > 0) {
+        const webAppUrl = getAppUrl();
+        const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
         const subject = `[財產通知] ${autoCompletedApps.length} 筆財產地點已變更`;
         let body = `您好，\n\n${currentUserEmail} 已變更以下財產的地點：\n\n`;
         autoCompletedApps.forEach(app => {
           body += `  - ${app.id}: ${app.assetName} → 新地點: ${newLocation}\n`;
         });
+        body += `請點擊下方連結，前往更新頁面進行操作：\n`;
+        body += `${printTransferLink}\n\n`; // ✨ 新增：直接連結
         body += `\n此為系統自動發送郵件。`;
         MailApp.sendEmail(adminEmails.join(','), subject, body);
       }
@@ -1274,13 +1278,13 @@ function processBatchApproval(appIds) {
       const adminEmails = getAdminEmails();
       if (adminEmails && adminEmails.length > 0) {
         const webAppUrl = getAppUrl();
-        const updateLink = `${webAppUrl}?page=update`; // ✨ 新增：更新頁面連結
+        const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
         
         const subject = `[系統通知] 有 ${successCount} 筆已完成轉移的財產待您更新`;
         let body = `您好，\n\n系統剛剛有 ${successCount} 筆財產轉移申請已被核准，請您執行後續的上傳更新作業。\n\n`;
         body += `請點擊下方連結，前往更新頁面進行操作：\n`;
-        body += `${updateLink}\n\n`; // ✨ 新增：直接連結
-        body += `您也可以從試算表的「財產管理系統」選單進入「更新已轉移財產」頁面進行操作。\n\n此為系統自動發送郵件。`;
+        body += `${printTransferLink}\n\n`; // ✨ 新增：直接連結
+        body += `此為系統自動發送郵件。`;
         MailApp.sendEmail(adminEmails.join(','), subject, body);
       }
     }
@@ -1808,6 +1812,7 @@ function processBatchScrapping(formData) {
 
     const now = new Date();
     let successCount = 0;
+    const scrappedAssets = []; // 收集報廢財產資訊供郵件通知使用
     const fullReason = reason === '其他' ? `其他: ${remarks}` : `${reason} ${remarks}`;
 
     assetIds.forEach(assetId => {
@@ -1819,6 +1824,17 @@ function processBatchScrapping(formData) {
           location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('報廢中');
           location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue(now);
           location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue(fullReason);
+
+          // 收集成功報廢的財產資訊供郵件通知使用
+          scrappedAssets.push({
+            assetId: assetId,
+            assetName: asset.assetName,
+            keeperName: asset.leaderName,
+            userName: asset.userName || '無',
+            location: asset.location,
+            category: asset.assetCategory  // 修正：使用正確的屬性名稱 assetCategory
+          });
+
           successCount++;
         } else {
           Logger.log(`processBatchScrapping: 找不到資產 ${assetId}，跳過。`);
@@ -1828,6 +1844,42 @@ function processBatchScrapping(formData) {
 
     if (successCount === 0) {
       throw new Error("處理失敗，勾選的財產可能已在報廢流程中或狀態已變更。");
+    }
+
+    // 📧 發送郵件通知給所有管理員
+    if (successCount > 0) {
+      try {
+        const applicantEmail = Session.getActiveUser().getEmail();
+        const applicantName = scrappedAssets[0].keeperName; // 申請人即為保管人
+        const adminEmails = getAdminEmails();
+
+        if (adminEmails && adminEmails.length > 0) {
+          const webAppUrl = getAppUrl();
+          const printScrapLink = `${webAppUrl}?page=printScrap`;
+
+          const subject = `[財產報廢通知] ${applicantName} 提交了 ${successCount} 筆財產報廢申請`;
+          let body = `您好，\n\n`;
+          body += `使用者 ${applicantName} (${applicantEmail}) 剛剛提交了 ${successCount} 筆財產的報廢申請：\n\n`;
+
+          // 列出報廢財產清單
+          scrappedAssets.forEach(asset => {
+            body += `  📦 ${asset.assetId} - ${asset.assetName}\n`;
+            body += `     保管人：${asset.keeperName} | 使用人：${asset.userName}\n`;
+            body += `     地點：${asset.location} | 類別：${asset.category}\n\n`;
+          });
+
+          body += `📋 報廢原因：${fullReason}\n\n`;
+          body += `請點擊下方連結前往「列印報廢申請紀錄」頁面進行列印：\n`;
+          body += `${printScrapLink}\n\n`;
+          body += `此為系統自動發送郵件。`;
+
+          MailApp.sendEmail(adminEmails.join(','), subject, body);
+          Logger.log(`✅ 已發送報廢通知給 ${adminEmails.length} 位管理員`);
+        }
+      } catch (emailError) {
+        Logger.log(`⚠️ 郵件發送失敗: ${emailError.message}`);
+        // 即使郵件發送失敗，報廢申請已成功，不影響主流程
+      }
     }
 
     return `成功為 ${successCount} 筆財產提交報廢申請，待管理員確認。`;
