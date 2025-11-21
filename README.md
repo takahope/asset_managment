@@ -10,15 +10,18 @@
 - **資產報廢處理** - 報廢申請、審核及文件自動產生
 - **電腦狀態回報** - 定期電腦健康狀態檢查與回報
 - **個人資產查詢** - 快速查詢個人保管及借用資產狀態
+- **文件產生功能** - 自動產生報廢單與轉移記錄報表
 - **管理員功能** - 資產狀態更新、上傳確認等進階管理功能
 
 ### 系統特色
 - 🔄 **雙表整合架構** - 統一管理財產總表與物品總表，提供一致的操作介面
 - 📊 **動態數據流** - 自動從資產清單提取保管人、地點等參考資料，無需維護額外對照表
 - ✉️ **自動通知機制** - 重要操作自動發送 Email 通知相關人員
+- 🎨 **現代化 UI** - 科技風格毛玻璃效果設計，支援待辦通知徽章與互動式卡片動畫
 - 📱 **響應式設計** - 支援 PWA (Progressive Web App) 功能，可在各種裝置上使用
 - 🔒 **權限控制** - 基於 Email 的身份驗證與管理員白名單機制
 - 💾 **快取優化** - 使用 CacheService 提升系統效能
+- 📄 **文件自動化** - 支援報廢單與轉移記錄的自動產生與 PDF 輸出
 
 ## 🏗️ 技術架構
 
@@ -171,11 +174,29 @@ const ADMIN_LIST_SHEET_NAME = "管理員名單";
 特定頁面: https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec?page=apply
 ```
 
+#### 🎨 主控台介面特色 (main.html)
+
+新版主控台採用現代化科技風格設計，提供更優質的使用者體驗：
+
+- **毛玻璃特效** - 使用 backdrop-filter 實現半透明毛玻璃卡片效果
+- **互動式動畫** - 懸停時卡片上浮與光暈流動效果
+- **通知徽章** - 即時顯示待接收資產數量，支援呼吸燈動畫
+- **科技字體** - 使用 Orbitron 與 Noto Sans TC 字體組合
+- **漸層配色** - Cyan 與 Purple 漸層色彩搭配深色背景
+- **載入動畫** - 轉場時顯示科技感載入遮罩
+- **響應式網格** - 支援桌面、平板與行動裝置的自適應佈局
+
+**設計技術**：
+- Tailwind CSS 框架
+- Font Awesome 圖標庫
+- Google Fonts (Orbitron, Noto Sans TC)
+- CSS3 動畫與變換效果
+
 ### 頁面路由
 
 | URL 參數 | 頁面 | 功能 |
 |---------|------|------|
-| (無) | portal.html | 主入口頁面 |
+| (無) | main.html | 主入口頁面 (現代化科技風格控制台) |
 | page=report | Index.html | 電腦狀態回報 |
 | page=apply | apply.html | 資產轉移申請 |
 | page=review | review.html | 轉移審核 |
@@ -183,6 +204,7 @@ const ADMIN_LIST_SHEET_NAME = "管理員名單";
 | page=return | return.html | 資產歸還管理 |
 | page=scrap | scrap.html | 資產報廢申請 |
 | page=printScrap | printScrap.html | 報廢文件產生 |
+| page=printTransfer | printTransfer.html | 轉移記錄產生 |
 | page=update | update.html | 管理員狀態更新 |
 | page=userstate | userstate.html | 個人資產查詢 |
 
@@ -268,6 +290,50 @@ const ADMIN_LIST_SHEET_NAME = "管理員名單";
 - 前端：`Index.html`
 - 後端：`processFormData()` (code.js)
 
+#### 5️⃣ 文件產生流程
+
+##### 報廢文件產生
+
+```
+管理員開啟報廢文件產生頁面
+    ↓
+選擇財產或物品類別
+    ↓
+系統載入已報廢清單
+    ↓
+按保管人產生報廢申請單
+    ↓
+自動填入 Google Docs 範本
+    ↓
+產生 PDF 文件並儲存
+```
+
+**相關檔案**：
+- 前端：`printScrap.html`
+- 後端：`getAllScrappableItems()`, `createScrapDoc()` (code.js:1182-1613, 2267-2573)
+
+##### 轉移記錄產生
+
+```
+管理員開啟轉移記錄產生頁面
+    ↓
+選擇財產或物品類別
+    ↓
+系統載入已完成轉移清單
+    ↓
+可選擇簡易模式（按保管人）或詳細模式（逐筆勾選）
+    ↓
+產生轉移報表文件
+    ↓
+自動填入轉移明細
+    ↓
+產生 PDF 文件並儲存
+```
+
+**相關檔案**：
+- 前端：`printTransfer.html`
+- 後端：`getTransferDataForPrint()`, `getAllTransferableItems()`, `createTransferDoc()` (code.js:2267-2573)
+
 ### 狀態流程圖
 
 ```
@@ -281,20 +347,22 @@ const ADMIN_LIST_SHEET_NAME = "管理員名單";
 
 ```
 asset_managment/
-├── code.js                 # 主要後端邏輯 (~1700 行)
-│   ├── 全域設定 (1-92)
+├── code.js                 # 主要後端邏輯 (~2666 行)
+│   ├── 全域設定 (1-99)
 │   ├── 資料抽象層 (94-193)
 │   ├── UI 選單處理器 (196-295)
-│   ├── 網頁應用路由 (297-396)
+│   ├── 網頁應用路由 (297-399)
 │   ├── 資產轉移工作流程 (514-774)
 │   ├── 借用/歸還工作流程 (942-1144)
 │   ├── 報廢工作流程 (1182-1613)
-│   └── 管理員功能 (1309-1451)
+│   ├── 管理員功能 (1309-1451)
+│   └── 文件產生功能 (2267-2573)
 │
 ├── env.js                  # 環境變數設定
 ├── appsscript.json        # Apps Script 專案設定
 │
-├── portal.html            # 主入口頁面
+├── main.html              # 主入口頁面 (現代化科技風格)
+├── portal.html            # 舊版入口頁面 (已被 main.html 取代)
 ├── Index.html             # 電腦狀態回報表單
 ├── apply.html             # 資產轉移申請
 ├── review.html            # 轉移審核儀表板
@@ -302,11 +370,13 @@ asset_managment/
 ├── return.html            # 歸還管理
 ├── scrap.html             # 報廢申請
 ├── printScrap.html        # 報廢文件產生
+├── printTransfer.html     # 轉移記錄產生
 ├── update.html            # 管理員狀態更新
 ├── userstate.html         # 個人資產查詢
 ├── shared-nav.html        # 共用導航元件
 │
-├── CLAUDE.md              # 專案開發指南
+├── CLAUDE.md              # 專案開發指南與架構文件
+├── error_report.md        # 錯誤報告與除錯記錄
 ├── .claspignore           # clasp 忽略檔案
 └── .gitignore             # Git 忽略檔案
 ```
@@ -452,6 +522,21 @@ MailApp.sendEmail({
 
 ---
 
-**最後更新**：2025-10-31
-**版本**：3.0
+**最後更新**：2025-11-21
+**版本**：3.1
 **維護者**：takahope
+
+## 📝 更新日誌
+
+### v3.1 (2025-11-21)
+- ✨ 新增轉移記錄產生功能 (`printTransfer.html`)
+- 🎨 升級主入口頁面為現代化科技風格 (`main.html`)
+- 🐛 修復 Google Apps Script 資料序列化問題 (Date 物件轉字串)
+- 📊 新增待接收資產通知徽章功能
+- 🔄 支援雙模式轉移記錄產生（簡易/詳細模式）
+- 📄 完善專案文件與架構說明
+
+### v3.0 (2025-10-31)
+- 🏗️ 實作 V3 資料抽象層架構
+- 📋 分離財產總表與物品總表
+- ⚡ 優化資料存取效能與快取機制
