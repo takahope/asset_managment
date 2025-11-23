@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; }
+        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #3498db; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .section-card { margin-bottom: 20px; }
+        .session-item { cursor: pointer; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; }
+        .session-item:hover { background-color: #f0f0f0; }
+        .session-item.active { background-color: #e3f2fd; border-color: #2196F3; }
+        .asset-item { padding: 8px; border-bottom: 1px solid #eee; }
+        .asset-item:last-child { border-bottom: none; }
+        .badge-result { padding: 5px 10px; border-radius: 3px; font-size: 0.9em; }
+        .result-normal { background-color: #4caf50; color: white; }
+        .result-missing { background-color: #f44336; color: white; }
+        .result-damaged { background-color: #ff9800; color: white; }
+        .result-unverified { background-color: #9e9e9e; color: white; }
+        .progress-container { margin: 15px 0; }
+        .stats-box { padding: 15px; background-color: #f5f5f5; border-radius: 5px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <?!= include('shared-nav'); ?>
+
+    <div id="loader-container" class="text-center">
+        <div class="loader"></div>
+        <p>正在載入盤點資料...</p>
+    </div>
+
+    <div id="main-content" style="display:none;">
+        <h4>資產盤點管理</h4>
+
+        <!-- Active Sessions Section -->
+        <div class="card section-card" id="active-sessions-card" style="display:none;">
+            <div class="card-header bg-warning text-white">
+                <h5 class="mb-0">進行中的盤點會話</h5>
+            </div>
+            <div class="card-body">
+                <div id="active-sessions-list"></div>
+            </div>
+        </div>
+
+        <!-- Start New Session Section -->
+        <div class="card section-card" id="start-session-card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">開始新的盤點</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label><b>選擇盤點範圍：</b></label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="filterType" id="filter-all" value="all" checked>
+                        <label class="form-check-label" for="filter-all">盤點所有資產（在庫狀態）</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="filterType" id="filter-location" value="location">
+                        <label class="form-check-label" for="filter-location">依地點篩選</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="filterType" id="filter-keeper" value="keeper">
+                        <label class="form-check-label" for="filter-keeper">依保管人篩選</label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="location-select-group" style="display:none;">
+                    <label for="location-select">選擇地點：</label>
+                    <select id="location-select" class="form-control"></select>
+                </div>
+
+                <div class="form-group" id="keeper-select-group" style="display:none;">
+                    <label for="keeper-select">選擇保管人：</label>
+                    <select id="keeper-select" class="form-control"></select>
+                </div>
+
+                <button class="btn btn-primary" id="start-session-btn" onclick="startNewSession()">
+                    <span class="btn-text">開始盤點</span>
+                    <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Inventory Session Detail -->
+        <div class="card section-card" id="session-detail-card" style="display:none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">盤點進行中 - <span id="session-id-display"></span></h5>
+            </div>
+            <div class="card-body">
+                <div class="progress-container">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>進度：<span id="progress-text">0/0</span></span>
+                        <span id="progress-percentage">0%</span>
+                    </div>
+                    <div class="progress">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="asset-search">搜尋資產：</label>
+                    <input type="text" class="form-control" id="asset-search" placeholder="輸入產編或名稱...">
+                </div>
+
+                <div id="assets-list" style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
+                    <!-- Assets will be loaded here -->
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-success" onclick="completeSession()">
+                        <span class="btn-text">完成盤點</span>
+                        <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
+                    </button>
+                    <button class="btn btn-secondary ml-2" onclick="refreshSessionDetails()">重新整理</button>
+                    <button class="btn btn-outline-secondary ml-2" onclick="backToStart()">返回</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory History -->
+        <div class="card section-card">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">盤點歷史記錄</h5>
+            </div>
+            <div class="card-body">
+                <div id="history-list">
+                    <p class="text-muted">尚無歷史記錄</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for marking asset -->
+    <div class="modal fade" id="markAssetModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">標記資產盤點結果</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p><b>財產編號：</b><span id="modal-asset-id"></span></p>
+                    <p><b>財產名稱：</b><span id="modal-asset-name"></span></p>
+                    <p><b>保管人：</b><span id="modal-keeper-name"></span></p>
+                    <p><b>地點：</b><span id="modal-location"></span></p>
+
+                    <div class="form-group">
+                        <label><b>盤點結果：</b></label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="inventoryResult" id="result-normal" value="正常" checked>
+                            <label class="form-check-label" for="result-normal">正常</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="inventoryResult" id="result-missing" value="遺失">
+                            <label class="form-check-label" for="result-missing">遺失</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="inventoryResult" id="result-damaged" value="損壞">
+                            <label class="form-check-label" for="result-damaged">損壞</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="inventory-remarks">備註：</label>
+                        <textarea class="form-control" id="inventory-remarks" rows="3" placeholder="選填"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveInventoryResult()">
+                        <span class="btn-text">儲存</span>
+                        <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        let inventoryData = null;
+        let currentSessionId = null;
+        let currentSessionDetails = [];
+
+        document.addEventListener("DOMContentLoaded", function() {
+            loadInventoryData();
+
+            // Filter type change handlers
+            document.querySelectorAll('input[name="filterType"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    document.getElementById('location-select-group').style.display =
+                        this.value === 'location' ? 'block' : 'none';
+                    document.getElementById('keeper-select-group').style.display =
+                        this.value === 'keeper' ? 'block' : 'none';
+                });
+            });
+
+            // Asset search handler
+            document.getElementById('asset-search').addEventListener('input', function() {
+                filterAssetsList(this.value);
+            });
+        });
+
+        function loadInventoryData() {
+            document.getElementById('loader-container').style.display = 'block';
+            document.getElementById('main-content').style.display = 'none';
+
+            google.script.run
+                .withSuccessHandler(function(data) {
+                    inventoryData = data;
+                    populateFilters(data);
+                    displayActiveSessions(data.activeSessions);
+                    loadHistory();
+
+                    document.getElementById('loader-container').style.display = 'none';
+                    document.getElementById('main-content').style.display = 'block';
+
+                    // If there's an active session, load it
+                    if (data.activeSessions.length > 0) {
+                        loadSessionDetails(data.activeSessions[0].inventoryId);
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    alert('載入資料失敗：' + error.message);
+                    document.getElementById('loader-container').style.display = 'none';
+                })
+                .getInventoryData();
+        }
+
+        function populateFilters(data) {
+            // Populate location select
+            const locationSelect = document.getElementById('location-select');
+            locationSelect.innerHTML = '<option value="">請選擇地點</option>';
+            data.locations.forEach(loc => {
+                locationSelect.innerHTML += `<option value="${loc}">${loc}</option>`;
+            });
+
+            // Populate keeper select
+            const keeperSelect = document.getElementById('keeper-select');
+            keeperSelect.innerHTML = '<option value="">請選擇保管人</option>';
+            data.keepers.forEach(keeper => {
+                keeperSelect.innerHTML += `<option value="${keeper}">${keeper}</option>`;
+            });
+        }
+
+        function displayActiveSessions(sessions) {
+            const card = document.getElementById('active-sessions-card');
+            const list = document.getElementById('active-sessions-list');
+
+            if (sessions.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+
+            card.style.display = 'block';
+            list.innerHTML = '';
+
+            sessions.forEach(session => {
+                const percentage = session.totalCount > 0
+                    ? Math.round((session.verifiedCount / session.totalCount) * 100)
+                    : 0;
+
+                list.innerHTML += `
+                    <div class="session-item" onclick="loadSessionDetails('${session.inventoryId}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <b>${session.inventoryId}</b><br>
+                                <small class="text-muted">範圍: ${session.filter}</small>
+                            </div>
+                            <div class="text-right">
+                                <div>${session.verifiedCount} / ${session.totalCount}</div>
+                                <small class="text-muted">${percentage}%</small>
+                            </div>
+                        </div>
+                        <div class="progress mt-2" style="height: 5px;">
+                            <div class="progress-bar" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function startNewSession() {
+            const filterType = document.querySelector('input[name="filterType"]:checked').value;
+            let filterValue = '';
+
+            if (filterType === 'location') {
+                filterValue = document.getElementById('location-select').value;
+                if (!filterValue) {
+                    alert('請選擇地點');
+                    return;
+                }
+            } else if (filterType === 'keeper') {
+                filterValue = document.getElementById('keeper-select').value;
+                if (!filterValue) {
+                    alert('請選擇保管人');
+                    return;
+                }
+            }
+
+            const btn = document.getElementById('start-session-btn');
+            btn.disabled = true;
+            btn.querySelector('.btn-text').style.display = 'none';
+            btn.querySelector('.spinner-border').style.display = 'inline-block';
+
+            const options = {
+                filterType: filterType,
+                filterValue: filterValue,
+                assetIds: []
+            };
+
+            google.script.run
+                .withSuccessHandler(function(result) {
+                    btn.disabled = false;
+                    btn.querySelector('.btn-text').style.display = 'inline';
+                    btn.querySelector('.spinner-border').style.display = 'none';
+
+                    if (result.success) {
+                        alert(result.message);
+                        loadSessionDetails(result.inventoryId);
+                        loadInventoryData(); // Refresh
+                    } else {
+                        alert('開始盤點失敗：' + result.error);
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    btn.disabled = false;
+                    btn.querySelector('.btn-text').style.display = 'inline';
+                    btn.querySelector('.spinner-border').style.display = 'none';
+                    alert('開始盤點失敗：' + error.message);
+                })
+                .startInventorySession(options);
+        }
+
+        function loadSessionDetails(inventoryId) {
+            currentSessionId = inventoryId;
+            document.getElementById('session-id-display').textContent = inventoryId;
+            document.getElementById('start-session-card').style.display = 'none';
+            document.getElementById('session-detail-card').style.display = 'block';
+
+            google.script.run
+                .withSuccessHandler(function(details) {
+                    currentSessionDetails = details;
+                    displaySessionDetails(details);
+                })
+                .withFailureHandler(function(error) {
+                    alert('載入盤點明細失敗：' + error.message);
+                })
+                .getInventoryDetails(inventoryId);
+        }
+
+        function displaySessionDetails(details) {
+            const total = details.length;
+            const verified = details.filter(d => d.inventoryResult !== '未盤點').length;
+            const percentage = total > 0 ? Math.round((verified / total) * 100) : 0;
+
+            document.getElementById('progress-text').textContent = `${verified}/${total}`;
+            document.getElementById('progress-percentage').textContent = `${percentage}%`;
+            document.getElementById('progress-bar').style.width = `${percentage}%`;
+
+            const assetsList = document.getElementById('assets-list');
+            assetsList.innerHTML = '';
+
+            if (details.length === 0) {
+                assetsList.innerHTML = '<p class="text-muted">沒有資產需要盤點</p>';
+                return;
+            }
+
+            details.forEach(asset => {
+                const resultClass = asset.inventoryResult === '正常' ? 'result-normal' :
+                                  asset.inventoryResult === '遺失' ? 'result-missing' :
+                                  asset.inventoryResult === '損壞' ? 'result-damaged' :
+                                  'result-unverified';
+
+                const resultBadge = `<span class="badge-result ${resultClass}">${asset.inventoryResult}</span>`;
+
+                assetsList.innerHTML += `
+                    <div class="asset-item" onclick="openMarkModal('${asset.assetId}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <b>${asset.assetId}</b> - ${asset.assetName}<br>
+                                <small class="text-muted">保管人: ${asset.keeperName} | 地點: ${asset.location}</small>
+                                ${asset.remarks ? '<br><small class="text-info">備註: ' + asset.remarks + '</small>' : ''}
+                            </div>
+                            <div>
+                                ${resultBadge}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function filterAssetsList(searchTerm) {
+            if (!currentSessionDetails) return;
+
+            const filtered = currentSessionDetails.filter(asset =>
+                asset.assetId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                asset.assetName.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            displaySessionDetails(filtered);
+        }
+
+        function openMarkModal(assetId) {
+            const asset = currentSessionDetails.find(a => a.assetId === assetId);
+            if (!asset) return;
+
+            document.getElementById('modal-asset-id').textContent = asset.assetId;
+            document.getElementById('modal-asset-name').textContent = asset.assetName;
+            document.getElementById('modal-keeper-name').textContent = asset.keeperName;
+            document.getElementById('modal-location').textContent = asset.location;
+            document.getElementById('inventory-remarks').value = asset.remarks || '';
+
+            // Set current result
+            if (asset.inventoryResult === '正常') {
+                document.getElementById('result-normal').checked = true;
+            } else if (asset.inventoryResult === '遺失') {
+                document.getElementById('result-missing').checked = true;
+            } else if (asset.inventoryResult === '損壞') {
+                document.getElementById('result-damaged').checked = true;
+            } else {
+                document.getElementById('result-normal').checked = true;
+            }
+
+            $('#markAssetModal').modal('show');
+        }
+
+        function saveInventoryResult() {
+            const assetId = document.getElementById('modal-asset-id').textContent;
+            const result = document.querySelector('input[name="inventoryResult"]:checked').value;
+            const remarks = document.getElementById('inventory-remarks').value;
+
+            const btn = $('#markAssetModal').find('.btn-primary');
+            btn.prop('disabled', true);
+            btn.find('.btn-text').hide();
+            btn.find('.spinner-border').show();
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    btn.prop('disabled', false);
+                    btn.find('.btn-text').show();
+                    btn.find('.spinner-border').hide();
+
+                    if (response.success) {
+                        $('#markAssetModal').modal('hide');
+                        refreshSessionDetails();
+                    } else {
+                        alert('儲存失敗：' + response.error);
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    btn.prop('disabled', false);
+                    btn.find('.btn-text').show();
+                    btn.find('.spinner-border').hide();
+                    alert('儲存失敗：' + error.message);
+                })
+                .markAssetInventory(currentSessionId, assetId, result, remarks);
+        }
+
+        function refreshSessionDetails() {
+            if (currentSessionId) {
+                loadSessionDetails(currentSessionId);
+            }
+        }
+
+        function completeSession() {
+            if (!currentSessionId) return;
+
+            if (!confirm('確定要完成此盤點會話嗎？完成後將無法再修改盤點結果。')) {
+                return;
+            }
+
+            const btn = event.target;
+            btn.disabled = true;
+            btn.querySelector('.btn-text').style.display = 'none';
+            btn.querySelector('.spinner-border').style.display = 'inline-block';
+
+            google.script.run
+                .withSuccessHandler(function(result) {
+                    btn.disabled = false;
+                    btn.querySelector('.btn-text').style.display = 'inline';
+                    btn.querySelector('.spinner-border').style.display = 'none';
+
+                    if (result.success) {
+                        const stats = result.stats;
+                        let message = `盤點已完成！\n\n`;
+                        message += `總計: ${stats.total} 筆\n`;
+                        message += `正常: ${stats.normal} 筆\n`;
+                        message += `遺失: ${stats.missing} 筆\n`;
+                        message += `損壞: ${stats.damaged} 筆\n`;
+
+                        alert(message);
+                        backToStart();
+                        loadInventoryData();
+                    } else {
+                        alert(result.error);
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    btn.disabled = false;
+                    btn.querySelector('.btn-text').style.display = 'inline';
+                    btn.querySelector('.spinner-border').style.display = 'none';
+                    alert('完成盤點失敗：' + error.message);
+                })
+                .completeInventorySession(currentSessionId);
+        }
+
+        function backToStart() {
+            currentSessionId = null;
+            currentSessionDetails = [];
+            document.getElementById('session-detail-card').style.display = 'none';
+            document.getElementById('start-session-card').style.display = 'block';
+            document.getElementById('asset-search').value = '';
+        }
+
+        function loadHistory() {
+            google.script.run
+                .withSuccessHandler(function(history) {
+                    const historyList = document.getElementById('history-list');
+
+                    if (history.length === 0) {
+                        historyList.innerHTML = '<p class="text-muted">尚無歷史記錄</p>';
+                        return;
+                    }
+
+                    historyList.innerHTML = '';
+                    history.forEach(record => {
+                        const date = new Date(record.inventoryDate).toLocaleString('zh-TW');
+                        const completionDate = record.completionTime ?
+                            new Date(record.completionTime).toLocaleString('zh-TW') : '-';
+
+                        const statusBadge = record.status === '已完成' ?
+                            '<span class="badge badge-success">已完成</span>' :
+                            '<span class="badge badge-warning">進行中</span>';
+
+                        historyList.innerHTML += `
+                            <div class="session-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <b>${record.inventoryId}</b> ${statusBadge}<br>
+                                        <small class="text-muted">
+                                            範圍: ${record.filter}<br>
+                                            開始時間: ${date}<br>
+                                            ${record.status === '已完成' ? '完成時間: ' + completionDate : ''}
+                                        </small>
+                                    </div>
+                                    <div class="text-right">
+                                        <div>${record.verifiedCount} / ${record.totalCount}</div>
+                                        <small class="text-muted">已盤點/總計</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                })
+                .withFailureHandler(function(error) {
+                    console.error('載入歷史記錄失敗：', error);
+                })
+                .getInventoryHistory(false);
+        }
+    </script>
+</body>
+</html>
