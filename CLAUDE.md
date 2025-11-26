@@ -206,6 +206,8 @@ Navigation: `webAppUrl + '?page=review'`
 
 7. **Date Formatting**: Scrapping documents parse both GMT timestamps and Minguo calendar dates (e.g., "112/05/15" → 2023/05/15).
 
+8. **Page Navigation in GAS Web Apps**: Always use `window.open(url, '_top')` for page navigation in Google Apps Script Web Apps, never use `window.location.href` or `window.location.replace()`. The `_top` parameter ensures navigation happens in the top frame, preserving Google authorization context and avoiding cross-origin issues when pages run inside iframes. Using `window.location.href` will trigger authorization errors.
+
 ## Security Model
 
 - **Web App Access**: Set to "DOMAIN" in `appsscript.json` (organization-only)
@@ -254,5 +256,26 @@ All HTML pages follow this pattern for data fetching and submission.
 - **Root Cause**: The backend function was returning raw `Date` objects (from `asset.lastModified`). Google Apps Script's `google.script.run` cannot serialize `Date` objects to JSON for the browser. It silently fails and sends `null` to the client.
 - **Resolution**: Updated `getAllScrappableItems` in `code.js` to explicitly convert dates to strings using `Utilities.formatDate` and ensure all fields are primitives (Strings) before returning.
 - **Lesson**: Never return raw database rows to the frontend. Always use a DTO (Data Transfer Object) pattern to sanitize types.
+
+### [2025-11-22] Navigation loader caused Google authorization error
+- **Symptom**: 在 `shared-nav.html` 實作轉跳動畫功能後，點擊導覽按鈕雖然能正常顯示轉跳動畫（全螢幕遮罩 + spinner），但轉跳完成後頁面顯示「Google 雲端硬碟 - 需要存取權」錯誤，要求用戶重新授權。錯誤訊息：「請直接開啟文件查看是否可要求存取權，或改用具有存取權的帳戶」。此問題影響所有使用該導覽列的 9 個頁面（apply.html, review.html, lending.html, return.html, scrap.html, update.html, printScrap.html, printTransfer.html, userstate.html）。
+- **Root Cause**: 在實作 `navigateWithLoader()` 函數時，使用了 `window.location.href = targetUrl` 進行頁面導航。在 Google Apps Script Web App 環境中，此方法會在當前框架內導航。如果頁面在 iframe 中執行，會觸發跨域安全檢查，導致 Google 認為這是一個新的未授權請求，強制要求用戶重新授權。原始代碼使用的是 `window.open(url, '_top')`，其中 `_top` 參數強制在頂層框架（top frame）中打開，可以跳出所有 iframe 層級並保持原有的 Google 授權上下文和 session。
+- **Resolution**: 修改 `shared-nav.html` 第 124 行的 `navigateWithLoader()` 函數，將 `window.location.href = targetUrl` 改回 `window.open(targetUrl, '_top')`。具體修改：
+  ```javascript
+  // 修改前：
+  setTimeout(() => {
+    window.location.href = targetUrl;
+  }, 100);
+
+  // 修改後：
+  setTimeout(() => {
+    window.open(targetUrl, '_top');
+  }, 100);
+  ```
+  修改後轉跳動畫正常顯示，頁面成功轉跳且不會出現授權錯誤，保持原有的用戶授權狀態。
+- **Lesson**:
+  1. **GAS 環境特殊性**：在 Google Apps Script Web App 中進行頁面導航時，必須使用 `window.open(url, '_top')`，不能使用 `window.location.href`、`window.location.replace()` 等一般網頁常用的方法。`_top` 參數確保在頂層框架操作，避免 iframe 跨域授權問題。
+  2. **保持原有架構的重要性**：在重構或優化功能時，必須保持關鍵技術實作方式不變。原始代碼使用 `window.open(url, '_top')` 是基於 GAS 環境的技術要求，不應隨意替換為看似等效的其他方法。
+  3. **完整測試的必要性**：功能修改後必須完整測試轉跳流程，不僅要測試動畫效果，還要確認轉跳後頁面是否正常載入且授權狀態正常。
 
 ## Architecture Notes
