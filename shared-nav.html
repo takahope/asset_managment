@@ -12,6 +12,46 @@
     font-weight: 600;
     color: #495057;
   }
+
+  /* 轉跳動畫相關樣式 */
+  @keyframes nav-spinner-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .nav-loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+
+  .nav-loader-overlay.active {
+    display: flex;
+  }
+
+  .nav-spinner {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #007bff;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: nav-spinner-spin 1s linear infinite;
+  }
+
+  .nav-loader-text {
+    color: white;
+    font-size: 1.1rem;
+    margin-top: 20px;
+    font-weight: 500;
+  }
 </style>
 
 <div class="portal-nav">
@@ -49,15 +89,53 @@
   </button>
 </div>
 
+<!-- 全螢幕轉跳載入動畫遮罩 -->
+<div id="nav-loader-overlay" class="nav-loader-overlay">
+  <div class="nav-spinner"></div>
+  <div class="nav-loader-text">正在轉跳，請稍候...</div>
+</div>
+
 <script>
   // 這個小腳本會被嵌入到所有頁面，提供 goToPortal 功能
   let _portalWebAppUrl = ''; // 使用底線避免與頁面自身變數衝突
 
+  /**
+   * 統一的導覽轉跳函數（帶載入動畫）
+   * @param {string} targetUrl - 目標 URL
+   */
+  function navigateWithLoader(targetUrl) {
+    // 顯示全螢幕載入遮罩
+    const loaderOverlay = document.getElementById('nav-loader-overlay');
+    if (loaderOverlay) {
+      loaderOverlay.classList.add('active');
+    }
+
+    // 禁用所有導覽按鈕，防止重複點擊
+    const navButtons = document.querySelectorAll('.portal-nav button');
+    navButtons.forEach(btn => {
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      btn.style.cursor = 'not-allowed';
+    });
+
+    // 執行頁面轉跳
+    // 使用 setTimeout 確保動畫已經顯示
+    setTimeout(() => {
+      // ⚠️ 重要：必須使用 window.open(url, '_top') 而非 window.location.href
+      // 原因：Google Apps Script Web App 可能在 iframe 中運行
+      // 使用 _top 參數可以：
+      //   1. 在頂層框架中導航，跳出所有 iframe
+      //   2. 保持 Google 授權上下文和 session
+      //   3. 避免觸發跨域安全檢查導致「需要存取權」錯誤
+      // 參考：CLAUDE.md → Common Gotchas #8
+      window.open(targetUrl, '_top');
+    }, 100);
+  }
+
   function goToPortal() {
     if (_portalWebAppUrl) {
-      window.open(_portalWebAppUrl, '_top');
+      navigateWithLoader(_portalWebAppUrl);
     } else {
-      // 如果 URL 還沒載入好，先顯示提示
       alert('頁面初始化中，請稍候...');
     }
   }
@@ -66,7 +144,7 @@
   function goToApply() {
     if (_portalWebAppUrl) {
       const applyUrl = _portalWebAppUrl + '?page=apply';
-      window.open(applyUrl, '_top');
+      navigateWithLoader(applyUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -75,9 +153,8 @@
   // ✨ **新增：前往 review.html 的函式** ✨
   function goToReview() {
     if (_portalWebAppUrl) {
-      // 組合出 review 頁面的完整網址
       const reviewUrl = _portalWebAppUrl + '?page=review';
-      window.open(reviewUrl, '_top');
+      navigateWithLoader(reviewUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -87,7 +164,7 @@
   function goToLending() {
     if (_portalWebAppUrl) {
       const lendingUrl = _portalWebAppUrl + '?page=lending';
-      window.open(lendingUrl, '_top');
+      navigateWithLoader(lendingUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -97,7 +174,7 @@
   function goToReturn() {
     if (_portalWebAppUrl) {
       const returnUrl = _portalWebAppUrl + '?page=return';
-      window.open(returnUrl, '_top');
+      navigateWithLoader(returnUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -106,8 +183,8 @@
   // ✨ **新增：前往 scrap.html 的函式** ✨
   function goToScrap() {
     if (_portalWebAppUrl) {
-      const updateUrl = _portalWebAppUrl + '?page=scrap';
-      window.open(updateUrl, '_top');
+      const scrapUrl = _portalWebAppUrl + '?page=scrap';
+      navigateWithLoader(scrapUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -116,8 +193,8 @@
   // ✨ **新增：前往 printScrap.html 的函式** ✨
   function goToprintScrap() {
     if (_portalWebAppUrl) {
-      const updateUrl = _portalWebAppUrl + '?page=printScrap';
-      window.open(updateUrl, '_top');
+      const printScrapUrl = _portalWebAppUrl + '?page=printScrap';
+      navigateWithLoader(printScrapUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -127,7 +204,7 @@
   function goToPrintTransfer() {
     if (_portalWebAppUrl) {
       const printTransferUrl = _portalWebAppUrl + '?page=printTransfer';
-      window.open(printTransferUrl, '_top');
+      navigateWithLoader(printTransferUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -137,7 +214,7 @@
   function goToUpdate() {
     if (_portalWebAppUrl) {
       const updateUrl = _portalWebAppUrl + '?page=update';
-      window.open(updateUrl, '_top');
+      navigateWithLoader(updateUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
@@ -146,7 +223,7 @@
   function goToUserState() {
     if (_portalWebAppUrl) {
       const userStateUrl = _portalWebAppUrl + '?page=userstate';
-      window.open(userStateUrl, '_top');
+      navigateWithLoader(userStateUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
