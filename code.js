@@ -2539,10 +2539,20 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
 
     const placeholderParagraph = tablePlaceholder.getElement().getParent();
     const insertIndex = body.getChildIndex(placeholderParagraph);
-    placeholderParagraph.removeFromParent();
 
-    // 插入表格到文件
+    // 先插入表格到佔位符位置
     const newTable = body.insertTable(insertIndex, tableValues);
+
+    // 然後安全地移除佔位符段落
+    // 如果是最後一個段落，只清空內容；否則完全移除
+    const totalChildren = body.getNumChildren();
+    if (insertIndex + 1 === totalChildren - 1) {
+      // 佔位符是最後一個段落，只清空內容
+      placeholderParagraph.clear();
+    } else {
+      // 不是最後一個段落，可以安全移除
+      placeholderParagraph.removeFromParent();
+    }
 
     // 標題列加粗
     const headerRowStyle = {};
