@@ -72,7 +72,12 @@
                             <th>財產編號</th>
                             <th>財產名稱</th>
                             <th>原保管人</th>
+                            <th>原使用人</th>
+                            <th>原存置地點</th>
                             <th>新保管人</th>
+                            <th>新使用人</th>
+                            <th>新存置地點</th>
+                            <th>轉移類型</th>
                             <th>轉移日期</th>
                         </tr>
                     </thead>
@@ -170,7 +175,7 @@
             listBody.innerHTML = '';
 
             if (!items || items.length === 0) {
-                listBody.innerHTML = '<tr><td colspan="6" class="text-center">目前沒有任何已完成轉移的記錄。</td></tr>';
+                listBody.innerHTML = '<tr><td colspan="11" class="text-center">目前沒有任何已完成轉移的記錄。</td></tr>';
             } else {
                 items.forEach(item => {
                     const row = document.createElement('tr');
@@ -179,7 +184,12 @@
                         <td>${item.assetId}</td>
                         <td>${item.assetName}</td>
                         <td>${item.oldKeeper}</td>
+                        <td>${item.oldUser || ''}</td>
+                        <td>${item.oldLocation}</td>
                         <td>${item.newKeeper}</td>
+                        <td>${item.newUser || ''}</td>
+                        <td>${item.newLocation}</td>
+                        <td>${item.transferType}</td>
                         <td>${item.transferDate}</td>
                     `;
                     listBody.appendChild(row);

@@ -2368,8 +2368,10 @@ function getAllTransferableItems(assetCategory) {
           assetToLatestTransfer.set(assetId, {
             oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
             oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
+            oldUser: row[AL_OLD_USER_COLUMN_INDEX - 1],
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
             newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
+            newUser: row[AL_NEW_USER_COLUMN_INDEX - 1],
             transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
             reviewTime: reviewTime
           });
@@ -2389,8 +2391,10 @@ function getAllTransferableItems(assetCategory) {
           assetId: asset.assetId,
           assetName: asset.assetName,
           oldKeeper: transfer.oldKeeper,
-          newKeeper: transfer.newKeeper,
+          oldUser: transfer.oldUser || '',
           oldLocation: transfer.oldLocation,
+          newKeeper: transfer.newKeeper,
+          newUser: transfer.newUser || '',
           newLocation: transfer.newLocation,
           transferType: transfer.transferType,
           transferDate: new Date(transfer.reviewTime).toLocaleDateString('zh-TW')
