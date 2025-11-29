@@ -2436,8 +2436,10 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
           assetToLatestTransfer.set(assetId, {
             oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
             oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
+            oldUser: row[AL_OLD_USER_COLUMN_INDEX - 1],
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
             newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
+            newUser: row[AL_NEW_USER_COLUMN_INDEX - 1],
             reviewTime: reviewTime
           });
         }
@@ -2505,9 +2507,11 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
       '財產名稱',
       '移出單位',
       '移出保管人',
+      '移出使用人',
       '移出存置地點',
       '移入單位',
       '移入保管人',
+      '移入使用人',
       '移入存置地點'
     ];
 
@@ -2523,9 +2527,11 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
         asset.assetName || '',               // 財產名稱
         '核心設施',                           // 移出單位（固定）
         transfer.oldKeeper,                  // 移出保管人
+        transfer.oldUser || '',              // 移出使用人
         transfer.oldLocation,                // 移出存置地點
         '核心設施',                           // 移入單位（固定）
         transfer.newKeeper,                  // 移入保管人
+        transfer.newUser || '',              // 移入使用人
         transfer.newLocation                 // 移入存置地點
       ];
       tableValues.push(rowData);
