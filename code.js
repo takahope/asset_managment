@@ -574,28 +574,48 @@ function getTransferData() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
 
-  // 讀取保管人資料（A欄：姓名，B欄：Email）
+  // 讀取保管人資料（A欄：姓名，B欄：Email，C欄：是否為駐管）
   // 假設第1行是標題，從第2行開始讀取
-  const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+  const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 3).getValues();
   const uniqueKeepersMap = new Map();
+  const custodianMap = new Map(); // ✨ 新增：駐管專用 Map
 
   keeperData.forEach(row => {
-    const name = row[0]; // A欄：姓名
+    const name = row[0];  // A欄：姓名
     const email = row[1]; // B欄：Email
+    const isCustodian = row[2]; // C欄：是否為駐管
+
     if (name && email) {
       uniqueKeepersMap.set(email, name);
+
+      // ✨ 如果 C 欄為「是」，加入駐管列表
+      if (isCustodian === '是') {
+        custodianMap.set(email, name);
+      }
     }
   });
 
-  // 從「存置地點列表」工作表的 A 欄讀取地點清單
+  // 從「存置地點列表」工作表讀取地點清單（A欄：地點名稱，B欄：是否為駐站）
   const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 1).getValues();
+  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 2).getValues();
   const locationList = locationData.map(row => row[0]).filter(loc => loc); // 過濾空值
+
+  // ✨ 新增：篩選出駐站地點
+  const stationLocationList = locationData
+    .filter(row => row[1] === '是') // B欄為「是」
+    .map(row => row[0])
+    .filter(loc => loc);
 
   // 3. 將 Map 轉換為前端需要的格式
   const keepers = {};
   uniqueKeepersMap.forEach((name, email) => {
     keepers[email] = name;
+  });
+
+  // ✨ 將駐管 Map 轉換為物件
+  const custodians = {};
+  custodianMap.forEach((name, email) => {
+    custodians[email] = name;
   });
 
   // ✨ 使用人列表與保管人列表相同（從同一工作表讀取）
@@ -605,12 +625,14 @@ function getTransferData() {
   const locations = locationList;
 
   // 4. 回傳整合後的資料
-  return { 
-    userEmail: currentUserEmail, 
-    assets: myAssets, 
-    keepers: keepers, 
-    users: users, // ✨ 新增：使用人列表
-    locations: locations 
+  return {
+    userEmail: currentUserEmail,
+    assets: myAssets,
+    keepers: keepers,
+    users: users,
+    locations: locations,
+    custodians: custodians,           // ✨ 新增：駐管列表
+    stationLocations: stationLocationList // ✨ 新增：駐站地點列表
   };
 }
 
@@ -620,15 +642,44 @@ function getTransferData() {
  */
 function processBatchTransferApplication(formData) {
   try {
-    const { assetIds, newKeeperEmail, newLocation, newUserName, newUserEmail } = formData;
+    const {
+      assetIds,
+      newKeeperEmail,
+      newLocation,
+      newUserName,
+      newUserEmail,
+      isStationTransfer,  // ✨ 新增：是否為駐站轉移
+      custodianEmail,     // ✨ 新增：駐管 Email
+      stationLocation     // ✨ 新增：駐站地點
+    } = formData;
     
     // ✨ 改進：支援選擇性參數（可以只變更其中一項）
     if (!assetIds || assetIds.length === 0) {
         throw new Error("請至少勾選一筆財產。");
     }
-    
-    if (!newKeeperEmail && !newLocation && !newUserName && !newUserEmail) {
+
+    // ✨ 新增：駐站轉移模式的參數處理
+    let actualNewKeeperEmail = newKeeperEmail;
+    let actualNewUserEmail = newUserEmail;
+    let actualNewLocation = newLocation;
+    let actualTransferType = '';
+
+    if (isStationTransfer) {
+      // 駐站轉移：保管人和使用人都設為駐管
+      actualNewKeeperEmail = custodianEmail;
+      actualNewUserEmail = custodianEmail;
+      actualNewLocation = stationLocation;
+      actualTransferType = '駐站轉移'; // 特殊標記
+
+      // 驗證必要參數
+      if (!custodianEmail || !stationLocation) {
+        throw new Error("駐站轉移需要選擇駐管和駐站地點。");
+      }
+    } else {
+      // 一般轉移模式驗證
+      if (!newKeeperEmail && !newLocation && !newUserName && !newUserEmail) {
         throw new Error("請至少選擇一項要變更的項目（保管人、地點或使用人）。");
+      }
     }
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -655,8 +706,8 @@ function processBatchTransferApplication(formData) {
       }
     });
 
-    // 3️⃣ 解析新保管人姓名
-    const newKeeperName = newKeeperEmail ? (emailToNameMap.get(newKeeperEmail) || newKeeperEmail.split('@')[0]) : null;
+    // 3️⃣ 解析新保管人姓名（✨ 使用 actualNewKeeperEmail）
+    const newKeeperName = actualNewKeeperEmail ? (emailToNameMap.get(actualNewKeeperEmail) || actualNewKeeperEmail.split('@')[0]) : null;
 
     // 4️⃣ 處理使用人Email（使用相同的映射表）
     const userEmailToNameMap = new Map(emailToNameMap); // 複製保管人映射作為基礎
@@ -668,7 +719,8 @@ function processBatchTransferApplication(formData) {
       }
     });
 
-    const finalNewUserName = newUserEmail ? (userEmailToNameMap.get(newUserEmail) || newUserName || newUserEmail.split('@')[0]) : newUserName;
+    // ✨ 使用 actualNewUserEmail 解析使用人姓名
+    const finalNewUserName = actualNewUserEmail ? (userEmailToNameMap.get(actualNewUserEmail) || newUserName || actualNewUserEmail.split('@')[0]) : newUserName;
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
 
     // ✨ 新增：讀取地點映射，用於判斷是否為駐站
@@ -693,19 +745,23 @@ function processBatchTransferApplication(formData) {
           // ✨ 改進：判斷轉移類型並決定需要審核的項目
           const oldUserName = asset.userName || '';
           const oldUserEmail = asset.userEmail || '';
-          const finalNewKeeperEmail = newKeeperEmail || asset.leaderEmail;
+          // ✨ 使用 actualXXX 變量替代原始參數
+          const finalNewKeeperEmail = actualNewKeeperEmail || asset.leaderEmail;
           const finalNewKeeperName = newKeeperName || asset.leaderName;
-          const finalNewLocation = newLocation || asset.location;
-          const finalNewUserEmail = newUserEmail || asset.userEmail || '';
+          const finalNewLocation = actualNewLocation || asset.location;
+          const finalNewUserEmail = actualNewUserEmail || asset.userEmail || '';
           const actualNewUserName = finalNewUserName || asset.userName || '';
-          
-          const isKeeperChange = newKeeperEmail && asset.leaderEmail !== newKeeperEmail;
-          const isLocationChange = newLocation && asset.location !== newLocation;
-          const isUserChange = (newUserEmail && oldUserEmail !== newUserEmail) || (newUserName && oldUserName !== newUserName);
-          
-          // 判斷轉移類型
+
+          // ✨ 使用 actualXXX 變量判斷是否有變更
+          const isKeeperChange = actualNewKeeperEmail && asset.leaderEmail !== actualNewKeeperEmail;
+          const isLocationChange = actualNewLocation && asset.location !== actualNewLocation;
+          const isUserChange = (actualNewUserEmail && oldUserEmail !== actualNewUserEmail) || (newUserName && oldUserName !== newUserName);
+
+          // ✨ 判斷轉移類型（優先使用駐站轉移標記）
           let transferType = '';
-          if (isKeeperChange && isUserChange) {
+          if (actualTransferType === '駐站轉移') {
+            transferType = '駐站轉移'; // 駐站轉移有最高優先級
+          } else if (isKeeperChange && isUserChange) {
             transferType = '保管人+使用人';
           } else if (isKeeperChange) {
             transferType = '保管人';
