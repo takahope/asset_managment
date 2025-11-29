@@ -81,9 +81,23 @@
 
         <hr>
 
-        <!-- ✨ 新增：轉移選項 -->
+        <!-- ✨ 新增：駐站轉移選項 -->
         <div class="form-group">
-            <label><b>請選擇轉移項目：</b></label>
+            <label><b>特殊轉移模式：</b></label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="station-transfer">
+                <label class="form-check-label" for="station-transfer">
+                    <strong>中心轉移給駐站</strong>（同時變更保管人、使用人和地點）
+                </label>
+            </div>
+        </div>
+
+        <hr>
+
+        <!-- ✨ 修改：用 div 包裹原有選項，方便隱藏 -->
+        <div id="regular-transfer-options">
+            <div class="form-group">
+                <label><b>請選擇轉移項目：</b></label>
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="change-location" checked>
                 <label class="form-check-label" for="change-location">變更地點</label>
@@ -96,10 +110,13 @@
                 <input class="form-check-input" type="checkbox" id="change-user">
                 <label class="form-check-label" for="change-user">變更使用人（需審核，僅適用財產總表）</label>
             </div>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label for="keeper-select">新保管人：</label>
+        <!-- ✨ 修改：用 div 包裹原有下拉選單 -->
+        <div id="regular-transfer-selects">
+            <div class="form-group">
+                <label for="keeper-select">新保管人：</label>
             <select class="form-control" id="keeper-select" name="newKeeperEmail">
                 <option value="">請選擇新保管人...</option>
             </select>
@@ -115,12 +132,31 @@
         </div>
 
         <!-- ✨ 新增：使用人選擇 -->
-        <div class="form-group" id="user-select-group" style="display:none;">
-            <label for="user-select">新使用人：</label>
-            <select class="form-control" id="user-select" name="newUserName">
-                <option value="">請選擇新使用人...</option>
-            </select>
-            <small class="form-text text-muted">僅適用於財產總表的資產</small>
+            <div class="form-group" id="user-select-group" style="display:none;">
+                <label for="user-select">新使用人：</label>
+                <select class="form-control" id="user-select" name="newUserName">
+                    <option value="">請選擇新使用人...</option>
+                </select>
+                <small class="form-text text-muted">僅適用於財產總表的資產</small>
+            </div>
+        </div>
+
+        <!-- ✨ 新增：駐站轉移專用下拉選單（預設隱藏）-->
+        <div id="station-transfer-selects" style="display:none;">
+            <div class="form-group">
+                <label for="custodian-select">轉移給駐管：</label>
+                <select class="form-control" id="custodian-select">
+                    <option value="">請選擇駐管...</option>
+                </select>
+                <small class="form-text text-muted">保管人和使用人將同時設為此駐管</small>
+            </div>
+
+            <div class="form-group">
+                <label for="station-location-select">駐站地點：</label>
+                <select class="form-control" id="station-location-select">
+                    <option value="">請選擇駐站地點...</option>
+                </select>
+            </div>
         </div>
 
         <button type="button" class="btn btn-primary" onclick="submitApplication()">提交申請</button>
@@ -163,6 +199,9 @@
             
             // ✨ 新增：轉移選項切換監聽
             document.getElementById('change-user').addEventListener('change', toggleUserSelect);
+
+            // ✨ 新增：駐站轉移模式切換監聽
+            document.getElementById('station-transfer').addEventListener('change', toggleStationTransferMode);
         });
         
         // ✨ 新增：切換使用人選擇框顯示/隱藏
@@ -170,6 +209,47 @@
             const changeUser = document.getElementById('change-user').checked;
             const userSelectGroup = document.getElementById('user-select-group');
             userSelectGroup.style.display = changeUser ? 'block' : 'none';
+        }
+
+        // ✨ 新增：切換駐站轉移模式
+        function toggleStationTransferMode() {
+            const isStationMode = document.getElementById('station-transfer').checked;
+            const regularOptions = document.getElementById('regular-transfer-options');
+            const regularSelects = document.getElementById('regular-transfer-selects');
+            const stationSelects = document.getElementById('station-transfer-selects');
+
+            if (isStationMode) {
+                // 切換到駐站模式：隱藏一般選項，顯示駐站選項
+                regularOptions.style.display = 'none';
+                regularSelects.style.display = 'none';
+                stationSelects.style.display = 'block';
+
+                // 取消勾選一般選項
+                document.getElementById('change-location').checked = false;
+                document.getElementById('change-keeper').checked = false;
+                document.getElementById('change-user').checked = false;
+
+                // 清空一般下拉選單的選擇
+                document.getElementById('keeper-select').value = '';
+                document.getElementById('location-select').value = '';
+                document.getElementById('user-select').value = '';
+
+                // 隱藏使用人選擇框
+                document.getElementById('user-select-group').style.display = 'none';
+            } else {
+                // 切換回一般模式：顯示一般選項，隱藏駐站選項
+                regularOptions.style.display = 'block';
+                regularSelects.style.display = 'block';
+                stationSelects.style.display = 'none';
+
+                // 恢復預設勾選
+                document.getElementById('change-location').checked = true;
+                document.getElementById('change-keeper').checked = true;
+
+                // 清空駐站下拉選單的選擇
+                document.getElementById('custodian-select').value = '';
+                document.getElementById('station-location-select').value = '';
+            }
         }
 
         function simulateProgress() {
@@ -261,6 +341,42 @@
                 option.textContent = displayName;
                 userSelect.appendChild(option);
             });
+
+            // ✨ 新增：填充駐管下拉選單
+            const custodianSelect = document.getElementById('custodian-select');
+            const custodians = data.custodians || {};
+            const custodianEntries = Object.entries(custodians)
+                .map(([email, name]) => ({ email, name }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+
+            if (custodianEntries.length === 0) {
+                custodianSelect.innerHTML = '<option value="">目前沒有駐管資料</option>';
+                custodianSelect.disabled = true;
+            } else {
+                custodianEntries.forEach(custodian => {
+                    const option = document.createElement('option');
+                    option.value = custodian.email;
+                    const displayName = (custodian.email === data.userEmail) ? `${custodian.name} (自己)` : custodian.name;
+                    option.textContent = displayName;
+                    custodianSelect.appendChild(option);
+                });
+            }
+
+            // ✨ 新增：填充駐站地點下拉選單
+            const stationLocationSelect = document.getElementById('station-location-select');
+            const stationLocations = data.stationLocations || [];
+
+            if (stationLocations.length === 0) {
+                stationLocationSelect.innerHTML = '<option value="">目前沒有駐站地點資料</option>';
+                stationLocationSelect.disabled = true;
+            } else {
+                stationLocations.forEach(loc => {
+                    const option = document.createElement('option');
+                    option.value = loc;
+                    option.textContent = loc;
+                    stationLocationSelect.appendChild(option);
+                });
+            }
         }
 
         // ✨ **核心修改：此函式負責顯示特定頁面的內容和分頁控制項**
@@ -395,58 +511,90 @@
             const locationSelect = document.getElementById('location-select');
             const userSelect = document.getElementById('user-select');
             const statusMsg = document.getElementById('status-message');
-            
-            // ✨ 新增：檢查轉移選項
-            const changeLocation = document.getElementById('change-location').checked;
-            const changeKeeper = document.getElementById('change-keeper').checked;
-            const changeUser = document.getElementById('change-user').checked;
-            
-            // 驗證：至少要選擇一項變更
-            if (!changeLocation && !changeKeeper && !changeUser) {
-                statusMsg.className = 'alert alert-warning';
-                statusMsg.textContent = '請至少選擇一項要變更的項目！';
-                return;
-            }
-            
+
+            // ✨ 新增：檢查是否為駐站轉移模式
+            const isStationTransfer = document.getElementById('station-transfer').checked;
+
             // 驗證：至少要勾選一筆財產
             if (selectedAssets.length === 0) {
                 statusMsg.className = 'alert alert-warning';
                 statusMsg.textContent = '請至少勾選一筆財產！';
                 return;
             }
-            
-            // 驗證：如果要變更保管人，必須選擇新保管人
-            if (changeKeeper && !keeperSelect.value) {
-                statusMsg.className = 'alert alert-warning';
-                statusMsg.textContent = '您選擇了變更保管人，請選擇新保管人！';
-                return;
+
+            let formData;
+
+            if (isStationTransfer) {
+                // ✨ 駐站轉移模式的驗證
+                const custodianEmail = document.getElementById('custodian-select').value;
+                const stationLocation = document.getElementById('station-location-select').value;
+
+                if (!custodianEmail) {
+                    statusMsg.className = 'alert alert-warning';
+                    statusMsg.textContent = '請選擇駐管！';
+                    return;
+                }
+
+                if (!stationLocation) {
+                    statusMsg.className = 'alert alert-warning';
+                    statusMsg.textContent = '請選擇駐站地點！';
+                    return;
+                }
+
+                // ✨ 駐站轉移模式的 formData
+                formData = {
+                    assetIds: selectedAssets,
+                    isStationTransfer: true,
+                    custodianEmail: custodianEmail,
+                    stationLocation: stationLocation
+                };
+            } else {
+                // 一般轉移模式的驗證
+                const changeLocation = document.getElementById('change-location').checked;
+                const changeKeeper = document.getElementById('change-keeper').checked;
+                const changeUser = document.getElementById('change-user').checked;
+
+                // 驗證：至少要選擇一項變更
+                if (!changeLocation && !changeKeeper && !changeUser) {
+                    statusMsg.className = 'alert alert-warning';
+                    statusMsg.textContent = '請至少選擇一項要變更的項目！';
+                    return;
+                }
+
+                // 驗證：如果要變更保管人，必須選擇新保管人
+                if (changeKeeper && !keeperSelect.value) {
+                    statusMsg.className = 'alert alert-warning';
+                    statusMsg.textContent = '您選擇了變更保管人，請選擇新保管人！';
+                    return;
+                }
+
+                // 驗證：如果要變更地點，必須選擇新地點
+                if (changeLocation && !locationSelect.value) {
+                    statusMsg.className = 'alert alert-warning';
+                    statusMsg.textContent = '您選擇了變更地點，請選擇新地點！';
+                    return;
+                }
+
+                // 驗證：如果要變更使用人，必須選擇新使用人
+                if (changeUser && !userSelect.value) {
+                    statusMsg.className = 'alert alert-warning';
+                    statusMsg.textContent = '您選擇了變更使用人，請選擇新使用人！';
+                    return;
+                }
+
+                // 一般轉移模式的 formData
+                formData = {
+                    assetIds: selectedAssets,
+                    newKeeperEmail: changeKeeper ? keeperSelect.value : null,
+                    newLocation: changeLocation ? locationSelect.value : null,
+                    newUserEmail: changeUser ? userSelect.value : null
+                };
             }
-            
-            // 驗證：如果要變更地點，必須選擇新地點
-            if (changeLocation && !locationSelect.value) {
-                statusMsg.className = 'alert alert-warning';
-                statusMsg.textContent = '您選擇了變更地點，請選擇新地點！';
-                return;
-            }
-            
-            // 驗證：如果要變更使用人，必須選擇新使用人
-            if (changeUser && !userSelect.value) {
-                statusMsg.className = 'alert alert-warning';
-                statusMsg.textContent = '您選擇了變更使用人，請選擇新使用人！';
-                return;
-            }
-            
+
             document.getElementById('main-form').style.display = 'none';
             document.getElementById('loading-spinner').style.display = 'block';
             statusMsg.textContent = '';
-            
-            const formData = { 
-                assetIds: selectedAssets, 
-                newKeeperEmail: changeKeeper ? keeperSelect.value : null,
-                newLocation: changeLocation ? locationSelect.value : null,
-                newUserEmail: changeUser ? userSelect.value : null // ✨ 改為傳送Email
-            };
-            
+
             google.script.run.withSuccessHandler(showSuccessAndClose).withFailureHandler(showError).processBatchTransferApplication(formData);
         }
         function showSuccessAndClose(message) {
