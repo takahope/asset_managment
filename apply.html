@@ -81,14 +81,38 @@
 
         <hr>
 
-        <!-- ✨ 新增：駐站轉移選項 -->
+        <!-- ✨ 修改：特殊轉移模式選擇（三個互斥選項）-->
         <div class="form-group">
             <label><b>特殊轉移模式：</b></label>
+
+            <!-- 選項1：中心轉移給駐站（現有）-->
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="station-transfer">
+                <input class="form-check-input special-transfer-mode" type="checkbox" id="station-transfer">
                 <label class="form-check-label" for="station-transfer">
                     <strong>中心轉移給駐站</strong>（同時變更保管人、使用人和地點）
                 </label>
+            </div>
+
+            <!-- ✨ 新增：選項2：駐站回送中心資訊組 -->
+            <div class="form-check">
+                <input class="form-check-input special-transfer-mode" type="checkbox" id="info-transfer">
+                <label class="form-check-label" for="info-transfer">
+                    <strong>駐站回送中心資訊組</strong>
+                </label>
+                <small class="form-text text-muted" id="info-transfer-hint" style="display:none; color:red;">
+                    目前資料不完整，無法使用此功能
+                </small>
+            </div>
+
+            <!-- ✨ 新增：選項3：駐站回送中心收案組 -->
+            <div class="form-check">
+                <input class="form-check-input special-transfer-mode" type="checkbox" id="intake-transfer">
+                <label class="form-check-label" for="intake-transfer">
+                    <strong>駐站回送中心收案組</strong>
+                </label>
+                <small class="form-text text-muted" id="intake-transfer-hint" style="display:none; color:red;">
+                    目前資料不完整，無法使用此功能
+                </small>
             </div>
         </div>
 
@@ -200,8 +224,10 @@
             // ✨ 新增：轉移選項切換監聽
             document.getElementById('change-user').addEventListener('change', toggleUserSelect);
 
-            // ✨ 新增：駐站轉移模式切換監聽
-            document.getElementById('station-transfer').addEventListener('change', toggleStationTransferMode);
+            // ✨ 修改：為所有特殊轉移模式 checkbox 添加互斥監聽
+            document.querySelectorAll('.special-transfer-mode').forEach(checkbox => {
+                checkbox.addEventListener('change', handleSpecialTransferModeChange);
+            });
         });
         
         // ✨ 新增：切換使用人選擇框顯示/隱藏
@@ -211,33 +237,48 @@
             userSelectGroup.style.display = changeUser ? 'block' : 'none';
         }
 
-        // ✨ 新增：切換駐站轉移模式
-        function toggleStationTransferMode() {
+        // ✨ 新增：處理特殊轉移模式的互斥選擇
+        function handleSpecialTransferModeChange(event) {
+            const selectedCheckbox = event.target;
+
+            // 如果當前 checkbox 被勾選，取消其他 checkbox
+            if (selectedCheckbox.checked) {
+                document.querySelectorAll('.special-transfer-mode').forEach(cb => {
+                    if (cb !== selectedCheckbox) {
+                        cb.checked = false;
+                    }
+                });
+            }
+
+            // 根據選擇的模式切換 UI
             const isStationMode = document.getElementById('station-transfer').checked;
+            const isInfoMode = document.getElementById('info-transfer').checked;
+            const isIntakeMode = document.getElementById('intake-transfer').checked;
+
             const regularOptions = document.getElementById('regular-transfer-options');
             const regularSelects = document.getElementById('regular-transfer-selects');
             const stationSelects = document.getElementById('station-transfer-selects');
 
-            if (isStationMode) {
-                // 切換到駐站模式：隱藏一般選項，顯示駐站選項
+            if (isStationMode || isInfoMode || isIntakeMode) {
+                // 任一特殊模式：隱藏一般選項
                 regularOptions.style.display = 'none';
                 regularSelects.style.display = 'none';
-                stationSelects.style.display = 'block';
 
                 // 取消勾選一般選項
                 document.getElementById('change-location').checked = false;
                 document.getElementById('change-keeper').checked = false;
                 document.getElementById('change-user').checked = false;
 
-                // 清空一般下拉選單的選擇
+                // 清空一般下拉選單
                 document.getElementById('keeper-select').value = '';
                 document.getElementById('location-select').value = '';
                 document.getElementById('user-select').value = '';
-
-                // 隱藏使用人選擇框
                 document.getElementById('user-select-group').style.display = 'none';
+
+                // 駐站模式才顯示下拉選單，其他模式不顯示（因為是自動指定）
+                stationSelects.style.display = isStationMode ? 'block' : 'none';
             } else {
-                // 切換回一般模式：顯示一般選項，隱藏駐站選項
+                // 一般模式：恢復原狀
                 regularOptions.style.display = 'block';
                 regularSelects.style.display = 'block';
                 stationSelects.style.display = 'none';
@@ -246,7 +287,7 @@
                 document.getElementById('change-location').checked = true;
                 document.getElementById('change-keeper').checked = true;
 
-                // 清空駐站下拉選單的選擇
+                // 清空駐站下拉選單
                 document.getElementById('custodian-select').value = '';
                 document.getElementById('station-location-select').value = '';
             }
@@ -294,8 +335,11 @@
         }
 
         function populateForm(data) {
+            // ✨ 儲存資料供提交時使用
+            window.transferData = data;
+
             allAssets = data.assets;
-            filteredAssets = allAssets; 
+            filteredAssets = allAssets;
 
             if (!allAssets || allAssets.length === 0) {
                 // If no assets, show error and return. onDataError already handles hiding loader.
@@ -376,6 +420,26 @@
                     option.textContent = loc;
                     stationLocationSelect.appendChild(option);
                 });
+            }
+
+            // ✨ 新增：驗證資訊組模式資料完整性
+            const infoTransferCheckbox = document.getElementById('info-transfer');
+            const infoTransferHint = document.getElementById('info-transfer-hint');
+
+            if (!data.infoCustodian || !data.infoUser || !data.infoLocation) {
+                // 資料不完整，禁用選項
+                infoTransferCheckbox.disabled = true;
+                infoTransferHint.style.display = 'block';
+            }
+
+            // ✨ 新增：驗證收案組模式資料完整性
+            const intakeTransferCheckbox = document.getElementById('intake-transfer');
+            const intakeTransferHint = document.getElementById('intake-transfer-hint');
+
+            if (!data.intakeCustodian || !data.intakeLocation) {
+                // 資料不完整，禁用選項
+                intakeTransferCheckbox.disabled = true;
+                intakeTransferHint.style.display = 'block';
             }
         }
 
@@ -512,8 +576,10 @@
             const userSelect = document.getElementById('user-select');
             const statusMsg = document.getElementById('status-message');
 
-            // ✨ 新增：檢查是否為駐站轉移模式
+            // ✨ 新增：檢查是哪種特殊轉移模式
             const isStationTransfer = document.getElementById('station-transfer').checked;
+            const isInfoTransfer = document.getElementById('info-transfer').checked;
+            const isIntakeTransfer = document.getElementById('intake-transfer').checked;
 
             // 驗證：至少要勾選一筆財產
             if (selectedAssets.length === 0) {
@@ -547,6 +613,46 @@
                     isStationTransfer: true,
                     custodianEmail: custodianEmail,
                     stationLocation: stationLocation
+                };
+            } else if (isInfoTransfer) {
+                // ✨ 資訊組轉移模式
+                // 從後端資料中取得強制指定的值（已在 populateForm 時儲存）
+                const infoCustodianEmail = window.transferData.infoCustodian
+                    ? Object.keys(window.transferData.infoCustodian)[0] : null;
+                const infoUserEmail = window.transferData.infoUser
+                    ? Object.keys(window.transferData.infoUser)[0] : null;
+                const infoLocation = window.transferData.infoLocation;
+
+                if (!infoCustodianEmail || !infoUserEmail || !infoLocation) {
+                    statusMsg.className = 'alert alert-danger';
+                    statusMsg.textContent = '資訊組轉移資料不完整！';
+                    return;
+                }
+
+                formData = {
+                    assetIds: selectedAssets,
+                    isInfoTransfer: true,
+                    infoCustodianEmail: infoCustodianEmail,
+                    infoUserEmail: infoUserEmail,
+                    infoLocation: infoLocation
+                };
+            } else if (isIntakeTransfer) {
+                // ✨ 收案組轉移模式
+                const intakeCustodianEmail = window.transferData.intakeCustodian
+                    ? Object.keys(window.transferData.intakeCustodian)[0] : null;
+                const intakeLocation = window.transferData.intakeLocation;
+
+                if (!intakeCustodianEmail || !intakeLocation) {
+                    statusMsg.className = 'alert alert-danger';
+                    statusMsg.textContent = '收案組轉移資料不完整！';
+                    return;
+                }
+
+                formData = {
+                    assetIds: selectedAssets,
+                    isIntakeTransfer: true,
+                    intakeCustodianEmail: intakeCustodianEmail,
+                    intakeLocation: intakeLocation
                 };
             } else {
                 // 一般轉移模式的驗證

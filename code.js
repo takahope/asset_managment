@@ -574,16 +574,22 @@ function getTransferData() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
 
-  // 讀取保管人資料（A欄：姓名，B欄：Email，C欄：是否為駐管）
+  // 讀取保管人資料（A欄：姓名，B欄：Email，C欄：是否為駐管，D欄：資訊組保管人，E欄：資訊組使用人，F欄：收案組保管＆使用人）
   // 假設第1行是標題，從第2行開始讀取
-  const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 3).getValues();
+  const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 6).getValues();
   const uniqueKeepersMap = new Map();
-  const custodianMap = new Map(); // ✨ 新增：駐管專用 Map
+  const custodianMap = new Map(); // ✨ 駐管專用 Map
+  const infoCustodianMap = new Map(); // ✨ 新增：資訊組保管人 Map
+  const infoUserMap = new Map(); // ✨ 新增：資訊組使用人 Map
+  const intakeCustodianMap = new Map(); // ✨ 新增：收案組保管＆使用人 Map
 
   keeperData.forEach(row => {
     const name = row[0];  // A欄：姓名
     const email = row[1]; // B欄：Email
     const isCustodian = row[2]; // C欄：是否為駐管
+    const isInfoCustodian = row[3]; // D欄：資訊組駐站資產保管人
+    const isInfoUser = row[4]; // E欄：資訊組駐站資產使用人
+    const isIntakeCustodian = row[5]; // F欄：駐站轉中心收案組保管＆使用人
 
     if (name && email) {
       uniqueKeepersMap.set(email, name);
@@ -592,17 +598,44 @@ function getTransferData() {
       if (isCustodian === '是') {
         custodianMap.set(email, name);
       }
+
+      // ✨ 如果 D 欄為「是」，加入資訊組保管人列表
+      if (isInfoCustodian === '是') {
+        infoCustodianMap.set(email, name);
+      }
+
+      // ✨ 如果 E 欄為「是」，加入資訊組使用人列表
+      if (isInfoUser === '是') {
+        infoUserMap.set(email, name);
+      }
+
+      // ✨ 如果 F 欄為「是」，加入收案組保管＆使用人列表
+      if (isIntakeCustodian === '是') {
+        intakeCustodianMap.set(email, name);
+      }
     }
   });
 
-  // 從「存置地點列表」工作表讀取地點清單（A欄：地點名稱，B欄：是否為駐站）
+  // 從「存置地點列表」工作表讀取地點清單（A欄：地點名稱，B欄：是否為駐站，C欄：駐站轉資訊組，D欄：駐站轉中心收案）
   const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 2).getValues();
+  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
   const locationList = locationData.map(row => row[0]).filter(loc => loc); // 過濾空值
 
-  // ✨ 新增：篩選出駐站地點
+  // ✨ 篩選出駐站地點
   const stationLocationList = locationData
     .filter(row => row[1] === '是') // B欄為「是」
+    .map(row => row[0])
+    .filter(loc => loc);
+
+  // ✨ 新增：篩選出資訊組地點
+  const infoLocationList = locationData
+    .filter(row => row[2] === '是') // C欄為「是」
+    .map(row => row[0])
+    .filter(loc => loc);
+
+  // ✨ 新增：篩選出收案組地點
+  const intakeLocationList = locationData
+    .filter(row => row[3] === '是') // D欄為「是」
     .map(row => row[0])
     .filter(loc => loc);
 
@@ -631,8 +664,15 @@ function getTransferData() {
     keepers: keepers,
     users: users,
     locations: locations,
-    custodians: custodians,           // ✨ 新增：駐管列表
-    stationLocations: stationLocationList // ✨ 新增：駐站地點列表
+    custodians: custodians,           // ✨ 駐管列表
+    stationLocations: stationLocationList, // ✨ 駐站地點列表
+    // ✨ 新增：資訊組相關資料
+    infoCustodian: infoCustodianMap.size > 0 ? Object.fromEntries(infoCustodianMap) : null,
+    infoUser: infoUserMap.size > 0 ? Object.fromEntries(infoUserMap) : null,
+    infoLocation: infoLocationList.length > 0 ? infoLocationList[0] : null,
+    // ✨ 新增：收案組相關資料
+    intakeCustodian: intakeCustodianMap.size > 0 ? Object.fromEntries(intakeCustodianMap) : null,
+    intakeLocation: intakeLocationList.length > 0 ? intakeLocationList[0] : null
   };
 }
 
@@ -648,9 +688,18 @@ function processBatchTransferApplication(formData) {
       newLocation,
       newUserName,
       newUserEmail,
-      isStationTransfer,  // ✨ 新增：是否為駐站轉移
-      custodianEmail,     // ✨ 新增：駐管 Email
-      stationLocation     // ✨ 新增：駐站地點
+      isStationTransfer,  // ✨ 是否為駐站轉移
+      custodianEmail,     // ✨ 駐管 Email
+      stationLocation,    // ✨ 駐站地點
+      // ✨ 新增：資訊組模式
+      isInfoTransfer,     // 是否為「駐站回送中心資訊組」
+      infoCustodianEmail, // 資訊組保管人 Email
+      infoUserEmail,      // 資訊組使用人 Email
+      infoLocation,       // 資訊組地點
+      // ✨ 新增：收案組模式
+      isIntakeTransfer,   // 是否為「駐站回送中心收案組」
+      intakeCustodianEmail, // 收案組保管人 Email（同時也是使用人）
+      intakeLocation      // 收案組地點
     } = formData;
     
     // ✨ 改進：支援選擇性參數（可以只變更其中一項）
@@ -674,6 +723,28 @@ function processBatchTransferApplication(formData) {
       // 驗證必要參數
       if (!custodianEmail || !stationLocation) {
         throw new Error("駐站轉移需要選擇駐管和駐站地點。");
+      }
+    } else if (isInfoTransfer) {
+      // ✨ 資訊組模式：保管人和使用人分別指定
+      actualNewKeeperEmail = infoCustodianEmail;
+      actualNewUserEmail = infoUserEmail;
+      actualNewLocation = infoLocation;
+      actualTransferType = '駐站回送資訊組';
+
+      // 驗證必要參數
+      if (!infoCustodianEmail || !infoUserEmail || !infoLocation) {
+        throw new Error("資訊組轉移需要完整的保管人、使用人和地點資料。");
+      }
+    } else if (isIntakeTransfer) {
+      // ✨ 收案組模式：保管人和使用人為同一人
+      actualNewKeeperEmail = intakeCustodianEmail;
+      actualNewUserEmail = intakeCustodianEmail; // 同一人
+      actualNewLocation = intakeLocation;
+      actualTransferType = '駐站回送收案組';
+
+      // 驗證必要參數
+      if (!intakeCustodianEmail || !intakeLocation) {
+        throw new Error("收案組轉移需要完整的保管人和地點資料。");
       }
     } else {
       // 一般轉移模式驗證
