@@ -1,19 +1,132 @@
 <style>
-  .portal-nav {
-    padding: 8px 15px;
-    background-color: #e9ecef;
-    border-radius: 8px;
-    margin-bottom: 25px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .portal-nav-brand {
-    font-weight: 600;
-    color: #495057;
+  /* --- CSS Custom Properties (主題變數) --- */
+  :root {
+    --sidebar-width-collapsed: 64px;
+    --sidebar-width-expanded: 240px;
+    --sidebar-bg: #ffffff;
+    --sidebar-hover-bg: #f8f9fa;
+    --sidebar-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+    --primary-color: #0d6efd;
+    --transition-speed: 0.3s;
   }
 
-  /* 轉跳動畫相關樣式 */
+  /* 為側邊欄預留空間 */
+  body {
+    padding-left: var(--sidebar-width-collapsed);
+    transition: padding-left var(--transition-speed) ease;
+  }
+
+  /* --- 側邊欄核心容器 --- */
+  .portal-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: var(--sidebar-width-collapsed);
+    background-color: var(--sidebar-bg);
+    box-shadow: var(--sidebar-shadow);
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0;
+    z-index: 1000;
+    transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+  }
+
+  /* 滑鼠懸停時展開 */
+  .portal-sidebar:hover {
+    width: var(--sidebar-width-expanded);
+  }
+
+  /* --- 品牌區塊 --- */
+  .sidebar-brand {
+    height: 50px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    margin-bottom: 20px;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: #333;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: all 0.2s ease;
+  }
+
+  /* 展開時顯示品牌名稱 */
+  .portal-sidebar:hover .sidebar-brand {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* --- 導覽按鈕 (Ghost Button 風格) --- */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 48px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #555;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.2s, color 0.2s;
+    outline: none;
+    position: relative;
+  }
+
+  .nav-item:hover {
+    background-color: var(--sidebar-hover-bg);
+    color: var(--primary-color);
+  }
+
+  .nav-item:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* 圖示區域 - 永遠顯示 */
+  .nav-icon {
+    min-width: var(--sidebar-width-collapsed);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+  }
+
+  /* 文字標籤 - 收合時隱藏 */
+  .nav-text {
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  /* 展開時顯示文字 (延遲 50ms 防止閃爍) */
+  .portal-sidebar:hover .nav-text {
+    opacity: 1;
+    transform: translateX(0);
+    transition-delay: 0.05s;
+  }
+
+  /* 分隔線 */
+  .nav-divider {
+    height: 1px;
+    background-color: #eee;
+    margin: 8px 0;
+    width: 100%;
+  }
+
+  /* 底部功能區推到最下方 */
+  .mt-auto {
+    margin-top: auto;
+  }
+
+  /* --- 轉跳載入動畫 (毛玻璃效果) --- */
   @keyframes nav-spinner-spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
@@ -25,7 +138,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
     display: none;
     flex-direction: column;
     justify-content: center;
@@ -38,66 +152,145 @@
   }
 
   .nav-spinner {
-    border: 6px solid #f3f3f3;
-    border-top: 6px solid #007bff;
+    border: 4px solid #e9ecef;
+    border-top: 4px solid var(--primary-color);
     border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: nav-spinner-spin 1s linear infinite;
+    width: 40px;
+    height: 40px;
+    animation: nav-spinner-spin 0.8s linear infinite;
   }
 
   .nav-loader-text {
-    color: white;
-    font-size: 1.1rem;
-    margin-top: 20px;
+    color: #495057;
+    font-size: 1rem;
+    margin-top: 16px;
     font-weight: 500;
+  }
+
+  /* --- 手機版適配 (RWD) --- */
+  @media (max-width: 768px) {
+    body {
+      padding-left: 0;
+      padding-bottom: 60px;
+    }
+
+    .portal-sidebar {
+      top: auto;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      flex-direction: row;
+      padding: 0;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+      justify-content: space-around;
+      overflow-x: auto;
+    }
+
+    .portal-sidebar:hover {
+      width: 100%;
+    }
+
+    .sidebar-brand, .nav-text {
+      display: none;
+    }
+
+    .nav-item {
+      flex-direction: column;
+      height: 100%;
+      width: auto;
+      min-width: 60px;
+    }
+
+    .nav-icon {
+      min-width: auto;
+      width: 100%;
+      height: 100%;
+    }
+
+    .mt-auto {
+      margin-top: 0;
+    }
+
+    .nav-divider {
+      display: none;
+    }
   }
 </style>
 
-<div class="portal-nav">
-  <span class="portal-nav-brand">財產管理</span>
-   <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goToApply()">
-      ➡️ 轉移
-    </button>
-  <button type="button" class="btn btn-sm btn-outline-primary" onclick="goToReview()">
-      ✔️ 接收
-    </button>
-  
-   <button type="button" class="btn btn-sm btn-outline-info" onclick="goToLending()">
-      📤 出借
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-success" onclick="goToReturn()">
-      📥 歸還
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="goToScrap()">
-      🗑️ 報廢
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="goToprintScrap()">
-      🖨️ 列印報廢申請
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-success" onclick="goToPrintTransfer()">
-      🖨️ 列印轉移記錄
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-info" onclick="goToUserState()">
-      📊 狀態
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-dark" onclick="goToUpdate()">
-      ⚙️ 更新
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goToPortal()">
-    &#8617; 返回入口
+<nav class="portal-sidebar" id="portalSidebar">
+  <!-- 品牌標題 (展開時顯示) -->
+  <div class="sidebar-brand">
+    🏢 財產管理系統
+  </div>
+
+  <!-- 主要操作區 -->
+  <button type="button" class="nav-item" onclick="goToApply()" title="轉移申請">
+    <span class="nav-icon">➡️</span>
+    <span class="nav-text">轉移申請</span>
   </button>
-</div>
+
+  <button type="button" class="nav-item" onclick="goToReview()" title="接收確認">
+    <span class="nav-icon">✔️</span>
+    <span class="nav-text">接收確認</span>
+  </button>
+
+  <button type="button" class="nav-item" onclick="goToLending()" title="資產出借">
+    <span class="nav-icon">📤</span>
+    <span class="nav-text">資產出借</span>
+  </button>
+
+  <button type="button" class="nav-item" onclick="goToReturn()" title="資產歸還">
+    <span class="nav-icon">📥</span>
+    <span class="nav-text">資產歸還</span>
+  </button>
+
+  <button type="button" class="nav-item" onclick="goToScrap()" title="資產報廢">
+    <span class="nav-icon">🗑️</span>
+    <span class="nav-text">資產報廢</span>
+  </button>
+
+  <div class="nav-divider"></div>
+
+  <!-- 報表與狀態查詢區 -->
+  <button type="button" class="nav-item" onclick="goToUserState()" title="我的狀態">
+    <span class="nav-icon">📊</span>
+    <span class="nav-text">我的狀態</span>
+  </button>
+
+  <button type="button" class="nav-item" onclick="goToprintScrap()" title="列印報廢單">
+    <span class="nav-icon">🖨️</span>
+    <span class="nav-text">列印報廢單</span>
+  </button>
+
+  <button type="button" class="nav-item" onclick="goToPrintTransfer()" title="列印轉移單">
+    <span class="nav-icon">🖨️</span>
+    <span class="nav-text">列印轉移單</span>
+  </button>
+
+  <!-- 底部系統功能區 -->
+  <div class="mt-auto">
+    <div class="nav-divider"></div>
+    <button type="button" class="nav-item" onclick="goToUpdate()" title="系統更新">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-text">系統更新</span>
+    </button>
+    <button type="button" class="nav-item" onclick="goToPortal()" title="返回入口">
+      <span class="nav-icon">↩️</span>
+      <span class="nav-text">返回入口</span>
+    </button>
+  </div>
+</nav>
 
 <!-- 全螢幕轉跳載入動畫遮罩 -->
 <div id="nav-loader-overlay" class="nav-loader-overlay">
   <div class="nav-spinner"></div>
-  <div class="nav-loader-text">正在轉跳，請稍候...</div>
+  <div class="nav-loader-text">正在轉跳,請稍候...</div>
 </div>
 
 <script>
-  // 這個小腳本會被嵌入到所有頁面，提供 goToPortal 功能
-  let _portalWebAppUrl = ''; // 使用底線避免與頁面自身變數衝突
+  // 全域變數：Portal Web App URL (使用底線避免衝突)
+  let _portalWebAppUrl = '';
 
   /**
    * 統一的導覽轉跳函數（帶載入動畫）
@@ -111,7 +304,7 @@
     }
 
     // 禁用所有導覽按鈕，防止重複點擊
-    const navButtons = document.querySelectorAll('.portal-nav button');
+    const navButtons = document.querySelectorAll('.nav-item');
     navButtons.forEach(btn => {
       btn.disabled = true;
       btn.style.opacity = '0.6';
@@ -119,7 +312,6 @@
     });
 
     // 執行頁面轉跳
-    // 使用 setTimeout 確保動畫已經顯示
     setTimeout(() => {
       // ⚠️ 重要：必須使用 window.open(url, '_top') 而非 window.location.href
       // 原因：Google Apps Script Web App 可能在 iframe 中運行
@@ -140,7 +332,6 @@
     }
   }
 
-  // ✨ **新增：前往 apply.html 的函式** ✨
   function goToApply() {
     if (_portalWebAppUrl) {
       const applyUrl = _portalWebAppUrl + '?page=apply';
@@ -150,7 +341,6 @@
     }
   }
 
-  // ✨ **新增：前往 review.html 的函式** ✨
   function goToReview() {
     if (_portalWebAppUrl) {
       const reviewUrl = _portalWebAppUrl + '?page=review';
@@ -160,7 +350,6 @@
     }
   }
 
-  // ✨ **新增：前往 lending.html 的函式** ✨
   function goToLending() {
     if (_portalWebAppUrl) {
       const lendingUrl = _portalWebAppUrl + '?page=lending';
@@ -170,7 +359,6 @@
     }
   }
 
-  // ✨ **新增：前往 return.html 的函式** ✨
   function goToReturn() {
     if (_portalWebAppUrl) {
       const returnUrl = _portalWebAppUrl + '?page=return';
@@ -180,7 +368,6 @@
     }
   }
 
-  // ✨ **新增：前往 scrap.html 的函式** ✨
   function goToScrap() {
     if (_portalWebAppUrl) {
       const scrapUrl = _portalWebAppUrl + '?page=scrap';
@@ -190,7 +377,6 @@
     }
   }
 
-  // ✨ **新增：前往 printScrap.html 的函式** ✨
   function goToprintScrap() {
     if (_portalWebAppUrl) {
       const printScrapUrl = _portalWebAppUrl + '?page=printScrap';
@@ -200,7 +386,6 @@
     }
   }
 
-  // ✨ **新增：前往 printTransfer.html 的函式** ✨
   function goToPrintTransfer() {
     if (_portalWebAppUrl) {
       const printTransferUrl = _portalWebAppUrl + '?page=printTransfer';
@@ -210,7 +395,6 @@
     }
   }
 
-  // ✨ **新增：前往 update.html 的函式** ✨
   function goToUpdate() {
     if (_portalWebAppUrl) {
       const updateUrl = _portalWebAppUrl + '?page=update';
