@@ -211,9 +211,26 @@
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
             google.script.run
                 .withSuccessHandler(result => {
-                    showMessage(`已成功為 ${keeperName} 產生轉移報表！`, 'alert-success');
-                    loadData(); // 重新載入資料
+                    // 先詢問是否標記為已上傳
+                    const shouldUpdate = confirm(
+                        '📄 轉移記錄產生成功！\n\n' +
+                        '❓ 是否要標記這些轉移為「已上傳」？\n\n' +
+                        `✅ 確認：標記 ${result.assetIds.length} 筆轉移記錄為已上傳\n` +
+                        '⚠️  提醒：標記後，這些記錄將不會再出現在待列印清單中\n\n' +
+                        '❌ 取消：僅開啟文件，不標記狀態'
+                    );
+
+                    // 再開啟文件
                     window.open(result.fileUrl, '_blank');
+
+                    if (shouldUpdate) {
+                        updateTransferStatus(result.assetIds, keeperName, btn);
+                    } else {
+                        showMessage(`📄 已成功為 ${keeperName} 產生轉移報表（未標記上傳）`, 'alert-info');
+                        loadData();
+                        btn.disabled = false;
+                        btn.textContent = '產生報表';
+                    }
                 })
                 .withFailureHandler(error => {
                     showError(error);
@@ -239,11 +256,26 @@
                     const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
                     google.script.run
                         .withSuccessHandler(result => {
-                            showMessage(`已成功產生彙總報表！`, 'alert-success');
-                            loadData(); // 重新載入資料
+                            // 先詢問是否標記為已上傳
+                            const shouldUpdate = confirm(
+                                '📄 彙總轉移記錄產生成功！\n\n' +
+                                '❓ 是否要標記這些轉移為「已上傳」？\n\n' +
+                                `✅ 確認：標記 ${result.assetIds.length} 筆轉移記錄為已上傳\n` +
+                                '⚠️  提醒：標記後，這些記錄將不會再出現在待列印清單中\n\n' +
+                                '❌ 取消：僅開啟文件，不標記狀態'
+                            );
+
+                            // 再開啟文件
                             window.open(result.fileUrl, '_blank');
-                            btn.disabled = false;
-                            btn.textContent = '產生彙總報表';
+
+                            if (shouldUpdate) {
+                                updateTransferStatus(result.assetIds, adminName, btn);
+                            } else {
+                                showMessage(`📄 已成功產生彙總轉移報表（未標記上傳）`, 'alert-info');
+                                loadData();
+                                btn.disabled = false;
+                                btn.textContent = '產生彙總報表';
+                            }
                         })
                         .withFailureHandler(error => {
                             showError(error);
@@ -258,6 +290,52 @@
                     btn.textContent = '產生彙總報表';
                 })
                 .getAdminName();
+        }
+
+        /**
+         * 標記轉移記錄為「已上傳」
+         * @param {Array<string>} assetIds - 要標記的資產ID陣列
+         * @param {string} userName - 操作者名稱
+         * @param {HTMLElement} btn - 按鈕元素
+         */
+        function updateTransferStatus(assetIds, userName, btn) {
+            if (!assetIds || assetIds.length === 0) {
+                showMessage('❌ 無法更新：資產ID列表為空', 'alert-danger');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = btn.classList.contains('btn-success') ? '產生彙總報表' : '產生報表';
+                }
+                return;
+            }
+
+            // 顯示更新狀態
+            if (btn) {
+                btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> 更新中`;
+            }
+
+            google.script.run
+                .withSuccessHandler(message => {
+                    showMessage(`✅ ${message}`, 'alert-success');
+                    loadData();
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = btn.classList.contains('btn-success') ? '產生彙總報表' : '產生報表';
+                    }
+                })
+                .withFailureHandler(error => {
+                    showMessage(
+                        '❌ 狀態更新失敗：' + error.message + '\n' +
+                        '⚠️  文件已成功產生，但未標記為已上傳。\n' +
+                        '💡 請稍後使用「管理後台」手動更新狀態。',
+                        'alert-warning'
+                    );
+                    loadData();
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = btn.classList.contains('btn-success') ? '產生彙總報表' : '產生報表';
+                    }
+                })
+                .processUploadConfirmation(assetIds);
         }
 
         function showMessage(msg, className) {

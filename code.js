@@ -2376,7 +2376,10 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
     });
     
     Logger.log(`成功為 ${applicantName} 產生文件: ${fileUrl}`);
-    return { fileUrl: fileUrl };
+    return {
+      fileUrl: fileUrl,
+      assetIds: assetsToScrap.map(asset => asset.assetId)
+    };
 
   } catch (e) {
     Logger.log(`createScrapDocForApplicant 失敗: ${e.message} at ${e.stack}`);
@@ -2714,7 +2717,10 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
     });
 
     Logger.log(`成功為 ${keeperName} 產生轉移記錄文件: ${fileUrl}`);
-    return { fileUrl: fileUrl };
+    return {
+      fileUrl: fileUrl,
+      assetIds: assetsToTransfer.map(item => item.asset.assetId)
+    };
 
   } catch (e) {
     Logger.log(`createTransferDoc 失敗: ${e.message} at ${e.stack}`);
