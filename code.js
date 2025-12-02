@@ -2432,15 +2432,17 @@ function getTransferDataForPrint(assetCategory) {
     // 取得所有資產資料，用於篩選類別
     const allAssets = getAllAssets();
     const assetCategoryMap = new Map(allAssets.map(asset => [asset.assetId, asset.assetCategory]));
+    const assetIsUploadedMap = new Map(allAssets.map(asset => [asset.assetId, asset.isUploaded]));
 
     // 按新保管人分組計數（同時篩選類別）
     const keeperCount = {};
 
     assetToLatestTransfer.forEach((transfer, assetId) => {
       const category = assetCategoryMap.get(assetId);
+      const isUploaded = assetIsUploadedMap.get(assetId);
 
-      // 只統計指定類別的資產
-      if (category === assetCategory) {
+      // 只統計指定類別且未上傳的資產
+      if (category === assetCategory && isUploaded !== 'V') {
         const keeperName = transfer.newKeeper;
         if (keeperCount[keeperName]) {
           keeperCount[keeperName]++;
@@ -2514,8 +2516,10 @@ function getAllTransferableItems(assetCategory) {
     const items = [];
 
     allAssets.forEach(asset => {
-      // 篩選條件：資產類別匹配且有轉移記錄
-      if (asset.assetCategory === assetCategory && assetToLatestTransfer.has(asset.assetId)) {
+      // 篩選條件：資產類別匹配且有轉移記錄且未上傳
+      if (asset.assetCategory === assetCategory &&
+          assetToLatestTransfer.has(asset.assetId) &&
+          asset.isUploaded !== 'V') {
         const transfer = assetToLatestTransfer.get(asset.assetId);
         items.push({
           assetId: asset.assetId,
