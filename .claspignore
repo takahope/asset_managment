@@ -5,3 +5,6 @@
 .env
 progress_bar_template/
 PWD_tamplate/
+template/
+docs/
+github/

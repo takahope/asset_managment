@@ -12,7 +12,7 @@
 
   /* 為側邊欄預留空間 */
   body {
-    padding-left: var(--sidebar-width-collapsed);
+    padding-left: calc(var(--sidebar-width-collapsed) + 24px);  /* 64px + 24px = 88px */
     transition: padding-left var(--transition-speed) ease;
   }
 
@@ -170,7 +170,8 @@
   /* --- 手機版適配 (RWD) --- */
   @media (max-width: 768px) {
     body {
-      padding-left: 0;
+      padding-left: 16px;
+      padding-right: 16px;
       padding-bottom: 60px;
     }
 
