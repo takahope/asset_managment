@@ -422,11 +422,11 @@
                 });
             }
 
-            // ✨ 新增：驗證資訊組模式資料完整性
+            // ✨ 修改：驗證資訊組模式資料完整性（包含電腦地點）
             const infoTransferCheckbox = document.getElementById('info-transfer');
             const infoTransferHint = document.getElementById('info-transfer-hint');
 
-            if (!data.infoCustodian || !data.infoUser || !data.infoLocation) {
+            if (!data.infoCustodian || !data.infoUser || !data.infoLocation || !data.infoComputerLocation) {
                 // 資料不完整，禁用選項
                 infoTransferCheckbox.disabled = true;
                 infoTransferHint.style.display = 'block';
@@ -622,8 +622,9 @@
                 const infoUserEmail = window.transferData.infoUser
                     ? Object.keys(window.transferData.infoUser)[0] : null;
                 const infoLocation = window.transferData.infoLocation;
+                const infoComputerLocation = window.transferData.infoComputerLocation; // ✨ 新增：電腦專用地點
 
-                if (!infoCustodianEmail || !infoUserEmail || !infoLocation) {
+                if (!infoCustodianEmail || !infoUserEmail || !infoLocation || !infoComputerLocation) {
                     statusMsg.className = 'alert alert-danger';
                     statusMsg.textContent = '資訊組轉移資料不完整！';
                     return;
@@ -634,7 +635,8 @@
                     isInfoTransfer: true,
                     infoCustodianEmail: infoCustodianEmail,
                     infoUserEmail: infoUserEmail,
-                    infoLocation: infoLocation
+                    infoLocation: infoLocation,
+                    infoComputerLocation: infoComputerLocation // ✨ 新增：電腦專用地點
                 };
             } else if (isIntakeTransfer) {
                 // ✨ 收案組轉移模式
