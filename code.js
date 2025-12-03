@@ -616,9 +616,9 @@ function getTransferData() {
     }
   });
 
-  // 從「存置地點列表」工作表讀取地點清單（A欄：地點名稱，B欄：是否為駐站，C欄：駐站轉資訊組，D欄：駐站轉中心收案）
+  // 從「存置地點列表」工作表讀取地點清單（A欄：地點名稱，B欄：是否為駐站，C欄：駐站轉資訊組，D欄：駐站轉中心收案，E欄：資訊組電腦專用）
   const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
+  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 5).getValues();
   const locationList = locationData.map(row => row[0]).filter(loc => loc); // 過濾空值
 
   // ✨ 篩選出駐站地點
@@ -636,6 +636,12 @@ function getTransferData() {
   // ✨ 新增：篩選出收案組地點
   const intakeLocationList = locationData
     .filter(row => row[3] === '是') // D欄為「是」
+    .map(row => row[0])
+    .filter(loc => loc);
+
+  // ✨ 新增：篩選出資訊組電腦專用地點
+  const infoComputerLocationList = locationData
+    .filter(row => row[4] === '是') // E欄為「是」
     .map(row => row[0])
     .filter(loc => loc);
 
@@ -666,11 +672,12 @@ function getTransferData() {
     locations: locations,
     custodians: custodians,           // ✨ 駐管列表
     stationLocations: stationLocationList, // ✨ 駐站地點列表
-    // ✨ 新增：資訊組相關資料
+    // ✨ 資訊組相關資料
     infoCustodian: infoCustodianMap.size > 0 ? Object.fromEntries(infoCustodianMap) : null,
     infoUser: infoUserMap.size > 0 ? Object.fromEntries(infoUserMap) : null,
     infoLocation: infoLocationList.length > 0 ? infoLocationList[0] : null,
-    // ✨ 新增：收案組相關資料
+    infoComputerLocation: infoComputerLocationList.length > 0 ? infoComputerLocationList[0] : null, // ✨ 新增：電腦專用地點
+    // ✨ 收案組相關資料
     intakeCustodian: intakeCustodianMap.size > 0 ? Object.fromEntries(intakeCustodianMap) : null,
     intakeLocation: intakeLocationList.length > 0 ? intakeLocationList[0] : null
   };
@@ -696,6 +703,7 @@ function processBatchTransferApplication(formData) {
       infoCustodianEmail, // 資訊組保管人 Email
       infoUserEmail,      // 資訊組使用人 Email
       infoLocation,       // 資訊組地點
+      infoComputerLocation, // ✨ 新增：資訊組電腦專用地點
       // ✨ 新增：收案組模式
       isIntakeTransfer,   // 是否為「駐站回送中心收案組」
       intakeCustodianEmail, // 收案組保管人 Email（同時也是使用人）
@@ -728,12 +736,13 @@ function processBatchTransferApplication(formData) {
       // ✨ 資訊組模式：保管人和使用人分別指定
       actualNewKeeperEmail = infoCustodianEmail;
       actualNewUserEmail = infoUserEmail;
-      actualNewLocation = infoLocation;
+      // ✨ 注意：地點將在處理每個資產時動態決定（根據是否為電腦）
+      actualNewLocation = infoLocation; // 預設使用一般地點
       actualTransferType = '駐站回送資訊組';
 
-      // 驗證必要參數
-      if (!infoCustodianEmail || !infoUserEmail || !infoLocation) {
-        throw new Error("資訊組轉移需要完整的保管人、使用人和地點資料。");
+      // ✨ 修改：驗證必要參數（包含電腦專用地點）
+      if (!infoCustodianEmail || !infoUserEmail || !infoLocation || !infoComputerLocation) {
+        throw new Error("資訊組轉移需要完整的保管人、使用人、一般地點和電腦地點資料。");
       }
     } else if (isIntakeTransfer) {
       // ✨ 收案組模式：保管人和使用人為同一人
@@ -819,13 +828,31 @@ function processBatchTransferApplication(formData) {
           // ✨ 使用 actualXXX 變量替代原始參數
           const finalNewKeeperEmail = actualNewKeeperEmail || asset.leaderEmail;
           const finalNewKeeperName = newKeeperName || asset.leaderName;
-          const finalNewLocation = actualNewLocation || asset.location;
+
+          // ✨ 新增：資訊組模式根據是否為電腦決定地點
+          let finalNewLocation = actualNewLocation || asset.location;
+          if (actualTransferType === '駐站回送資訊組') {
+            // 檢查是否為財產總表且為電腦
+            if (location.sheetName === PROPERTY_MASTER_SHEET_NAME) {
+              const isComputer = assetRow[indicesToUpdate.IS_ACTUALLY_COMPUTER - 1] === '是';
+              if (isComputer) {
+                finalNewLocation = infoComputerLocation; // 使用電腦專用地點
+              } else {
+                finalNewLocation = infoLocation; // 使用一般地點
+              }
+            } else {
+              // 物品總表沒有電腦欄位，直接使用一般地點
+              finalNewLocation = infoLocation;
+            }
+          }
+
           const finalNewUserEmail = actualNewUserEmail || asset.userEmail || '';
           const actualNewUserName = finalNewUserName || asset.userName || '';
 
           // ✨ 使用 actualXXX 變量判斷是否有變更
           const isKeeperChange = actualNewKeeperEmail && asset.leaderEmail !== actualNewKeeperEmail;
-          const isLocationChange = actualNewLocation && asset.location !== actualNewLocation;
+          // ✨ 修改：使用 finalNewLocation 判斷地點變更（因為資訊組模式可能會根據是否為電腦使用不同地點）
+          const isLocationChange = finalNewLocation && asset.location !== finalNewLocation;
           const isUserChange = (actualNewUserEmail && oldUserEmail !== actualNewUserEmail) || (newUserName && oldUserName !== newUserName);
 
           // ✨ 判斷轉移類型（優先使用駐站轉移標記）
