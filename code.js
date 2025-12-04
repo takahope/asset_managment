@@ -2664,73 +2664,89 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
     const body = newDoc.getBody();
     body.replaceText("{{申請日期}}", Utilities.formatDate(now, "GMT+8", "yyyy/MM/dd"));
     body.replaceText("{{填表人}}", keeperName);
+    // 註：聯繫電話「02-26523580#710」和單據編號「（總務室填列）」已在模板中寫死
 
-    // 5️⃣ 準備表格數據
-    const tableHeader = [
-      '序號',
-      '財產編號',
-      '財產名稱',
-      '移出單位',
-      '移出保管人',
-      '移出存置地點',
-      '移入單位',
-      '移入保管人',
-      '移入存置地點'
-    ];
+    // 5️⃣ 找到模板中的表格
+    const tables = body.getTables();
+    if (tables.length === 0) {
+      throw new Error('模板中找不到表格！請確認模板包含表格結構。');
+    }
+    const targetTable = tables[0];  // 假設模板中只有一個表格
 
-    const tableValues = [tableHeader];
+    // 6️⃣ 找到標記為 {{TEMPLATE_ROW}} 的行（數據範本行）
+    let templateRowIndex = -1;
+    for (let i = 0; i < targetTable.getNumRows(); i++) {
+      const cellText = targetTable.getRow(i).getCell(0).getText();
+      if (cellText.includes('{{TEMPLATE_ROW}}')) {
+        templateRowIndex = i;
+        break;
+      }
+    }
 
+    if (templateRowIndex === -1) {
+      throw new Error('找不到數據範本行標記 "{{TEMPLATE_ROW}}"！請確認模板表格格式正確。');
+    }
+
+    // 7️⃣ 動態插入數據列（方案 2：手動創建儲存格）
+    Logger.log(`開始插入 ${assetsToTransfer.length} 筆數據`);
+
+    // ⚠️ 診斷：檢查範本行的儲存格數量
+    const templateRow = targetTable.getRow(templateRowIndex);
+    const templateCellCount = templateRow.getNumCells();
+    Logger.log(`範本行儲存格數量: ${templateCellCount}`);
+
+    if (templateCellCount !== 9) {
+      throw new Error(`範本行儲存格數量錯誤！預期 9 個，實際 ${templateCellCount} 個。請檢查模板中的 {{TEMPLATE_ROW}} 列。`);
+    }
+
+    // 使用手動創建儲存格的方式（適用於有合併儲存格的表格）
     assetsToTransfer.forEach((item, index) => {
       const asset = item.asset;
       const transfer = item.transfer;
 
-      const rowData = [
-        (index + 1).toString(),              // 序號
-        asset.assetId,                       // 財產編號
-        asset.assetName || '',               // 財產名稱
-        '核心設施',                           // 移出單位（固定）
-        transfer.oldKeeper,                  // 移出保管人
-        transfer.oldLocation,                // 移出存置地點
-        '核心設施',                           // 移入單位（固定）
-        transfer.newKeeper,                  // 移入保管人
-        transfer.newLocation                 // 移入存置地點
-      ];
-      tableValues.push(rowData);
+      try {
+        // 創建新行（空行）
+        const newRow = targetTable.appendTableRow();
+
+        // 準備 9 個欄位的數據
+        const cellData = [
+          (index + 1).toString(),           // 序號
+          asset.assetId,                    // 財產編號
+          asset.assetName || '',            // 財產名稱
+          '核心設施',                        // 移出單位（固定）
+          transfer.oldKeeper,               // 移出保管人
+          transfer.oldLocation,             // 移出存置地點
+          '核心設施',                        // 移入單位（固定）
+          transfer.newKeeper,               // 移入保管人
+          transfer.newLocation              // 移入存置地點
+        ];
+
+        // 手動創建 9 個儲存格並填充數據
+        for (let i = 0; i < cellData.length; i++) {
+          newRow.appendTableCell(cellData[i]);
+        }
+
+        // 註：序號置中對齊需要在模板中預先設定
+        // Google Docs API 的 appendTableCell() 在表格有合併儲存格時
+        // 無法正確支援動態樣式設定
+
+        Logger.log(`✅ 第 ${index + 1} 行數據填充成功（${cellData.length} 個儲存格）`);
+      } catch (e) {
+        Logger.log(`❌ 填充第 ${index + 1} 行時發生錯誤: ${e.message}`);
+        throw new Error(`填充數據時發生錯誤（第 ${index + 1} 筆）: ${e.message}`);
+      }
     });
 
-    // 6️⃣ 找到並移除表格佔位符，插入新表格
-    const tablePlaceholder = body.findText("{{轉移項目表格}}");
-    if (!tablePlaceholder) {
-      throw new Error('找不到 "{{轉移項目表格}}" 佔位符！請確認模板格式正確。');
-    }
+    // 8️⃣ 刪除範本行（因為已經複製完成）
+    Logger.log(`刪除範本行（索引 ${templateRowIndex}）`);
+    targetTable.removeRow(templateRowIndex);
+    Logger.log(`✅ 成功刪除範本行`);
 
-    const placeholderParagraph = tablePlaceholder.getElement().getParent();
-    const insertIndex = body.getChildIndex(placeholderParagraph);
-
-    // 先插入表格到佔位符位置
-    const newTable = body.insertTable(insertIndex, tableValues);
-
-    // 然後安全地移除佔位符段落
-    // 如果是最後一個段落，只清空內容；否則完全移除
-    const totalChildren = body.getNumChildren();
-    if (insertIndex + 1 === totalChildren - 1) {
-      // 佔位符是最後一個段落，只清空內容
-      placeholderParagraph.clear();
-    } else {
-      // 不是最後一個段落，可以安全移除
-      placeholderParagraph.removeFromParent();
-    }
-
-    // 標題列加粗
-    const headerRowStyle = {};
-    headerRowStyle[DocumentApp.Attribute.BOLD] = true;
-    newTable.getRow(0).setAttributes(headerRowStyle);
-
-    // 7️⃣ 保存文件並取得URL
+    // 9️⃣ 保存文件並取得URL
     newDoc.saveAndClose();
     const fileUrl = newFile.getUrl();
 
-    // 8️⃣ 回寫 DOC_URL 到資產表
+    // 🔟 回寫 DOC_URL 到資產表
     assetsToTransfer.forEach(item => {
       const asset = item.asset;
       const location = findAssetLocation(asset.assetId);
