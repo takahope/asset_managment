@@ -2325,18 +2325,27 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
     if (!tablePlaceholder) {
       throw new Error('錯誤：在您的 Google Docs 範本文件中找不到 "{{報廢項目表格}}" 這個佔位符！');
     }
-    const placeholderParagraph = tablePlaceholder.getElement().getParent();
-    const insertIndex = body.getChildIndex(placeholderParagraph);
-    placeholderParagraph.removeFromParent();
-      
-    let tableHeader;
-    if (assetCategory === '非消耗品') {
-      tableHeader = ['序號', '物品編號', '物品名稱', '購置日期', '使用年限', '已使用期間', '報廢原因'];
-    } else {
-      tableHeader = ['序號', '財產編號', '財產名稱', '購置日期', '使用年限', '已使用期間', '報廢原因'];
+
+    // 🔍 向上遍歷找到佔位符所在的環境（段落或表格）
+    let element = tablePlaceholder.getElement();
+    let parentTable = null;
+    let placeholderRow = null;
+
+    // 最多向上遍歷 10 層，找到 Table 元素
+    for (let i = 0; i < 10; i++) {
+      element = element.getParent();
+      if (!element) break;
+
+      if (element.getType() === DocumentApp.ElementType.TABLE) {
+        parentTable = element.asTable();
+        break;
+      }
+      if (element.getType() === DocumentApp.ElementType.TABLE_ROW) {
+        placeholderRow = element.asTableRow();
+      }
     }
-    const tableValues = [tableHeader];
-      
+
+    // 準備資料列
     assetsToScrap.forEach((asset, index) => {
       const assetInfo = assetMap.get(asset.assetId.trim());
       if (assetInfo) {
@@ -2373,23 +2382,93 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
         const usefulLife = !isNaN(parseInt(usefulLifeRaw)) ? parseInt(usefulLifeRaw).toString() : (usefulLifeRaw || '');
         const reasonCode = assetInfo.remarks || '';
 
-        const rowData = [
-          serialNumber,
-          assetInfo.assetId.trim(),
-          assetInfo.assetName,
-          purchaseDateFormatted,
-          usefulLife,
-          `${years}/${months}`,
-          reasonCode
-        ];
-        tableValues.push(rowData);
+        // ✅ 如果佔位符在表格中，直接在表格中插入新列
+        if (parentTable && placeholderRow) {
+          const rowIndex = parentTable.getChildIndex(placeholderRow);
+          const newRow = parentTable.insertTableRow(rowIndex);
+
+          newRow.appendTableCell(serialNumber);
+          newRow.appendTableCell(assetInfo.assetId.trim());
+          newRow.appendTableCell(assetInfo.assetName);
+          newRow.appendTableCell(purchaseDateFormatted);
+          newRow.appendTableCell(usefulLife);
+          newRow.appendTableCell(`${years}/${months}`);
+          newRow.appendTableCell(reasonCode);
+        }
       }
     });
-      
-    const newTable = body.insertTable(insertIndex, tableValues);
-    const headerRowStyle = {};
-    headerRowStyle[DocumentApp.Attribute.BOLD] = true;
-    newTable.getRow(0).setAttributes(headerRowStyle);
+
+    // 刪除佔位符所在的列
+    if (parentTable && placeholderRow) {
+      placeholderRow.removeFromParent();
+    } else {
+      // ⚠️ 向後兼容：如果佔位符不在表格中，使用原有邏輯
+      const placeholderParagraph = tablePlaceholder.getElement().getParent();
+      const insertIndex = body.getChildIndex(placeholderParagraph);
+      placeholderParagraph.removeFromParent();
+
+      let tableHeader;
+      if (assetCategory === '非消耗品') {
+        tableHeader = ['序號', '物品編號', '物品名稱', '購置日期', '使用年限', '已使用期間', '報廢原因'];
+      } else {
+        tableHeader = ['序號', '財產編號', '財產名稱', '購置日期', '使用年限', '已使用期間', '報廢原因'];
+      }
+      const tableValues = [tableHeader];
+
+      assetsToScrap.forEach((asset, index) => {
+        const assetInfo = assetMap.get(asset.assetId.trim());
+        if (assetInfo) {
+          let purchaseDateStr = (assetInfo.purchaseDate || '').toString();
+          purchaseDateStr = purchaseDateStr.split('\n')[0].trim();
+
+          let purchaseDate = null;
+          let years = 'N/A';
+          let months = 'N/A';
+          let purchaseDateFormatted = '無日期資料';
+
+          if (purchaseDateStr.includes('GMT')) {
+              purchaseDate = new Date(purchaseDateStr);
+          } else {
+              const dateParts = purchaseDateStr.match(/(0?\d+)\/(\d+)\/(\d+)/);
+              if (dateParts) {
+                  const minguoYear = parseInt(dateParts[1], 10);
+                  const gregorianYear = minguoYear + 1911;
+                  const monthJs = parseInt(dateParts[2], 10) - 1;
+                  const day = parseInt(dateParts[3], 10);
+                  purchaseDate = new Date(gregorianYear, monthJs, day);
+              }
+          }
+
+          if (purchaseDate && !isNaN(purchaseDate.getTime())) {
+               purchaseDateFormatted = Utilities.formatDate(purchaseDate, "GMT+8", "yyyy/MM/dd");
+               const monthsUsed = (now.getFullYear() - purchaseDate.getFullYear()) * 12 + (now.getMonth() - purchaseDate.getMonth());
+               years = Math.floor(monthsUsed / 12);
+               months = monthsUsed % 12;
+          }
+
+          const serialNumber = (index + 1).toString();
+          const usefulLifeRaw = assetInfo.useLife;
+          const usefulLife = !isNaN(parseInt(usefulLifeRaw)) ? parseInt(usefulLifeRaw).toString() : (usefulLifeRaw || '');
+          const reasonCode = assetInfo.remarks || '';
+
+          const rowData = [
+            serialNumber,
+            assetInfo.assetId.trim(),
+            assetInfo.assetName,
+            purchaseDateFormatted,
+            usefulLife,
+            `${years}/${months}`,
+            reasonCode
+          ];
+          tableValues.push(rowData);
+        }
+      });
+
+      const newTable = body.insertTable(insertIndex, tableValues);
+      const headerRowStyle = {};
+      headerRowStyle[DocumentApp.Attribute.BOLD] = true;
+      newTable.getRow(0).setAttributes(headerRowStyle);
+    }
 
     newDoc.saveAndClose();
     const fileUrl = newFile.getUrl();
