@@ -2721,14 +2721,46 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
           transfer.newLocation              // 移入存置地點
         ];
 
-        // 手動創建 9 個儲存格並填充數據
+        // 複製範本行的儲存格樣式並填充數據
         for (let i = 0; i < cellData.length; i++) {
-          newRow.appendTableCell(cellData[i]);
+          // 1. 獲取對應的範本儲存格
+          const templateCell = templateRow.getCell(i);
+          
+          // 2. 複製該儲存格 (保留樣式、邊框、對齊)
+          const newCell = templateCell.copy();
+          
+          // 3. 設定文字內容 (保留段落樣式)
+          // 嘗試獲取第一個段落並設定文字，如果沒有段落則直接設定儲存格文字
+          if (newCell.getNumChildren() > 0 && newCell.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH) {
+             newCell.getChild(0).asParagraph().setText(cellData[i]);
+             // 移除可能存在的多餘段落 (如果範本儲存格有多行)
+             while(newCell.getNumChildren() > 1) {
+               newCell.removeChild(newCell.getChild(1));
+             }
+          } else {
+             newCell.setText(cellData[i]);
+          }
+
+          // 4. 強制設定邊框 (確保黑色實線)
+          // 使用 setAttributes 設定邊框樣式
+          try {
+            const style = {};
+            style[DocumentApp.Attribute.BORDER_WIDTH] = 1; // 設定邊框寬度為 1pt
+            style[DocumentApp.Attribute.BORDER_COLOR] = '#000000'; // 設定邊框顏色為黑色
+            newCell.setAttributes(style);
+
+            // Logger.log(`✓ 儲存格 ${i} 邊框設定成功`);
+          } catch (borderError) {
+            Logger.log(`⚠️ 儲存格 ${i} 邊框設定失敗: ${borderError.message}`);
+          }
+
+          // 5. 將處理好的儲存格加入新行
+          newRow.appendTableCell(newCell);
         }
 
         // 註：序號置中對齊需要在模板中預先設定
         // Google Docs API 的 appendTableCell() 在表格有合併儲存格時
-        // 無法正確支援動態樣式設定
+        // 可能無法正確支援某些樣式設定（如對齊），但邊框設定通常可以正常運作
 
         Logger.log(`✅ 第 ${index + 1} 行數據填充成功（${cellData.length} 個儲存格）`);
       } catch (e) {
