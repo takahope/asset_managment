@@ -2321,34 +2321,51 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
     body.replaceText("{{申請日期}}", Utilities.formatDate(now, "GMT+8", "yyyy/MM/dd"));
     body.replaceText("{{填表人}}", applicantName);
 
-    const tablePlaceholder = body.findText("{{報廢項目表格}}");
-    if (!tablePlaceholder) {
-      throw new Error('錯誤：在您的 Google Docs 範本文件中找不到 "{{報廢項目表格}}" 這個佔位符！');
+    // 🔍 找到表格和範本行
+    const tables = body.getTables();
+    if (tables.length === 0) {
+      throw new Error('錯誤：在模板文件中找不到表格！');
     }
 
-    // 🔍 向上遍歷找到佔位符所在的環境（段落或表格）
-    let element = tablePlaceholder.getElement();
-    let parentTable = null;
-    let placeholderRow = null;
+    const targetTable = tables[0]; // 假設是第一個表格
+    let templateRowIndex = -1;
 
-    // 最多向上遍歷 10 層，找到 Table 元素
-    for (let i = 0; i < 10; i++) {
-      element = element.getParent();
-      if (!element) break;
-
-      if (element.getType() === DocumentApp.ElementType.TABLE) {
-        parentTable = element.asTable();
+    // 尋找包含 {{TEMPLATE_ROW}} 的行
+    for (let i = 0; i < targetTable.getNumRows(); i++) {
+      const firstCell = targetTable.getRow(i).getCell(0);
+      if (firstCell.getText().includes('{{TEMPLATE_ROW}}')) {
+        templateRowIndex = i;
         break;
       }
-      if (element.getType() === DocumentApp.ElementType.TABLE_ROW) {
-        placeholderRow = element.asTableRow();
-      }
     }
 
-    // 準備資料列
+    if (templateRowIndex === -1) {
+      throw new Error('錯誤：在表格中找不到 {{TEMPLATE_ROW}} 範本行！請在模板的表格中添加包含 {{TEMPLATE_ROW}} 的行。');
+    }
+
+    Logger.log(`找到範本行於索引: ${templateRowIndex}`);
+
+    // 📐 準備邊框樣式
+    const borderStyle = {};
+    borderStyle[DocumentApp.Attribute.BORDER_WIDTH] = 1.5;       // 1.5pt 寬度（比 1pt 更明顯）
+    borderStyle[DocumentApp.Attribute.BORDER_COLOR] = '#000000'; // 黑色
+
+    // 📋 獲取範本行
+    const templateRow = targetTable.getRow(templateRowIndex);
+    const templateCellCount = templateRow.getNumCells();
+    Logger.log(`範本行儲存格數量: ${templateCellCount}`);
+
+    if (templateCellCount !== 7) {
+      throw new Error(`範本行儲存格數量錯誤！預期 7 個，實際 ${templateCellCount} 個。請確保範本行有 7 個獨立的儲存格。`);
+    }
+
+    Logger.log(`開始插入 ${assetsToScrap.length} 筆報廢資料`);
+
+    // 🔄 動態插入數據列（使用 .copy() 方法）
     assetsToScrap.forEach((asset, index) => {
       const assetInfo = assetMap.get(asset.assetId.trim());
       if (assetInfo) {
+        // 📅 處理購置日期
         let purchaseDateStr = (assetInfo.purchaseDate || '').toString();
         purchaseDateStr = purchaseDateStr.split('\n')[0].trim();
 
@@ -2377,31 +2394,69 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
              months = monthsUsed % 12;
         }
 
-        const serialNumber = (index + 1).toString();
-        const usefulLifeRaw = assetInfo.useLife;
-        const usefulLife = !isNaN(parseInt(usefulLifeRaw)) ? parseInt(usefulLifeRaw).toString() : (usefulLifeRaw || '');
-        const reasonCode = assetInfo.remarks || '';
+        // 📊 準備儲存格數據
+        const cellData = [
+          (index + 1).toString(),                                                          // 序號
+          assetInfo.assetId.trim(),                                                        // 財產編號
+          assetInfo.assetName,                                                             // 財產名稱
+          purchaseDateFormatted,                                                           // 購置日期
+          !isNaN(parseInt(assetInfo.useLife)) ? parseInt(assetInfo.useLife).toString() : (assetInfo.useLife || ''),  // 使用年限
+          `${years}/${months}`,                                                            // 已使用期間
+          assetInfo.remarks || ''                                                          // 報廢原因
+        ];
 
-        // ✅ 如果佔位符在表格中，直接在表格中插入新列
-        if (parentTable && placeholderRow) {
-          const rowIndex = parentTable.getChildIndex(placeholderRow);
-          const newRow = parentTable.insertTableRow(rowIndex);
+        try {
+          // 🆕 在範本行之後插入新行（而非在表格末端添加）
+          // 計算插入位置：範本行索引 + 1 + 當前已插入的行數
+          const insertPosition = templateRowIndex + index + 1;
+          const newRow = targetTable.insertTableRow(insertPosition);
+          Logger.log(`插入新行於位置: ${insertPosition}`);
 
-          newRow.appendTableCell(serialNumber);
-          newRow.appendTableCell(assetInfo.assetId.trim());
-          newRow.appendTableCell(assetInfo.assetName);
-          newRow.appendTableCell(purchaseDateFormatted);
-          newRow.appendTableCell(usefulLife);
-          newRow.appendTableCell(`${years}/${months}`);
-          newRow.appendTableCell(reasonCode);
+          // 🔄 複製並填充每個儲存格
+          for (let i = 0; i < cellData.length; i++) {
+            // 1️⃣ 複製範本儲存格（繼承所有樣式）
+            const templateCell = templateRow.getCell(i);
+            const newCell = templateCell.copy();
+
+            // 2️⃣ 更新段落文字（保留對齊格式）
+            if (newCell.getNumChildren() > 0 &&
+                newCell.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH) {
+              newCell.getChild(0).asParagraph().setText(cellData[i]);
+
+              // 清理多餘的空行
+              while (newCell.getNumChildren() > 1) {
+                newCell.removeChild(newCell.getChild(1));
+              }
+            } else {
+              newCell.setText(cellData[i]);
+            }
+
+            // 3️⃣ 強制設定邊框樣式（雙重保險）
+            try {
+              newCell.setAttributes(borderStyle);
+            } catch (borderError) {
+              Logger.log(`⚠️ 儲存格 ${i} 設定邊框失敗: ${borderError.message}`);
+            }
+
+            // 4️⃣ 將處理好的儲存格加入新行
+            newRow.appendTableCell(newCell);
+          }
+
+          Logger.log(`✅ 第 ${index + 1} 行資料填充成功（${cellData.length} 個儲存格）`);
+        } catch (e) {
+          Logger.log(`❌ 填充第 ${index + 1} 行時發生錯誤: ${e.message}`);
+          throw new Error(`填充數據時發生錯誤（第 ${index + 1} 筆）: ${e.message}`);
         }
       }
     });
 
-    // 刪除佔位符所在的列
-    if (parentTable && placeholderRow) {
-      placeholderRow.removeFromParent();
-    } else {
+    // 🗑️ 刪除範本行
+    Logger.log(`刪除範本行（索引 ${templateRowIndex}）`);
+    targetTable.removeRow(templateRowIndex);
+    Logger.log(`✅ 成功刪除範本行`);
+
+    // ⚠️ 以下是向後兼容的舊邏輯（如果上述邏輯失敗，不會執行到這裡）
+    if (false) {
       // ⚠️ 向後兼容：如果佔位符不在表格中，使用原有邏輯
       const placeholderParagraph = tablePlaceholder.getElement().getParent();
       const insertIndex = body.getChildIndex(placeholderParagraph);
