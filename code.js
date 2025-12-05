@@ -987,9 +987,9 @@ function processBatchTransferApplication(formData) {
     
     // ✨ 改進：根據不同情況發送不同的通知
     // 情況1：只變更使用人（change-user 勾選，其他未勾）
-    if (newUserEmail && !newKeeperEmail && !newLocation) {
+    if (actualNewUserEmail && !actualNewKeeperEmail && !actualNewLocation) {
       // 通知新使用人
-      if (newUserEmail) {
+      if (actualNewUserEmail) {
         const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（使用人變更）`;
         let body = `您好 ${finalNewUserName}，\n\n${currentUserEmail} 已申請將您設為 ${needsApprovalApps.length} 筆財產的使用人。\n\n`;
         body += `財產清單：\n`;
@@ -998,7 +998,7 @@ function processBatchTransferApplication(formData) {
         });
         body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
         body += `${reviewLink}\n\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(newUserEmail, subject, body);
+        MailApp.sendEmail(actualNewUserEmail, subject, body);
       }
       
       // 通知原保管人
@@ -1017,7 +1017,7 @@ function processBatchTransferApplication(formData) {
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆使用人變更申請！已通知新使用人和原保管人。`;
     }
     // 情況2：只變更保管人（change-keeper 勾選，其他未勾）
-    else if (newKeeperEmail && !newUserEmail && !newLocation) {
+    else if (actualNewKeeperEmail && !actualNewUserEmail && !actualNewLocation) {
       // 通知新保管人
       const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（保管人變更）`;
       let body = `您好 ${newKeeperName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您保管。\n\n`;
@@ -1027,7 +1027,7 @@ function processBatchTransferApplication(formData) {
       });
       body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
       body += `${reviewLink}\n\n此為系統自動發送郵件。`;
-      MailApp.sendEmail(newKeeperEmail, subject, body);
+      MailApp.sendEmail(actualNewKeeperEmail, subject, body);
       
       // 通知原使用人
       const oldUsers = new Set(needsApprovalApps.map(app => app.oldUserEmail).filter(e => e));
@@ -1045,7 +1045,7 @@ function processBatchTransferApplication(formData) {
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆保管人變更申請！已通知新保管人和原使用人。`;
     }
     // 情況3：只變更地點（change-location 勾選，其他未勾）
-    else if (newLocation && !newKeeperEmail && !newUserEmail) {
+    else if (actualNewLocation && !actualNewKeeperEmail && !actualNewUserEmail) {
       // 通知管理員
       const adminEmails = getAdminEmails();
       if (adminEmails && adminEmails.length > 0) {
@@ -1054,7 +1054,7 @@ function processBatchTransferApplication(formData) {
         const subject = `[財產通知] ${autoCompletedApps.length} 筆財產地點已變更`;
         let body = `您好，\n\n${currentUserEmail} 已變更以下財產的地點：\n\n`;
         autoCompletedApps.forEach(app => {
-          body += `  - ${app.id}: ${app.assetName} → 新地點: ${newLocation}\n`;
+          body += `  - ${app.id}: ${app.assetName} → 新地點: ${actualNewLocation}\n`;
         });
         body += `請點擊下方連結，前往更新頁面進行操作：\n`;
         body += `${printTransferLink}\n\n`; // ✨ 新增：直接連結
@@ -1068,7 +1068,7 @@ function processBatchTransferApplication(formData) {
       const notifiedEmails = new Set(); // 追蹤已發送郵件的對象，避免重複發送
 
       // ✅ 1. 通知新保管人（方案D：審核者之一）
-      if (newKeeperEmail) {
+      if (actualNewKeeperEmail) {
         const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（需審核）`;
         let body = `您好 ${newKeeperName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您保管。\n\n`;
         body += `轉移類型：${typeDescription}\n\n`;
@@ -1076,19 +1076,19 @@ function processBatchTransferApplication(formData) {
         needsApprovalApps.forEach(app => {
           body += `  - ${app.id}: ${app.assetName}\n`;
         });
-        if (newUserEmail) {
+        if (actualNewUserEmail) {
           body += `\n新使用人：${finalNewUserName}\n`;
         }
         body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
         body += `${reviewLink}\n`;
         body += `\n⚠️ 提醒：此申請需要您或新使用人審核，任一方審核即可完成轉移。\n`;
         body += `\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(newKeeperEmail, subject, body);
-        notifiedEmails.add(newKeeperEmail.toLowerCase());
+        MailApp.sendEmail(actualNewKeeperEmail, subject, body);
+        notifiedEmails.add(actualNewKeeperEmail.toLowerCase());
       }
 
       // ✅ 2. 通知新使用人（方案D：改為審核通知）
-      if (newUserEmail && !notifiedEmails.has(newUserEmail.toLowerCase())) {
+      if (actualNewUserEmail && !notifiedEmails.has(actualNewUserEmail.toLowerCase())) {
         const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（需審核）`;
         let body = `您好 ${finalNewUserName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您使用。\n\n`;
         body += `轉移類型：${typeDescription}\n\n`;
@@ -1096,19 +1096,19 @@ function processBatchTransferApplication(formData) {
         needsApprovalApps.forEach(app => {
           body += `  - ${app.id}: ${app.assetName}\n`;
         });
-        if (newKeeperEmail) {
+        if (actualNewKeeperEmail) {
           body += `\n新保管人：${newKeeperName}\n`;
         }
         body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
         body += `${reviewLink}\n`;
         body += `\n⚠️ 提醒：此申請需要您或新保管人審核，任一方審核即可完成轉移。\n`;
         body += `\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(newUserEmail, subject, body);
-        notifiedEmails.add(newUserEmail.toLowerCase());
+        MailApp.sendEmail(actualNewUserEmail, subject, body);
+        notifiedEmails.add(actualNewUserEmail.toLowerCase());
       }
 
       // ✅ 3. 通知原保管人（如果保管人有變更且不是申請人本人）
-      if (newKeeperEmail) {
+      if (actualNewKeeperEmail) {
         const oldKeepers = new Set(
           needsApprovalApps
             .map(app => app.oldKeeperEmail)
@@ -1125,7 +1125,7 @@ function processBatchTransferApplication(formData) {
             body += `  - ${app.id}: ${app.assetName}\n`;
           });
           body += `\n新保管人：${newKeeperName}\n`;
-          if (newUserEmail) {
+          if (actualNewUserEmail) {
             body += `新使用人：${finalNewUserName}\n`;
           }
           body += `\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n`;
@@ -1136,7 +1136,7 @@ function processBatchTransferApplication(formData) {
       }
 
       // ✅ 4. 通知原使用人（如果使用人有變更且不是申請人本人，且與原保管人不同）
-      if (newUserEmail) {
+      if (actualNewUserEmail) {
         const oldUsers = new Set(
           needsApprovalApps
             .map(app => app.oldUserEmail)
@@ -1153,7 +1153,7 @@ function processBatchTransferApplication(formData) {
             body += `  - ${app.id}: ${app.assetName}\n`;
           });
           body += `\n新使用人：${finalNewUserName}\n`;
-          if (newKeeperEmail) {
+          if (actualNewKeeperEmail) {
             body += `新保管人：${newKeeperName}\n`;
           }
           body += `\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n`;
@@ -1165,8 +1165,8 @@ function processBatchTransferApplication(formData) {
 
       // ✅ 5. 組合結果訊息（方案D）
       let notificationSummary = [];
-      if (newKeeperEmail) notificationSummary.push('新保管人（需審核）');
-      if (newUserEmail) notificationSummary.push('新使用人（需審核）');
+      if (actualNewKeeperEmail) notificationSummary.push('新保管人（需審核）');
+      if (actualNewUserEmail) notificationSummary.push('新使用人（需審核）');
 
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆需要審核的申請！已通知：${notificationSummary.join('、')}。任一方審核即可完成轉移。`;
     }
