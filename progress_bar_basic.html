@@ -1,0 +1,112 @@
+<style>
+  /* 全螢幕遮罩層（參考 shared-nav.html） */
+  .progress-loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    display: none; /* 預設隱藏 */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+
+  .progress-loader-overlay.active {
+    display: flex;
+  }
+
+  /* 進度條容器 */
+  .progress-loader-container {
+    width: 80%;
+    max-width: 500px;
+    margin: 20px;
+  }
+
+  /* 狀態文字 */
+  .progress-loader-text {
+    color: #495057;
+    font-size: 16px;
+    margin-top: 20px;
+    font-weight: 500;
+    text-align: center;
+  }
+</style>
+
+<div id="progress-loader-overlay" class="progress-loader-overlay">
+  <div class="progress-loader-container">
+    <div class="progress" style="height: 20px;">
+      <div id="progress-loader-bar"
+           class="progress-bar progress-bar-striped progress-bar-animated"
+           role="progressbar"
+           style="width: 0%;"
+           aria-valuenow="0"
+           aria-valuemin="0"
+           aria-valuemax="100">
+      </div>
+    </div>
+  </div>
+  <div id="progress-loader-text" class="progress-loader-text">正在載入資料，請稍候...</div>
+</div>
+
+<script>
+  // 使用底線前綴避免全局變量衝突（參考 shared-nav.html 的 _portalWebAppUrl）
+  let _progressLoaderInterval;
+
+  /**
+   * 顯示進度條並開始模擬進度
+   * @param {string} statusText - 載入狀態文字
+   */
+  function showProgressBar(statusText = '正在載入資料，請稍候...') {
+    const overlay = document.getElementById('progress-loader-overlay');
+    const progressBar = document.getElementById('progress-loader-bar');
+    const loadingText = document.getElementById('progress-loader-text');
+
+    // 重置進度條
+    let progress = 1;
+    progressBar.style.width = '0%';
+    progressBar.setAttribute('aria-valuenow', 0);
+
+    // 更新狀態文字
+    loadingText.textContent = statusText;
+
+    // 顯示遮罩
+    overlay.classList.add('active');
+
+    // 模擬進度增長（最多到 90%）
+    _progressLoaderInterval = setInterval(() => {
+      if (progress < 90) {
+        progress++;
+        progressBar.style.width = progress + '%';
+        progressBar.setAttribute('aria-valuenow', progress);
+      }
+    }, 20); // 每 20ms 增加 1%（保持與 apply.html 一致）
+  }
+
+  /**
+   * 完成進度並隱藏進度條
+   * @param {string} completionText - 完成訊息文字
+   * @param {number} delay - 隱藏前的延遲時間（毫秒）
+   */
+  function hideProgressBar(completionText = '資料載入完成！', delay = 300) {
+    const overlay = document.getElementById('progress-loader-overlay');
+    const progressBar = document.getElementById('progress-loader-bar');
+    const loadingText = document.getElementById('progress-loader-text');
+
+    // 停止模擬進度
+    clearInterval(_progressLoaderInterval);
+
+    // 跳到 100%
+    progressBar.style.width = '100%';
+    progressBar.setAttribute('aria-valuenow', 100);
+    loadingText.textContent = completionText;
+
+    // 延遲後隱藏
+    setTimeout(() => {
+      overlay.classList.remove('active');
+    }, delay);
+  }
+</script>
