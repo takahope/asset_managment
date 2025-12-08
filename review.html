@@ -5,20 +5,10 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         /* ✨ 修改點：移除 body 的特殊背景色，並調整 padding ✨ */
-        body { 
+        body {
             padding: 20px;
         }
-        .loader { 
-            border: 8px solid #f3f3f3; 
-            border-radius: 50%; 
-            border-top: 8px solid #28a745; 
-            width: 60px; 
-            height: 60px; 
-            animation: spin 2s linear infinite; 
-            margin: 50px auto; 
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
+
         /* ✨ 修改點：移除 .card-main 的樣式定義 ✨ */
 
         .approval-table-container { 
@@ -38,11 +28,7 @@
 </head>
 <body>
   <?!= include('shared-nav'); ?>
-    <!-- ✨ 修改點：移除了 <div class="container-fluid"> 這個外層容器 ✨ -->
-    <div id="loading-spinner">
-        <div class="loader"></div>
-        <p class="text-center">正在載入您的待接收清單...</p>
-    </div>
+  <?!= include('progress_bar_basic'); ?>
 
     <!-- ✨ 修改點：移除了 class="card-main" ✨ -->
     <div id="main-content" style="display:none;">
@@ -109,7 +95,7 @@
 
         function loadData() {
             console.log(`[FRONTEND] 開始呼叫後端 getPendingApprovals 函式... 時間: ${new Date().toLocaleTimeString()}`);
-            showLoading(true);
+            showProgressBar('正在載入您的待接收清單...'); // 使用新的進度條組件
             const startTime = new Date();
 
             google.script.run
@@ -126,30 +112,39 @@
         function populateData(response) {
             console.log("[FRONTEND] populateData 函式開始執行...");
             if (response.error) { handleError({message: response.error}); return; }
-            
+
             allApprovals = response.approvals || [];
             filteredApprovals = allApprovals;
             console.log(`[FRONTEND] 接收到 ${allApprovals.length} 筆待審核資料。`);
-            
-            showLoading(false);
-            
-            if (allApprovals.length > 0) {
-                document.getElementById('main-content').style.display = 'block';
-                populateLocationFilter(allApprovals);
-                currentPage = 1;
-                renderPage(currentPage);
-                
-                document.getElementById('location-filter-select').addEventListener('change', filterTable);
-                document.getElementById('search-box').addEventListener('input', filterTable);
-                document.getElementById('select-all').addEventListener('change', (e) => {
-                    document.querySelectorAll('.approval-checkbox').forEach(cb => cb.checked = e.target.checked);
-                });
 
-            } else {
-                console.log("[FRONTEND] 沒有待審核資料，顯示提示訊息。");
-                document.getElementById('approval-list').innerHTML = '';
-                document.getElementById('no-data-message').style.display = 'block';
-            }
+            hideProgressBar('資料載入完成！'); // 使用新的進度條組件
+
+            // 延遲顯示內容（與進度條隱藏動畫同步）
+            setTimeout(() => {
+                // ✨ 修正：無論是否有資料，都要顯示主要內容區塊，避免畫面空白
+                document.getElementById('main-content').style.display = 'block';
+
+                if (allApprovals.length > 0) {
+                    populateLocationFilter(allApprovals);
+                    currentPage = 1;
+                    renderPage(currentPage);
+
+                    document.getElementById('location-filter-select').addEventListener('change', filterTable);
+                    document.getElementById('search-box').addEventListener('input', filterTable);
+                    document.getElementById('select-all').addEventListener('change', (e) => {
+                        document.querySelectorAll('.approval-checkbox').forEach(cb => cb.checked = e.target.checked);
+                    });
+
+                } else {
+                    console.log("[FRONTEND] 沒有待審核資料，顯示提示訊息。");
+                    document.getElementById('approval-list').innerHTML = '';
+                    document.getElementById('no-data-message').style.display = 'block';
+                    
+                    // Optional: 如果沒有資料，可以隱藏表格或操作按鈕，視需求而定
+                    // document.getElementById('approval-table-container').style.display = 'none';
+                    // document.getElementById('submit-btn').style.display = 'none';
+                }
+            }, 300);
         }
 
         function populateLocationFilter(approvals) {
@@ -271,16 +266,16 @@
         function submitApproval() {
             const checkedBoxes = document.querySelectorAll('.approval-checkbox:checked');
             const selectedAppIds = Array.from(checkedBoxes).map(cb => cb.value);
-            
+
             console.log(`[FRONTEND] submitApproval 函式被觸發，共勾選了 ${selectedAppIds.length} 筆資料。`);
             if (selectedAppIds.length === 0) {
                 showMessage('請至少勾選一個項目再送出。', 'alert-warning');
                 return;
             }
-            
+
             document.getElementById('status-message').innerHTML = ''; // Clear message before new submission
             console.log("[FRONTEND] 開始呼叫後端 processBatchApproval 函式...");
-            showLoading(true, '正在批次處理核准作業...');
+            showProgressBar('正在批次處理核准作業...'); // 使用新的進度條組件
             google.script.run
                 .withSuccessHandler(handleSuccess)
                 .withFailureHandler(handleError)
@@ -289,33 +284,27 @@
 
         function handleSuccess(message) {
             console.log(`[FRONTEND] 後端 processBatchApproval 執行成功，回傳訊息: "${message}"`);
-            showMessage(message, 'alert-success');
-            setTimeout(loadData, 3000);
+            hideProgressBar('處理完成！'); // 使用新的進度條組件
+
+            setTimeout(() => {
+                showMessage(message, 'alert-success');
+                setTimeout(loadData, 3000);
+            }, 300);
         }
 
         function handleError(error) {
             console.error(`[FRONTEND] 發生錯誤！錯誤訊息: ${error.message}`);
-            showLoading(false);
-            showMessage('錯誤：' + error.message, 'alert-danger');
+            hideProgressBar('載入失敗！', 300); // 使用新的進度條組件
+
+            setTimeout(() => {
+                showMessage('錯誤：' + error.message, 'alert-danger');
+            }, 300);
         }
 
         function showMessage(msg, className) {
             const statusDiv = document.getElementById('status-message');
             statusDiv.className = `alert ${className}`;
             statusDiv.innerHTML = msg.replace(/\n/g, '<br>');
-        }
-
-        function showLoading(isLoading, text = '正在載入您的待審核清單...') {
-            const loader = document.getElementById('loading-spinner');
-            const content = document.getElementById('main-content');
-            if (isLoading) {
-                loader.querySelector('p').textContent = text;
-                loader.style.display = 'block';
-                content.style.display = 'none';
-            } else {
-                loader.style.display = 'none';
-                content.style.display = 'block';
-            }
         }
     </script>
 </body>
