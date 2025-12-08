@@ -5,14 +5,13 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body { padding: 20px; }
-        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #28a745; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #status-message { margin-top: 15px; font-weight: bold; }
         .asset-table-container { max-height: 400px; overflow-y: auto; margin-bottom: 15px; }
     </style>
 </head>
 <body>
   <?!= include('shared-nav'); ?>
+  <?!= include('progress_bar_temp'); ?>
     <div id="main-content">
         <div id="main-form">
             <h4>歸還作業管理</h4>
@@ -42,10 +41,6 @@
             <button type="button" class="btn btn-secondary" onclick="google.script.host.close()">關閉</button>
         </div>
         
-        <div id="loading-spinner" style="display:none;">
-            <div class="loader"></div>
-            <p class="text-center">處理中，請稍候...</p>
-        </div>
 
         <div id="status-message"></div>
     </div>
@@ -106,7 +101,7 @@
                 return;
             }
 
-            showLoading(true, "正在提交歸還資料...");
+            showLoading(true, "可歸還資料分析中...");
 
             google.script.run
                 .withSuccessHandler(handleSuccess)
@@ -125,17 +120,15 @@
 
         function showLoading(isLoading, text = "正在載入資料...") {
             const form = document.getElementById('main-form');
-            const loader = document.getElementById('loading-spinner');
             const status = document.getElementById('status-message');
-            
+
             if (isLoading) {
                 form.style.display = 'none';
-                loader.style.display = 'block';
-                loader.querySelector('p').textContent = text;
                 status.innerHTML = '';
+                showProgressBar(text);
             } else {
                 form.style.display = 'block';
-                loader.style.display = 'none';
+                hideProgressBar('分析完成！', 300);
             }
         }
 

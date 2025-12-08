@@ -1,0 +1,156 @@
+<style>
+  /* 全螢幕遮罩層 */
+  .progress-loader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.3); /*稍微增加不透明度以突出動畫*/
+    backdrop-filter: blur(4px);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+
+  .progress-loader-overlay.active {
+    display: flex;
+  }
+
+  /* 進度條容器 */
+  .progress-loader-container {
+    width: 80%;
+    max-width: 500px;
+    margin: 20px;
+    display: flex;        /* 新增 Flex 佈局 */
+    flex-direction: column; /* 垂直排列 */
+    align-items: center;    /* 水平置中 */
+  }
+
+  /* --- 新增：GIF 動畫樣式 --- */
+  .progress-loader-gif {
+    width: 400px;       /* 根據你的 GIF 解析度調整大小 */
+    height: auto;
+    margin-bottom: 1px; /* 與進度條保持距離 */
+    display: block;
+  }
+
+  /* 狀態文字 */
+  .progress-loader-text {
+    color: #495057;
+    font-size: 16px;
+    margin-top: 5px;
+    font-weight: 500;
+    text-align: center;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  }
+  
+  /* 進度條外框修正 */
+  .progress {
+    width: 100%; /* 確保進度條佔滿容器寬度 */
+    height: 20px;
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    overflow: hidden;
+  }
+  
+  /* 進度條本體 */
+  .progress-bar {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    background-color: #0d6efd;
+    transition: width .6s ease;
+  }
+  
+  /* Bootstrap Striped & Animated 效果模擬 (若未引入 Bootstrap CSS) */
+  .progress-bar-striped {
+    background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+    background-size: 1rem 1rem;
+  }
+  .progress-bar-animated {
+    animation: progress-bar-stripes 1s linear infinite;
+  }
+  @keyframes progress-bar-stripes {
+    0% { background-position: 1rem 0; }
+    100% { background-position: 0 0; }
+  }
+</style>
+
+<div id="progress-loader-overlay" class="progress-loader-overlay">
+  <div class="progress-loader-container">
+    
+    <img id="progress-loader-image" 
+         class="progress-loader-gif" 
+         src="data:image/gif;base64,R0lGODdh4AEOAfcAAAAAAAAAVSQAACQAVUgAAAAkAAAkVQAkqiQk"
+         alt="Loading...">
+         
+    <div class="progress">
+      <div id="progress-loader-bar"
+           class="progress-bar progress-bar-striped progress-bar-animated"
+           role="progressbar"
+           style="width: 0%;"
+           aria-valuenow="0"
+           aria-valuemin="0"
+           aria-valuemax="100">
+           0%
+      </div>
+    </div>
+  </div>
+  <div id="progress-loader-text" class="progress-loader-text">正在載入資料，請稍候...</div>
+</div>
+
+<script>
+  let _progressLoaderInterval;
+
+  function showProgressBar(statusText = '正在載入資料，請稍候...') {
+    const overlay = document.getElementById('progress-loader-overlay');
+    const progressBar = document.getElementById('progress-loader-bar');
+    const loadingText = document.getElementById('progress-loader-text');
+
+    // 重置進度條
+    let progress = 1;
+    progressBar.style.width = '0%';
+    progressBar.setAttribute('aria-valuenow', 0);
+    progressBar.textContent = '0%'; // --- 新增：重置文字 ---
+
+    loadingText.textContent = statusText;
+    overlay.classList.add('active');
+
+    if (_progressLoaderInterval) clearInterval(_progressLoaderInterval);
+
+    // 模擬進度增長
+    _progressLoaderInterval = setInterval(() => {
+      if (progress < 90) {
+        progress++;
+        progressBar.style.width = progress + '%';
+        progressBar.setAttribute('aria-valuenow', progress);
+        progressBar.textContent = progress + '%'; // --- 新增：更新百分比文字 ---
+      }
+    }, 30); 
+  }
+
+  function hideProgressBar(completionText = '資料載入完成！', delay = 300) {
+    const overlay = document.getElementById('progress-loader-overlay');
+    const progressBar = document.getElementById('progress-loader-bar');
+    const loadingText = document.getElementById('progress-loader-text');
+
+    clearInterval(_progressLoaderInterval);
+
+    // 跳到 100%
+    progressBar.style.width = '100%';
+    progressBar.setAttribute('aria-valuenow', 100);
+    progressBar.textContent = '100%'; // --- 新增：設定為 100% ---
+    
+    loadingText.textContent = completionText;
+
+    setTimeout(() => {
+      overlay.classList.remove('active');
+    }, delay);
+  }
+</script>
