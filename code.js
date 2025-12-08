@@ -2170,20 +2170,25 @@ function checkAdminPermissions() {
  * @returns {Array<Object>} 包含詳細資訊的陣列
  */
 function getAllScrappableItems(assetCategory) {
-  // 1. 權限檢查
-  if (!checkAdminPermissions()) {
-    throw new Error("權限不足，無法存取此資料。");
-  }
+  // 1. 取得當前使用者身分與權限
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const isAdmin = checkAdminPermissions();
 
   const allAssets = getAllAssets();
   
-  // 2. 篩選符合條件的資產
-  const targetAssets = allAssets.filter(asset => 
-    asset.assetStatus === '報廢中' && 
-    asset.assetCategory === assetCategory
-  );
+  // 2. 篩選符合條件的資產 (狀態 + 權限)
+  const targetAssets = allAssets.filter(asset => {
+    // 基本條件
+    if (asset.assetStatus !== '報廢中' || asset.assetCategory !== assetCategory) {
+      return false;
+    }
+    
+    // 權限條件：管理員看全部，一般人看自己 (保管人或使用人)
+    if (isAdmin) return true;
+    return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
+  });
 
-  // 3. 轉換為前端可用的純物件格式 (關鍵修正：將 Date 轉為 String)
+  // 3. 轉換為前端可用的純物件格式
   return targetAssets.map(asset => {
     // 處理日期格式化
     let scrapDateStr = '';
@@ -2215,13 +2220,9 @@ function getAdminName() {
 }
 
 function getScrappingDataForAdmin(assetCategory) {
-  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
-  const adminEmails = getAdminEmails().map(email => email.toLowerCase());
-
-  if (!adminEmails.includes(currentUserEmail)) {
-    Logger.log(`權限阻擋：使用者 ${currentUserEmail} 嘗試存取管理員報廢清單。`);
-    return { error: "權限不足，您無法存取此功能。" };
-  }
+  // 此函式名稱雖保留 "ForAdmin"，但現在已支援一般使用者
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const isAdmin = checkAdminPermissions();
 
   try {
     const allAssets = getAllAssets();
@@ -2230,6 +2231,13 @@ function getScrappingDataForAdmin(assetCategory) {
 
     allAssets.forEach(asset => {
       if (asset.assetStatus === '報廢中' && asset.leaderName && asset.assetCategory === assetCategory) {
+        // 權限過濾：非管理員只能看到自己的資料
+        if (!isAdmin) {
+          if (asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
+            return; 
+          }
+        }
+
         if (applicants[asset.leaderName]) {
           applicants[asset.leaderName]++;
         } else {
@@ -2254,30 +2262,8 @@ function getScrappingDataForAdmin(assetCategory) {
  * @returns {Array<Object>} 回傳一個陣列，包含 { applicant: '保管人名稱', count: 報廢數量 }
  */
 function getScrappingApplicants(assetCategory) {
-  try {
-    const allAssets = getAllAssets();
-    
-    const applicants = {};
-
-    allAssets.forEach(asset => {
-      if (asset.assetStatus === '報廢中' && asset.leaderName && asset.assetCategory === assetCategory) {
-        if (applicants[asset.leaderName]) {
-          applicants[asset.leaderName]++;
-        } else {
-          applicants[asset.leaderName] = 1;
-        }
-      }
-    });
-
-    return Object.keys(applicants).map(name => ({
-      applicant: name,
-      count: applicants[name]
-    }));
-    
-  } catch (e) {
-    Logger.log("getScrappingApplicants 失敗: " + e.message);
-    throw new Error("讀取待報廢清單時發生錯誤。");
-  }
+  // 直接轉呼叫通用的邏輯
+  return getScrappingDataForAdmin(assetCategory);
 }
 
 /**
@@ -2288,25 +2274,51 @@ function getScrappingApplicants(assetCategory) {
  */
 function createScrapDoc(applicantName, assetCategory, assetIds) {
   const now = new Date();
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const isAdmin = checkAdminPermissions();
+
+  // 🛡️ 安全檢查：防止一般使用者產生他人的報表
+  // 如果不是管理員，我們強制檢查 applicantName 是否對應到當前使用者，
+  // 或者更嚴格地，我們在篩選資產時再次過濾。
+  
   try {
     const allAssets = getAllAssets();
     const assetsToScrap = [];
 
+    // 建立 Email 與 Name 的簡易查找 (為了安全檢查)
+    // 這裡我們直接在篩選資產時做嚴格檢查，這比檢查 applicantName 更安全
+    
     if (assetIds && assetIds.length > 0) {
       const assetIdSet = new Set(assetIds);
       allAssets.forEach(asset => {
         if (assetIdSet.has(asset.assetId)) {
+          // 🛡️ 權限檢查
+          if (!isAdmin && asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
+            Logger.log(`[Security Block] User ${currentUserEmail} tried to print asset ${asset.assetId} belonging to ${asset.leaderEmail}`);
+            return; // 跳過不屬於自己的資產
+          }
           assetsToScrap.push(asset);
         }
       });
     } else {
+      // 簡易模式：根據 applicantName 篩選
       allAssets.forEach(asset => {
         if (asset.leaderName === applicantName && asset.assetStatus === '報廢中' && asset.assetCategory === assetCategory) {
+           // 🛡️ 權限檢查
+           if (!isAdmin && asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
+             return; // 跳過
+           }
           assetsToScrap.push(asset);
         }
       });
     }
-    if (assetsToScrap.length === 0) throw new Error(`找不到 ${applicantName} 的待報廢財產。`);
+
+    if (assetsToScrap.length === 0) {
+        if (!isAdmin) {
+             throw new Error(`找不到您 (${applicantName}) 的待報廢財產，或您沒有權限列印此報表。`);
+        }
+        throw new Error(`找不到 ${applicantName} 的待報廢財產。`);
+    }
 
     const assetMap = new Map(allAssets.map(asset => [asset.assetId, asset]));
 
@@ -2557,14 +2569,9 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
  */
 function getTransferDataForPrint(assetCategory) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
-  const adminEmails = getAdminEmails().map(email => email.toLowerCase());
-
-  // 權限檢查：只有管理員可以存取
-  if (!adminEmails.includes(currentUserEmail)) {
-    Logger.log(`權限阻擋：使用者 ${currentUserEmail} 嘗試存取轉移列印頁面。`);
-    return { error: "權限不足，您無法存取此功能。" };
-  }
-
+  const isAdmin = checkAdminPermissions();
+  // 移除強制阻擋，改為下方邏輯判斷
+  
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
@@ -2584,6 +2591,7 @@ function getTransferDataForPrint(assetCategory) {
             new Date(reviewTime) > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
           assetToLatestTransfer.set(assetId, {
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
+            newKeeperEmail: row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1], // ✨ 用於權限判斷
             reviewTime: reviewTime
           });
         }
@@ -2602,8 +2610,17 @@ function getTransferDataForPrint(assetCategory) {
       const category = assetCategoryMap.get(assetId);
       const isUploaded = assetIsUploadedMap.get(assetId);
 
-      // 只統計指定類別且未上傳的資產
+      // 1. 類別與上傳狀態篩選
       if (category === assetCategory && isUploaded !== 'V') {
+        
+        // 2. 🛡️ 權限篩選
+        if (!isAdmin) {
+          // 一般使用者只能看到自己是新保管人的記錄
+          // (假設列印轉移記錄主要是為了「接收確認」或「保管證明」)
+          const isMyRecord = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail);
+          if (!isMyRecord) return;
+        }
+
         const keeperName = transfer.newKeeper;
         if (keeperCount[keeperName]) {
           keeperCount[keeperName]++;
@@ -2636,10 +2653,9 @@ function getTransferDataForPrint(assetCategory) {
  * @returns {Array} 返回格式：[{ assetId, assetName, oldKeeper, newKeeper, oldLocation, newLocation, transferDate }, ...]
  */
 function getAllTransferableItems(assetCategory) {
-  // 權限檢查
-  if (!checkAdminPermissions()) {
-    return { error: "權限不足，您無法存取此功能。" };
-  }
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const isAdmin = checkAdminPermissions();
+  // 移除強制阻擋
 
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -2663,8 +2679,10 @@ function getAllTransferableItems(assetCategory) {
             oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
             oldUser: row[AL_OLD_USER_COLUMN_INDEX - 1],
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
+            newKeeperEmail: row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1], // ✨ 用於權限判斷
             newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
             newUser: row[AL_NEW_USER_COLUMN_INDEX - 1],
+            newUserEmail: row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1], // ✨ 用於權限判斷
             transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
             reviewTime: reviewTime
           });
@@ -2681,7 +2699,17 @@ function getAllTransferableItems(assetCategory) {
       if (asset.assetCategory === assetCategory &&
           assetToLatestTransfer.has(asset.assetId) &&
           asset.isUploaded !== 'V') {
+        
         const transfer = assetToLatestTransfer.get(asset.assetId);
+
+        // 🛡️ 權限過濾
+        if (!isAdmin) {
+           // 一般使用者只能看到自己相關的（新保管人或新使用人）
+           const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
+                              (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
+           if (!isRelevant) return;
+        }
+
         items.push({
           assetId: asset.assetId,
           assetName: asset.assetName,
@@ -2714,6 +2742,9 @@ function getAllTransferableItems(assetCategory) {
  * @returns {Object} { fileUrl: '...' }
  */
 function createTransferDoc(keeperName, assetCategory, assetIds) {
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const isAdmin = checkAdminPermissions();
+
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
@@ -2737,8 +2768,10 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
             oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
             oldUser: row[AL_OLD_USER_COLUMN_INDEX - 1],
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
+            newKeeperEmail: row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1], // 🛡️
             newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
             newUser: row[AL_NEW_USER_COLUMN_INDEX - 1],
+            newUserEmail: row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1], // 🛡️
             reviewTime: reviewTime
           });
         }
@@ -2755,6 +2788,14 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
       allAssets.forEach(asset => {
         if (assetIdSet.has(asset.assetId) && assetToLatestTransfer.has(asset.assetId)) {
           const transfer = assetToLatestTransfer.get(asset.assetId);
+          
+          // 🛡️ 權限檢查
+          if (!isAdmin) {
+             const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
+                                (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
+             if (!isRelevant) return; // 跳過不相關的
+          }
+          
           assetsToTransfer.push({
             asset: asset,
             transfer: transfer
@@ -2768,6 +2809,14 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
           const transfer = assetToLatestTransfer.get(asset.assetId);
           // 篩選條件：新保管人匹配 + 類別匹配
           if (transfer.newKeeper === keeperName && asset.assetCategory === assetCategory) {
+            
+            // 🛡️ 權限檢查
+            if (!isAdmin) {
+                const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
+                                   (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
+                if (!isRelevant) return; 
+            }
+
             assetsToTransfer.push({
               asset: asset,
               transfer: transfer
@@ -2778,7 +2827,7 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
     }
 
     if (assetsToTransfer.length === 0) {
-      throw new Error(`找不到 ${keeperName} 的已完成轉移記錄。`);
+      throw new Error(`找不到 ${keeperName} 的已完成轉移記錄，或您沒有權限存取。`);
     }
 
     // 3️⃣ 選擇模板並複製文件
