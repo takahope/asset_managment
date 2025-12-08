@@ -18,7 +18,7 @@
     <div id="main-content">
         <h4>列印報廢申請紀錄</h4>
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <p>此處會依保管人列出所有狀態為「報廢中」的財產。您可以為每位保管人產生一份彙整的報廢報表。</p>
+            <p id="intro-text">此處會依保管人列出所有狀態為「報廢中」的財產。您可以為每位保管人產生一份彙整的報廢報表。</p>
             <button id="view-toggle-btn" class="btn btn-outline-secondary" onclick="toggleView()">切換簡易模式</button>
         </div>
 
@@ -87,29 +87,40 @@
     <script>
         console.log('🚀 [頁面載入] printScrap.html 開始載入');
         let isDetailedView = true;
+        let isAdmin = false; // ✨ 全域變數記錄權限狀態
 
         document.addEventListener("DOMContentLoaded", () => {
             console.log('📄 [DOMContentLoaded] DOM 載入完成，開始檢查權限');
             google.script.run
                 .withSuccessHandler(hasPermission => {
-                    if (hasPermission) {
-                        console.log('✅ 權限驗證通過');
-                        loadData(); 
-                        document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
-                            radio.addEventListener('change', loadData);
-                        });
-                        document.getElementById('select-all-detailed').addEventListener('change', toggleSelectAll);
+                    isAdmin = hasPermission; // 記錄權限
+                    console.log(`👤 使用者權限狀態: ${isAdmin ? '管理員' : '一般使用者'}`);
+                    
+                    // 根據權限調整 UI
+                    if (isAdmin) {
+                        document.getElementById('intro-text').textContent = '此處會依保管人列出所有狀態為「報廢中」的財產。您可以為每位保管人產生一份彙整的報廢報表。';
                     } else {
-                        console.warn('⛔️ 權限不足');
-                        showError({ message: "權限不足，只有資產管理員才能存取此頁面。" });
-                        document.getElementById('main-content').style.display = 'none';
+                        document.getElementById('intro-text').textContent = '此處列出您名下所有狀態為「報廢中」的財產。您可以勾選項目後產生報廢申請單。';
+                        // 一般使用者隱藏切換視圖按鈕，強制使用詳細模式以便勾選
+                        document.getElementById('view-toggle-btn').style.display = 'none';
+                        isDetailedView = true; 
                     }
+
+                    loadData(); // 無論權限如何都載入資料 (後端會過濾)
+
+                    document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
+                        radio.addEventListener('change', loadData);
+                    });
+                    document.getElementById('select-all-detailed').addEventListener('change', toggleSelectAll);
                 })
                 .withFailureHandler(showError)
                 .checkAdminPermissions();
         });
 
         function toggleView() {
+            // 如果是一般使用者，禁止切換視圖 (雖然後端有保護，前端也做一層)
+            if (!isAdmin) return;
+
             isDetailedView = !isDetailedView;
             const simpleView = document.getElementById('simple-view');
             const detailedView = document.getElementById('detailed-view');
@@ -132,7 +143,8 @@
             showLoading(true);
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
 
-            if (isDetailedView) {
+            // 一般使用者強制使用詳細模式 API
+            if (isDetailedView || !isAdmin) {
                 google.script.run
                     .withSuccessHandler(renderDetailedTable)
                     .withFailureHandler(showError)
@@ -144,6 +156,7 @@
                     .getScrappingDataForAdmin(assetCategory);
             }
         }
+// ... (其餘函式保持不變)
 
         function renderSimpleTable(applicants) {
             console.log('📦 [renderSimpleTable] 收到資料:', applicants);

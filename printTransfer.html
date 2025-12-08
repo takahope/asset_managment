@@ -19,7 +19,7 @@
     <div id="main-content">
         <h4>列印轉移記錄</h4>
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <p>此處會依保管人列出所有已完成轉移的財產。您可以為每位保管人產生一份彙整的轉移報表。</p>
+            <p id="intro-text">此處會依保管人列出所有已完成轉移的財產。您可以為每位保管人產生一份彙整的轉移報表。</p>
             <button id="view-toggle-btn" class="btn btn-outline-secondary" onclick="toggleView()">切換簡易模式</button>
         </div>
 
@@ -92,26 +92,38 @@
 
     <script>
         let isDetailedView = true;
+        let isAdmin = false; // ✨ 全域變數記錄權限
 
         document.addEventListener("DOMContentLoaded", () => {
             google.script.run
                 .withSuccessHandler(hasPermission => {
-                    if (hasPermission) {
-                        loadData(); // 如果有權限，才載入資料
-                        document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
-                            radio.addEventListener('change', loadData);
-                        });
-                        document.getElementById('select-all-detailed').addEventListener('change', toggleSelectAll);
+                    isAdmin = hasPermission;
+                    console.log(`👤 使用者權限狀態: ${isAdmin ? '管理員' : '一般使用者'}`);
+                    
+                    // 根據權限調整 UI
+                    if (isAdmin) {
+                        document.getElementById('intro-text').textContent = '此處會依保管人列出所有已完成轉移的財產。您可以為每位保管人產生一份彙整的轉移報表。';
                     } else {
-                        showError({ message: "權限不足，只有資產管理員才能存取此頁面。" });
-                        document.getElementById('main-content').style.display = 'none';
+                        document.getElementById('intro-text').textContent = '此處列出您名下（作為新保管人或新使用人）所有已完成轉移的財產記錄。';
+                        // 一般使用者隱藏切換視圖按鈕，強制使用詳細模式
+                        document.getElementById('view-toggle-btn').style.display = 'none';
+                        isDetailedView = true; 
                     }
+
+                    loadData(); // 載入資料 (後端會過濾)
+
+                    document.querySelectorAll('input[name="assetCategory"]').forEach(radio => {
+                        radio.addEventListener('change', loadData);
+                    });
+                    document.getElementById('select-all-detailed').addEventListener('change', toggleSelectAll);
                 })
                 .withFailureHandler(showError)
                 .checkAdminPermissions();
         });
 
         function toggleView() {
+            if (!isAdmin) return; // 一般使用者禁止切換
+
             isDetailedView = !isDetailedView;
             const simpleView = document.getElementById('simple-view');
             const detailedView = document.getElementById('detailed-view');
@@ -133,7 +145,8 @@
             showLoading(true);
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
 
-            if (isDetailedView) {
+            // 一般使用者強制使用詳細模式 API
+            if (isDetailedView || !isAdmin) {
                 google.script.run
                     .withSuccessHandler(renderDetailedTable)
                     .withFailureHandler(showError)
@@ -145,6 +158,7 @@
                     .getTransferDataForPrint(assetCategory);
             }
         }
+// ... (rest of the functions)
 
         function renderSimpleTable(keepers) {
             const listBody = document.getElementById('transfer-list');
