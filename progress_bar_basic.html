@@ -113,16 +113,29 @@
     const progressBar = document.getElementById('progress-loader-bar');
     const loadingText = document.getElementById('progress-loader-text');
 
+    // 如果進度條已經在運行中，只更新文字，不重置進度
+    if (_progressLoaderInterval) {
+      loadingText.textContent = statusText;
+      return;
+    }
+
     // 重置進度條
     let progress = 1;
     progressBar.style.width = '0%';
     progressBar.setAttribute('aria-valuenow', 0);
-    progressBar.textContent = '0%'; // --- 新增：重置文字 ---
+    progressBar.textContent = '0%';
 
     loadingText.textContent = statusText;
     overlay.classList.add('active');
 
-    if (_progressLoaderInterval) clearInterval(_progressLoaderInterval);
+    // 強制重新播放 GIF 動畫（清空再重設 src）
+    const loaderImg = document.getElementById('progress-loader-image');
+    if (loaderImg) {
+      const originalSrc = loaderImg.src;
+      loaderImg.src = '';
+      loaderImg.offsetHeight; // 觸發 reflow
+      loaderImg.src = originalSrc;
+    }
 
     // 模擬進度增長
     _progressLoaderInterval = setInterval(() => {
@@ -130,9 +143,9 @@
         progress++;
         progressBar.style.width = progress + '%';
         progressBar.setAttribute('aria-valuenow', progress);
-        progressBar.textContent = progress + '%'; // --- 新增：更新百分比文字 ---
+        progressBar.textContent = progress + '%';
       }
-    }, 30); 
+    }, 30);
   }
 
   function hideProgressBar(completionText = '資料載入完成！', delay = 300) {
@@ -141,6 +154,7 @@
     const loadingText = document.getElementById('progress-loader-text');
 
     clearInterval(_progressLoaderInterval);
+    _progressLoaderInterval = null; // 重置標記，允許下次重新啟動進度條
 
     // 跳到 100%
     progressBar.style.width = '100%';
