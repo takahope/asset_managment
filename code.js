@@ -85,6 +85,7 @@ const AL_NEW_USER_COLUMN_INDEX = 13;         // ✨ 新增：新使用人
 const AL_NEW_USER_EMAIL_COLUMN_INDEX = 14;   // ✨ 新增：新使用人Email
 const AL_TRANSFER_TYPE_COLUMN_INDEX = 15;    // ✨ 新增：轉移類型（地點/保管人/使用人）
 const AL_APPROVER_EMAIL_COLUMN_INDEX = 16;  // ✨ 新增：實際審核者Email（方案D）
+const AL_APPLICANT_EMAIL_COLUMN_INDEX = 17;  // Q 欄：申請操作人員 Email
 
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
@@ -809,6 +810,7 @@ function processBatchTransferApplication(formData) {
     const locationIsStationMap = new Map(locationData.map(row => [row[0], row[1]]));
 
     const now = new Date();
+    const applicantEmail = Session.getActiveUser().getEmail(); // 申請操作人員 Email
     const newLogsToAdd = [];
     const createdApplications = [];
 
@@ -910,7 +912,9 @@ function processBatchTransferApplication(formData) {
             oldUserName, // AL_OLD_USER_COLUMN_INDEX (12)
             actualNewUserName, // AL_NEW_USER_COLUMN_INDEX (13)
             finalNewUserEmail, // AL_NEW_USER_EMAIL_COLUMN_INDEX (14)
-            transferType // AL_TRANSFER_TYPE_COLUMN_INDEX (15)
+            transferType, // AL_TRANSFER_TYPE_COLUMN_INDEX (15)
+            "", // AL_APPROVER_EMAIL_COLUMN_INDEX (16) - 審核者 Email（審核時填入）
+            applicantEmail // AL_APPLICANT_EMAIL_COLUMN_INDEX (17) - 申請操作人員 Email
           ];
           newLogsToAdd.push(newLogRow);
           createdApplications.push({ 
