@@ -5,8 +5,6 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body { padding: 20px; }
-        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #007bff; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #status-message { margin-top: 15px; }
         .table-container { max-height: 450px; overflow-y: auto; }
         .btn-print { min-width: 100px; }
@@ -14,6 +12,7 @@
 </head>
 <body>
     <?!= include('shared-nav'); ?>
+    <?!= include('progress_bar_runner'); ?>
 
     <div id="main-content">
         <h4>列印報廢申請紀錄</h4>
@@ -36,10 +35,6 @@
             </div>
         </div>
 
-        <div id="loading-spinner">
-            <div class="loader"></div>
-            <p class="text-center">正在載入待報廢清單...</p>
-        </div>
         
         <div id="simple-view" style="display: none;">
             <div id="table-container" class="table-container">
@@ -91,6 +86,7 @@
 
         document.addEventListener("DOMContentLoaded", () => {
             console.log('📄 [DOMContentLoaded] DOM 載入完成，開始檢查權限');
+            showLoading(true); // 一開始就顯示進度條，避免頁面內容先閃現
             google.script.run
                 .withSuccessHandler(hasPermission => {
                     isAdmin = hasPermission; // 記錄權限
@@ -356,7 +352,11 @@
         }
 
         function showLoading(isLoading) {
-            document.getElementById('loading-spinner').style.display = isLoading ? 'block' : 'none';
+            if (isLoading) {
+                showProgressBar('正在載入待報廢清單...');
+            } else {
+                hideProgressBar('載入完成！', 300);
+            }
             document.getElementById('simple-view').style.display = isLoading ? 'none' : (isDetailedView ? 'none' : 'block');
             document.getElementById('detailed-view').style.display = isLoading ? 'none' : (isDetailedView ? 'block' : 'none');
         }
