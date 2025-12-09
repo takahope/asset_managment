@@ -124,6 +124,15 @@
     text.textContent = statusText;
     overlay.classList.add('active');
 
+    // 強制重新播放 GIF 動畫（清空再重設 src）
+    const runnerImg = document.getElementById('runnerImage');
+    if (runnerImg) {
+      const originalSrc = runnerImg.src;
+      runnerImg.src = '';
+      runnerImg.offsetHeight; // 觸發 reflow
+      runnerImg.src = originalSrc;
+    }
+
     // 模擬進度增長
     _runnerInterval = setInterval(() => {
       if (progress < 90) {
