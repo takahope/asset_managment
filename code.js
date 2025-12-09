@@ -1065,7 +1065,7 @@ function processBatchTransferApplication(formData) {
         body += `\n此為系統自動發送郵件。`;
         MailApp.sendEmail(adminEmails.join(','), subject, body);
       }
-      resultMessage = `${autoCompletedApps.length} 筆財產地點已變更！已通知財產管理人員。`;
+      resultMessage = `${autoCompletedApps.length} 筆財產地點已變更！請列印轉移申請單。`;
     }
     // 情況4：組合變更（其他情況）
     else if (needsApprovalApps.length > 0) {

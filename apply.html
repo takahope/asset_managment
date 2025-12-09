@@ -719,7 +719,7 @@
                     .withSuccessHandler(onDataLoaded)
                     .withFailureHandler(onDataError)
                     .getTransferData();
-            }, 3000);
+            }, 1000);
         }
         function showError(error) {
             const statusMsg = document.getElementById('status-message');
