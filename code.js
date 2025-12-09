@@ -1423,6 +1423,46 @@ function processBatchApproval(appIds) {
             }
           }
 
+          // ✨ 新增：通知原始申請人
+          try {
+            const applicantEmail = appDetails.row[AL_APPLICANT_EMAIL_COLUMN_INDEX - 1];
+
+            // 只有當申請人不是審核者本人時才發送通知（避免自己審核自己的申請收到多餘通知）
+            if (applicantEmail && applicantEmail.toLowerCase() !== currentUserEmail.toLowerCase()) {
+              const webAppUrl = getAppUrl();
+              const printTransferLink = `${webAppUrl}?page=printTransfer`;
+
+              // 嘗試取得申請人姓名
+              const applicantName = getAllAssets()
+                .find(a => a.leaderEmail && a.leaderEmail.toLowerCase() === applicantEmail.toLowerCase())?.leaderName
+                || applicantEmail.split('@')[0];
+
+              // 從申請紀錄取得新使用人姓名（用於郵件內容）
+              const notifyNewUserName = appDetails.row.length > AL_NEW_USER_COLUMN_INDEX - 1
+                ? appDetails.row[AL_NEW_USER_COLUMN_INDEX - 1]
+                : '';
+
+              const subject = `[財產轉移通知] 您的轉移申請已審核完成`;
+              let body = `您好 ${applicantName}，\n\n`;
+              body += `您提交的財產轉移申請（申請ID: ${appId}）已審核完成。\n\n`;
+              body += `資產編號：${assetId}\n`;
+              body += `新保管人：${newKeeperName}\n`;
+              if (notifyNewUserName && notifyNewUserName.toString().trim() !== '') {
+                body += `新使用人：${notifyNewUserName}\n`;
+              }
+              body += `審核時間：${now.toLocaleString('zh-TW')}\n\n`;
+              body += `請點擊下方連結，前往「列印轉移申請」頁面列印轉移申請單：\n`;
+              body += `${printTransferLink}\n\n`;
+              body += `此為系統自動發送郵件。`;
+
+              MailApp.sendEmail(applicantEmail, subject, body);
+              Logger.log(`✅ 已通知申請人: ${applicantEmail}`);
+            }
+          } catch (emailError) {
+            Logger.log(`⚠️ 發送通知給申請人時發生錯誤: ${emailError.message}`);
+            // 不中斷流程
+          }
+
           successCount++;
         } else {
           errors.push(`找不到資產 ${assetId}`);
