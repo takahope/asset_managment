@@ -1048,7 +1048,7 @@ function processBatchTransferApplication(formData) {
     else if (actualNewLocation && !actualNewKeeperEmail && !actualNewUserEmail) {
       // 通知管理員
       const adminEmails = getAdminEmails();
-      if (adminEmails && adminEmails.length > 0) {
+      if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
         const webAppUrl = getAppUrl();
         const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
         const subject = `[財產通知] ${autoCompletedApps.length} 筆財產地點已變更`;
@@ -1430,10 +1430,10 @@ function processBatchApproval(appIds) {
 
     if (successCount > 0) {
       const adminEmails = getAdminEmails();
-      if (adminEmails && adminEmails.length > 0) {
+      if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
         const webAppUrl = getAppUrl();
         const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
-        
+
         const subject = `[系統通知] 有 ${successCount} 筆已完成轉移的財產待您更新`;
         let body = `您好，\n\n系統剛剛有 ${successCount} 筆財產轉移申請已被核准，請您執行後續的上傳更新作業。\n\n`;
         body += `請點擊下方連結，前往更新頁面進行操作：\n`;
@@ -2007,7 +2007,7 @@ function processBatchScrapping(formData) {
         const applicantName = scrappedAssets[0].keeperName; // 申請人即為保管人
         const adminEmails = getAdminEmails();
 
-        if (adminEmails && adminEmails.length > 0) {
+        if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
           const webAppUrl = getAppUrl();
           const printScrapLink = `${webAppUrl}?page=printScrap`;
 
@@ -2118,6 +2118,28 @@ function getAdminEmails() {
   }
 
   return emails;
+}
+
+/**
+ * 檢查是否啟用管理員郵件通知功能
+ * 讀取「管理員名單」工作表的 C2 儲存格，若為「是」則啟用
+ * @returns {boolean} true = 啟用郵件通知, false = 停用
+ */
+function isAdminEmailEnabled() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ADMIN_LIST_SHEET_NAME);
+  if (!sheet) {
+    Logger.log(`錯誤：找不到名為 "${ADMIN_LIST_SHEET_NAME}" 的工作表。`);
+    return false;
+  }
+
+  const emailToggle = sheet.getRange("C2").getValue();
+  const isEnabled = (emailToggle === '是');
+
+  if (!isEnabled) {
+    Logger.log(`📧 管理員郵件通知已停用（C2 = 「${emailToggle}」）`);
+  }
+
+  return isEnabled;
 }
 
 /**
