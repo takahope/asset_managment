@@ -314,7 +314,18 @@
                 showError({message: "您目前沒有可轉移的財產。"});
                 return;
             }
-            
+
+            // ✨ 重新載入時先清空所有下拉選單，避免重複填充
+            document.getElementById('location-filter-select').innerHTML = '<option value="">-- 顯示全部地點 --</option>';
+            document.getElementById('category-filter-select').innerHTML = '<option value="">-- 顯示全部類別 --</option>';
+            document.getElementById('keeper-select').innerHTML = '<option value="">請選擇新保管人...</option>';
+            document.getElementById('user-select').innerHTML = '<option value="">請選擇新使用人...</option>';
+            document.getElementById('custodian-select').innerHTML = '<option value="">請選擇駐管...</option>';
+            document.getElementById('station-location-select').innerHTML = '<option value="">請選擇駐站地點...</option>';
+
+            // 重置分頁
+            currentPage = 1;
+
             displayPage(currentPage);
             populateLocationFilter(allAssets);
             populateCategoryFilter(allAssets);
@@ -678,7 +689,37 @@
             document.getElementById('loading-spinner').style.display = 'none';
             statusMsg.className = 'alert alert-success';
             statusMsg.textContent = message;
-            setTimeout(() => google.script.host.close(), 3000);
+
+            // 3 秒後重新載入資料，讓使用者可以繼續使用
+            setTimeout(() => {
+                statusMsg.textContent = '';
+                statusMsg.className = '';
+
+                // 重置表單狀態
+                document.getElementById('select-all').checked = false;
+                document.getElementById('search-box').value = '';
+                document.querySelectorAll('.special-transfer-mode').forEach(cb => cb.checked = false);
+                document.getElementById('regular-transfer-options').style.display = 'block';
+                document.getElementById('regular-transfer-selects').style.display = 'block';
+                document.getElementById('station-transfer-selects').style.display = 'none';
+                document.getElementById('change-location').checked = true;
+                document.getElementById('change-keeper').checked = true;
+                document.getElementById('change-user').checked = false;
+                document.getElementById('user-select-group').style.display = 'none';
+                document.getElementById('keeper-select').value = '';
+                document.getElementById('location-select').value = '';
+                document.getElementById('user-select').value = '';
+                document.getElementById('custodian-select').value = '';
+                document.getElementById('station-location-select').value = '';
+
+                // 重新載入資料
+                document.getElementById('main-form').style.display = 'none';
+                showProgressBar('正在重新載入資料...');
+                google.script.run
+                    .withSuccessHandler(onDataLoaded)
+                    .withFailureHandler(onDataError)
+                    .getTransferData();
+            }, 3000);
         }
         function showError(error) {
             const statusMsg = document.getElementById('status-message');
