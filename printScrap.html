@@ -13,6 +13,7 @@
 <body>
     <?!= include('shared-nav'); ?>
     <?!= include('progress_bar_runner'); ?>
+    <?!= include('progress_bar_print'); ?>
 
     <div id="main-content">
         <h4>列印報廢申請紀錄</h4>
@@ -257,10 +258,12 @@
         function generateDoc(applicantName, btn) {
             btn.disabled = true;
             btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 產生中`;
+            showPrintProgressBar('正在為 ' + applicantName + ' 產生報廢報表...');
 
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
             google.script.run
                 .withSuccessHandler(result => {
+                    hidePrintProgressBar('報表產生完成！');
                     // 先詢問是否更新狀態
                     const shouldUpdate = confirm(
                         '📄 文件產生成功！\n\n' +
@@ -283,6 +286,7 @@
                     }
                 })
                 .withFailureHandler(error => {
+                    hidePrintProgressBar('報表產生失敗');
                     showError(error);
                     btn.disabled = false;
                     btn.textContent = '產生報表';
@@ -300,12 +304,14 @@
             const btn = document.querySelector('.btn-success');
             btn.disabled = true;
             btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 產生中`;
+            showPrintProgressBar('正在產生彙總報廢報表...');
 
             google.script.run
                 .withSuccessHandler(adminName => {
                     const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
                     google.script.run
                         .withSuccessHandler(result => {
+                            hidePrintProgressBar('報表產生完成！');
                             // 先詢問是否更新狀態
                             const shouldUpdate = confirm(
                                 '📄 彙總報表產生成功！\n\n' +
@@ -330,6 +336,7 @@
                             }
                         })
                         .withFailureHandler(error => {
+                            hidePrintProgressBar('報表產生失敗');
                             showError(error);
                             btn.disabled = false;
                             btn.textContent = '產生彙總報表';
@@ -337,6 +344,7 @@
                         .createScrapDoc(adminName, assetCategory, selectedIds);
                 })
                 .withFailureHandler(error => {
+                    hidePrintProgressBar('報表產生失敗');
                     showError(error);
                     btn.disabled = false;
                     btn.textContent = '產生彙總報表';

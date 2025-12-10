@@ -31,7 +31,7 @@
 
   /* --- 新增：GIF 動畫樣式 --- */
   .progress-loader-gif {
-    width: 400px;       /* 根據你的 GIF 解析度調整大小 */
+    width: 300px;       /* 根據你的 GIF 解析度調整大小 */
     height: auto;
     margin-bottom: 1px; /* 與進度條保持距離 */
     display: block;
@@ -64,7 +64,7 @@
     color: #fff;
     text-align: center;
     white-space: nowrap;
-    background-color: #0d6efd;
+    background-color: #4CAF50;
     transition: width .6s ease;
   }
   
@@ -106,15 +106,15 @@
 </div>
 
 <script>
-  let _progressLoaderInterval;
+  let _printProgressInterval;
 
-  function showProgressBar(statusText = '正在載入資料，請稍候...') {
+  function showPrintProgressBar(statusText = '正在產生文件，請稍候...') {
     const overlay = document.getElementById('progress-loader-overlay');
     const progressBar = document.getElementById('progress-loader-bar');
     const loadingText = document.getElementById('progress-loader-text');
 
     // 如果進度條已經在運行中，只更新文字，不重置進度
-    if (_progressLoaderInterval) {
+    if (_printProgressInterval) {
       loadingText.textContent = statusText;
       return;
     }
@@ -138,23 +138,23 @@
     }
 
     // 模擬進度增長
-    _progressLoaderInterval = setInterval(() => {
+    _printProgressInterval = setInterval(() => {
       if (progress < 90) {
         progress++;
         progressBar.style.width = progress + '%';
         progressBar.setAttribute('aria-valuenow', progress);
         progressBar.textContent = progress + '%';
       }
-    }, 30);
+    }, 150);
   }
 
-  function hideProgressBar(completionText = '資料載入完成！', delay = 300) {
+  function hidePrintProgressBar(completionText = '文件產生完成！', delay = 300) {
     const overlay = document.getElementById('progress-loader-overlay');
     const progressBar = document.getElementById('progress-loader-bar');
     const loadingText = document.getElementById('progress-loader-text');
 
-    clearInterval(_progressLoaderInterval);
-    _progressLoaderInterval = null; // 重置標記，允許下次重新啟動進度條
+    clearInterval(_printProgressInterval);
+    _printProgressInterval = null; // 重置標記，允許下次重新啟動進度條
 
     // 跳到 100%
     progressBar.style.width = '100%';
