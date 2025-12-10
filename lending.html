@@ -84,6 +84,12 @@
         let allAssets = [];
 
         document.addEventListener("DOMContentLoaded", () => {
+            // 只在首次載入時綁定事件監聽器（避免重複綁定）
+            document.getElementById('location-filter-select').addEventListener('change', filterTable);
+            document.getElementById('search-box').addEventListener('input', filterTable);
+            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+
+            // 載入資料
             showLoading(true);
             google.script.run
                 .withSuccessHandler(populateForm)
@@ -108,10 +114,6 @@
             populateLocationFilter(allAssets);
             populateBorrowerSelect(response.borrowers);
             populateLendingLocationSelect(response.locations);
-
-            document.getElementById('location-filter-select').addEventListener('change', filterTable);
-            document.getElementById('search-box').addEventListener('input', filterTable);
-            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
         }
 
         function renderTable(assets) {
@@ -133,6 +135,8 @@
 
         function populateLocationFilter(assets) {
             const locationFilterSelect = document.getElementById('location-filter-select');
+            // 清空舊選項（保留第一個預設選項）
+            locationFilterSelect.innerHTML = '<option value="">-- 顯示全部地點 --</option>';
             const uniqueLocations = [...new Set(assets.map(asset => asset.location))].sort();
             uniqueLocations.forEach(loc => {
                 const option = document.createElement('option');
@@ -144,6 +148,8 @@
         
         function populateBorrowerSelect(borrowers) {
             const borrowerSelect = document.getElementById('borrower-select');
+            // 清空舊選項（保留第一個預設選項）
+            borrowerSelect.innerHTML = '<option value="">請選擇借用人...</option>';
             if (borrowers && borrowers.length > 0) {
                 borrowers.forEach(name => {
                     const option = document.createElement('option');
@@ -156,6 +162,8 @@
 
         function populateLendingLocationSelect(locations) {
             const locationSelect = document.getElementById('lending-location-select');
+            // 清空舊選項（保留第一個預設選項）
+            locationSelect.innerHTML = '<option value="">請選擇地點...</option>';
             if (locations && locations.length > 0) {
                 locations.forEach(loc => {
                     const option = document.createElement('option');
@@ -227,9 +235,22 @@
         }
 
         function showSuccessAndClose(message) {
-            const mainContent = document.getElementById('main-content');
-            mainContent.innerHTML = `<div class="alert alert-success">${message}</div>`;
-            setTimeout(() => google.script.host.close(), 3000);
+            hideProgressBar('出借申請已提交！', 0);
+            const statusMsg = document.getElementById('status-message');
+            // ✅ 不顯示表單，保持隱藏狀態避免閃現舊資料
+            statusMsg.className = 'alert alert-success';
+            statusMsg.textContent = message + ' 正在重新載入資料...';
+
+            // 短暫延遲後立即重新載入資料（讓用戶看到成功訊息）
+            setTimeout(loadData, 500);
+        }
+
+        function loadData() {
+            showLoading(true, '正在重新載入資料...');
+            google.script.run
+                .withSuccessHandler(populateForm)
+                .withFailureHandler(showError)
+                .getLendingData();
         }
 
         function showError(error) {
