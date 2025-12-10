@@ -857,21 +857,23 @@ function processBatchTransferApplication(formData) {
           const isLocationChange = finalNewLocation && asset.location !== finalNewLocation;
           const isUserChange = (actualNewUserEmail && oldUserEmail !== actualNewUserEmail) || (newUserName && oldUserName !== newUserName);
 
-          // ✨ 判斷轉移類型（優先使用駐站轉移標記）
+          // ✨ 判斷轉移類型（優先使用駐站轉移標記，否則動態組合變更項目）
           let transferType = '';
           if (actualTransferType === '駐站轉移') {
             transferType = '駐站轉移'; // 駐站轉移有最高優先級
-          } else if (isKeeperChange && isUserChange) {
-            transferType = '保管人+使用人';
-          } else if (isKeeperChange) {
-            transferType = '保管人';
-          } else if (isUserChange) {
-            transferType = '使用人';
-          } else if (isLocationChange) {
-            transferType = '地點';
           } else {
-            // 沒有實際變更，跳過此資產
-            return;
+            // 動態組合轉移類型
+            const parts = [];
+            if (isKeeperChange) parts.push('保管人');
+            if (isUserChange) parts.push('使用人');
+            if (isLocationChange) parts.push('地點');
+
+            if (parts.length > 0) {
+              transferType = parts.join('+');
+            } else {
+              // 沒有實際變更，跳過此資產
+              return;
+            }
           }
           
           // 只有變更保管人或使用人時才需要設為「待接收」狀態
