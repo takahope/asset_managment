@@ -245,6 +245,7 @@
         }
 
         function showSuccessAndClose(message) {
+            hideProgressBar('報廢申請已提交！', 0);
             const mainContent = document.getElementById('main-content');
             mainContent.innerHTML = `<div class="alert alert-success">${message}</div>`;
             setTimeout(() => google.script.host.close(), 3000);
