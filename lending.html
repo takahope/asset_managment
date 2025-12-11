@@ -5,7 +5,13 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body { padding: 20px; }
-        #status-message { margin-top: 15px; font-weight: bold; }
+        #status-message {
+            margin-top: 15px;
+            font-weight: bold;
+            /* 確保狀態訊息顯示在進度條之上 */
+            position: relative;
+            z-index: 10000;  /* 高於進度條的 z-index: 9999 */
+        }
         .asset-table-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
     </style>
 </head>
@@ -13,10 +19,11 @@
   <?!= include('shared-nav'); ?>
   <?!= include('progress_bar_basic'); ?>
     <div id="main-content">
-        <div id="main-form">
+        <!-- 靜態區域：始終可見 -->
+        <div id="static-header">
             <h4>申請財產出借 (批次)</h4>
             <p>請從您名下「在庫」的財產中，勾選要出借的項目。</p>
-            
+
             <div class="form-row">
                 <div class="form-group col-md-6">
                     <label for="location-filter-select">依地點篩選：</label>
@@ -29,7 +36,10 @@
                     <input type="text" class="form-control" id="search-box" placeholder="輸入產編、名稱、保管人...">
                 </div>
             </div>
+        </div>
 
+        <!-- 動態區域：載入時隱藏 -->
+        <div id="dynamic-form">
             <div class="asset-table-container">
                 <table class="table table-hover table-sm">
                     <thead class="thead-light" style="position: sticky; top: 0;">
@@ -76,7 +86,7 @@
             <button id="submit-btn" type="button" class="btn btn-primary" onclick="submitLending()">提交出借申請</button>
             <button type="button" class="btn btn-secondary" onclick="google.script.host.close()">取消</button>
         </div>
-        
+
         <div id="status-message"></div>
     </div>
 
@@ -106,7 +116,18 @@
             allAssets = response.assets;
 
             if (!allAssets || allAssets.length === 0) {
-                document.getElementById('main-form').innerHTML = '<div class="alert alert-info">您目前沒有任何「在庫」狀態的財產可供出借。</div>';
+                // 只更新 dynamic-form，保持標題和篩選器可見
+                const dynamicForm = document.getElementById('dynamic-form');
+                dynamicForm.innerHTML = `
+                    <div class="alert alert-info" role="alert">
+                        <h5 class="alert-heading">目前沒有可申請出借的財產</h5>
+                        <p>您目前沒有狀態為「在庫」的財產可供出借申請。</p>
+                        <hr>
+                        <p class="mb-0">如有疑問，請聯絡系統管理員。</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="google.script.host.close()">關閉</button>
+                `;
+                dynamicForm.style.display = 'block';
                 return;
             }
 
@@ -200,6 +221,23 @@
             updateSelectedCount();
         }
 
+        /**
+         * 顯示提示訊息（3 秒後自動消失）
+         * @param {string} msg - 訊息內容
+         * @param {string} className - Bootstrap alert 樣式類別
+         */
+        function showMessage(msg, className = 'alert-info') {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.className = `alert ${className}`;
+            statusDiv.textContent = msg;
+
+            // 3 秒後自動清除訊息
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = '';
+            }, 3000);
+        }
+
         function submitLending() {
             const selectedAssets = Array.from(document.querySelectorAll('.asset-checkbox:checked')).map(cb => cb.value);
             const borrowerName = document.getElementById('borrower-select').value;
@@ -222,27 +260,30 @@
         }
 
         function showLoading(isLoading, text = "正在分析可出借資產資料中...") {
-            const form = document.getElementById('main-form');
-            const status = document.getElementById('status-message');
+            const dynamicForm = document.getElementById('dynamic-form');
             if (isLoading) {
-                form.style.display = 'none';
-                status.innerHTML = '';
+                dynamicForm.style.display = 'none';  // 只隱藏動態區域
                 showProgressBar(text);
             } else {
-                form.style.display = 'block';
+                dynamicForm.style.display = 'block';
                 hideProgressBar('分析數據載入完成！', 300);
             }
         }
 
         function showSuccessAndClose(message) {
+            // 步驟 1：隱藏提交時的進度條
             hideProgressBar('出借申請已提交！', 0);
-            const statusMsg = document.getElementById('status-message');
-            // ✅ 不顯示表單，保持隱藏狀態避免閃現舊資料
-            statusMsg.className = 'alert alert-success';
-            statusMsg.textContent = message + ' 正在重新載入資料...';
 
-            // 短暫延遲後立即重新載入資料（讓用戶看到成功訊息）
-            setTimeout(loadData, 500);
+            const dynamicForm = document.getElementById('dynamic-form');
+            dynamicForm.style.display = 'none';  // 確保動態區域隱藏
+
+            // 步驟 2：立即顯示綠色提示訊息（3 秒後自動消失）
+            showMessage(message + ' 正在重新載入資料...', 'alert-success');
+
+            // 步驟 3：短暫延遲後啟動重新載入進度條（讓用戶先看到綠色訊息）
+            setTimeout(() => {
+                loadData();  // 這會調用 showLoading(true, '正在重新載入資料...')
+            }, 150);  // 150ms 延遲，確保綠色訊息先渲染
         }
 
         function loadData() {
