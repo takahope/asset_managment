@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; }
+        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #3498db; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status-message { margin-top: 15px; font-weight: bold; }
+        .required-field::after { content: "*"; color: red; margin-left: 4px; }
+    </style>
+</head>
+<body>
+    <?!= include('shared-nav'); ?>
+    <?!= include('progress_bar_basic'); ?>
+
+    <div id="main-form" style="display:none;" class="container-fluid">
+        <h4 class="mb-4">新增財產 / 物品</h4>
+
+        <form id="add-asset-form">
+            <!-- 類型選擇 -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    資料類型
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="assetType" id="typeProperty" value="property" checked onchange="toggleFields()">
+                            <label class="form-check-label" for="typeProperty">財產 (列入財產總表)</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="assetType" id="typeItem" value="item" onchange="toggleFields()">
+                            <label class="form-check-label" for="typeItem">物品 (列入物品總表)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 基本資料 -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    基本資料
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label for="assetId" class="required-field">編號</label>
+                            <input type="text" class="form-control" id="assetId" required placeholder="例如：A1120001">
+                            <small class="form-text text-muted">請輸入完整的財產或物品編號，系統將檢查唯一性。</small>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="assetName" class="required-field">名稱</label>
+                            <input type="text" class="form-control" id="assetName" required placeholder="例如：ASUS 筆記型電腦">
+                        </div>
+                         <div class="form-group col-md-4">
+                            <label for="category">類別</label>
+                            <input type="text" class="form-control" id="category" list="categoryList" placeholder="選擇或輸入類別">
+                            <datalist id="categoryList"></datalist>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label for="purchaseDate">取得日期</label>
+                            <input type="date" class="form-control" id="purchaseDate">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="useLife">使用年限 (年)</label>
+                            <input type="number" class="form-control" id="useLife" min="0" placeholder="例如：3">
+                        </div>
+                        <div class="form-group col-md-4 d-flex align-items-center">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="isActuallyComputer">
+                                <label class="form-check-label" for="isActuallyComputer">
+                                    此設備為電腦主機/筆電 (需定期回報狀態)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 保管與位置 -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    保管與位置
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label for="location" class="required-field">保管地點</label>
+                            <select class="form-control" id="location" required>
+                                <option value="">載入中...</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="keeper" class="required-field">保管人</label>
+                            <select class="form-control" id="keeper" required onchange="autoFillUser()">
+                                <option value="">載入中...</option>
+                            </select>
+                        </div>
+                         <div class="form-group col-md-4 property-only">
+                            <label for="user">使用人 (預設同保管人)</label>
+                            <select class="form-control" id="user">
+                                <option value="">同保管人</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 其他 -->
+            <div class="form-group">
+                <label for="remarks">備註</label>
+                <textarea class="form-control" id="remarks" rows="3"></textarea>
+            </div>
+
+            <button type="button" class="btn btn-primary btn-lg btn-block" onclick="submitForm()">新增資料</button>
+        </form>
+    </div>
+
+    <div id="loading-spinner" style="display:none;">
+        <div class="loader"></div>
+        <p class="text-center">處理中，請稍候...</p>
+    </div>
+
+    <div id="status-message"></div>
+
+    <script>
+        let keeperMap = {}; // Email -> Name
+        let userMap = {};   // Email -> Name
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById('main-form').style.display = 'none';
+            showProgressBar('正在載入選單資料...');
+
+            google.script.run
+                .withSuccessHandler(initForm)
+                .withFailureHandler(onDataError)
+                .getDropdownData();
+        });
+
+        function initForm(data) {
+            hideProgressBar('載入完成');
+            setTimeout(() => {
+                document.getElementById('main-form').style.display = 'block';
+                
+                // 填充地點
+                const locationSelect = document.getElementById('location');
+                locationSelect.innerHTML = '<option value="">請選擇地點...</option>';
+                data.locations.forEach(loc => {
+                    locationSelect.add(new Option(loc, loc));
+                });
+
+                // 填充保管人與使用人
+                const keeperSelect = document.getElementById('keeper');
+                const userSelect = document.getElementById('user');
+                keeperSelect.innerHTML = '<option value="">請選擇保管人...</option>';
+                userSelect.innerHTML = '<option value="">同保管人</option>';
+                
+                keeperMap = data.keepers;
+                userMap = data.keepers; // 假設使用人列表同保管人
+
+                // 排序並加入選單
+                const sortedKeepers = Object.entries(keeperMap).sort((a, b) => a[1].localeCompare(b[1], 'zh-Hant'));
+                
+                sortedKeepers.forEach(([email, name]) => {
+                    keeperSelect.add(new Option(`${name} (${email})`, email));
+                    userSelect.add(new Option(`${name} (${email})`, email));
+                });
+
+                // 填充類別 Datalist
+                const categoryList = document.getElementById('categoryList');
+                data.categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    categoryList.appendChild(option);
+                });
+
+            }, 300);
+        }
+
+        function toggleFields() {
+            const type = document.querySelector('input[name="assetType"]:checked').value;
+            const propertyOnlyFields = document.querySelectorAll('.property-only');
+            
+            propertyOnlyFields.forEach(el => {
+                el.style.display = (type === 'property') ? 'block' : 'none';
+            });
+            
+            if (type === 'item') {
+                document.getElementById('user').value = ""; // 清空使用人
+            }
+        }
+
+        function autoFillUser() {
+            const type = document.querySelector('input[name="assetType"]:checked').value;
+            const keeperVal = document.getElementById('keeper').value;
+            
+            // 如果是財產模式，且使用人尚未選擇，則預設選為保管人
+            if (type === 'property' && document.getElementById('user').value === "") {
+                document.getElementById('user').value = keeperVal;
+            }
+        }
+
+        function submitForm() {
+            const form = {
+                assetType: document.querySelector('input[name="assetType"]:checked').value,
+                assetId: document.getElementById('assetId').value.trim(),
+                assetName: document.getElementById('assetName').value.trim(),
+                category: document.getElementById('category').value.trim(),
+                purchaseDate: document.getElementById('purchaseDate').value,
+                useLife: document.getElementById('useLife').value,
+                isActuallyComputer: document.getElementById('isActuallyComputer').checked,
+                location: document.getElementById('location').value,
+                keeperEmail: document.getElementById('keeper').value,
+                userEmail: document.getElementById('user').value,
+                remarks: document.getElementById('remarks').value.trim()
+            };
+
+            // 驗證
+            if (!form.assetId || !form.assetName || !form.location || !form.keeperEmail) {
+                showError({message: "請填寫所有必填欄位 (編號、名稱、地點、保管人)"});
+                return;
+            }
+
+            document.getElementById('main-form').style.display = 'none';
+            document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('status-message').textContent = '';
+            document.getElementById('status-message').className = '';
+
+            google.script.run
+                .withSuccessHandler(onSuccess)
+                .withFailureHandler(onDataError)
+                .addNewAsset(form);
+        }
+
+        function onSuccess(message) {
+            document.getElementById('loading-spinner').style.display = 'none';
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = 'alert alert-success';
+            statusMsg.textContent = message;
+
+            // 顯示按鈕讓使用者選擇下一步
+            const btnDiv = document.createElement('div');
+            btnDiv.className = 'mt-3 text-center';
+            btnDiv.innerHTML = `
+                <button class="btn btn-outline-primary mr-2" onclick="location.reload()">繼續新增</button>
+                <button class="btn btn-outline-secondary" onclick="google.script.host.close()">關閉視窗</button>
+            `;
+            statusMsg.appendChild(btnDiv);
+        }
+
+        function onDataError(error) {
+            hideProgressBar('載入失敗', 300);
+            setTimeout(() => {
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('main-form').style.display = 'block';
+                showError(error);
+            }, 300);
+        }
+
+        function showError(error) {
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.className = 'alert alert-danger';
+            statusMsg.textContent = "錯誤：" + error.message;
+            window.scrollTo(0, 0);
+        }
+    </script>
+</body>
+</html>
