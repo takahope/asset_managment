@@ -246,6 +246,11 @@
     <span class="nav-text">資產歸還</span>
   </button>
 
+  <button type="button" class="nav-item" onclick="goToAddNew()" title="新增財產">
+    <span class="nav-icon">✨</span>
+    <span class="nav-text">新增財產</span>
+  </button>
+
   <button type="button" class="nav-item" onclick="goToScrap()" title="資產報廢">
     <span class="nav-icon">🗑️</span>
     <span class="nav-text">資產報廢</span>
@@ -365,6 +370,15 @@
     if (_portalWebAppUrl) {
       const returnUrl = _portalWebAppUrl + '?page=return';
       navigateWithLoader(returnUrl);
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  function goToAddNew() {
+    if (_portalWebAppUrl) {
+      const addNewUrl = _portalWebAppUrl + '?page=addnew';
+      navigateWithLoader(addNewUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
