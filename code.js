@@ -372,6 +372,11 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('scrap');
       title = "申請財產報廢";
       break;
+    // ✨ 新增 case 'addnew'
+    case 'addnew':
+      template = HtmlService.createTemplateFromFile('addnew');
+      title = "新增財產/物品";
+      break;
     // ✨ 新增 case 'printScrap'
     case 'printScrap':
       template = HtmlService.createTemplateFromFile('printScrap');
@@ -3143,4 +3148,122 @@ function cancelTransferOrScrap(assetId) {
     Logger.log(`取消申請失敗 (assetId: ${assetId}): ${e.message} at ${e.stack}`);
     return { success: false, error: e.message };
   }
+}
+
+// =================================================================
+// --- ✨ 全新功能模組：新增財產/物品 (addnew.html) ✨ ---
+// =================================================================
+
+/**
+ * [供 addnew.html 呼叫] 獲取新增頁面所需的下拉選單資料
+ * (地點、保管人、分類)
+ */
+function getDropdownData() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 1. 讀取保管人 (Email -> 姓名)
+    const keeperSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    const keeperData = keeperSheet.getRange(2, 1, keeperSheet.getLastRow() - 1, 2).getValues();
+    const keepers = {};
+    keeperData.forEach(row => {
+      const name = row[0];
+      const email = row[1];
+      if (email) keepers[email] = name;
+    });
+
+    // 2. 讀取地點
+    const locSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+    const locData = locSheet.getRange(2, 1, locSheet.getLastRow() - 1, 1).getValues();
+    const locations = locData.map(row => row[0]).filter(loc => loc && loc.toString().trim() !== "");
+
+    // 3. 讀取現有分類 (從所有資產中掃描不重複的分類)
+    const allAssets = getAllAssets();
+    const categories = [...new Set(allAssets.map(a => a.assetCategory).filter(c => c))].sort();
+
+    return { keepers, locations, categories };
+  } catch (e) {
+    Logger.log("getDropdownData 失敗: " + e.message);
+    throw new Error("讀取選單資料失敗：" + e.message);
+  }
+}
+
+/**
+ * [供 addnew.html 呼叫] 處理新增財產/物品的表單提交
+ */
+function addNewAsset(form) {
+  Logger.log("開始新增資產: " + JSON.stringify(form));
+  
+  // 1. 檢查必填與唯一性
+  if (!form.assetId || !form.assetName) throw new Error("編號與名稱為必填項目");
+  
+  if (findAssetLocation(form.assetId)) {
+    throw new Error("編號 " + form.assetId + " 已存在於系統中，請勿重複新增。");
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet, indices;
+
+  // 2. 決定寫入的工作表
+  if (form.assetType === 'property') {
+    sheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+    indices = PROPERTY_COLUMN_INDICES;
+  } else {
+    sheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
+    indices = ITEM_COLUMN_INDICES;
+  }
+  
+  if (!sheet) throw new Error("找不到目標工作表，請聯絡管理員。");
+
+  // 3. 準備輔助資料 (名稱查找 & 駐站判斷)
+  const keeperSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  const keeperData = keeperSheet.getRange(2, 1, keeperSheet.getLastRow() - 1, 2).getValues();
+  const emailToName = new Map(keeperData.map(r => [r[1], r[0]])); // Email -> Name
+
+  const locSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+  const locData = locSheet.getRange(2, 1, locSheet.getLastRow() - 1, 2).getValues(); // A=Name, B=IsStation
+  const locIsStationMap = new Map(locData.map(r => [r[0], r[1] === '是']));
+
+  // 4. 解析名稱
+  const keeperName = emailToName.get(form.keeperEmail) || form.keeperEmail.split('@')[0];
+  const userName = form.userEmail ? (emailToName.get(form.userEmail) || form.userEmail.split('@')[0]) : keeperName;
+
+  // 5. 建構資料列 (Array)
+  // 找出最大的索引值以決定陣列長度
+  const maxIndex = Math.max(...Object.values(indices));
+  const row = new Array(maxIndex).fill(""); // 建立足夠長度的空陣列 (注意：索引從1開始，所以長度要是 maxIndex)
+  
+  // 填入資料 (注意：indices 是 1-based，陣列是 0-based，所以要 -1)
+  row[indices.ASSET_ID - 1] = form.assetId;
+  row[indices.ASSET_NAME - 1] = form.assetName;
+  row[indices.PURCHASE_DATE - 1] = form.purchaseDate ? new Date(form.purchaseDate) : "";
+  row[indices.USE_LIFE - 1] = form.useLife;
+  row[indices.ASSET_CATEGORY - 1] = form.category;
+  row[indices.LOCATION - 1] = form.location;
+  row[indices.LEADER_EMAIL - 1] = form.keeperEmail;
+  row[indices.LEADER_NAME - 1] = keeperName;
+  row[indices.ASSET_STATUS - 1] = "在庫"; // 預設狀態
+  row[indices.REMARKS - 1] = form.remarks;
+
+  // 處理特定欄位
+  if (indices.USER_EMAIL) row[indices.USER_EMAIL - 1] = form.userEmail || form.keeperEmail; // 若無使用人Email則預設同保管人
+  if (indices.USER_NAME) row[indices.USER_NAME - 1] = userName;
+
+  // 處理電腦相關標記
+  if (form.isActuallyComputer) {
+    if (indices.IS_ACTUALLY_COMPUTER) {
+        row[indices.IS_ACTUALLY_COMPUTER - 1] = "是";
+    }
+    
+    // 如果是駐站地點 + 是電腦實體 -> 標記為需回報電腦 (IS_COMPUTER)
+    const isStation = locIsStationMap.get(form.location);
+    if (isStation && indices.IS_COMPUTER) {
+        row[indices.IS_COMPUTER - 1] = "是";
+    }
+  }
+
+  // 6. 寫入資料
+  sheet.appendRow(row);
+  
+  return "成功新增 " + (form.assetType === 'property' ? "財產" : "物品") + "：" + form.assetId;
 }
