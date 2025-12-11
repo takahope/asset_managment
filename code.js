@@ -2082,7 +2082,7 @@ function processBatchScrapping(formData) {
       }
     }
 
-    return `成功為 ${successCount} 筆財產提交報廢申請，待管理員確認。`;
+    return `成功為 ${successCount} 筆財產提交報廢申請，請列印報廢申請單。`;
 
   } catch (e) {
     Logger.log("批次報廢申請失敗: " + e.message);
