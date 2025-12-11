@@ -3150,6 +3150,74 @@ function cancelTransferOrScrap(assetId) {
   }
 }
 
+/**
+ * [供 printScrap.html 呼叫] 獲取已列印的報廢文件歷史紀錄
+ * @param {string} assetCategory - 財產類別
+ * @returns {Array<Object>} 文件列表 { url, applicant, date, count }
+ */
+function getScrapDocHistory(assetCategory) {
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const isAdmin = checkAdminPermissions();
+  const allAssets = getAllAssets();
+  
+  // 1. 篩選有 docUrl 且符合類別的資產
+  const printedAssets = allAssets.filter(asset => {
+    if (!asset.docUrl || asset.docUrl.trim() === '') return false;
+    if (assetCategory && asset.assetCategory !== assetCategory) return false;
+    
+    // 權限檢查
+    if (!isAdmin) {
+      return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
+    }
+    return true;
+  });
+
+  // 2. 依 docUrl 分組
+  const docMap = new Map();
+  printedAssets.forEach(asset => {
+    const url = asset.docUrl;
+    if (!docMap.has(url)) {
+      docMap.set(url, {
+        url: url,
+        applicant: asset.leaderName,
+        date: asset.lastModified, // 使用最後修改日期作為參考
+        count: 0,
+        assets: [] // 儲存包含的資產名稱 (可選)
+      });
+    }
+    const docInfo = docMap.get(url);
+    docInfo.count++;
+    // 如果日期為空，嘗試用其他資產的日期補
+    if (!docInfo.date && asset.lastModified) {
+      docInfo.date = asset.lastModified;
+    }
+  });
+
+  // 3. 轉換為陣列並排序 (依日期新到舊)
+  const history = Array.from(docMap.values()).map(item => {
+    let dateStr = '未知日期';
+    if (item.date) {
+      try {
+        dateStr = Utilities.formatDate(new Date(item.date), Session.getScriptTimeZone(), "yyyy/MM/dd");
+      } catch (e) {
+        // ignore date error
+      }
+    }
+    return {
+      url: item.url,
+      applicant: item.applicant,
+      date: dateStr,
+      count: item.count
+    };
+  });
+
+  // 排序：最新的在前
+  return history.sort((a, b) => {
+    if (a.date === b.date) return 0;
+    return a.date < b.date ? 1 : -1;
+  });
+}
+
 // =================================================================
 // --- ✨ 全新功能模組：新增財產/物品 (addnew.html) ✨ ---
 // =================================================================
