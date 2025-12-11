@@ -110,7 +110,7 @@
         }
         
         function handleSuccess(message) {
-            showLoading(false);
+            hideProgressBar('歸還完成！', 0);
             const statusMsg = document.getElementById('status-message');
             statusMsg.className = 'alert alert-success';
             statusMsg.textContent = message;
