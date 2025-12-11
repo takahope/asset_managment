@@ -5,7 +5,13 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body { padding: 20px; }
-        #status-message { margin-top: 15px; font-weight: bold; }
+        #status-message {
+            margin-top: 15px;
+            font-weight: bold;
+            /* 確保狀態訊息顯示在進度條之上 */
+            position: relative;
+            z-index: 10000;  /* 高於進度條的 z-index: 9999 */
+        }
         .asset-table-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
         /* ✨ 新增分頁樣式 ✨ */
         .pagination-controls { margin-top: 15px; user-select: none; }
@@ -249,14 +255,28 @@
             });
             updateSelectedCount();
         }
-        
+
+        /**
+         * 顯示提示訊息（3 秒後自動消失）
+         * @param {string} msg - 訊息內容
+         * @param {string} className - Bootstrap alert 樣式類別
+         */
+        function showMessage(msg, className = 'alert-info') {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.className = `alert ${className}`;
+            statusDiv.textContent = msg;
+
+            // 3 秒後自動清除訊息
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = '';
+            }, 3000);
+        }
+
         function showLoading(isLoading, text = "正在分析可報廢資產資料中...") {
             const dynamicForm = document.getElementById('dynamic-form');
-            const status = document.getElementById('status-message');
             if (isLoading) {
                 dynamicForm.style.display = 'none';  // 只隱藏動態區域
-                status.innerHTML = '';
-                status.className = '';  // 清除樣式類別，避免綠色背景殘留
                 showProgressBar(text);
             } else {
                 dynamicForm.style.display = 'block';
@@ -265,17 +285,19 @@
         }
 
         function showSuccessAndClose(message) {
+            // 步驟 1：隱藏提交時的進度條
             hideProgressBar('報廢申請已提交！', 0);
-            const statusMsg = document.getElementById('status-message');
+
             const dynamicForm = document.getElementById('dynamic-form');
+            dynamicForm.style.display = 'none';  // 確保動態區域隱藏
 
-            // 確保動態區域隱藏，避免閃現舊資料
-            dynamicForm.style.display = 'none';
-            statusMsg.className = 'alert alert-success';
-            statusMsg.textContent = message + ' 正在重新載入資料...';
+            // 步驟 2：立即顯示綠色提示訊息（3 秒後自動消失）
+            showMessage(message + ' 正在重新載入資料...', 'alert-success');
 
-            // 3 秒後重新載入資料（讓用戶看到成功訊息）
-            setTimeout(loadData, 3000);
+            // 步驟 3：短暫延遲後啟動重新載入進度條（讓用戶先看到綠色訊息）
+            setTimeout(() => {
+                loadData();  // 這會調用 showLoading(true, '正在重新載入資料...')
+            }, 150);  // 150ms 延遲，確保綠色訊息先渲染
         }
 
         function loadData() {
