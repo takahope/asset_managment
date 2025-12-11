@@ -4,25 +4,28 @@
     <base target="_top">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
-        /* ✨ 修改點：移除 body 的特殊背景色，並調整 padding ✨ */
         body {
             padding: 20px;
         }
 
-        /* ✨ 修改點：移除 .card-main 的樣式定義 ✨ */
+        #status-message {
+            /* 確保狀態訊息顯示在進度條之上 */
+            position: relative;
+            z-index: 10000;  /* 高於進度條的 z-index: 9999 */
+        }
 
-        .approval-table-container { 
+        .approval-table-container {
             max-height: 400px;
-            overflow-y: auto; 
+            overflow-y: auto;
             border: 1px solid #dee2e6;
             border-radius: 8px;
         }
-        .pagination-controls { 
-            margin-top: 15px; 
-            user-select: none; 
+        .pagination-controls {
+            margin-top: 15px;
+            user-select: none;
         }
-        .pagination-controls .page-link { 
-            cursor: pointer; 
+        .pagination-controls .page-link {
+            cursor: pointer;
         }
     </style>
 </head>
@@ -30,9 +33,9 @@
   <?!= include('shared-nav'); ?>
   <?!= include('progress_bar_review'); ?>
 
-    <!-- ✨ 修改點：移除了 class="card-main" ✨ -->
-    <div id="main-content" style="display:none;">
-        <div id="review-form-content">
+    <div id="main-content">
+        <!-- 靜態區域：始終可見 -->
+        <div id="static-header">
             <h4>財產轉移接收儀表板</h4>
             <p class="text-muted">以下是所有待您接收的財產轉移申請，您可以使用篩選器快速尋找。</p>
             <hr>
@@ -50,7 +53,10 @@
                     <input type="text" class="form-control" id="search-box" placeholder="輸入關鍵字...">
                 </div>
             </div>
+        </div>
 
+        <!-- 動態區域：載入時隱藏 -->
+        <div id="dynamic-form">
             <!-- 表格區塊 -->
             <div id="approval-table-container" class="approval-table-container">
                 <table class="table table-hover table-sm">
@@ -69,10 +75,10 @@
                     <tbody id="approval-list"></tbody>
                 </table>
             </div>
-            
+
             <!-- 分頁控制項 -->
             <div id="pagination-controls" class="d-flex justify-content-between align-items-center"></div>
-            
+
             <div id="no-data-message" class="alert alert-info mt-3" style="display:none;">
                 恭喜！目前沒有任何待您接收的項目。
             </div>
@@ -82,6 +88,7 @@
                 <button id="submit-btn" class="btn btn-success btn-lg" onclick="submitApproval()">批次核准所選項目</button>
             </div>
         </div>
+
         <div id="status-message" class="mt-3"></div>
     </div>
 
@@ -97,7 +104,12 @@
 
         function loadData() {
             console.log(`[FRONTEND] 開始呼叫後端 getPendingApprovals 函式... 時間: ${new Date().toLocaleTimeString()}`);
-            showProgressBar('正在載入您的待接收清單...'); // 使用新的進度條組件
+
+            // 只隱藏動態區域
+            const dynamicForm = document.getElementById('dynamic-form');
+            dynamicForm.style.display = 'none';
+
+            showProgressBar('正在載入您的待接收清單...');
             const startTime = new Date();
 
             google.script.run
@@ -119,33 +131,40 @@
             filteredApprovals = allApprovals;
             console.log(`[FRONTEND] 接收到 ${allApprovals.length} 筆待審核資料。`);
 
-            hideProgressBar('資料載入完成！'); // 使用新的進度條組件
+            hideProgressBar('資料載入完成！', 300);
 
-            // 延遲顯示內容（與進度條隱藏動畫同步）
+            // 延遲顯示動態區域（與進度條隱藏動畫同步）
             setTimeout(() => {
-                // ✨ 修正：無論是否有資料，都要顯示主要內容區塊，避免畫面空白
-                document.getElementById('main-content').style.display = 'block';
-                document.getElementById('review-form-content').style.display = 'block';
+                const dynamicForm = document.getElementById('dynamic-form');
 
                 if (allApprovals.length > 0) {
                     populateLocationFilter(allApprovals);
                     currentPage = 1;
                     renderPage(currentPage);
 
-                    document.getElementById('location-filter-select').addEventListener('change', filterTable);
-                    document.getElementById('search-box').addEventListener('input', filterTable);
-                    document.getElementById('select-all').addEventListener('change', (e) => {
-                        document.querySelectorAll('.approval-checkbox').forEach(cb => cb.checked = e.target.checked);
-                    });
+                    // 綁定事件監聽器（只在首次載入時綁定）
+                    if (!dynamicForm.dataset.initialized) {
+                        document.getElementById('location-filter-select').addEventListener('change', filterTable);
+                        document.getElementById('search-box').addEventListener('input', filterTable);
+                        document.getElementById('select-all').addEventListener('change', (e) => {
+                            document.querySelectorAll('.approval-checkbox').forEach(cb => cb.checked = e.target.checked);
+                        });
+                        dynamicForm.dataset.initialized = 'true';
+                    }
 
+                    dynamicForm.style.display = 'block';
                 } else {
                     console.log("[FRONTEND] 沒有待審核資料，顯示提示訊息。");
-                    document.getElementById('approval-list').innerHTML = '';
-                    document.getElementById('no-data-message').style.display = 'block';
-                    
-                    // Optional: 如果沒有資料，可以隱藏表格或操作按鈕，視需求而定
-                    // document.getElementById('approval-table-container').style.display = 'none';
-                    // document.getElementById('submit-btn').style.display = 'none';
+                    // 只更新 dynamic-form，保持標題和篩選器可見
+                    dynamicForm.innerHTML = `
+                        <div class="alert alert-info" role="alert">
+                            <h5 class="alert-heading">恭喜！目前沒有待接收的項目</h5>
+                            <p>您目前沒有任何待接收的財產轉移申請。</p>
+                            <hr>
+                            <p class="mb-0">如有疑問，請聯絡系統管理員。</p>
+                        </div>
+                    `;
+                    dynamicForm.style.display = 'block';
                 }
             }, 300);
         }
@@ -276,10 +295,11 @@
                 return;
             }
 
-            document.getElementById('status-message').innerHTML = ''; // Clear message before new submission
-            document.getElementById('review-form-content').style.display = 'none'; // Hide form content
+            const dynamicForm = document.getElementById('dynamic-form');
+            dynamicForm.style.display = 'none';  // 隱藏動態區域
+
             console.log("[FRONTEND] 開始呼叫後端 processBatchApproval 函式...");
-            showProgressBar('正在批次處理核准作業...'); // 使用新的進度條組件
+            showProgressBar('正在批次處理核准作業...');
             google.script.run
                 .withSuccessHandler(handleSuccess)
                 .withFailureHandler(handleError)
@@ -288,12 +308,19 @@
 
         function handleSuccess(message) {
             console.log(`[FRONTEND] 後端 processBatchApproval 執行成功，回傳訊息: "${message}"`);
-            hideProgressBar('處理完成！'); // 使用新的進度條組件
+            // 步驟 1：隱藏提交時的進度條
+            hideProgressBar('處理完成！', 0);
 
+            const dynamicForm = document.getElementById('dynamic-form');
+            dynamicForm.style.display = 'none';  // 確保動態區域隱藏
+
+            // 步驟 2：立即顯示綠色提示訊息（3 秒後自動消失）
+            showMessage(message + ' 正在重新載入資料...', 'alert-success');
+
+            // 步驟 3：短暫延遲後啟動重新載入進度條（讓用戶先看到綠色訊息）
             setTimeout(() => {
-                showMessage(message, 'alert-success');
-                setTimeout(loadData, 3000);
-            }, 300);
+                loadData();  // 這會調用 showProgressBar()
+            }, 150);  // 150ms 延遲，確保綠色訊息先渲染
         }
 
         function handleError(error) {
@@ -305,10 +332,21 @@
             }, 300);
         }
 
-        function showMessage(msg, className) {
+        /**
+         * 顯示提示訊息（3 秒後自動消失）
+         * @param {string} msg - 訊息內容
+         * @param {string} className - Bootstrap alert 樣式類別
+         */
+        function showMessage(msg, className = 'alert-info') {
             const statusDiv = document.getElementById('status-message');
             statusDiv.className = `alert ${className}`;
             statusDiv.innerHTML = msg.replace(/\n/g, '<br>');
+
+            // 3 秒後自動清除訊息
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = '';
+            }, 3000);
         }
     </script>
 </body>
