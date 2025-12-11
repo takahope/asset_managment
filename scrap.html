@@ -16,10 +16,11 @@
   <?!= include('shared-nav'); ?>
   <?!= include('progress_bar_basic'); ?>
     <div id="main-content">
-        <div id="main-form">
+        <!-- 靜態區域：始終可見 -->
+        <div id="static-header">
             <h4>申請財產報廢 (批次)</h4>
             <p class="text-danger">請勾選要報廢的項目。注意：此操作將會將財產狀態更新為「報廢中」，待管理員最終確認。</p>
-            
+
             <div class="form-row">
                 <div class="form-group col-md-4">
                     <label for="location-filter-select">依地點篩選：</label>
@@ -40,7 +41,10 @@
                     <input type="text" class="form-control" id="search-box" placeholder="輸入產編或地點...">
                 </div>
             </div>
+        </div>
 
+        <!-- 動態區域：載入時隱藏 -->
+        <div id="dynamic-form">
             <div class="asset-table-container">
                 <table class="table table-hover table-sm">
                     <thead class="thead-light" style="position: sticky; top: 0;">
@@ -57,7 +61,7 @@
                     <tbody id="asset-list"></tbody>
                 </table>
             </div>
-            
+
             <!-- ✨ 新增分頁控制項的容器 ✨ -->
             <div id="pagination-controls" class="d-flex justify-content-between align-items-center"></div>
 
@@ -80,6 +84,7 @@
             <button id="submit-btn" type="button" class="btn btn-danger" onclick="submitScrapping()">提交報廢申請</button>
             <button type="button" class="btn btn-secondary" onclick="google.script.host.close()">取消</button>
         </div>
+
         <div id="status-message"></div>
     </div>
     <script>
@@ -114,10 +119,21 @@
             filteredAssets = allAssets;
 
             if (!allAssets || allAssets.length === 0) {
-                 document.getElementById('main-form').innerHTML = '<p class="alert alert-info">您目前沒有可申請報廢的財產 (狀態需為「在庫」或「出借中」)。</p><button class="btn btn-secondary" onclick="google.script.host.close()">關閉</button>';
+                // 只更新 dynamic-form，保持標題和篩選器可見
+                const dynamicForm = document.getElementById('dynamic-form');
+                dynamicForm.innerHTML = `
+                    <div class="alert alert-info" role="alert">
+                        <h5 class="alert-heading">目前沒有可申請報廢的財產</h5>
+                        <p>您目前沒有狀態為「在庫」或「出借中」的財產可供報廢申請。</p>
+                        <hr>
+                        <p class="mb-0">如有疑問，請聯絡系統管理員。</p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="google.script.host.close()">關閉</button>
+                `;
+                dynamicForm.style.display = 'block';
                 return;
             }
-            
+
             populateLocationFilter(allAssets);
             currentPage = 1;
             renderPage(currentPage);
@@ -235,14 +251,15 @@
         }
         
         function showLoading(isLoading, text = "正在分析可報廢資產資料中...") {
-            const form = document.getElementById('main-form');
+            const dynamicForm = document.getElementById('dynamic-form');
             const status = document.getElementById('status-message');
             if (isLoading) {
-                form.style.display = 'none';
+                dynamicForm.style.display = 'none';  // 只隱藏動態區域
                 status.innerHTML = '';
+                status.className = '';  // 清除樣式類別，避免綠色背景殘留
                 showProgressBar(text);
             } else {
-                form.style.display = 'block';
+                dynamicForm.style.display = 'block';
                 hideProgressBar('分析完成！', 300);
             }
         }
@@ -250,12 +267,15 @@
         function showSuccessAndClose(message) {
             hideProgressBar('報廢申請已提交！', 0);
             const statusMsg = document.getElementById('status-message');
-            // ✅ 不顯示表單，保持隱藏狀態避免閃現舊資料
+            const dynamicForm = document.getElementById('dynamic-form');
+
+            // 確保動態區域隱藏，避免閃現舊資料
+            dynamicForm.style.display = 'none';
             statusMsg.className = 'alert alert-success';
             statusMsg.textContent = message + ' 正在重新載入資料...';
 
-            // 短暫延遲後立即重新載入資料（讓用戶看到成功訊息）
-            setTimeout(loadData, 500);
+            // 3 秒後重新載入資料（讓用戶看到成功訊息）
+            setTimeout(loadData, 3000);
         }
 
         function loadData() {
