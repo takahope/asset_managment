@@ -5,14 +5,13 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body { padding: 20px; }
-        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #007bff; width: 60px; height: 60px; animation: spin 2s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #status-message { margin-top: 15px; }
         .table-container { max-height: 60vh; overflow-y: auto; }
     </style>
 </head>
 <body>
     <?!= include('shared-nav'); ?>
+    <?!= include('progress_bar_fly'); ?>
 
     <div id="main-content">
         <h4>財產狀態查詢</h4>
@@ -42,11 +41,6 @@
             </div>
         </div>
 
-        <div id="loading-spinner">
-            <div class="loader"></div>
-            <p class="text-center">正在載入資料...</p>
-        </div>
-        
         <div id="table-container" class="table-container" style="display:none;">
             <table class="table table-hover table-sm">
                 <thead class="thead-light" style="position: sticky; top: 0;">
@@ -75,7 +69,7 @@
         let webAppUrl = ''; // ✨ 新增：儲存 Web App 的基礎 URL
 
         document.addEventListener("DOMContentLoaded", () => {
-            showLoading(true);
+            showLoading(true, '正在載入財產狀態資料...');
             google.script.run.withSuccessHandler(url => {
                 webAppUrl = url; // ✨ 獲取 URL
                 // 確保先取得 URL 再載入頁面資料
@@ -223,7 +217,7 @@
         function promptCancel(assetId, status) {
             const confirmation = confirm(`您確定要取消這筆 [${status}] 狀態的申請嗎？\n\n財產編號：${assetId}\n\n此操作將會把財產狀態恢復為「在庫」。`);
             if (confirmation) {
-                showLoading(true);
+                showLoading(true, '正在取消申請...');
                 google.script.run
                     .withSuccessHandler(response => {
                         if (response.success) {
@@ -243,9 +237,14 @@
             }
         }
 
-        function showLoading(isLoading) {
-            document.getElementById('loading-spinner').style.display = isLoading ? 'block' : 'none';
-            document.getElementById('table-container').style.display = isLoading ? 'none' : 'block';
+        function showLoading(isLoading, statusText = '正在載入資料...') {
+            if (isLoading) {
+                showProgressBar(statusText);
+                document.getElementById('table-container').style.display = 'none';
+            } else {
+                hideProgressBar('資料載入完成！', 300);
+                document.getElementById('table-container').style.display = 'block';
+            }
         }
 
         function showError(error) {
