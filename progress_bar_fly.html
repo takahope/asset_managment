@@ -1,0 +1,167 @@
+<style>
+  /* 全螢幕遮罩層 */
+  .progress-fly-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* 背景改為透明 */
+    background-color: transparent;
+    /* 移除模糊效果 */
+    backdrop-filter: none;
+
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+
+    /* 重要：讓滑鼠可以點擊到遮罩下方的原本內容 */
+    /* 因為遮罩現在透明了，如果擋住點擊會很奇怪 */
+    pointer-events: none;
+  }
+
+  .progress-fly-overlay.active {
+    display: flex;
+  }
+
+  /* 狀態文字 */
+  .progress-fly-text {
+    color: #333;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 40px;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  /* 進度條容器 (跑道) */
+  .progress-fly-container {
+    position: relative;
+    width: 80%;
+    max-width: 500px;
+    height: 16px;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  /* 進度條填充 */
+  .progress-fly-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4CAF50, #8BC34A);
+    border-radius: 10px;
+    transition: width 0.3s ease-out;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+  }
+
+  /* 跑步人物容器 */
+  .runner-wrapper {
+    position: absolute;
+    bottom: 8px;
+    left: 0%;
+    width: 160px;
+    height: auto;
+    transform: translateX(-50%);
+    transition: left 0.3s ease-out;
+    pointer-events: none;
+    z-index: 10;
+    overflow: visible;
+  }
+
+  .runner-wrapper img {
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+  }
+
+  /* 百分比文字 */
+  .progress-fly-percent {
+    margin-top: 15px;
+    color: #666;
+    font-size: 14px;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+</style>
+
+<div id="progress-fly-overlay" class="progress-fly-overlay">
+  <div id="progress-fly-text" class="progress-fly-text">正在載入資料...</div>
+
+  <div class="progress-fly-container">
+    <div class="progress-fly-fill" id="progress-fly-bar"></div>
+    <div class="runner-wrapper" id="runner">
+      <img src=""
+      id="runnerImage"
+      alt="Running">
+    </div>
+  </div>
+
+  <div class="progress-fly-percent" id="progress-fly-percent">0%</div>
+</div>
+
+<script>
+  let _runnerInterval;
+
+  function showProgressBar(statusText = '正在載入資料...') {
+    const overlay = document.getElementById('progress-fly-overlay');
+    const bar = document.getElementById('progress-fly-bar');
+    const runner = document.getElementById('runner');
+    const text = document.getElementById('progress-fly-text');
+    const percent = document.getElementById('progress-fly-percent');
+
+    // 如果進度條已經在運行中，只更新文字，不重置進度
+    if (_runnerInterval) {
+      text.textContent = statusText;
+      return;
+    }
+
+    // 重置進度
+    let progress = 0;
+    bar.style.width = '0%';
+    runner.style.left = '0%';
+    percent.textContent = '0%';
+    text.textContent = statusText;
+    overlay.classList.add('active');
+
+    // 強制重新播放 GIF 動畫（清空再重設 src）
+    const runnerImg = document.getElementById('runnerImage');
+    if (runnerImg) {
+      const originalSrc = runnerImg.src;
+      runnerImg.src = '';
+      runnerImg.offsetHeight; // 觸發 reflow
+      runnerImg.src = originalSrc;
+    }
+
+    // 模擬進度增長
+    _runnerInterval = setInterval(() => {
+      if (progress < 90) {
+        progress++;
+        bar.style.width = progress + '%';
+        runner.style.left = progress + '%';
+        percent.textContent = progress + '%';
+      }
+    }, 30);
+  }
+
+  function hideProgressBar(completionText = '載入完成！', delay = 300) {
+    const overlay = document.getElementById('progress-fly-overlay');
+    const bar = document.getElementById('progress-fly-bar');
+    const runner = document.getElementById('runner');
+    const text = document.getElementById('progress-fly-text');
+    const percent = document.getElementById('progress-fly-percent');
+
+    clearInterval(_runnerInterval);
+    _runnerInterval = null; // 重置標記，允許下次重新啟動進度條
+
+    // 跳到 100%
+    bar.style.width = '100%';
+    runner.style.left = '100%';
+    percent.textContent = '100%';
+    text.textContent = completionText;
+
+    setTimeout(() => {
+      overlay.classList.remove('active');
+    }, delay);
+  }
+</script>
