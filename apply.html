@@ -253,7 +253,7 @@
                     <div class="custom-control custom-switch mb-3 mt-3">
                         <input type="checkbox" class="custom-control-input special-transfer-mode" id="info-transfer">
                         <label class="custom-control-label font-weight-bold" for="info-transfer">駐站回送中心資訊組</label>
-                        <small class="d-block text-danger mt-1" id="info-transfer-hint" style="display:none;">
+                        <small class="text-danger mt-1" id="info-transfer-hint" style="display:none;">
                             <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
                         </small>
                     </div>
@@ -262,7 +262,7 @@
                     <div class="custom-control custom-switch">
                         <input type="checkbox" class="custom-control-input special-transfer-mode" id="intake-transfer">
                         <label class="custom-control-label font-weight-bold" for="intake-transfer">駐站回送中心收案組</label>
-                        <small class="d-block text-danger mt-1" id="intake-transfer-hint" style="display:none;">
+                        <small class="text-danger mt-1" id="intake-transfer-hint" style="display:none;">
                             <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
                         </small>
                     </div>
@@ -609,6 +609,10 @@
                 infoTransferHint.style.display = 'block';
                 // 添加視覺化禁用樣式到父容器
                 infoTransferCheckbox.closest('.custom-control').style.opacity = '0.5';
+            } else {
+                infoTransferCheckbox.disabled = false;
+                infoTransferHint.style.display = 'none';
+                infoTransferCheckbox.closest('.custom-control').style.opacity = '1';
             }
 
             const intakeTransferCheckbox = document.getElementById('intake-transfer');
@@ -620,6 +624,10 @@
                 intakeTransferHint.style.display = 'block';
                 // 添加視覺化禁用樣式到父容器
                 intakeTransferCheckbox.closest('.custom-control').style.opacity = '0.5';
+            } else {
+                intakeTransferCheckbox.disabled = false;
+                intakeTransferHint.style.display = 'none';
+                intakeTransferCheckbox.closest('.custom-control').style.opacity = '1';
             }
         }
 
