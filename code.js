@@ -592,10 +592,10 @@ function getTransferData() {
   keeperData.forEach(row => {
     const name = row[0];  // A欄：姓名
     const email = row[1]; // B欄：Email
-    const isCustodian = row[2]; // C欄：是否為駐管
-    const isInfoCustodian = row[3]; // D欄：資訊組駐站資產保管人
-    const isInfoUser = row[4]; // E欄：資訊組駐站資產使用人
-    const isIntakeCustodian = row[5]; // F欄：駐站轉中心收案組保管＆使用人
+    const isCustodian = String(row[2]).trim(); // C欄：是否為駐管
+    const isInfoCustodian = String(row[3]).trim(); // D欄：資訊組駐站資產保管人
+    const isInfoUser = String(row[4]).trim(); // E欄：資訊組駐站資產使用人
+    const isIntakeCustodian = String(row[5]).trim(); // F欄：駐站轉中心收案組保管＆使用人
 
     if (name && email) {
       uniqueKeepersMap.set(email, name);
@@ -629,25 +629,25 @@ function getTransferData() {
 
   // ✨ 篩選出駐站地點
   const stationLocationList = locationData
-    .filter(row => row[1] === '是') // B欄為「是」
+    .filter(row => String(row[1]).trim() === '是') // B欄為「是」
     .map(row => row[0])
     .filter(loc => loc);
 
   // ✨ 新增：篩選出資訊組地點
   const infoLocationList = locationData
-    .filter(row => row[2] === '是') // C欄為「是」
+    .filter(row => String(row[2]).trim() === '是') // C欄為「是」
     .map(row => row[0])
     .filter(loc => loc);
 
   // ✨ 新增：篩選出收案組地點
   const intakeLocationList = locationData
-    .filter(row => row[3] === '是') // D欄為「是」
+    .filter(row => String(row[3]).trim() === '是') // D欄為「是」
     .map(row => row[0])
     .filter(loc => loc);
 
   // ✨ 新增：篩選出資訊組電腦專用地點
   const infoComputerLocationList = locationData
-    .filter(row => row[4] === '是') // E欄為「是」
+    .filter(row => String(row[4]).trim() === '是') // E欄為「是」
     .map(row => row[0])
     .filter(loc => loc);
 
