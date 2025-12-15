@@ -79,6 +79,33 @@
             border: 1px solid #ffe082;
             border-radius: 8px;
             padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        /* 模式分隔線 */
+        .mode-divider {
+            text-align: center;
+            margin: 25px 0;
+            position: relative;
+        }
+
+        .mode-divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #ddd 20%, #ddd 80%, transparent);
+        }
+
+        .mode-divider span {
+            position: relative;
+            background: #fff;
+            padding: 0 20px;
+            color: #999;
+            font-size: 14px;
+            font-weight: 500;
         }
 
         /* 分頁控制優化 */
@@ -193,13 +220,49 @@
                 </div>
             </div>
 
-            <div class="row">
-                <!-- 左側：一般轉移 (預設) -->
-                <div class="col-lg-8">
-                    <div class="ui-card" id="regular-transfer-card">
-                        <h5><i class="fas fa-tasks mr-2 filter-icon"></i>步驟 2：設定轉移資訊 (一般轉移)</h5>
-                        
-                        <!-- 一般轉移選項與下拉選單的容器 -->
+            <!-- SECTION 2: 轉移設定 (整合特殊與一般模式) -->
+            <div class="ui-card" id="transfer-settings-card">
+                <h5><i class="fas fa-tasks mr-2 filter-icon"></i>步驟 2：設定轉移資訊</h5>
+
+                <!-- 特殊轉移模式區塊 (優先顯示) -->
+                <div class="special-transfer-section">
+                    <h6 class="text-warning-dark font-weight-bold mb-3"><i class="fas fa-star mr-2"></i>特殊轉移模式</h6>
+                    <p class="small text-muted mb-3">若選用此區功能，下方一般設定將被覆蓋。</p>
+
+                    <!-- 選項1 -->
+                    <div class="custom-control custom-switch mb-3">
+                        <input type="checkbox" class="custom-control-input special-transfer-mode" id="station-transfer">
+                        <label class="custom-control-label font-weight-bold" for="station-transfer">中心轉移給駐站</label>
+                        <div class="small text-muted ml-1">同時變更保管人、使用人和地點</div>
+                    </div>
+
+                    <div class="dropdown-divider border-warning opacity-50"></div>
+
+                    <!-- 選項2 -->
+                    <div class="custom-control custom-switch mb-3 mt-3">
+                        <input type="checkbox" class="custom-control-input special-transfer-mode" id="info-transfer">
+                        <label class="custom-control-label font-weight-bold" for="info-transfer">駐站回送中心資訊組</label>
+                        <small class="d-block text-danger mt-1" id="info-transfer-hint" style="display:none;">
+                            <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
+                        </small>
+                    </div>
+
+                    <!-- 選項3 -->
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input special-transfer-mode" id="intake-transfer">
+                        <label class="custom-control-label font-weight-bold" for="intake-transfer">駐站回送中心收案組</label>
+                        <small class="d-block text-danger mt-1" id="intake-transfer-hint" style="display:none;">
+                            <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
+                        </small>
+                    </div>
+                </div>
+
+                <!-- 模式分隔線 -->
+                <div class="mode-divider">
+                    <span>或使用一般轉移</span>
+                </div>
+
+                <!-- 一般轉移選項與下拉選單的容器 -->
                         <div id="regular-transfer-options">
                             <div class="form-group mb-4">
                                 <label class="d-block mb-2 text-muted font-weight-bold">請勾選本次要變更的項目：</label>
@@ -247,60 +310,23 @@
                             </div>
                         </div>
                         
-                        <!-- 駐站轉移專用下拉選單 (預設隱藏，會取代上面的 regular-selects) -->
-                        <div id="station-transfer-selects" class="bg-light p-3 rounded" style="display:none;">
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle mr-1"></i> <strong>駐站模式說明：</strong> 保管人和使用人將同時設為此駐管。
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group col-md-6">
-                                    <label for="custodian-select">轉移給駐管：</label>
-                                    <select class="form-control" id="custodian-select">
-                                        <option value="">請選擇駐管...</option>
-                                    </select>
-                                </div>
-                                <div class="form-group col-md-6">
-                                    <label for="station-location-select">駐站地點：</label>
-                                    <select class="form-control" id="station-location-select">
-                                        <option value="">請選擇駐站地點...</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
+                <!-- 駐站轉移專用下拉選單 (預設隱藏，會取代上面的 regular-selects) -->
+                <div id="station-transfer-selects" class="bg-light p-3 rounded" style="display:none;">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle mr-1"></i> <strong>駐站模式說明：</strong> 保管人和使用人將同時設為此駐管。
                     </div>
-                </div>
-
-                <!-- 右側：特殊轉移模式 -->
-                <div class="col-lg-4">
-                    <div class="ui-card special-transfer-section">
-                        <h6 class="text-warning-dark font-weight-bold"><i class="fas fa-star mr-2"></i>特殊轉移模式</h6>
-                        <p class="small text-muted mb-3">若選用此區功能，左側一般設定將被覆蓋。</p>
-
-                        <!-- 選項1 -->
-                        <div class="custom-control custom-switch mb-3">
-                            <input type="checkbox" class="custom-control-input special-transfer-mode" id="station-transfer">
-                            <label class="custom-control-label font-weight-bold" for="station-transfer">中心轉移給駐站</label>
-                            <div class="small text-muted ml-1">同時變更保管人、使用人和地點</div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="custodian-select">轉移給駐管：</label>
+                            <select class="form-control" id="custodian-select">
+                                <option value="">請選擇駐管...</option>
+                            </select>
                         </div>
-
-                        <div class="dropdown-divider border-warning opacity-50"></div>
-
-                        <!-- 選項2 -->
-                        <div class="custom-control custom-switch mb-3 mt-3">
-                            <input type="checkbox" class="custom-control-input special-transfer-mode" id="info-transfer">
-                            <label class="custom-control-label font-weight-bold" for="info-transfer">駐站回送中心資訊組</label>
-                            <small class="d-block text-danger mt-1" id="info-transfer-hint" style="display:none;">
-                                <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
-                            </small>
-                        </div>
-
-                        <!-- 選項3 -->
-                        <div class="custom-control custom-switch">
-                            <input type="checkbox" class="custom-control-input special-transfer-mode" id="intake-transfer">
-                            <label class="custom-control-label font-weight-bold" for="intake-transfer">駐站回送中心收案組</label>
-                            <small class="d-block text-danger mt-1" id="intake-transfer-hint" style="display:none;">
-                                <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
-                            </small>
+                        <div class="form-group col-md-6">
+                            <label for="station-location-select">駐站地點：</label>
+                            <select class="form-control" id="station-location-select">
+                                <option value="">請選擇駐站地點...</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -397,27 +423,26 @@
             const regularOptions = document.getElementById('regular-transfer-options');
             const regularSelects = document.getElementById('regular-transfer-selects');
             const stationSelects = document.getElementById('station-transfer-selects');
-            const regularCard = document.getElementById('regular-transfer-card'); // 獲取卡片參考
 
             if (isStationMode || isInfoMode || isIntakeMode) {
                 // 特殊模式：視覺變更
-                regularCard.style.opacity = '0.6'; // 讓一般選項看起來像被禁用
-                regularCard.style.pointerEvents = 'none'; // 禁止點擊
-                
+                regularOptions.style.opacity = '0.5'; // 讓一般選項看起來像被禁用
+                regularOptions.style.pointerEvents = 'none'; // 禁止點擊
+                regularSelects.style.opacity = '0.5';
+                regularSelects.style.pointerEvents = 'none';
+
                 // 為了讓駐站模式的選單可以使用，我們需要特殊處理
                 if (isStationMode) {
                     regularOptions.style.display = 'none';
                     regularSelects.style.display = 'none';
                     stationSelects.style.display = 'block';
-                    // 恢復卡片互動性給駐站下拉選單
-                    regularCard.style.opacity = '1';
-                    regularCard.style.pointerEvents = 'auto';
+                    stationSelects.style.opacity = '1';
+                    stationSelects.style.pointerEvents = 'auto';
                 } else {
                     // 資訊組或收案組模式，完全不需要下拉選單
                     regularOptions.style.display = 'none';
                     regularSelects.style.display = 'none';
                     stationSelects.style.display = 'none';
-                    // 這裡保持卡片淡出，表示不需要操作此區
                 }
 
                 // 取消勾選一般選項 (邏輯層面)
@@ -433,9 +458,11 @@
 
             } else {
                 // 一般模式：恢復原狀
-                regularCard.style.opacity = '1';
-                regularCard.style.pointerEvents = 'auto';
-                
+                regularOptions.style.opacity = '1';
+                regularOptions.style.pointerEvents = 'auto';
+                regularSelects.style.opacity = '1';
+                regularSelects.style.pointerEvents = 'auto';
+
                 regularOptions.style.display = 'block';
                 regularSelects.style.display = 'block';
                 stationSelects.style.display = 'none';
