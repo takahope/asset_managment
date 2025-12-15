@@ -273,53 +273,53 @@
                     <span>或使用一般轉移</span>
                 </div>
 
-                <!-- 一般轉移選項與下拉選單的容器 -->
-                        <div id="regular-transfer-options">
-                            <div class="form-group mb-4">
-                                <label class="d-block mb-2 text-muted font-weight-bold">請勾選本次要變更的項目：</label>
-                                <div class="d-flex flex-wrap">
-                                    <div class="custom-control custom-checkbox mr-4 mb-2">
-                                        <input class="custom-control-input" type="checkbox" id="change-location" checked>
-                                        <label class="custom-control-label" for="change-location">變更地點</label>
-                                    </div>
-                                    <div class="custom-control custom-checkbox mr-4 mb-2">
-                                        <input class="custom-control-input" type="checkbox" id="change-keeper" checked>
-                                        <label class="custom-control-label" for="change-keeper">變更保管人 <span class="badge badge-warning font-weight-normal">需審核</span></label>
-                                    </div>
-                                    <div class="custom-control custom-checkbox mb-2">
-                                        <input class="custom-control-input" type="checkbox" id="change-user">
-                                        <label class="custom-control-label" for="change-user">變更使用人 <span class="badge badge-secondary font-weight-normal">僅限財產總表</span></label>
-                                    </div>
-                                </div>
+                <!-- 一般轉移選項與下拉選單的容器 (新版排版) -->
+                <div id="regular-transfer-section">
+                    <!-- 1. 變更地點 -->
+                    <div class="form-row align-items-center mb-3">
+                        <div class="col-md-3">
+                            <div class="custom-control custom-checkbox">
+                                <input class="custom-control-input" type="checkbox" id="change-location">
+                                <label class="custom-control-label" for="change-location">變更地點</label>
                             </div>
                         </div>
+                        <div class="col-md-9">
+                            <select class="form-control" id="location-select" name="newLocation" style="display:none;">
+                                <option value="">請選擇地點...</option>
+                            </select>
+                        </div>
+                    </div>
 
-                        <div id="regular-transfer-selects" class="bg-light p-3 rounded">
-                            <div class="form-row">
-                                <div class="form-group col-md-6">
-                                    <label for="location-select">新地點：</label>
-                                    <select class="form-control" id="location-select" name="newLocation">
-                                        <option value="">請選擇地點...</option>
-                                    </select>
-                                    <small class="form-text text-muted">若不變更地點，請留空</small>
-                                </div>
-                                <div class="form-group col-md-6">
-                                    <label for="keeper-select">新保管人：</label>
-                                    <select class="form-control" id="keeper-select" name="newKeeperEmail">
-                                        <option value="">請選擇新保管人...</option>
-                                    </select>
-                                    <small class="form-text text-muted">若不變更保管人，請留空</small>
-                                </div>
-                                <!-- 使用人選擇 (預設隱藏) -->
-                                <div class="form-group col-md-12 mt-2" id="user-select-group" style="display:none;">
-                                    <label for="user-select" class="text-primary font-weight-bold">新使用人：</label>
-                                    <select class="form-control border-primary" id="user-select" name="newUserName">
-                                        <option value="">請選擇新使用人...</option>
-                                    </select>
-                                    <small class="form-text text-muted">僅適用於財產總表的資產</small>
-                                </div>
+                    <!-- 2. 變更保管人 -->
+                    <div class="form-row align-items-center mb-3">
+                        <div class="col-md-3">
+                            <div class="custom-control custom-checkbox">
+                                <input class="custom-control-input" type="checkbox" id="change-keeper">
+                                <label class="custom-control-label" for="change-keeper">變更保管人 <span class="badge badge-warning font-weight-normal">需審核</span></label>
                             </div>
                         </div>
+                        <div class="col-md-9">
+                            <select class="form-control" id="keeper-select" name="newKeeperEmail" style="display:none;">
+                                <option value="">請選擇新保管人...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 3. 變更使用人 -->
+                    <div class="form-row align-items-center mb-3">
+                        <div class="col-md-3">
+                            <div class="custom-control custom-checkbox">
+                                <input class="custom-control-input" type="checkbox" id="change-user">
+                                <label class="custom-control-label" for="change-user">變更使用人 <span class="badge badge-secondary font-weight-normal">僅限財產總表</span></label>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <select class="form-control border-primary" id="user-select" name="newUserName" style="display:none;">
+                                <option value="">請選擇新使用人...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                         
                 <!-- 駐站轉移專用下拉選單 (預設隱藏，會取代上面的 regular-selects) -->
                 <div id="station-transfer-selects" class="bg-light p-3 rounded" style="display:none;">
@@ -375,21 +375,23 @@
             document.getElementById('category-filter-select').addEventListener('change', filterTable);
             document.getElementById('select-all').addEventListener('change', toggleSelectAll);
             
-            // ✨ 轉移選項切換監聽
-            document.getElementById('change-user').addEventListener('change', toggleUserSelect);
+            // ✨ 轉移選項切換監聽 (地點、保管人、使用人)
+            const regularCheckboxes = [
+                { cbId: 'change-location', selectId: 'location-select' },
+                { cbId: 'change-keeper', selectId: 'keeper-select' },
+                { cbId: 'change-user', selectId: 'user-select' }
+            ];
 
-            // ✨ 特殊轉移模式 checkbox 監聽
-            document.querySelectorAll('.special-transfer-mode').forEach(checkbox => {
-                checkbox.addEventListener('change', handleSpecialTransferModeChange);
-            });
-            
-            // UI 優化：當一般選項改變時，確保特殊選項被取消 (雙向互斥)
-            const regularCheckboxes = ['change-location', 'change-keeper', 'change-user'];
-            regularCheckboxes.forEach(id => {
-                document.getElementById(id).addEventListener('change', function() {
+            regularCheckboxes.forEach(item => {
+                const checkbox = document.getElementById(item.cbId);
+                const select = document.getElementById(item.selectId);
+                
+                checkbox.addEventListener('change', function() {
+                    // 1. 切換下拉選單顯示狀態
+                    select.style.display = this.checked ? 'block' : 'none';
+                    
+                    // 2. 如果使用者手動去勾選一般選項，且目前處於特殊模式，則取消特殊模式
                     if(this.checked) {
-                       // 如果使用者手動去勾選一般選項，且目前處於特殊模式，是否要取消特殊模式？
-                       // 為了 UX 直覺，如果使用者回頭操作一般選項，我們視為他想回到一般模式
                        const isAnySpecialChecked = Array.from(document.querySelectorAll('.special-transfer-mode')).some(c => c.checked);
                        if(isAnySpecialChecked) {
                            // 取消所有特殊模式
@@ -400,18 +402,23 @@
                            });
                            // 因為 handleSpecialTransferModeChange 會把一般選項取消，我們這裡要重新勾選被點擊的那個
                            this.checked = true;
-                           // 重新觸發一次 user select 的顯示邏輯
-                           if(this.id === 'change-user') toggleUserSelect();
+                           select.style.display = 'block'; // 確保顯示
                        }
                     }
                 });
             });
+
+            // ✨ 特殊轉移模式 checkbox 監聽
+            document.querySelectorAll('.special-transfer-mode').forEach(checkbox => {
+                checkbox.addEventListener('change', handleSpecialTransferModeChange);
+            });
         });
         
+        // 已整合到通用的監聽器中，此函式保留相容性或可移除
         function toggleUserSelect() {
             const changeUser = document.getElementById('change-user').checked;
-            const userSelectGroup = document.getElementById('user-select-group');
-            userSelectGroup.style.display = changeUser ? 'block' : 'none';
+            const userSelect = document.getElementById('user-select');
+            userSelect.style.display = changeUser ? 'block' : 'none';
         }
 
         function handleSpecialTransferModeChange(event) {
@@ -437,56 +444,39 @@
             const isInfoMode = document.getElementById('info-transfer').checked;
             const isIntakeMode = document.getElementById('intake-transfer').checked;
 
-            const regularOptions = document.getElementById('regular-transfer-options');
-            const regularSelects = document.getElementById('regular-transfer-selects');
+            const regularSection = document.getElementById('regular-transfer-section');
             const stationSelects = document.getElementById('station-transfer-selects');
 
             if (isStationMode || isInfoMode || isIntakeMode) {
-                // 特殊模式：視覺變更
-                regularOptions.style.opacity = '0.5'; // 讓一般選項看起來像被禁用
-                regularOptions.style.pointerEvents = 'none'; // 禁止點擊
-                regularSelects.style.opacity = '0.5';
-                regularSelects.style.pointerEvents = 'none';
+                // 特殊模式：隱藏一般轉移區塊
+                regularSection.style.display = 'none';
 
                 // 為了讓駐站模式的選單可以使用，我們需要特殊處理
                 if (isStationMode) {
-                    regularOptions.style.display = 'none';
-                    regularSelects.style.display = 'none';
                     stationSelects.style.display = 'block';
                     stationSelects.style.opacity = '1';
                     stationSelects.style.pointerEvents = 'auto';
                 } else {
                     // 資訊組或收案組模式，完全不需要下拉選單
-                    regularOptions.style.display = 'none';
-                    regularSelects.style.display = 'none';
                     stationSelects.style.display = 'none';
                 }
 
-                // 取消勾選一般選項 (邏輯層面)
-                document.getElementById('change-location').checked = false;
-                document.getElementById('change-keeper').checked = false;
-                document.getElementById('change-user').checked = false;
+                // 取消勾選一般選項並隱藏下拉選單 (邏輯層面)
+                ['change-location', 'change-keeper', 'change-user'].forEach(id => {
+                    const cb = document.getElementById(id);
+                    cb.checked = false;
+                    cb.dispatchEvent(new Event('change')); // 觸發隱藏下拉選單
+                });
 
-                // 清空一般下拉選單
+                // 清空一般下拉選單值
                 document.getElementById('keeper-select').value = '';
                 document.getElementById('location-select').value = '';
                 document.getElementById('user-select').value = '';
-                document.getElementById('user-select-group').style.display = 'none';
 
             } else {
-                // 一般模式：恢復原狀
-                regularOptions.style.opacity = '1';
-                regularOptions.style.pointerEvents = 'auto';
-                regularSelects.style.opacity = '1';
-                regularSelects.style.pointerEvents = 'auto';
-
-                regularOptions.style.display = 'block';
-                regularSelects.style.display = 'block';
+                // 一般模式：恢復顯示一般轉移區塊
+                regularSection.style.display = 'block';
                 stationSelects.style.display = 'none';
-
-                // 恢復預設勾選
-                document.getElementById('change-location').checked = true;
-                document.getElementById('change-keeper').checked = true;
 
                 // 清空駐站下拉選單
                 document.getElementById('custodian-select').value = '';
@@ -629,6 +619,13 @@
                 intakeTransferHint.style.display = 'none';
                 intakeTransferCheckbox.closest('.custom-control').style.opacity = '1';
             }
+            
+            // ✨ 初始化狀態：確保所有一般選項未勾選且隱藏下拉選單
+            ['change-location', 'change-keeper', 'change-user'].forEach(id => {
+                const cb = document.getElementById(id);
+                cb.checked = false;
+                cb.dispatchEvent(new Event('change'));
+            });
         }
 
         function displayPage(page) {
@@ -897,13 +894,18 @@
                 document.getElementById('select-all').checked = false;
                 document.getElementById('search-box').value = '';
                 document.querySelectorAll('.special-transfer-mode').forEach(cb => cb.checked = false);
-                document.getElementById('regular-transfer-options').style.display = 'block';
-                document.getElementById('regular-transfer-selects').style.display = 'block';
+                // 恢復一般模式顯示
+                document.getElementById('regular-transfer-section').style.display = 'block';
                 document.getElementById('station-transfer-selects').style.display = 'none';
-                document.getElementById('change-location').checked = true;
-                document.getElementById('change-keeper').checked = true;
-                document.getElementById('change-user').checked = false;
-                document.getElementById('user-select-group').style.display = 'none';
+                
+                // 重置一般選項：取消勾選並隱藏下拉選單
+                ['change-location', 'change-keeper', 'change-user'].forEach(id => {
+                    const cb = document.getElementById(id);
+                    cb.checked = false;
+                    cb.dispatchEvent(new Event('change'));
+                });
+                
+                // 清空值
                 document.getElementById('keeper-select').value = '';
                 document.getElementById('location-select').value = '';
                 document.getElementById('user-select').value = '';
