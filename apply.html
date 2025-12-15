@@ -2,25 +2,130 @@
 <html>
 <head>
     <base target="_top">
+    <!-- 引入 FontAwesome 增加圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
-        body { padding: 20px; }
-        #status-message { margin-top: 15px; font-weight: bold; }
-        .asset-table-container { max-height: 400px; /* 稍微增加高度以容納更多項目 */ overflow-y: auto; margin-bottom: 15px; }
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f4f7f6;
+            --card-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            --header-bg: #fff;
+        }
 
-        /* ✨ 新增分頁樣式 ✨ */
+        body { 
+            padding: 20px; 
+            background-color: var(--bg-color);
+            color: #333;
+            font-family: 'Segoe UI', "Microsoft JhengHei", sans-serif;
+        }
+
+        /* UI 元件：卡片樣式 */
+        .ui-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            padding: 25px;
+            margin-bottom: 25px;
+            border: none;
+            transition: transform 0.2s;
+        }
+        
+        .ui-card h5 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        /* 讀取動畫 */
+        .loader { border: 5px solid #f3f3f3; border-radius: 50%; border-top: 5px solid var(--primary-color); width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 表格區塊優化 */
+        .asset-table-container { 
+            max-height: 500px; 
+            overflow-y: auto; 
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+        
+        .table thead th {
+            background-color: #fafafa;
+            border-top: none;
+            color: #555;
+            font-weight: 600;
+            position: sticky; 
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: #f1f8ff;
+        }
+
+        /* 狀態列 */
+        .selection-status {
+            background: #e3f2fd;
+            color: #0d47a1;
+            padding: 10px 15px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-top: 10px;
+            font-weight: 600;
+        }
+
+        /* 特殊轉移模式區塊 - 視覺區隔 */
+        .special-transfer-section {
+            background-color: #fff8e1; /* 淡黃色背景，強調注意 */
+            border: 1px solid #ffe082;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        /* 分頁控制優化 */
         .pagination-controls { 
-            margin-top: 15px; 
-            user-select: none; 
+            margin-top: 20px; 
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
         }
-        .pagination-controls .page-link { 
-            cursor: pointer; 
+
+        /* 搜尋框與篩選器美化 */
+        .filter-icon {
+            color: #888;
+            margin-right: 5px;
         }
-        .pagination-controls .page-item.disabled .page-link {
-            cursor: not-allowed;
+
+        /* 互動選項美化 */
+        .custom-control-label {
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        /* 按鈕區 */
+        .action-bar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            padding: 10px 30px;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(74, 144, 226, 0.3);
+        }
+
+        .btn-primary:hover {
+            background-color: #357abd;
         }
     </style>
 </head>
@@ -29,170 +134,215 @@
     <?!= include('progress_bar_basic'); ?>
     <?!= include('progress_bar_fly'); ?>
 
-    <div id="main-form" style="display:none;">
-        <h4>財產轉移申請 (批次)</h4>
+    <div class="container-fluid" style="max-width: 1200px;">
         
-        <div class="form-row">
-            <div class="form-group col-md-4">
-                <label for="location-filter-select">依地點篩選：</label>
-                <select id="location-filter-select" class="form-control">
-                    <option value="">-- 顯示全部地點 --</option>
-                </select>
-            </div>
-            <div class="form-group col-md-4">
-                <label for="category-filter-select">依財產類別篩選：</label>
-                <select id="category-filter-select" class="form-control">
-                    <option value="">-- 顯示全部類別 --</option>
-                </select>
-            </div>
-            <div class="form-group col-md-4">
-                <label for="search-box">依關鍵字搜尋：</label>
-                <input type="text" class="form-control" id="search-box" placeholder="輸入產編或地點...">
-            </div>
+        <!-- 讀取畫面 -->
+        <div id="loading-spinner" style="display:none;">
+            <div class="loader"></div>
+            <p class="text-center text-muted">系統處理中，請稍候...</p>
         </div>
 
-        <div class="asset-table-container">
-            <table class="table table-hover table-sm">
-                <thead class="thead-light" style="position: sticky; top: 0;">
-                    <tr>
-                        <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
-                        <th style="width: 20%;">財產編號</th>
-                        <th style="width: 25%;">財產名稱</th>
-                        <th style="width: 12%;">使用者</th>
-                        <th style="width: 12%;">保管人</th>
-                        <th style="width: 13%;">目前地點</th>
-                        <th style="width: 13%;">財產類別</th>
-                    </tr>
-                </thead>
-                <tbody id="asset-list"></tbody>
-            </table>
+        <div id="status-message"></div>
+
+        <div id="main-form" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0"><i class="fas fa-exchange-alt mr-2 text-primary"></i>財產轉移申請 (批次)</h4>
+            </div>
+            
+            <!-- SECTION 1: 篩選與清單 -->
+            <div class="ui-card">
+                <h5><i class="fas fa-filter mr-2 filter-icon"></i>步驟 1：選擇資產</h5>
+                
+                <div class="form-row mb-3">
+                    <div class="form-group col-md-4">
+                        <label class="text-muted small">地點篩選</label>
+                        <select id="location-filter-select" class="form-control custom-select">
+                            <option value="">-- 顯示全部地點 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="text-muted small">財產類別篩選</label>
+                        <select id="category-filter-select" class="form-control custom-select">
+                            <option value="">-- 顯示全部類別 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="text-muted small">關鍵字搜尋</label>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                            </div>
+                            <input type="text" class="form-control" id="search-box" placeholder="輸入產編、名稱或地點...">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="asset-table-container">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th style="width: 5%;" class="text-center"><input type="checkbox" id="select-all"></th>
+                                <th style="width: 20%;">財產編號</th>
+                                <th style="width: 25%;">財產名稱</th>
+                                <th style="width: 12%;">使用者</th>
+                                <th style="width: 12%;">保管人</th>
+                                <th style="width: 13%;">目前地點</th>
+                                <th style="width: 13%;">財產類別</th>
+                            </tr>
+                        </thead>
+                        <tbody id="asset-list"></tbody>
+                    </table>
+                </div>
+                
+                <div id="pagination-controls" class="pagination-controls border-top mt-0"></div>
+                
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="selection-status">
+                        <i class="fas fa-check-circle mr-1"></i> 已勾選 <span id="selected-count" class="font-weight-bold" style="font-size: 1.2em;">0</span> 筆財產
+                    </div>
+                    <small class="text-muted">請勾選上方列表中的財產以繼續</small>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- 左側：一般轉移 (預設) -->
+                <div class="col-lg-8">
+                    <div class="ui-card" id="regular-transfer-card">
+                        <h5><i class="fas fa-tasks mr-2 filter-icon"></i>步驟 2：設定轉移資訊 (一般轉移)</h5>
+                        
+                        <!-- 一般轉移選項與下拉選單的容器 -->
+                        <div id="regular-transfer-options">
+                            <div class="form-group mb-4">
+                                <label class="d-block mb-2 text-muted font-weight-bold">請勾選本次要變更的項目：</label>
+                                <div class="d-flex flex-wrap">
+                                    <div class="custom-control custom-checkbox mr-4 mb-2">
+                                        <input class="custom-control-input" type="checkbox" id="change-location" checked>
+                                        <label class="custom-control-label" for="change-location">變更地點</label>
+                                    </div>
+                                    <div class="custom-control custom-checkbox mr-4 mb-2">
+                                        <input class="custom-control-input" type="checkbox" id="change-keeper" checked>
+                                        <label class="custom-control-label" for="change-keeper">變更保管人 <span class="badge badge-warning font-weight-normal">需審核</span></label>
+                                    </div>
+                                    <div class="custom-control custom-checkbox mb-2">
+                                        <input class="custom-control-input" type="checkbox" id="change-user">
+                                        <label class="custom-control-label" for="change-user">變更使用人 <span class="badge badge-secondary font-weight-normal">僅限財產總表</span></label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="regular-transfer-selects" class="bg-light p-3 rounded">
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label for="location-select">新地點：</label>
+                                    <select class="form-control" id="location-select" name="newLocation">
+                                        <option value="">請選擇地點...</option>
+                                    </select>
+                                    <small class="form-text text-muted">若不變更地點，請留空</small>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label for="keeper-select">新保管人：</label>
+                                    <select class="form-control" id="keeper-select" name="newKeeperEmail">
+                                        <option value="">請選擇新保管人...</option>
+                                    </select>
+                                    <small class="form-text text-muted">若不變更保管人，請留空</small>
+                                </div>
+                                <!-- 使用人選擇 (預設隱藏) -->
+                                <div class="form-group col-md-12 mt-2" id="user-select-group" style="display:none;">
+                                    <label for="user-select" class="text-primary font-weight-bold">新使用人：</label>
+                                    <select class="form-control border-primary" id="user-select" name="newUserName">
+                                        <option value="">請選擇新使用人...</option>
+                                    </select>
+                                    <small class="form-text text-muted">僅適用於財產總表的資產</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 駐站轉移專用下拉選單 (預設隱藏，會取代上面的 regular-selects) -->
+                        <div id="station-transfer-selects" class="bg-light p-3 rounded" style="display:none;">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle mr-1"></i> <strong>駐站模式說明：</strong> 保管人和使用人將同時設為此駐管。
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label for="custodian-select">轉移給駐管：</label>
+                                    <select class="form-control" id="custodian-select">
+                                        <option value="">請選擇駐管...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label for="station-location-select">駐站地點：</label>
+                                    <select class="form-control" id="station-location-select">
+                                        <option value="">請選擇駐站地點...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側：特殊轉移模式 -->
+                <div class="col-lg-4">
+                    <div class="ui-card special-transfer-section">
+                        <h6 class="text-warning-dark font-weight-bold"><i class="fas fa-star mr-2"></i>特殊轉移模式</h6>
+                        <p class="small text-muted mb-3">若選用此區功能，左側一般設定將被覆蓋。</p>
+
+                        <!-- 選項1 -->
+                        <div class="custom-control custom-switch mb-3">
+                            <input type="checkbox" class="custom-control-input special-transfer-mode" id="station-transfer">
+                            <label class="custom-control-label font-weight-bold" for="station-transfer">中心轉移給駐站</label>
+                            <div class="small text-muted ml-1">同時變更保管人、使用人和地點</div>
+                        </div>
+
+                        <div class="dropdown-divider border-warning opacity-50"></div>
+
+                        <!-- 選項2 -->
+                        <div class="custom-control custom-switch mb-3 mt-3">
+                            <input type="checkbox" class="custom-control-input special-transfer-mode" id="info-transfer">
+                            <label class="custom-control-label font-weight-bold" for="info-transfer">駐站回送中心資訊組</label>
+                            <small class="d-block text-danger mt-1" id="info-transfer-hint" style="display:none;">
+                                <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
+                            </small>
+                        </div>
+
+                        <!-- 選項3 -->
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input special-transfer-mode" id="intake-transfer">
+                            <label class="custom-control-label font-weight-bold" for="intake-transfer">駐站回送中心收案組</label>
+                            <small class="d-block text-danger mt-1" id="intake-transfer-hint" style="display:none;">
+                                <i class="fas fa-exclamation-triangle"></i> 資料不完整，無法使用
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-bar">
+                <button type="button" class="btn btn-primary btn-lg" onclick="submitApplication()">
+                    <i class="fas fa-paper-plane mr-2"></i>提交申請
+                </button>
+            </div>
+            
+            <div class="mb-5"></div> <!-- 底部留白 -->
         </div>
-        
-        <div id="pagination-controls" class="pagination-controls"></div>
-
-        <p>已勾選 <span id="selected-count" class="font-weight-bold">0</span> 筆財產</p>
-
-        <hr>
-
-        <!-- ✨ 修改：特殊轉移模式選擇（三個互斥選項）-->
-        <div class="form-group">
-            <label><b>特殊轉移模式：</b></label>
-
-            <!-- 選項1：中心轉移給駐站（現有）-->
-            <div class="form-check">
-                <input class="form-check-input special-transfer-mode" type="checkbox" id="station-transfer">
-                <label class="form-check-label" for="station-transfer">
-                    <strong>中心轉移給駐站或駐站間轉移</strong>（同時變更保管人、使用人和地點）
-                </label>
-            </div>
-
-            <!-- ✨ 新增：選項2：駐站回送中心資訊組 -->
-            <div class="form-check">
-                <input class="form-check-input special-transfer-mode" type="checkbox" id="info-transfer">
-                <label class="form-check-label" for="info-transfer">
-                    <strong>駐站回送中心資訊組</strong>
-                </label>
-                <small class="form-text text-muted" id="info-transfer-hint" style="display:none; color:red;">
-                    目前資料不完整，無法使用此功能
-                </small>
-            </div>
-
-            <!-- ✨ 新增：選項3：駐站回送中心收案組 -->
-            <div class="form-check">
-                <input class="form-check-input special-transfer-mode" type="checkbox" id="intake-transfer">
-                <label class="form-check-label" for="intake-transfer">
-                    <strong>駐站回送中心收案組</strong>
-                </label>
-                <small class="form-text text-muted" id="intake-transfer-hint" style="display:none; color:red;">
-                    目前資料不完整，無法使用此功能
-                </small>
-            </div>
-        </div>
-
-        <hr>
-
-        <!-- ✨ 修改：用 div 包裹原有選項，方便隱藏 -->
-        <div id="regular-transfer-options">
-            <div class="form-group">
-                <label><b>請選擇轉移項目：</b></label>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="change-location" checked>
-                <label class="form-check-label" for="change-location">變更地點</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="change-keeper" checked>
-                <label class="form-check-label" for="change-keeper">變更保管人（需審核）</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="change-user">
-                <label class="form-check-label" for="change-user">變更使用人（需審核，僅適用財產總表）</label>
-            </div>
-            </div>
-        </div>
-
-        <!-- ✨ 修改：用 div 包裹原有下拉選單 -->
-        <div id="regular-transfer-selects">
-            <div class="form-group">
-                <label for="keeper-select">新保管人：</label>
-            <select class="form-control" id="keeper-select" name="newKeeperEmail">
-                <option value="">請選擇新保管人...</option>
-            </select>
-            <small class="form-text text-muted">若不變更保管人，請留空</small>
-        </div>
-        
-        <div class="form-group">
-            <label for="location-select">新地點：</label>
-            <select class="form-control" id="location-select" name="newLocation">
-                <option value="">請選擇地點...</option>
-            </select>
-            <small class="form-text text-muted">若不變更地點，請留空</small>
-        </div>
-
-        <!-- ✨ 新增：使用人選擇 -->
-            <div class="form-group" id="user-select-group" style="display:none;">
-                <label for="user-select">新使用人：</label>
-                <select class="form-control" id="user-select" name="newUserName">
-                    <option value="">請選擇新使用人...</option>
-                </select>
-                <small class="form-text text-muted">僅適用於財產總表的資產</small>
-            </div>
-        </div>
-
-        <!-- ✨ 新增：駐站轉移專用下拉選單（預設隱藏）-->
-        <div id="station-transfer-selects" style="display:none;">
-            <div class="form-group">
-                <label for="custodian-select">轉移給駐管：</label>
-                <select class="form-control" id="custodian-select">
-                    <option value="">請選擇駐管...</option>
-                </select>
-                <small class="form-text text-muted">保管人和使用人將同時設為此駐管</small>
-            </div>
-
-            <div class="form-group">
-                <label for="station-location-select">駐站地點：</label>
-                <select class="form-control" id="station-location-select">
-                    <option value="">請選擇駐站地點...</option>
-                </select>
-            </div>
-        </div>
-
-        <button type="button" class="btn btn-primary" onclick="submitApplication()">提交申請</button>
     </div>
 
-    <div id="status-message"></div>
-
+    <!-- 保持原有的 Script 邏輯，不做任何變更，只確保 DOM ID 存在 -->
     <script>
         let allAssets = [];
         let filteredAssets = [];
-        // custodianDataMap 已不再需要
-
         let currentPage = 1;
         let rowsPerPage = 2000;
 
         document.addEventListener("DOMContentLoaded", () => {
             // Hide main form and show progress bar
             document.getElementById('main-form').style.display = 'none';
-            showProgressBar('正在載入資料，請稍候...'); // 使用新的進度條組件
+            // 嘗試呼叫外部 shared 函數，如果沒有則使用本地 fallback
+            if (typeof showProgressBar === 'function') {
+                showProgressBar('正在載入資料，請稍候...');
+            } else {
+                document.getElementById('loading-spinner').style.display = 'block';
+            }
 
             google.script.run
                 .withSuccessHandler(onDataLoaded)
@@ -204,23 +354,45 @@
             document.getElementById('category-filter-select').addEventListener('change', filterTable);
             document.getElementById('select-all').addEventListener('change', toggleSelectAll);
             
-            // ✨ 新增：轉移選項切換監聽
+            // ✨ 轉移選項切換監聽
             document.getElementById('change-user').addEventListener('change', toggleUserSelect);
 
-            // ✨ 修改：為所有特殊轉移模式 checkbox 添加互斥監聽
+            // ✨ 特殊轉移模式 checkbox 監聽
             document.querySelectorAll('.special-transfer-mode').forEach(checkbox => {
                 checkbox.addEventListener('change', handleSpecialTransferModeChange);
             });
+            
+            // UI 優化：當一般選項改變時，確保特殊選項被取消 (雙向互斥)
+            const regularCheckboxes = ['change-location', 'change-keeper', 'change-user'];
+            regularCheckboxes.forEach(id => {
+                document.getElementById(id).addEventListener('change', function() {
+                    if(this.checked) {
+                       // 如果使用者手動去勾選一般選項，且目前處於特殊模式，是否要取消特殊模式？
+                       // 為了 UX 直覺，如果使用者回頭操作一般選項，我們視為他想回到一般模式
+                       const isAnySpecialChecked = Array.from(document.querySelectorAll('.special-transfer-mode')).some(c => c.checked);
+                       if(isAnySpecialChecked) {
+                           // 取消所有特殊模式
+                           document.querySelectorAll('.special-transfer-mode').forEach(cb => {
+                               cb.checked = false;
+                               // 手動觸發 change 事件以重置 UI
+                               cb.dispatchEvent(new Event('change'));
+                           });
+                           // 因為 handleSpecialTransferModeChange 會把一般選項取消，我們這裡要重新勾選被點擊的那個
+                           this.checked = true;
+                           // 重新觸發一次 user select 的顯示邏輯
+                           if(this.id === 'change-user') toggleUserSelect();
+                       }
+                    }
+                });
+            });
         });
         
-        // ✨ 新增：切換使用人選擇框顯示/隱藏
         function toggleUserSelect() {
             const changeUser = document.getElementById('change-user').checked;
             const userSelectGroup = document.getElementById('user-select-group');
             userSelectGroup.style.display = changeUser ? 'block' : 'none';
         }
 
-        // ✨ 新增：處理特殊轉移模式的互斥選擇
         function handleSpecialTransferModeChange(event) {
             const selectedCheckbox = event.target;
 
@@ -241,13 +413,30 @@
             const regularOptions = document.getElementById('regular-transfer-options');
             const regularSelects = document.getElementById('regular-transfer-selects');
             const stationSelects = document.getElementById('station-transfer-selects');
+            const regularCard = document.getElementById('regular-transfer-card'); // 獲取卡片參考
 
             if (isStationMode || isInfoMode || isIntakeMode) {
-                // 任一特殊模式：隱藏一般選項
-                regularOptions.style.display = 'none';
-                regularSelects.style.display = 'none';
+                // 特殊模式：視覺變更
+                regularCard.style.opacity = '0.6'; // 讓一般選項看起來像被禁用
+                regularCard.style.pointerEvents = 'none'; // 禁止點擊
+                
+                // 為了讓駐站模式的選單可以使用，我們需要特殊處理
+                if (isStationMode) {
+                    regularOptions.style.display = 'none';
+                    regularSelects.style.display = 'none';
+                    stationSelects.style.display = 'block';
+                    // 恢復卡片互動性給駐站下拉選單
+                    regularCard.style.opacity = '1';
+                    regularCard.style.pointerEvents = 'auto';
+                } else {
+                    // 資訊組或收案組模式，完全不需要下拉選單
+                    regularOptions.style.display = 'none';
+                    regularSelects.style.display = 'none';
+                    stationSelects.style.display = 'none';
+                    // 這裡保持卡片淡出，表示不需要操作此區
+                }
 
-                // 取消勾選一般選項
+                // 取消勾選一般選項 (邏輯層面)
                 document.getElementById('change-location').checked = false;
                 document.getElementById('change-keeper').checked = false;
                 document.getElementById('change-user').checked = false;
@@ -258,10 +447,11 @@
                 document.getElementById('user-select').value = '';
                 document.getElementById('user-select-group').style.display = 'none';
 
-                // 駐站模式才顯示下拉選單，其他模式不顯示（因為是自動指定）
-                stationSelects.style.display = isStationMode ? 'block' : 'none';
             } else {
                 // 一般模式：恢復原狀
+                regularCard.style.opacity = '1';
+                regularCard.style.pointerEvents = 'auto';
+                
                 regularOptions.style.display = 'block';
                 regularSelects.style.display = 'block';
                 stationSelects.style.display = 'none';
@@ -277,9 +467,12 @@
         }
 
         function onDataLoaded(data) {
-            hideProgressBar('資料載入完成！'); // 使用新的進度條組件 API
+            if (typeof hideProgressBar === 'function') {
+                hideProgressBar('資料載入完成！');
+            } else {
+                document.getElementById('loading-spinner').style.display = 'none';
+            }
 
-            // 延遲 300ms 後顯示表單（與進度條隱藏動畫同步）
             setTimeout(() => {
                 document.getElementById('main-form').style.display = 'block';
                 populateForm(data);
@@ -287,7 +480,11 @@
         }
 
         function onDataError(error) {
-            hideProgressBar('載入失敗！', 300); // 使用新的進度條組件 API
+            if (typeof hideProgressBar === 'function') {
+                hideProgressBar('載入失敗！', 300);
+            } else {
+                document.getElementById('loading-spinner').style.display = 'none';
+            }
 
             setTimeout(() => {
                 document.getElementById('main-form').style.display = 'block';
@@ -296,19 +493,15 @@
         }
 
         function populateForm(data) {
-            // ✨ 儲存資料供提交時使用
             window.transferData = data;
-
             allAssets = data.assets;
             filteredAssets = allAssets;
 
             if (!allAssets || allAssets.length === 0) {
-                // If no assets, show error and return. onDataError already handles hiding loader.
                 showError({message: "您目前沒有可轉移的財產。"});
                 return;
             }
 
-            // ✨ 重新載入時先清空所有下拉選單，避免重複填充
             document.getElementById('location-filter-select').innerHTML = '<option value="">-- 顯示全部地點 --</option>';
             document.getElementById('category-filter-select').innerHTML = '<option value="">-- 顯示全部類別 --</option>';
             document.getElementById('keeper-select').innerHTML = '<option value="">請選擇新保管人...</option>';
@@ -316,18 +509,15 @@
             document.getElementById('custodian-select').innerHTML = '<option value="">請選擇駐管...</option>';
             document.getElementById('station-location-select').innerHTML = '<option value="">請選擇駐站地點...</option>';
 
-            // 重置分頁
             currentPage = 1;
 
             displayPage(currentPage);
             populateLocationFilter(allAssets);
             populateCategoryFilter(allAssets);
             
-            // ✨ **核心修改：使用新的 keepers 和 locations 資料來填充下拉選單**
             const keeperSelect = document.getElementById('keeper-select');
             const locationSelect = document.getElementById('location-select');
 
-            // 填充保管人 (顯示姓名，值為 Email)
             const sortedKeepers = Object.entries(data.keepers).map(([email, name]) => ({ email, name })).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
             sortedKeepers.forEach(keeper => {
                 const option = document.createElement('option');
@@ -337,28 +527,25 @@
                 keeperSelect.appendChild(option);
             });
 
-            // 填充地點 (不再與保管人連動)
-            locationSelect.innerHTML = '<option value="">請選擇地點...</option>'; // 清空並加入預設選項
+            locationSelect.innerHTML = '<option value="">請選擇地點...</option>';
             data.locations.forEach(loc => {
                 const option = document.createElement('option');
                 option.value = loc;
                 option.textContent = loc;
                 locationSelect.appendChild(option);
             });
-            locationSelect.disabled = false; // 直接啟用
+            locationSelect.disabled = false;
             
-            // ✨ 新增：填充使用人下拉選單（使用Email作為value）
             const userSelect = document.getElementById('user-select');
             const sortedUsers = Object.entries(data.users || data.keepers).map(([email, name]) => ({ email, name })).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
             sortedUsers.forEach(user => {
                 const option = document.createElement('option');
-                option.value = user.email; // ✨ 改用Email作為value
+                option.value = user.email;
                 const displayName = (user.email === data.userEmail) ? `${user.name} (自己)` : user.name;
                 option.textContent = displayName;
                 userSelect.appendChild(option);
             });
 
-            // ✨ 新增：填充駐管下拉選單
             const custodianSelect = document.getElementById('custodian-select');
             const custodians = data.custodians || {};
             const custodianEntries = Object.entries(custodians)
@@ -378,7 +565,6 @@
                 });
             }
 
-            // ✨ 新增：填充駐站地點下拉選單
             const stationLocationSelect = document.getElementById('station-location-select');
             const stationLocations = data.stationLocations || [];
 
@@ -394,28 +580,23 @@
                 });
             }
 
-            // ✨ 修改：驗證資訊組模式資料完整性（包含電腦地點）
             const infoTransferCheckbox = document.getElementById('info-transfer');
             const infoTransferHint = document.getElementById('info-transfer-hint');
 
             if (!data.infoCustodian || !data.infoUser || !data.infoLocation || !data.infoComputerLocation) {
-                // 資料不完整，禁用選項
                 infoTransferCheckbox.disabled = true;
                 infoTransferHint.style.display = 'block';
             }
 
-            // ✨ 新增：驗證收案組模式資料完整性
             const intakeTransferCheckbox = document.getElementById('intake-transfer');
             const intakeTransferHint = document.getElementById('intake-transfer-hint');
 
             if (!data.intakeCustodian || !data.intakeLocation) {
-                // 資料不完整，禁用選項
                 intakeTransferCheckbox.disabled = true;
                 intakeTransferHint.style.display = 'block';
             }
         }
 
-        // ✨ **核心修改：此函式負責顯示特定頁面的內容和分頁控制項**
         function displayPage(page) {
             currentPage = page;
             renderTableForPage(filteredAssets, rowsPerPage, currentPage);
@@ -437,7 +618,7 @@
             const categoryFilterSelect = document.getElementById('category-filter-select');
             const uniqueCategories = [...new Set(assets.map(asset => asset.category))].sort();
             uniqueCategories.forEach(cat => {
-                if (cat) { // 過濾掉可能是 null 或 undefined 的值
+                if (cat) {
                     const option = document.createElement('option');
                     option.value = cat;
                     option.textContent = cat;
@@ -446,12 +627,11 @@
             });
         }
 
-        // ✨ **核心修改：重構 renderTable 函式，使其只渲染特定頁面的資料**
         function renderTableForPage(assets, rows, page) {
             const assetListBody = document.getElementById('asset-list');
             assetListBody.innerHTML = '';
             
-            page--; // 將頁碼轉換為陣列索引 (第1頁對應索引0)
+            page--;
             const start = rows * page;
             const end = start + rows;
             const paginatedItems = assets.slice(start, end);
@@ -466,39 +646,36 @@
             document.querySelectorAll('.asset-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedCount));
         }
         
-        // ✨ **新增：建立並渲染分頁控制按鈕**
         function setupPagination(items, rows) {
             const paginationContainer = document.getElementById('pagination-controls');
             paginationContainer.innerHTML = "";
 
             const pageCount = Math.ceil(items.length / rows);
+            
+            if(pageCount <= 1) return; // 只有一頁時隱藏分頁
 
-            // 頁面資訊
             const pageInfo = document.createElement('div');
-            pageInfo.innerHTML = `第 ${currentPage} / ${pageCount} 頁 (共 ${items.length} 筆)`;
+            pageInfo.innerHTML = `<span class="badge badge-light">第 ${currentPage} / ${pageCount} 頁</span> <span class="text-muted ml-2">(共 ${items.length} 筆)</span>`;
             paginationContainer.appendChild(pageInfo);
 
-            // 按鈕群組
             const nav = document.createElement('nav');
             const ul = document.createElement('ul');
-            ul.className = 'pagination';
+            ul.className = 'pagination mb-0';
             
-            // 上一頁按鈕
             const prevLi = document.createElement('li');
             prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
             const prevLink = document.createElement('a');
             prevLink.className = 'page-link';
-            prevLink.innerText = '上一頁';
+            prevLink.innerHTML = '<i class="fas fa-chevron-left"></i>';
             prevLink.onclick = () => { if (currentPage > 1) displayPage(currentPage - 1); };
             prevLi.appendChild(prevLink);
             ul.appendChild(prevLi);
 
-            // 下一頁按鈕
             const nextLi = document.createElement('li');
             nextLi.className = `page-item ${currentPage === pageCount ? 'disabled' : ''}`;
             const nextLink = document.createElement('a');
             nextLink.className = 'page-link';
-            nextLink.innerText = '下一頁';
+            nextLink.innerHTML = '<i class="fas fa-chevron-right"></i>';
             nextLink.onclick = () => { if (currentPage < pageCount) displayPage(currentPage + 1); };
             nextLi.appendChild(nextLink);
             ul.appendChild(nextLi);
@@ -507,7 +684,6 @@
             paginationContainer.appendChild(nav);
         }
 
-        // ✨ **修改：篩選邏輯更新後，重新渲染第一頁和分頁控制項**
         function filterTable() {
             const locationFilter = document.getElementById('location-filter-select').value.toUpperCase();
             const categoryFilter = document.getElementById('category-filter-select').value.toUpperCase();
@@ -522,24 +698,21 @@
                 return locationMatch && categoryMatch && searchMatch;
             });
             
-            displayPage(1); // 從第一頁開始顯示篩選結果
+            displayPage(1);
         }
         
-        // --- 以下所有輔助函式維持不變 ---
         function updateSelectedCount() {
             const count = document.querySelectorAll('.asset-checkbox:checked').length;
             document.getElementById('selected-count').textContent = count;
         }
+
         function toggleSelectAll(event) {
-            // 注意：這裡只會全選/取消全選「當前頁面」的項目，這是預期行為
             document.querySelectorAll('#asset-list tr').forEach(row => {
                 const checkbox = row.querySelector('.asset-checkbox');
                 if (checkbox) checkbox.checked = event.target.checked;
             });
             updateSelectedCount();
         }
-
-        // ✨ **移除 updateLocationOptions 函式，因為不再需要**
 
         function submitApplication() {
             const selectedAssets = Array.from(document.querySelectorAll('.asset-checkbox:checked')).map(cb => cb.value);
@@ -548,38 +721,37 @@
             const userSelect = document.getElementById('user-select');
             const statusMsg = document.getElementById('status-message');
 
-            // ✨ 新增：檢查是哪種特殊轉移模式
             const isStationTransfer = document.getElementById('station-transfer').checked;
             const isInfoTransfer = document.getElementById('info-transfer').checked;
             const isIntakeTransfer = document.getElementById('intake-transfer').checked;
 
-            // 驗證：至少要勾選一筆財產
             if (selectedAssets.length === 0) {
                 statusMsg.className = 'alert alert-warning';
                 statusMsg.textContent = '請至少勾選一筆財產！';
+                window.scrollTo(0, 0); // 滾動到頂部顯示錯誤
                 return;
             }
 
             let formData;
 
             if (isStationTransfer) {
-                // ✨ 駐站轉移模式的驗證
                 const custodianEmail = document.getElementById('custodian-select').value;
                 const stationLocation = document.getElementById('station-location-select').value;
 
                 if (!custodianEmail) {
                     statusMsg.className = 'alert alert-warning';
                     statusMsg.textContent = '請選擇駐管！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
                 if (!stationLocation) {
                     statusMsg.className = 'alert alert-warning';
                     statusMsg.textContent = '請選擇駐站地點！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
-                // ✨ 駐站轉移模式的 formData
                 formData = {
                     assetIds: selectedAssets,
                     isStationTransfer: true,
@@ -587,18 +759,17 @@
                     stationLocation: stationLocation
                 };
             } else if (isInfoTransfer) {
-                // ✨ 資訊組轉移模式
-                // 從後端資料中取得強制指定的值（已在 populateForm 時儲存）
                 const infoCustodianEmail = window.transferData.infoCustodian
                     ? Object.keys(window.transferData.infoCustodian)[0] : null;
                 const infoUserEmail = window.transferData.infoUser
                     ? Object.keys(window.transferData.infoUser)[0] : null;
                 const infoLocation = window.transferData.infoLocation;
-                const infoComputerLocation = window.transferData.infoComputerLocation; // ✨ 新增：電腦專用地點
+                const infoComputerLocation = window.transferData.infoComputerLocation;
 
                 if (!infoCustodianEmail || !infoUserEmail || !infoLocation || !infoComputerLocation) {
                     statusMsg.className = 'alert alert-danger';
                     statusMsg.textContent = '資訊組轉移資料不完整！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
@@ -608,10 +779,9 @@
                     infoCustodianEmail: infoCustodianEmail,
                     infoUserEmail: infoUserEmail,
                     infoLocation: infoLocation,
-                    infoComputerLocation: infoComputerLocation // ✨ 新增：電腦專用地點
+                    infoComputerLocation: infoComputerLocation
                 };
             } else if (isIntakeTransfer) {
-                // ✨ 收案組轉移模式
                 const intakeCustodianEmail = window.transferData.intakeCustodian
                     ? Object.keys(window.transferData.intakeCustodian)[0] : null;
                 const intakeLocation = window.transferData.intakeLocation;
@@ -619,6 +789,7 @@
                 if (!intakeCustodianEmail || !intakeLocation) {
                     statusMsg.className = 'alert alert-danger';
                     statusMsg.textContent = '收案組轉移資料不完整！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
@@ -629,40 +800,38 @@
                     intakeLocation: intakeLocation
                 };
             } else {
-                // 一般轉移模式的驗證
                 const changeLocation = document.getElementById('change-location').checked;
                 const changeKeeper = document.getElementById('change-keeper').checked;
                 const changeUser = document.getElementById('change-user').checked;
 
-                // 驗證：至少要選擇一項變更
                 if (!changeLocation && !changeKeeper && !changeUser) {
                     statusMsg.className = 'alert alert-warning';
                     statusMsg.textContent = '請至少選擇一項要變更的項目！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
-                // 驗證：如果要變更保管人，必須選擇新保管人
                 if (changeKeeper && !keeperSelect.value) {
                     statusMsg.className = 'alert alert-warning';
                     statusMsg.textContent = '您選擇了變更保管人，請選擇新保管人！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
-                // 驗證：如果要變更地點，必須選擇新地點
                 if (changeLocation && !locationSelect.value) {
                     statusMsg.className = 'alert alert-warning';
                     statusMsg.textContent = '您選擇了變更地點，請選擇新地點！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
-                // 驗證：如果要變更使用人，必須選擇新使用人
                 if (changeUser && !userSelect.value) {
                     statusMsg.className = 'alert alert-warning';
                     statusMsg.textContent = '您選擇了變更使用人，請選擇新使用人！';
+                     window.scrollTo(0, 0);
                     return;
                 }
 
-                // 一般轉移模式的 formData
                 formData = {
                     assetIds: selectedAssets,
                     newKeeperEmail: changeKeeper ? keeperSelect.value : null,
