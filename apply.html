@@ -82,6 +82,17 @@
             margin-bottom: 25px;
         }
 
+        /* 禁用的特殊轉移選項視覺化 */
+        .custom-control-input:disabled ~ .custom-control-label {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .custom-control-input:disabled ~ .custom-control-label::before {
+            background-color: #e9ecef;
+            border-color: #dee2e6;
+        }
+
         /* 模式分隔線 */
         .mode-divider {
             text-align: center;
@@ -406,6 +417,12 @@
         function handleSpecialTransferModeChange(event) {
             const selectedCheckbox = event.target;
 
+            // ✨ 防護：如果此 checkbox 被禁用，不執行任何操作
+            if (selectedCheckbox.disabled) {
+                selectedCheckbox.checked = false; // 強制取消勾選
+                return;
+            }
+
             // 如果當前 checkbox 被勾選，取消其他 checkbox
             if (selectedCheckbox.checked) {
                 document.querySelectorAll('.special-transfer-mode').forEach(cb => {
@@ -588,7 +605,10 @@
 
             if (!data.infoCustodian || !data.infoUser || !data.infoLocation || !data.infoComputerLocation) {
                 infoTransferCheckbox.disabled = true;
+                infoTransferCheckbox.checked = false; // 確保不會被勾選
                 infoTransferHint.style.display = 'block';
+                // 添加視覺化禁用樣式到父容器
+                infoTransferCheckbox.closest('.custom-control').style.opacity = '0.5';
             }
 
             const intakeTransferCheckbox = document.getElementById('intake-transfer');
@@ -596,7 +616,10 @@
 
             if (!data.intakeCustodian || !data.intakeLocation) {
                 intakeTransferCheckbox.disabled = true;
+                intakeTransferCheckbox.checked = false; // 確保不會被勾選
                 intakeTransferHint.style.display = 'block';
+                // 添加視覺化禁用樣式到父容器
+                intakeTransferCheckbox.closest('.custom-control').style.opacity = '0.5';
             }
         }
 
