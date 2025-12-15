@@ -101,9 +101,9 @@
 </div>
 
 <script>
-  let _runnerInterval;
+  let _flyProgressInterval;
 
-  function showProgressBar(statusText = '正在載入資料...') {
+  function showFlyProgressBar(statusText = '正在載入資料...') {
     const overlay = document.getElementById('progress-fly-overlay');
     const bar = document.getElementById('progress-fly-bar');
     const runner = document.getElementById('runner');
@@ -111,7 +111,7 @@
     const percent = document.getElementById('progress-fly-percent');
 
     // 如果進度條已經在運行中，只更新文字，不重置進度
-    if (_runnerInterval) {
+    if (_flyProgressInterval) {
       text.textContent = statusText;
       return;
     }
@@ -134,7 +134,7 @@
     }
 
     // 模擬進度增長
-    _runnerInterval = setInterval(() => {
+    _flyProgressInterval = setInterval(() => {
       if (progress < 90) {
         progress++;
         bar.style.width = progress + '%';
@@ -144,15 +144,15 @@
     }, 30);
   }
 
-  function hideProgressBar(completionText = '載入完成！', delay = 300) {
+  function hideFlyProgressBar(completionText = '載入完成！', delay = 300) {
     const overlay = document.getElementById('progress-fly-overlay');
     const bar = document.getElementById('progress-fly-bar');
     const runner = document.getElementById('runner');
     const text = document.getElementById('progress-fly-text');
     const percent = document.getElementById('progress-fly-percent');
 
-    clearInterval(_runnerInterval);
-    _runnerInterval = null; // 重置標記，允許下次重新啟動進度條
+    clearInterval(_flyProgressInterval);
+    _flyProgressInterval = null; // 重置標記，允許下次重新啟動進度條
 
     // 跳到 100%
     bar.style.width = '100%';

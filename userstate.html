@@ -239,10 +239,10 @@
 
         function showLoading(isLoading, statusText = '正在載入資料...') {
             if (isLoading) {
-                showProgressBar(statusText);
+                showFlyProgressBar(statusText);
                 document.getElementById('table-container').style.display = 'none';
             } else {
-                hideProgressBar('資料載入完成！', 300);
+                hideFlyProgressBar('資料載入完成！', 300);
                 document.getElementById('table-container').style.display = 'block';
             }
         }
