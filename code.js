@@ -86,6 +86,7 @@ const AL_NEW_USER_EMAIL_COLUMN_INDEX = 14;   // ✨ 新增：新使用人Email
 const AL_TRANSFER_TYPE_COLUMN_INDEX = 15;    // ✨ 新增：轉移類型（地點/保管人/使用人）
 const AL_APPROVER_EMAIL_COLUMN_INDEX = 16;  // ✨ 新增：實際審核者Email（方案D）
 const AL_APPLICANT_EMAIL_COLUMN_INDEX = 17;  // Q 欄：申請操作人員 Email
+const AL_DOC_URL_COLUMN_INDEX = 18;  // R 欄：轉移文件連結
 
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
@@ -2827,7 +2828,7 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
     // 1️⃣ 建立資產ID到最新轉移記錄的映射
     const assetToLatestTransfer = new Map();
 
-    appLogData.forEach(row => {
+    appLogData.forEach((row, index) => {  // ✨ 新增 index 參數
       const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
       const status = row[AL_STATUS_COLUMN_INDEX - 1];
       const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
@@ -2845,7 +2846,8 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
             newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1],
             newUser: row[AL_NEW_USER_COLUMN_INDEX - 1],
             newUserEmail: row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1], // 🛡️
-            reviewTime: reviewTime
+            reviewTime: reviewTime,
+            rowIndex: index + 2  // ✨ 新增：記錄工作表行號（陣列索引 + 2）
           });
         }
       }
@@ -3046,6 +3048,31 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
         location.sheet.getRange(location.rowIndex, indices.DOC_URL).setValue(fileUrl);
       }
     });
+
+    // ✨ 新增：回寫 DOC_URL 到 APPLICATION_LOG (R 欄)
+    Logger.log(`準備更新 APPLICATION_LOG 的 R 欄，共 ${assetsToTransfer.length} 筆記錄`);
+    let updatedCount = 0;
+
+    assetsToTransfer.forEach(item => {
+      const transfer = item.transfer;
+      const assetId = item.asset.assetId;
+
+      // 檢查是否有記錄行號（理論上一定有，因為是從 Map 中篩選出來的）
+      if (transfer.rowIndex) {
+        try {
+          appLogSheet.getRange(transfer.rowIndex, AL_DOC_URL_COLUMN_INDEX).setValue(fileUrl);
+          updatedCount++;
+          Logger.log(`✓ 已更新資產 ${assetId} 的轉移記錄（行 ${transfer.rowIndex}）`);
+        } catch (e) {
+          Logger.log(`✗ 更新資產 ${assetId} 的轉移記錄時失敗（行 ${transfer.rowIndex}）: ${e.message}`);
+          // 不中斷流程，繼續處理其他資產
+        }
+      } else {
+        Logger.log(`⚠️ 警告：資產 ${assetId} 的轉移記錄缺少 rowIndex，跳過更新`);
+      }
+    });
+
+    Logger.log(`APPLICATION_LOG R 欄更新完成：成功 ${updatedCount}/${assetsToTransfer.length} 筆`);
 
     Logger.log(`成功為 ${keeperName} 產生轉移記錄文件: ${fileUrl}`);
     return {
