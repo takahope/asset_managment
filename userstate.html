@@ -186,7 +186,8 @@
                 '出借中': 'badge-warning',
                 '報廢中': 'badge-danger',
                 '已報廢': 'badge-secondary',
-                '轉移中': 'badge-primary'
+                '轉移中': 'badge-primary',
+                '待接收': 'badge-primary'
             };
 
             assets.forEach(asset => {
@@ -195,7 +196,8 @@
                 
                 let actionHtml = '';
                 const canCancel = isAdmin || currentUserEmail === asset.leaderEmail || currentUserEmail === asset.userEmail;
-                if (canCancel && (asset.status === '轉移中' || asset.status === '報廢中')) {
+                // 支援「待接收」與「轉移中」(舊資料相容)
+                if (canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中')) {
                     actionHtml = `<button class="btn btn-sm btn-danger" onclick="promptCancel('${asset.assetId}', '${asset.status}')">取消</button>`;
                 }
 
