@@ -85,13 +85,11 @@
                 if (!assets || assets.length === 0) {
                     // 只更新 dynamic-form，保持標題可見
                     dynamicForm.innerHTML = `
-                        <div class="alert alert-info" role="alert">
+                        <div class="alert alert-success" role="alert">
                             <h5 class="alert-heading">目前沒有出借中的財產</h5>
                             <p>您目前沒有任何「出借中」的財產需要歸還。</p>
                             <hr>
-                            <p class="mb-0">如有疑問，請聯絡系統管理員。</p>
                         </div>
-                        <button class="btn btn-secondary" onclick="google.script.host.close()">關閉</button>
                     `;
                     dynamicForm.style.display = 'block';
                     return;
