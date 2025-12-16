@@ -3086,6 +3086,99 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
   }
 }
 
+/**
+ * 取得轉移文件的歷史紀錄
+ * @param {string} assetCategory - 財產類別（'財產' 或 '物品'）
+ * @returns {Array} 歷史紀錄陣列，按日期降序排列
+ */
+function getTransferDocHistory(assetCategory) {
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const isAdmin = checkAdminPermissions();
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+
+    // 1️⃣ 篩選有文件連結的記錄
+    const recordsWithDoc = [];
+    appLogData.forEach(row => {
+      const docUrl = row[AL_DOC_URL_COLUMN_INDEX - 1];
+      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const newKeeperEmail = row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
+      const newUserEmail = row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1];
+
+      // 跳過沒有文件連結或狀態不是「已完成」的記錄
+      if (!docUrl || docUrl.trim() === '' || status !== '已完成') {
+        return;
+      }
+
+      // 權限檢查（非管理員只能看到與自己相關的記錄）
+      if (!isAdmin) {
+        const isRelevant = (newKeeperEmail && newKeeperEmail.toLowerCase() === currentUserEmail) ||
+                           (newUserEmail && newUserEmail.toLowerCase() === currentUserEmail);
+        if (!isRelevant) {
+          return;
+        }
+      }
+
+      // 取得資產類別（需要從資產表查詢）
+      const asset = getAllAssets().find(a => a.assetId === assetId);
+      if (!asset) return;
+
+      // 類別篩選
+      if (assetCategory && asset.assetCategory !== assetCategory) {
+        return;
+      }
+
+      recordsWithDoc.push({
+        url: docUrl,
+        keeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
+        date: row[AL_REVIEW_TIME_COLUMN_INDEX - 1],  // 審核時間作為轉移日期
+        assetId: assetId
+      });
+    });
+
+    // 2️⃣ 依文件 URL 分組統計
+    const docMap = new Map();
+    recordsWithDoc.forEach(record => {
+      const url = record.url;
+      if (!docMap.has(url)) {
+        docMap.set(url, {
+          url: url,
+          keeper: record.keeper,
+          date: record.date,
+          count: 0
+        });
+      }
+      docMap.get(url).count++;
+    });
+
+    // 3️⃣ 轉換為陣列並排序（按日期降序）
+    const history = Array.from(docMap.values()).map(item => ({
+      url: item.url,
+      keeper: item.keeper,
+      date: Utilities.formatDate(new Date(item.date), Session.getScriptTimeZone(), "yyyy/MM/dd"),
+      count: item.count
+    }));
+
+    // 按日期降序排列（最新的在前）
+    history.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB - dateA;
+    });
+
+    Logger.log(`成功取得轉移文件歷史紀錄，共 ${history.length} 筆`);
+    return history;
+
+  } catch (e) {
+    Logger.log(`getTransferDocHistory 失敗: ${e.message}`);
+    throw new Error("取得歷史紀錄時發生錯誤: " + e.message);
+  }
+}
+
 
 // --- 除錯專用測試函式 ---
 function testMyEmail() {
