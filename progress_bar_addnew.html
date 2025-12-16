@@ -108,15 +108,15 @@
 </div>
 
 <script>
-  let _progressLoaderInterval;
+  let _progressLoaderIntervalAddnew;
 
-  function showProgressBar(statusText = '正在載入資料，請稍候...') {
+  function showProgressBarAddnew(statusText = '正在載入資料，請稍候...') {
     const overlay = document.getElementById('progress-loader-overlay-addnew');
     const progressBar = document.getElementById('progress-loader-bar-addnew');
     const loadingText = document.getElementById('progress-loader-text-addnew');
 
     // 如果進度條已經在運行中，只更新文字，不重置進度
-    if (_progressLoaderInterval) {
+    if (_progressLoaderIntervalAddnew) {
       loadingText.textContent = statusText;
       return;
     }
@@ -140,7 +140,7 @@
     }
 
     // 模擬進度增長
-    _progressLoaderInterval = setInterval(() => {
+    _progressLoaderIntervalAddnew = setInterval(() => {
       if (progress < 90) {
         progress++;
         progressBar.style.width = progress + '%';
@@ -150,13 +150,13 @@
     }, 30);
   }
 
-  function hideProgressBar(completionText = '資料載入完成！', delay = 300) {
+  function hideProgressBarAddnew(completionText = '資料載入完成！', delay = 300) {
     const overlay = document.getElementById('progress-loader-overlay-addnew');
     const progressBar = document.getElementById('progress-loader-bar-addnew');
     const loadingText = document.getElementById('progress-loader-text-addnew');
 
-    clearInterval(_progressLoaderInterval);
-    _progressLoaderInterval = null; // 重置標記，允許下次重新啟動進度條
+    clearInterval(_progressLoaderIntervalAddnew);
+    _progressLoaderIntervalAddnew = null; // 重置標記，允許下次重新啟動進度條
 
     // 跳到 100%
     progressBar.style.width = '100%';
