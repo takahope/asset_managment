@@ -5,7 +5,12 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body { padding: 20px; }
-        #status-message { margin-top: 15px; }
+        #status-message {
+            margin-top: 15px;
+            /* 確保狀態訊息顯示在進度條之上 */
+            position: relative;
+            z-index: 10000;  /* 高於進度條的 z-index: 9999 */
+        }
         .table-container { max-height: 60vh; overflow-y: auto; }
         .restore-btn-container {
             margin-top: 20px;
@@ -115,12 +120,17 @@
             allAssets = response.assets;
             populateFilters(allAssets);
 
-            // 綁定事件監聽
-            document.getElementById('category-filter').addEventListener('change', filterAndRender);
-            document.getElementById('leader-filter').addEventListener('change', filterAndRender);
-            document.getElementById('location-filter').addEventListener('change', filterAndRender);
-            document.getElementById('search-box').addEventListener('input', filterAndRender);
-            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+            const tableContainer = document.getElementById('table-container');
+
+            // 綁定事件監聽（只在首次載入時綁定，避免重複綁定）
+            if (!tableContainer.dataset.initialized) {
+                document.getElementById('category-filter').addEventListener('change', filterAndRender);
+                document.getElementById('leader-filter').addEventListener('change', filterAndRender);
+                document.getElementById('location-filter').addEventListener('change', filterAndRender);
+                document.getElementById('search-box').addEventListener('input', filterAndRender);
+                document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+                tableContainer.dataset.initialized = 'true';
+            }
 
             filterAndRender();
             showLoading(false);
@@ -268,24 +278,43 @@
         }
 
         function handleRestoreResult(result) {
-            showLoading(false);
+            // 步驟 1：隱藏進度條，但保持表格隱藏（避免舊資料閃現）
+            hideFlyProgressBar('回溯完成！', 0);
+            document.getElementById('table-container').style.display = 'none';
+            document.getElementById('restore-section').style.display = 'none';
 
-            const statusDiv = document.getElementById('status-message');
-            if (result.includes('成功')) {
-                statusDiv.className = 'alert alert-success';
-            } else {
-                statusDiv.className = 'alert alert-warning';
-            }
-            statusDiv.innerHTML = result.replace(/\n/g, '<br>');
+            // 步驟 2：顯示結果訊息（3 秒後自動消失）
+            showMessage(result.replace(/\n/g, '<br>') + ' 正在重新載入資料...', result.includes('成功') ? 'alert-success' : 'alert-warning');
 
-            // 重新載入資料
+            // 步驟 3：短暫延遲後啟動重新載入進度條（讓用戶先看到綠色訊息）
             setTimeout(() => {
-                showLoading(true, '正在重新載入資料...');
-                google.script.run
-                    .withSuccessHandler(populatePage)
-                    .withFailureHandler(showError)
-                    .getScrapHistoryData();
-            }, 1500);
+                loadData();
+            }, 150);  // 150ms 延遲，確保綠色訊息先渲染
+        }
+
+        function loadData() {
+            document.getElementById('table-container').style.display = 'none';
+            document.getElementById('restore-section').style.display = 'none';
+            showFlyProgressBar('正在重新載入資料...');
+            google.script.run
+                .withSuccessHandler(populatePage)
+                .withFailureHandler(showError)
+                .getScrapHistoryData();
+        }
+
+        /**
+         * 顯示提示訊息（3 秒後自動消失）
+         */
+        function showMessage(msg, className = 'alert-info') {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.className = `alert ${className}`;
+            statusDiv.innerHTML = msg;
+
+            // 3 秒後自動清除訊息
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = '';
+            }, 3000);
         }
 
         function showLoading(isLoading, statusText = '正在載入資料...') {
