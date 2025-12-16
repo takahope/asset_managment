@@ -240,20 +240,26 @@
             document.getElementById('loading-spinner').style.display = 'none';
             const statusMsg = document.getElementById('status-message');
             statusMsg.className = 'alert alert-success text-center';
-            statusMsg.textContent = message + '，2秒後自動返回新增頁面...';
+            statusMsg.textContent = message;
 
-            // 2秒後自動轉跳回新增頁面
-            // ⚠️ 重要：必須使用 window.open(url, '_top') 而非 location.reload()
-            // 原因：避免 GAS Web App 在 iframe 中運行時導致空白頁面或授權錯誤
+            // 2秒後重置表單並重新載入資料
             setTimeout(() => {
-                if (typeof _portalWebAppUrl !== 'undefined' && _portalWebAppUrl) {
-                    window.open(_portalWebAppUrl + '?page=addnew', '_top');
-                } else {
-                    // 備用方案：如果 URL 尚未載入，延遲再試一次
-                    setTimeout(() => {
-                        window.open(_portalWebAppUrl + '?page=addnew', '_top');
-                    }, 500);
-                }
+                statusMsg.textContent = '';
+                statusMsg.className = '';
+
+                // 重置表單
+                document.getElementById('add-asset-form').reset();
+                document.getElementById('typeProperty').checked = true;
+                toggleFields(); // 恢復財產模式的欄位顯示
+
+                // 重新載入下拉選單資料
+                document.getElementById('main-form').style.display = 'none';
+                showProgressBar('準備繼續新增...');
+
+                google.script.run
+                    .withSuccessHandler(initForm)
+                    .withFailureHandler(onDataError)
+                    .getDropdownData();
             }, 2000);
         }
 
