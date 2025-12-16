@@ -43,7 +43,9 @@ const PROPERTY_COLUMN_INDICES = {
   LAST_MODIFIED: 21,    // U欄: 報廢日期 (原T欄)
   REMARKS: 22,          // V欄: 報廢原因 (原U欄)
   DOC_URL: 23,          // W欄: 報廢申請文件 (原V欄)
+  IS_IT_ASSET: 24,      // X欄: 是否為資訊資產
   IS_ACTUALLY_COMPUTER: 25, // Y欄: 是否為電腦 (原X欄)
+  IS_ISO_SCOPE: 26,     // Z欄: 是否在ISO驗證範圍內
   NOTES: 30             // AD欄: 備註
 };
 
@@ -65,7 +67,9 @@ const ITEM_COLUMN_INDICES = {
   LAST_MODIFIED: 21,    // U欄 報廢日期
   REMARKS: 22,          // V欄 報廢原因
   DOC_URL: 23,          // W欄 報廢申請文件
+  IS_IT_ASSET: 24,      // X欄 是否為資訊資產
   IS_ACTUALLY_COMPUTER: 25, // Y欄 是否為電腦
+  IS_ISO_SCOPE: 26,     // Z欄 是否在ISO驗證範圍內
   NOTES: 30             // AD欄: 備註
 };
 
@@ -134,7 +138,9 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
       lastModified: row[indices.LAST_MODIFIED - 1],
       remarks: row[indices.REMARKS - 1],
       docUrl: row[indices.DOC_URL - 1],
+      isItAsset: row[indices.IS_IT_ASSET - 1],
       isActuallyComputer: row[indices.IS_ACTUALLY_COMPUTER - 1],
+      isIsoScope: row[indices.IS_ISO_SCOPE - 1],
       sourceSheet: sourceSheet
     };
 }
@@ -3439,17 +3445,27 @@ function addNewAsset(form) {
   if (indices.USER_EMAIL) row[indices.USER_EMAIL - 1] = form.userEmail || form.keeperEmail; // 若無使用人Email則預設同保管人
   if (indices.USER_NAME) row[indices.USER_NAME - 1] = userName;
 
-  // 處理電腦相關標記
-  if (form.isActuallyComputer) {
+  // ✨ 新增：處理資訊資產標記 (X 欄)
+  if (form.isItAsset && indices.IS_IT_ASSET) {
+    row[indices.IS_IT_ASSET - 1] = "是";
+  }
+
+  // ✨ 修改：處理電腦相關標記（只有資訊資產才能是電腦）
+  if (form.isItAsset && form.isActuallyComputer) {
     if (indices.IS_ACTUALLY_COMPUTER) {
-        row[indices.IS_ACTUALLY_COMPUTER - 1] = "是";
+        row[indices.IS_ACTUALLY_COMPUTER - 1] = "是";  // Y 欄
     }
-    
+
     // 如果是駐站地點 + 是電腦實體 -> 標記為需回報電腦 (IS_COMPUTER)
     const isStation = locIsStationMap.get(form.location);
     if (isStation && indices.IS_COMPUTER) {
-        row[indices.IS_COMPUTER - 1] = "是";
+        row[indices.IS_COMPUTER - 1] = "是";  // T 欄
     }
+  }
+
+  // ✨ 新增：處理 ISO 驗證範圍標記 (Z 欄)
+  if (form.isItAsset && form.isIsoScope && indices.IS_ISO_SCOPE) {
+    row[indices.IS_ISO_SCOPE - 1] = "是";
   }
 
   // 6. 寫入資料
