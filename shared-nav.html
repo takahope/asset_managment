@@ -274,6 +274,10 @@
     <span class="nav-text">列印報廢單</span>
   </button>
 
+  <button type="button" class="nav-item" onclick="goToScrapHistory()" title="報廢歷史">
+    <span class="nav-icon">📜</span>
+    <span class="nav-text">報廢歷史</span>
+  </button>
 
   <!-- 底部系統功能區 -->
   <div class="mt-auto">
@@ -424,6 +428,15 @@
     if (_portalWebAppUrl) {
       const userStateUrl = _portalWebAppUrl + '?page=userstate';
       navigateWithLoader(userStateUrl);
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  function goToScrapHistory() {
+    if (_portalWebAppUrl) {
+      const scrapHistoryUrl = _portalWebAppUrl + '?page=scrapHistory';
+      navigateWithLoader(scrapHistoryUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }

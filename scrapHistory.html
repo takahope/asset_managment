@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; }
+        #status-message { margin-top: 15px; }
+        .table-container { max-height: 60vh; overflow-y: auto; }
+        .restore-btn-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .selected-count {
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <?!= include('shared-nav'); ?>
+    <?!= include('progress_bar_fly'); ?>
+
+    <div id="main-content">
+        <h4>已報廢資產管理</h4>
+        <p class="text-muted">此頁面可查看所有已報廢的資產，並可將選定的資產回溯為「在庫」狀態。</p>
+
+        <div class="form-row">
+            <div class="form-group col-md-3">
+                <label for="category-filter">依財產類別篩選：</label>
+                <select id="category-filter" class="form-control">
+                    <option value="">-- 顯示全部 --</option>
+                </select>
+            </div>
+            <div class="form-group col-md-3">
+                <label for="leader-filter">依保管人篩選：</label>
+                <select id="leader-filter" class="form-control">
+                    <option value="">-- 顯示全部 --</option>
+                </select>
+            </div>
+            <div class="form-group col-md-3">
+                <label for="location-filter">依地點篩選：</label>
+                <select id="location-filter" class="form-control">
+                    <option value="">-- 顯示全部 --</option>
+                </select>
+            </div>
+            <div class="form-group col-md-3">
+                <label for="search-box">關鍵字搜尋：</label>
+                <input type="text" id="search-box" class="form-control" placeholder="搜尋產編、名稱、原因...">
+            </div>
+        </div>
+
+        <div id="table-container" class="table-container" style="display:none;">
+            <table class="table table-hover table-sm">
+                <thead class="thead-light" style="position: sticky; top: 0;">
+                    <tr>
+                        <th style="width: 4%;"><input type="checkbox" id="select-all" title="全選"></th>
+                        <th style="width: 12%;">財產編號</th>
+                        <th style="width: 15%;">財產名稱</th>
+                        <th style="width: 10%;">財產類別</th>
+                        <th style="width: 10%;">保管人</th>
+                        <th style="width: 10%;">使用者</th>
+                        <th style="width: 10%;">地點</th>
+                        <th style="width: 10%;">報廢日期</th>
+                        <th style="width: 19%;">報廢原因</th>
+                    </tr>
+                </thead>
+                <tbody id="asset-list">
+                </tbody>
+            </table>
+        </div>
+
+        <div id="restore-section" class="restore-btn-container" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center">
+                <span>已選擇 <span id="selected-count" class="selected-count">0</span> 筆資產</span>
+                <button id="restore-btn" class="btn btn-warning btn-lg" onclick="submitRestore()" disabled>
+                    回溯所選項目為「在庫」
+                </button>
+            </div>
+        </div>
+
+        <div id="status-message"></div>
+    </div>
+
+    <div id="error-content" style="display:none;">
+        <div class="alert alert-danger">
+            <h5>權限不足</h5>
+            <p id="error-message"></p>
+            <button class="btn btn-secondary" onclick="goToPortal()">返回入口</button>
+        </div>
+    </div>
+
+    <script>
+        let allAssets = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            showLoading(true, '正在載入已報廢資產資料...');
+            google.script.run
+                .withSuccessHandler(populatePage)
+                .withFailureHandler(showError)
+                .getScrapHistoryData();
+        });
+
+        function populatePage(response) {
+            if (response.error) {
+                showLoading(false);
+                document.getElementById('main-content').style.display = 'none';
+                document.getElementById('error-content').style.display = 'block';
+                document.getElementById('error-message').textContent = response.error;
+                return;
+            }
+
+            allAssets = response.assets;
+            populateFilters(allAssets);
+
+            // 綁定事件監聽
+            document.getElementById('category-filter').addEventListener('change', filterAndRender);
+            document.getElementById('leader-filter').addEventListener('change', filterAndRender);
+            document.getElementById('location-filter').addEventListener('change', filterAndRender);
+            document.getElementById('search-box').addEventListener('input', filterAndRender);
+            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+
+            filterAndRender();
+            showLoading(false);
+            document.getElementById('table-container').style.display = 'block';
+            document.getElementById('restore-section').style.display = 'block';
+        }
+
+        function populateFilters(assets) {
+            const categorySet = new Set();
+            const leaderSet = new Set();
+            const locationSet = new Set();
+
+            assets.forEach(asset => {
+                if (asset.assetCategory) categorySet.add(asset.assetCategory);
+                if (asset.leaderName) leaderSet.add(asset.leaderName);
+                if (asset.location) locationSet.add(asset.location);
+            });
+
+            // 填充類別篩選器
+            const categoryFilter = document.getElementById('category-filter');
+            categoryFilter.innerHTML = '<option value="">-- 顯示全部 --</option>';
+            categorySet.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categoryFilter.appendChild(option);
+            });
+
+            // 填充保管人篩選器
+            const leaderFilter = document.getElementById('leader-filter');
+            leaderFilter.innerHTML = '<option value="">-- 顯示全部 --</option>';
+            leaderSet.forEach(leader => {
+                const option = document.createElement('option');
+                option.value = leader;
+                option.textContent = leader;
+                leaderFilter.appendChild(option);
+            });
+
+            // 填充地點篩選器
+            const locationFilter = document.getElementById('location-filter');
+            locationFilter.innerHTML = '<option value="">-- 顯示全部 --</option>';
+            locationSet.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location;
+                option.textContent = location;
+                locationFilter.appendChild(option);
+            });
+        }
+
+        function filterAndRender() {
+            const categoryValue = document.getElementById('category-filter').value;
+            const leaderValue = document.getElementById('leader-filter').value;
+            const locationValue = document.getElementById('location-filter').value;
+            const searchValue = document.getElementById('search-box').value.toUpperCase();
+
+            const filteredAssets = allAssets.filter(asset => {
+                const categoryMatch = !categoryValue || asset.assetCategory === categoryValue;
+                const leaderMatch = !leaderValue || asset.leaderName === leaderValue;
+                const locationMatch = !locationValue || asset.location === locationValue;
+                const searchMatch = !searchValue ||
+                                    asset.assetId.toUpperCase().includes(searchValue) ||
+                                    asset.assetName.toUpperCase().includes(searchValue) ||
+                                    asset.scrapReason.toUpperCase().includes(searchValue);
+                return categoryMatch && leaderMatch && locationMatch && searchMatch;
+            });
+
+            renderTable(filteredAssets);
+            updateSelectedCount();
+        }
+
+        function renderTable(assets) {
+            const listBody = document.getElementById('asset-list');
+            listBody.innerHTML = '';
+
+            // 重置全選框
+            document.getElementById('select-all').checked = false;
+
+            if (!assets || assets.length === 0) {
+                listBody.innerHTML = '<tr><td colspan="9" class="text-center">沒有符合條件的已報廢資產。</td></tr>';
+                return;
+            }
+
+            assets.forEach(asset => {
+                const row = document.createElement('tr');
+
+                // 格式化報廢原因（移除標記前綴）
+                let displayReason = asset.scrapReason || '';
+                displayReason = displayReason.replace('[報廢完成]', '').replace('[報廢申請]', '').trim();
+                if (displayReason.length > 30) {
+                    displayReason = displayReason.substring(0, 30) + '...';
+                }
+
+                row.innerHTML = `
+                    <td><input type="checkbox" class="asset-checkbox" value="${asset.assetId}" onchange="updateSelectedCount()"></td>
+                    <td>${asset.assetId}</td>
+                    <td>${asset.assetName}</td>
+                    <td>${asset.assetCategory}</td>
+                    <td>${asset.leaderName}</td>
+                    <td>${asset.userName || '-'}</td>
+                    <td>${asset.location || '-'}</td>
+                    <td>${asset.scrapDate || '-'}</td>
+                    <td title="${asset.scrapReason || ''}">${displayReason || '-'}</td>
+                `;
+                listBody.appendChild(row);
+            });
+        }
+
+        function toggleSelectAll(e) {
+            const checkboxes = document.querySelectorAll('.asset-checkbox');
+            checkboxes.forEach(cb => cb.checked = e.target.checked);
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const selectedCheckboxes = document.querySelectorAll('.asset-checkbox:checked');
+            const count = selectedCheckboxes.length;
+            document.getElementById('selected-count').textContent = count;
+            document.getElementById('restore-btn').disabled = count === 0;
+        }
+
+        function submitRestore() {
+            const selectedCheckboxes = document.querySelectorAll('.asset-checkbox:checked');
+            const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+            if (selectedIds.length === 0) {
+                alert('請先勾選要回溯的資產。');
+                return;
+            }
+
+            const confirmation = confirm(
+                `您確定要將這 ${selectedIds.length} 筆已報廢資產回溯為「在庫」狀態嗎？\n\n` +
+                `此操作會：\n` +
+                `1. 將資產狀態從「已報廢」改為「在庫」\n` +
+                `2. 在備註欄記錄回溯資訊\n\n` +
+                `選定的財產編號：\n${selectedIds.join(', ')}`
+            );
+
+            if (!confirmation) return;
+
+            showLoading(true, '正在回溯資產狀態...');
+            google.script.run
+                .withSuccessHandler(handleRestoreResult)
+                .withFailureHandler(showError)
+                .restoreFromScrap(selectedIds);
+        }
+
+        function handleRestoreResult(result) {
+            showLoading(false);
+
+            const statusDiv = document.getElementById('status-message');
+            if (result.includes('成功')) {
+                statusDiv.className = 'alert alert-success';
+            } else {
+                statusDiv.className = 'alert alert-warning';
+            }
+            statusDiv.innerHTML = result.replace(/\n/g, '<br>');
+
+            // 重新載入資料
+            setTimeout(() => {
+                showLoading(true, '正在重新載入資料...');
+                google.script.run
+                    .withSuccessHandler(populatePage)
+                    .withFailureHandler(showError)
+                    .getScrapHistoryData();
+            }, 1500);
+        }
+
+        function showLoading(isLoading, statusText = '正在載入資料...') {
+            if (isLoading) {
+                showFlyProgressBar(statusText);
+                document.getElementById('table-container').style.display = 'none';
+                document.getElementById('restore-section').style.display = 'none';
+            } else {
+                hideFlyProgressBar('資料載入完成！', 300);
+                document.getElementById('table-container').style.display = 'block';
+                document.getElementById('restore-section').style.display = 'block';
+            }
+        }
+
+        function showError(error) {
+            showLoading(false);
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.className = 'alert alert-danger';
+            statusDiv.textContent = '錯誤：' + error.message;
+        }
+
+        function goToPortal() {
+            google.script.run.withSuccessHandler(url => {
+                window.open(url, '_top');
+            }).getAppUrl();
+        }
+    </script>
+</body>
+</html>
