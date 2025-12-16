@@ -172,6 +172,7 @@
 
                 // 填充類別 Datalist
                 const categoryList = document.getElementById('categoryList');
+                categoryList.innerHTML = '';  // ✅ 先清空舊選項
                 data.categories.forEach(cat => {
                     const option = document.createElement('option');
                     option.value = cat;
