@@ -1859,6 +1859,13 @@ function getLentOutAssets() {
     try {
         const currentUserEmail = Session.getActiveUser().getEmail();
         const lendingLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(LENDING_LOG_SHEET_NAME);
+        
+        // ✨ 新增：檢查工作表是否為空或只有標題行
+        if (!lendingLogSheet || lendingLogSheet.getLastRow() < 2) {
+            Logger.log("出借紀錄工作表為空或只有標題行，回傳空陣列。");
+            return { assets: [] };
+        }
+
         const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, 10).getValues(); // ✨ 讀取到 J 欄
 
         const allAssets = getAllAssets();
