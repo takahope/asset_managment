@@ -43,7 +43,8 @@ const PROPERTY_COLUMN_INDICES = {
   LAST_MODIFIED: 21,    // U欄: 報廢日期 (原T欄)
   REMARKS: 22,          // V欄: 報廢原因 (原U欄)
   DOC_URL: 23,          // W欄: 報廢申請文件 (原V欄)
-  IS_ACTUALLY_COMPUTER: 25 // Y欄: 是否為電腦 (原X欄)
+  IS_ACTUALLY_COMPUTER: 25, // Y欄: 是否為電腦 (原X欄)
+  NOTES: 30             // AD欄: 備註
 };
 
 const ITEM_COLUMN_INDICES = {
@@ -64,7 +65,8 @@ const ITEM_COLUMN_INDICES = {
   LAST_MODIFIED: 21,    // U欄 報廢日期
   REMARKS: 22,          // V欄 報廢原因
   DOC_URL: 23,          // W欄 報廢申請文件
-  IS_ACTUALLY_COMPUTER: 25 // Y欄 是否為電腦
+  IS_ACTUALLY_COMPUTER: 25, // Y欄 是否為電腦
+  NOTES: 30             // AD欄: 備註
 };
 
 
@@ -3431,7 +3433,7 @@ function addNewAsset(form) {
   row[indices.LEADER_EMAIL - 1] = form.keeperEmail;
   row[indices.LEADER_NAME - 1] = keeperName;
   row[indices.ASSET_STATUS - 1] = "在庫"; // 預設狀態
-  row[indices.REMARKS - 1] = form.remarks;
+  if (indices.NOTES) row[indices.NOTES - 1] = form.remarks; // 備註寫入AD欄
 
   // 處理特定欄位
   if (indices.USER_EMAIL) row[indices.USER_EMAIL - 1] = form.userEmail || form.keeperEmail; // 若無使用人Email則預設同保管人
