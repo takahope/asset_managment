@@ -69,12 +69,34 @@
                             <label for="useLife">使用年限 (年)</label>
                             <input type="number" class="form-control" id="useLife" min="0" placeholder="例如：3">
                         </div>
-                        <div class="form-group col-md-4 d-flex align-items-center">
-                            <div class="form-check mt-4">
-                                <input class="form-check-input" type="checkbox" id="isActuallyComputer">
-                                <label class="form-check-label" for="isActuallyComputer">
-                                    此設備為電腦主機/筆電
+                        <div class="form-group col-md-4">
+                            <label>資訊資產標記</label>
+
+                            <!-- 第一層：資訊資產主控 checkbox -->
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="isItAsset">
+                                <label class="form-check-label" for="isItAsset">
+                                    此設備是否為資訊資產？
                                 </label>
+                            </div>
+
+                            <!-- 第二層：子選項容器，預設隱藏 -->
+                            <div id="it-asset-sub-options" style="display: none; margin-left: 20px; margin-top: 10px;">
+                                <!-- 子選項 1：電腦主機/筆電 -->
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="isActuallyComputer">
+                                    <label class="form-check-label" for="isActuallyComputer">
+                                        此設備為電腦主機/筆電
+                                    </label>
+                                </div>
+
+                                <!-- 子選項 2：ISO 驗證範圍 -->
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="isIsoScope">
+                                    <label class="form-check-label" for="isIsoScope">
+                                        此設備是否在 ISO 驗證範圍內
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -135,6 +157,9 @@
             document.getElementById('main-form').style.display = 'none';
             showProgressBar('正在載入選單資料...');
 
+            // ✨ 新增：設定資訊資產連動邏輯
+            setupItAssetDependency();
+
             google.script.run
                 .withSuccessHandler(initForm)
                 .withFailureHandler(onDataError)
@@ -185,14 +210,36 @@
         function toggleFields() {
             const type = document.querySelector('input[name="assetType"]:checked').value;
             const propertyOnlyFields = document.querySelectorAll('.property-only');
-            
+
             propertyOnlyFields.forEach(el => {
                 el.style.display = (type === 'property') ? 'block' : 'none';
             });
-            
+
             if (type === 'item') {
                 document.getElementById('user').value = ""; // 清空使用人
             }
+        }
+
+        /**
+         * ✨ 新增：設定資訊資產 checkbox 與子選項的連動關係
+         */
+        function setupItAssetDependency() {
+            const mainCheckbox = document.getElementById('isItAsset');
+            const subOptionsContainer = document.getElementById('it-asset-sub-options');
+            const computerCheckbox = document.getElementById('isActuallyComputer');
+            const isoCheckbox = document.getElementById('isIsoScope');
+
+            mainCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    // 勾選時：顯示子選項（保留其原有狀態）
+                    subOptionsContainer.style.display = 'block';
+                } else {
+                    // 取消勾選時：隱藏子選項並重置其狀態
+                    subOptionsContainer.style.display = 'none';
+                    computerCheckbox.checked = false;
+                    isoCheckbox.checked = false;
+                }
+            });
         }
 
         function autoFillUser() {
@@ -213,7 +260,9 @@
                 category: document.getElementById('category').value.trim(),
                 purchaseDate: document.getElementById('purchaseDate').value,
                 useLife: document.getElementById('useLife').value,
+                isItAsset: document.getElementById('isItAsset').checked,           // ✨ 新增
                 isActuallyComputer: document.getElementById('isActuallyComputer').checked,
+                isIsoScope: document.getElementById('isIsoScope').checked,         // ✨ 新增
                 location: document.getElementById('location').value,
                 keeperEmail: document.getElementById('keeper').value,
                 userEmail: document.getElementById('user').value,
@@ -252,6 +301,12 @@
                 document.getElementById('add-asset-form').reset();
                 document.getElementById('typeProperty').checked = true;
                 toggleFields(); // 恢復財產模式的欄位顯示
+
+                // ✨ 新增：重置資訊資產連動狀態
+                document.getElementById('it-asset-sub-options').style.display = 'none';
+                document.getElementById('isItAsset').checked = false;
+                document.getElementById('isActuallyComputer').checked = false;
+                document.getElementById('isIsoScope').checked = false;
 
                 // 重新載入下拉選單資料
                 document.getElementById('main-form').style.display = 'none';
