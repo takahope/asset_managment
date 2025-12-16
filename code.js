@@ -400,6 +400,10 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('userstate');
       title = "個人財產狀態查詢";
       break;
+    case 'scrapHistory':
+      template = HtmlService.createTemplateFromFile('scrapHistory');
+      title = "已報廢資產管理";
+      break;
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('main');
@@ -2146,6 +2150,141 @@ function processScrapConfirmation(assetIds) {
   } catch (e) {
     Logger.log("批次報廢確認失敗: " + e.message);
     return "報廢確認失敗：" + e.message;
+  }
+}
+
+/**
+ * [供 scrapHistory.html 呼叫] 取得所有已報廢的資產清單
+ * 僅管理員可存取
+ * @returns {Object} { assets: Array, isAdmin: boolean, error?: string }
+ */
+function getScrapHistoryData() {
+  try {
+    const isAdmin = checkAdminPermissions();
+
+    if (!isAdmin) {
+      return {
+        assets: [],
+        isAdmin: false,
+        error: '權限不足：僅管理員可查看已報廢資產歷史紀錄。'
+      };
+    }
+
+    const allAssets = getAllAssets();
+
+    // 篩選所有已報廢的資產
+    const scrappedAssets = allAssets.filter(asset => asset.assetStatus === '已報廢');
+
+    // 轉換為前端可用的純物件格式（避免 Date 序列化問題）
+    const results = scrappedAssets.map(asset => {
+      // 處理報廢日期格式化
+      let scrapDateStr = '';
+      if (asset.lastModified) {
+        try {
+          scrapDateStr = Utilities.formatDate(new Date(asset.lastModified), Session.getScriptTimeZone(), "yyyy/MM/dd");
+        } catch (e) {
+          scrapDateStr = '';
+        }
+      }
+
+      return {
+        assetId: String(asset.assetId || ''),
+        assetName: String(asset.assetName || ''),
+        assetCategory: String(asset.assetCategory || ''),
+        leaderName: String(asset.leaderName || ''),
+        userName: String(asset.userName || ''),
+        location: String(asset.location || ''),
+        scrapDate: scrapDateStr,
+        scrapReason: String(asset.remarks || ''),
+        sourceSheet: String(asset.sourceSheet || '')
+      };
+    });
+
+    // 按報廢日期降序排列（最新的在前面）
+    results.sort((a, b) => {
+      if (!a.scrapDate && !b.scrapDate) return 0;
+      if (!a.scrapDate) return 1;
+      if (!b.scrapDate) return -1;
+      return b.scrapDate.localeCompare(a.scrapDate);
+    });
+
+    return {
+      assets: results,
+      isAdmin: true
+    };
+
+  } catch (e) {
+    Logger.log("取得已報廢資產失敗: " + e.message);
+    return {
+      assets: [],
+      isAdmin: false,
+      error: '取得資料失敗：' + e.message
+    };
+  }
+}
+
+/**
+ * [供 scrapHistory.html 呼叫] 將已報廢資產回溯為在庫狀態
+ * 僅管理員可執行
+ * @param {string[]} assetIds - 要回溯的資產編號陣列
+ * @returns {string} 成功/失敗訊息
+ */
+function restoreFromScrap(assetIds) {
+  if (!assetIds || assetIds.length === 0) {
+    throw new Error("您沒有勾選任何要回溯的項目。");
+  }
+
+  // 權限檢查
+  const isAdmin = checkAdminPermissions();
+  if (!isAdmin) {
+    throw new Error("權限不足：僅管理員可執行回溯作業。");
+  }
+
+  try {
+    const allAssets = getAllAssets();
+    const assetMap = new Map(allAssets.map(asset => [asset.assetId, asset]));
+
+    const now = new Date();
+    let successCount = 0;
+    const failedIds = [];
+
+    assetIds.forEach(assetId => {
+      const asset = assetMap.get(assetId);
+      if (asset && asset.assetStatus === '已報廢') {
+        const location = findAssetLocation(assetId);
+        if (location) {
+          const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+
+          // 更新狀態為「在庫」
+          location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('在庫');
+
+          // 更新備註欄位，標記為已回溯
+          const originalReason = asset.remarks || '';
+          const restoreNote = `[回溯] ${Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyy/MM/dd")} 由管理員回溯為在庫。原報廢原因：${originalReason.replace('[報廢完成]', '').trim()}`;
+          location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue(restoreNote);
+
+          // 更新最後修改日期
+          location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue(now);
+
+          successCount++;
+        } else {
+          failedIds.push(assetId);
+        }
+      } else {
+        failedIds.push(assetId);
+      }
+    });
+
+    let message = `成功將 ${successCount} 筆資產回溯為在庫狀態！`;
+    if (failedIds.length > 0) {
+      message += `\n以下資產回溯失敗（可能狀態非「已報廢」或找不到資料）：${failedIds.join(', ')}`;
+    }
+
+    return message;
+
+  } catch (e) {
+    Logger.log("回溯報廢資產失敗: " + e.message);
+    return "回溯失敗：" + e.message;
   }
 }
 
