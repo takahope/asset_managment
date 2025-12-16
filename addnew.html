@@ -239,17 +239,13 @@
         function onSuccess(message) {
             document.getElementById('loading-spinner').style.display = 'none';
             const statusMsg = document.getElementById('status-message');
-            statusMsg.className = 'alert alert-success';
-            statusMsg.textContent = message;
+            statusMsg.className = 'alert alert-success text-center';
+            statusMsg.textContent = message + '，2秒後自動返回新增頁面...';
 
-            // 顯示按鈕讓使用者選擇下一步
-            const btnDiv = document.createElement('div');
-            btnDiv.className = 'mt-3 text-center';
-            btnDiv.innerHTML = `
-                <button class="btn btn-outline-primary mr-2" onclick="location.reload()">繼續新增</button>
-                <button class="btn btn-outline-secondary" onclick="google.script.host.close()">關閉視窗</button>
-            `;
-            statusMsg.appendChild(btnDiv);
+            // 2秒後自動轉跳回新增頁面
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
         }
 
         function onDataError(error) {
