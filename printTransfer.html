@@ -200,17 +200,31 @@
             if (!keepers || keepers.length === 0) {
                 listBody.innerHTML = '<tr><td colspan="3" class="text-center">目前沒有任何已完成轉移的記錄。</td></tr>';
             } else {
+                // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
                 keepers.forEach(keeper => {
                     const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${keeper.keeper}</td>
-                        <td>${keeper.count}</td>
-                        <td>
-                            <button id="btn-${keeper.keeper}" class="btn btn-primary btn-sm btn-print" onclick="generateDoc('${keeper.keeper}', this)">
-                                產生報表
-                            </button>
-                        </td>
-                    `;
+
+                    // 保管人
+                    const keeperTd = document.createElement('td');
+                    keeperTd.textContent = keeper.keeper;
+                    row.appendChild(keeperTd);
+
+                    // 數量
+                    const countTd = document.createElement('td');
+                    countTd.textContent = keeper.count;
+                    row.appendChild(countTd);
+
+                    // 按鈕（使用 addEventListener 替代 onclick）
+                    const btnTd = document.createElement('td');
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-primary btn-sm btn-print';
+                    btn.textContent = '產生報表';
+                    btn.addEventListener('click', function() {
+                        generateDoc(keeper.keeper, this);
+                    });
+                    btnTd.appendChild(btn);
+                    row.appendChild(btnTd);
+
                     listBody.appendChild(row);
                 });
             }
@@ -224,21 +238,28 @@
             if (!items || items.length === 0) {
                 listBody.innerHTML = '<tr><td colspan="11" class="text-center">目前沒有任何已完成轉移的記錄。</td></tr>';
             } else {
+                // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
                 items.forEach(item => {
                     const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><input type="checkbox" class="detailed-checkbox" value="${item.assetId}"></td>
-                        <td>${item.assetId}</td>
-                        <td>${item.assetName}</td>
-                        <td>${item.oldKeeper}</td>
-                        <td>${item.oldUser || ''}</td>
-                        <td>${item.oldLocation}</td>
-                        <td>${item.newKeeper}</td>
-                        <td>${item.newUser || ''}</td>
-                        <td>${item.newLocation}</td>
-                        <td>${item.transferType}</td>
-                        <td>${item.transferDate}</td>
-                    `;
+
+                    // Checkbox 儲存格
+                    const checkboxTd = document.createElement('td');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'detailed-checkbox';
+                    checkbox.value = item.assetId;
+                    checkboxTd.appendChild(checkbox);
+                    row.appendChild(checkboxTd);
+
+                    // 其他欄位使用 textContent 安全設定
+                    [item.assetId, item.assetName, item.oldKeeper, item.oldUser || '',
+                     item.oldLocation, item.newKeeper, item.newUser || '',
+                     item.newLocation, item.transferType, item.transferDate].forEach(data => {
+                        const td = document.createElement('td');
+                        td.textContent = data || '';
+                        row.appendChild(td);
+                    });
+
                     listBody.appendChild(row);
                 });
             }
@@ -444,16 +465,35 @@
                 return;
             }
 
+            // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
             history.forEach(doc => {
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${doc.keeper}</td>
-                    <td>${doc.date}</td>
-                    <td>${doc.count}</td>
-                    <td>
-                        <a href="${doc.url}" target="_blank" class="btn btn-sm btn-primary">開啟文件</a>
-                    </td>
-                `;
+
+                // 保管人
+                const keeperTd = document.createElement('td');
+                keeperTd.textContent = doc.keeper;
+                row.appendChild(keeperTd);
+
+                // 日期
+                const dateTd = document.createElement('td');
+                dateTd.textContent = doc.date;
+                row.appendChild(dateTd);
+
+                // 數量
+                const countTd = document.createElement('td');
+                countTd.textContent = doc.count;
+                row.appendChild(countTd);
+
+                // 按鈕（使用 addEventListener 替代 onclick）
+                const btnTd = document.createElement('td');
+                const link = document.createElement('a');
+                link.href = doc.url;
+                link.target = '_blank';
+                link.className = 'btn btn-sm btn-primary';
+                link.textContent = '開啟文件';
+                btnTd.appendChild(link);
+                row.appendChild(btnTd);
+
                 listBody.appendChild(row);
             });
         }

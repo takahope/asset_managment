@@ -213,27 +213,42 @@
                 return;
             }
 
+            // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
             assets.forEach(asset => {
                 const row = document.createElement('tr');
 
                 // 格式化報廢原因（移除標記前綴）
                 let displayReason = asset.scrapReason || '';
                 displayReason = displayReason.replace('[報廢完成]', '').replace('[報廢申請]', '').trim();
+                const fullReason = displayReason;
                 if (displayReason.length > 30) {
                     displayReason = displayReason.substring(0, 30) + '...';
                 }
 
-                row.innerHTML = `
-                    <td><input type="checkbox" class="asset-checkbox" value="${asset.assetId}" onchange="updateSelectedCount()"></td>
-                    <td>${asset.assetId}</td>
-                    <td>${asset.assetName}</td>
-                    <td>${asset.assetCategory}</td>
-                    <td>${asset.leaderName}</td>
-                    <td>${asset.userName || '-'}</td>
-                    <td>${asset.location || '-'}</td>
-                    <td>${asset.scrapDate || '-'}</td>
-                    <td title="${asset.scrapReason || ''}">${displayReason || '-'}</td>
-                `;
+                // Checkbox 儲存格（使用 addEventListener 替代 onchange）
+                const checkboxTd = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'asset-checkbox';
+                checkbox.value = asset.assetId;
+                checkbox.addEventListener('change', updateSelectedCount);
+                checkboxTd.appendChild(checkbox);
+                row.appendChild(checkboxTd);
+
+                // 其他欄位使用 textContent 安全設定
+                [asset.assetId, asset.assetName, asset.assetCategory, asset.leaderName,
+                 asset.userName || '-', asset.location || '-', asset.scrapDate || '-'].forEach(data => {
+                    const td = document.createElement('td');
+                    td.textContent = data || '';
+                    row.appendChild(td);
+                });
+
+                // 報廢原因欄位（需設定 title 屬性）
+                const reasonTd = document.createElement('td');
+                reasonTd.textContent = displayReason || '-';
+                reasonTd.title = fullReason || '';
+                row.appendChild(reasonTd);
+
                 listBody.appendChild(row);
             });
         }

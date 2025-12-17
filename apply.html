@@ -667,9 +667,26 @@
             const end = start + rows;
             const paginatedItems = assets.slice(start, end);
 
+            // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
             paginatedItems.forEach(asset => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td><td>${asset.id}</td><td>${asset.assetName}</td><td>${asset.userName}</td><td>${asset.leaderName}</td><td>${asset.location}</td><td>${asset.category}</td>`;
+
+                // Checkbox 儲存格
+                const checkboxTd = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'asset-checkbox';
+                checkbox.value = asset.id;
+                checkboxTd.appendChild(checkbox);
+                row.appendChild(checkboxTd);
+
+                // 其他欄位使用 textContent 安全設定
+                [asset.id, asset.assetName, asset.userName, asset.leaderName, asset.location, asset.category].forEach(data => {
+                    const td = document.createElement('td');
+                    td.textContent = data || '';
+                    row.appendChild(td);
+                });
+
                 assetListBody.appendChild(row);
             });
             

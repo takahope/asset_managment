@@ -99,16 +99,32 @@
                 const assetListBody = document.getElementById('asset-list');
                 assetListBody.innerHTML = '';
 
+                // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
                 assets.forEach(asset => {
                     const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><input type="checkbox" class="asset-checkbox" value="${asset.lendId}"></td>
-                        <td>${asset.assetId}</td>
-                        <td>${asset.borrower}</td>
-                        <td>${asset.expectedReturnDate}</td>
-                        <td>${asset.lendingLocation || ''}</td>
-                        <td>${asset.reason}</td>
-                    `;
+
+                    // Checkbox 儲存格
+                    const checkboxTd = document.createElement('td');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'asset-checkbox';
+                    checkbox.value = asset.lendId;
+                    checkboxTd.appendChild(checkbox);
+                    row.appendChild(checkboxTd);
+
+                    // 其他欄位使用 textContent 安全設定
+                    [
+                        asset.assetId,
+                        asset.borrower,
+                        asset.expectedReturnDate,
+                        asset.lendingLocation || '',
+                        asset.reason
+                    ].forEach(data => {
+                        const td = document.createElement('td');
+                        td.textContent = data || '';
+                        row.appendChild(td);
+                    });
+
                     assetListBody.appendChild(row);
                 });
 

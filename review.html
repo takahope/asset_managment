@@ -212,47 +212,83 @@
                 // ✨ 根據轉移類型顯示不同顏色的標籤
                 const transferType = item.transferType || '地點';
                 let typeBadge = '';
-                if (transferType.includes('保管人') && transferType.includes('使用人')) {
-                    typeBadge = '<span class="badge badge-danger">保管人+使用人</span>';
-                } else if (transferType.includes('保管人')) {
-                    typeBadge = '<span class="badge badge-warning">保管人</span>';
-                } else if (transferType.includes('使用人')) {
-                    typeBadge = '<span class="badge badge-info">使用人</span>';
-                } else {
-                    typeBadge = '<span class="badge badge-secondary">地點</span>';
+                // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
+                const row = document.createElement('tr');
+
+                // Checkbox 儲存格
+                const checkboxTd = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'approval-checkbox';
+                checkbox.value = item.appId;
+                checkboxTd.appendChild(checkbox);
+                row.appendChild(checkboxTd);
+
+                // 資產編號和名稱
+                const assetIdTd = document.createElement('td');
+                assetIdTd.textContent = item.assetId;
+                row.appendChild(assetIdTd);
+
+                const assetNameTd = document.createElement('td');
+                assetNameTd.textContent = item.assetName;
+                row.appendChild(assetNameTd);
+
+                // 輔助函式：建立變更顯示儲存格
+                function createChangeTd(oldVal, newVal, hasChange) {
+                    const td = document.createElement('td');
+                    if (hasChange) {
+                        td.appendChild(document.createTextNode(oldVal || ''));
+                        const arrow = document.createElement('span');
+                        arrow.className = 'text-primary';
+                        arrow.textContent = ' → ';
+                        td.appendChild(arrow);
+                        td.appendChild(document.createTextNode(newVal || ''));
+                    } else {
+                        td.textContent = oldVal || '';
+                    }
+                    return td;
                 }
 
-                // ✨ 方案B：箭頭式顯示變更
                 // 保管人變更
-                const keeperChange = (item.newKeeper && item.oldKeeper !== item.newKeeper)
-                    ? `${item.oldKeeper} <span class="text-primary">→</span> ${item.newKeeper}`
-                    : item.oldKeeper;
+                const keeperHasChange = item.newKeeper && item.oldKeeper !== item.newKeeper;
+                row.appendChild(createChangeTd(item.oldKeeper, item.newKeeper, keeperHasChange));
 
                 // 使用人變更
                 const oldUser = item.oldUser || item.userName || '';
                 const newUser = item.newUser || '';
-                const userChange = (newUser && oldUser !== newUser)
-                    ? `${oldUser} <span class="text-primary">→</span> ${newUser}`
-                    : oldUser;
+                const userHasChange = newUser && oldUser !== newUser;
+                row.appendChild(createChangeTd(oldUser, newUser, userHasChange));
 
                 // 地點變更
-                const locationChange = (item.newLocation && item.oldLocation !== item.newLocation)
-                    ? `${item.oldLocation} <span class="text-primary">→</span> ${item.newLocation}`
-                    : item.oldLocation;
+                const locationHasChange = item.newLocation && item.oldLocation !== item.newLocation;
+                row.appendChild(createChangeTd(item.oldLocation, item.newLocation, locationHasChange));
 
-                tableHtml += `
-                    <tr>
-                        <td><input type="checkbox" class="approval-checkbox" value="${item.appId}"></td>
-                        <td>${item.assetId}</td>
-                        <td>${item.assetName}</td>
-                        <td>${keeperChange}</td>
-                        <td>${userChange}</td>
-                        <td>${locationChange}</td>
-                        <td>${typeBadge}</td>
-                        <td>${item.applyTime}</td>
-                    </tr>`;
+                // 轉移類型 Badge
+                const typeTd = document.createElement('td');
+                const typeBadgeEl = document.createElement('span');
+                if (transferType.includes('保管人') && transferType.includes('使用人')) {
+                    typeBadgeEl.className = 'badge badge-danger';
+                    typeBadgeEl.textContent = '保管人+使用人';
+                } else if (transferType.includes('保管人')) {
+                    typeBadgeEl.className = 'badge badge-warning';
+                    typeBadgeEl.textContent = '保管人';
+                } else if (transferType.includes('使用人')) {
+                    typeBadgeEl.className = 'badge badge-info';
+                    typeBadgeEl.textContent = '使用人';
+                } else {
+                    typeBadgeEl.className = 'badge badge-secondary';
+                    typeBadgeEl.textContent = '地點';
+                }
+                typeTd.appendChild(typeBadgeEl);
+                row.appendChild(typeTd);
+
+                // 申請時間
+                const applyTimeTd = document.createElement('td');
+                applyTimeTd.textContent = item.applyTime;
+                row.appendChild(applyTimeTd);
+
+                approvalListBody.appendChild(row);
             });
-            approvalListBody.innerHTML = tableHtml;
 
             const tableEndTime = new Date();
             const duration = (tableEndTime - tableStartTime);

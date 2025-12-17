@@ -212,19 +212,31 @@
                 if (applicants.length === 0) {
                     listBody.innerHTML = '<tr><td colspan="3" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
                 } else {
+                    // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
                     applicants.forEach(app => {
                         const row = document.createElement('tr');
-                        // 安全處理單引號
-                        const safeName = (app.applicant || '').replace(/'/g, "\\'");
-                        row.innerHTML = `
-                            <td>${app.applicant}</td>
-                            <td>${app.count}</td>
-                            <td>
-                                <button id="btn-${app.applicant}" class="btn btn-primary btn-sm btn-print" onclick="generateDoc('${safeName}', this)">
-                                    產生報表
-                                </button>
-                            </td>
-                        `;
+
+                        // 申請人
+                        const nameTd = document.createElement('td');
+                        nameTd.textContent = app.applicant;
+                        row.appendChild(nameTd);
+
+                        // 數量
+                        const countTd = document.createElement('td');
+                        countTd.textContent = app.count;
+                        row.appendChild(countTd);
+
+                        // 按鈕（使用 addEventListener 替代 onclick）
+                        const btnTd = document.createElement('td');
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-primary btn-sm btn-print';
+                        btn.textContent = '產生報表';
+                        btn.addEventListener('click', function() {
+                            generateDoc(app.applicant, this);
+                        });
+                        btnTd.appendChild(btn);
+                        row.appendChild(btnTd);
+
                         listBody.appendChild(row);
                     });
                 }
@@ -261,18 +273,35 @@
                 if (items.length === 0) {
                     listBody.innerHTML = '<tr><td colspan="8" class="text-center">目前沒有任何狀態為「報廢中」的財產。</td></tr>';
                 } else {
+                    // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
                     items.forEach(item => {
                         const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td><input type="checkbox" class="detailed-checkbox" value="${item.assetId}"></td>
-                            <td>${item.assetId}</td>
-                            <td>${item.assetName}</td>
-                            <td>${item.originalKeeper}</td>
-                            <td>${item.originalUser || ''}</td>
-                            <td>${item.scrapDate || ''}</td>
-                            <td>${item.scrapReason || ''}</td>
-                            <td><button class="btn btn-sm btn-danger" onclick="cancelScrap('${item.assetId}')">取消</button></td>
-                        `;
+
+                        // Checkbox 儲存格
+                        const checkboxTd = document.createElement('td');
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'detailed-checkbox';
+                        checkbox.value = item.assetId;
+                        checkboxTd.appendChild(checkbox);
+                        row.appendChild(checkboxTd);
+
+                        // 其他欄位使用 textContent 安全設定
+                        [item.assetId, item.assetName, item.originalKeeper, item.originalUser || '', item.scrapDate || '', item.scrapReason || ''].forEach(data => {
+                            const td = document.createElement('td');
+                            td.textContent = data || '';
+                            row.appendChild(td);
+                        });
+
+                        // 取消按鈕（使用 addEventListener 替代 onclick）
+                        const btnTd = document.createElement('td');
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.className = 'btn btn-sm btn-danger';
+                        cancelBtn.textContent = '取消';
+                        cancelBtn.addEventListener('click', () => cancelScrap(item.assetId));
+                        btnTd.appendChild(cancelBtn);
+                        row.appendChild(btnTd);
+
                         listBody.appendChild(row);
                     });
                 }

@@ -190,27 +190,48 @@
                 '待接收': 'badge-primary'
             };
 
+            // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
             assets.forEach(asset => {
                 const row = document.createElement('tr');
                 const statusColor = statusColors[asset.status] || 'badge-info';
-                
-                let actionHtml = '';
                 const canCancel = isAdmin || currentUserEmail === asset.leaderEmail || currentUserEmail === asset.userEmail;
-                // 支援「待接收」與「轉移中」(舊資料相容)
-                if (canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中')) {
-                    actionHtml = `<button class="btn btn-sm btn-danger" onclick="promptCancel('${asset.assetId}', '${asset.status}')">取消</button>`;
-                }
 
-                row.innerHTML = `
-                    <td>${asset.assetId}</td>
-                    <td>${asset.assetName}</td>
-                    <td>${asset.userName}</td>
-                    <td>${asset.leader}</td>
-                    <td>${asset.location}</td>
-                    <td>${asset.category}</td>
-                    <td><span class="badge ${statusColor}">${asset.status}</span></td>
-                    <td>${actionHtml}</td>
-                `;
+                // 使用 textContent 安全設定文字內容
+                const cells = [
+                    asset.assetId,
+                    asset.assetName,
+                    asset.userName,
+                    asset.leader,
+                    asset.location,
+                    asset.category
+                ];
+
+                cells.forEach(cellData => {
+                    const td = document.createElement('td');
+                    td.textContent = cellData || '';
+                    row.appendChild(td);
+                });
+
+                // 狀態 Badge
+                const statusTd = document.createElement('td');
+                const badge = document.createElement('span');
+                badge.className = `badge ${statusColor}`;
+                badge.textContent = asset.status;
+                statusTd.appendChild(badge);
+                row.appendChild(statusTd);
+
+                // 操作按鈕（使用 addEventListener 替代 onclick）
+                const actionTd = document.createElement('td');
+                if (canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中')) {
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'btn btn-sm btn-danger';
+                    cancelBtn.textContent = '取消';
+                    // 使用閉包安全傳遞參數，避免 XSS
+                    cancelBtn.addEventListener('click', () => promptCancel(asset.assetId, asset.status));
+                    actionTd.appendChild(cancelBtn);
+                }
+                row.appendChild(actionTd);
+
                 listBody.appendChild(row);
             });
         }
