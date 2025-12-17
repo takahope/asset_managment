@@ -430,8 +430,23 @@
             } else {
                 hideProgressBar('載入完成！', 300);
             }
-            document.getElementById('simple-view').style.display = isLoading ? 'none' : (isDetailedView ? 'none' : 'block');
-            document.getElementById('detailed-view').style.display = isLoading ? 'none' : (isDetailedView ? 'block' : 'none');
+            toggleTableVisibility(!isLoading);
+        }
+
+        /**
+         * 控制表格顯示/隱藏
+         * @param {boolean} show - true 顯示表格，false 隱藏表格
+         */
+        function toggleTableVisibility(show) {
+            if (show) {
+                // 根據當前視圖模式顯示對應的表格
+                document.getElementById('simple-view').style.display = isDetailedView ? 'none' : 'block';
+                document.getElementById('detailed-view').style.display = isDetailedView ? 'block' : 'none';
+            } else {
+                // 隱藏所有表格
+                document.getElementById('simple-view').style.display = 'none';
+                document.getElementById('detailed-view').style.display = 'none';
+            }
         }
 
         function showError(error) {
@@ -496,21 +511,33 @@
 
             if (!confirmation) return;
 
+            // 隱藏表格，防止重複操作
+            toggleTableVisibility(false);
+
+            // 顯示進度條
+            showProgressBar(`正在取消財產 ${assetId} 的報廢申請...`);
+
             // 呼叫後端取消函數
             google.script.run
                 .withSuccessHandler(response => {
+                    hideProgressBar('取消完成！', 500);
                     if (response.success) {
                         showMessage('報廢申請已成功取消。正在更新資料...', 'alert-success');
-                        // 延遲 1 秒後重新載入資料
+                        // 延遲 1 秒後重新載入資料（loadData 會自動恢復表格顯示）
                         setTimeout(() => {
                             loadData();
                         }, 1000);
                     } else {
                         showMessage('取消失敗：' + response.error, 'alert-danger');
+                        // 恢復表格顯示
+                        toggleTableVisibility(true);
                     }
                 })
                 .withFailureHandler(error => {
+                    hideProgressBar('操作失敗', 300);
                     showMessage('取消失敗：' + error.message, 'alert-danger');
+                    // 恢復表格顯示
+                    toggleTableVisibility(true);
                 })
                 .cancelTransferOrScrap(assetId);
         }
