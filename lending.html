@@ -140,14 +140,26 @@
         function renderTable(assets) {
             const assetListBody = document.getElementById('asset-list');
             assetListBody.innerHTML = '';
+            // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
             assets.forEach(asset => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td>` +
-                                `<td>${asset.id}</td>` +
-                                `<td>${asset.assetName}</td>` +
-                                `<td>${asset.userName}</td>` +
-                                `<td>${asset.location}</td>` +
-                                `<td>${asset.leaderName}</td>`;
+
+                // Checkbox 儲存格
+                const checkboxTd = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'asset-checkbox';
+                checkbox.value = asset.id;
+                checkboxTd.appendChild(checkbox);
+                row.appendChild(checkboxTd);
+
+                // 其他欄位使用 textContent 安全設定
+                [asset.id, asset.assetName, asset.userName, asset.location, asset.leaderName].forEach(data => {
+                    const td = document.createElement('td');
+                    td.textContent = data || '';
+                    row.appendChild(td);
+                });
+
                 assetListBody.appendChild(row);
             });
             document.querySelectorAll('.asset-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedCount));

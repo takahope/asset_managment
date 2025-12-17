@@ -829,8 +829,11 @@ function processBatchTransferApplication(formData) {
 
     const now = new Date();
     const applicantEmail = Session.getActiveUser().getEmail(); // 申請操作人員 Email
+    const applicantEmailLower = applicantEmail.toLowerCase(); // 🛡️ 安全性修復：統一小寫比對
+    const isAdmin = checkAdminPermissions(); // 🛡️ 安全性修復：檢查是否為管理員
     const newLogsToAdd = [];
     const createdApplications = [];
+    const unauthorizedAssets = []; // 🛡️ 安全性修復：收集無權限的資產
 
     assetIds.forEach(assetId => {
       const location = findAssetLocation(assetId);
@@ -838,6 +841,17 @@ function processBatchTransferApplication(formData) {
         const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
         const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
         const asset = mapRowToAssetObject(assetRow, indices, location.sheetName);
+
+        // 🛡️ 安全性修復：驗證使用者是否有權操作此資產
+        if (!isAdmin) {
+          const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
+          const assetUserEmail = (asset.userEmail || '').toLowerCase();
+          if (assetLeaderEmail !== applicantEmailLower && assetUserEmail !== applicantEmailLower) {
+            unauthorizedAssets.push(assetId);
+            Logger.log(`🛡️ 權限拒絕：${applicantEmail} 無權轉移資產 ${assetId}`);
+            return; // 跳過此資產
+          }
+        }
 
         if (asset.assetStatus === '在庫') {
           const indicesToUpdate = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
@@ -1199,6 +1213,17 @@ function processBatchTransferApplication(formData) {
       resultMessage = `${autoCompletedApps.length} 筆財產已直接完成（無需審核）！`;
     }
 
+    // 🛡️ 安全性修復：如果有無權限的資產，附加提示訊息
+    if (unauthorizedAssets.length > 0) {
+      const warningMsg = `（注意：${unauthorizedAssets.length} 筆財產因權限不足已跳過）`;
+      if (resultMessage) {
+        resultMessage += warningMsg;
+      } else if (createdApplications.length === 0) {
+        // 全部都無權限
+        throw new Error(`權限不足：您不是所選財產的保管人或使用人，無法執行轉移操作。`);
+      }
+    }
+
     return resultMessage || `成功處理 ${createdApplications.length} 筆財產！`;
 
   } catch (e) {
@@ -1318,15 +1343,46 @@ function processBatchApproval(appIds) {
     let successCount = 0;
     const errors = [];
 
+    // 🛡️ 安全性修復：取得當前使用者身分
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = currentUserEmail.toLowerCase();
+    const isAdmin = checkAdminPermissions();
+    const unauthorizedApps = []; // 🛡️ 收集無權限的申請
+
     appIds.forEach(appId => {
       const appDetails = appLogMap.get(appId);
       if (appDetails && appDetails.row[AL_STATUS_COLUMN_INDEX - 1] === "待接收") {
+        // 🛡️ 安全性修復：驗證審核權限
+        const newLeaderEmail = (appDetails.row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
+        const newUserEmail = (appDetails.row.length > AL_NEW_USER_EMAIL_COLUMN_INDEX - 1
+          ? appDetails.row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1]
+          : '').toLowerCase();
+        const transferType = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
+          ? appDetails.row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
+          : '地點';
+
+        if (!isAdmin) {
+          let canApprove = false;
+          if (transferType === '保管人+使用人') {
+            canApprove = newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
+          } else if (transferType === '使用人') {
+            canApprove = newUserEmail === currentUserEmailLower;
+          } else {
+            canApprove = newLeaderEmail === currentUserEmailLower;
+          }
+
+          if (!canApprove) {
+            unauthorizedApps.push(appId);
+            Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權審核申請 ${appId}`);
+            return; // 跳過此申請
+          }
+        }
+
         const assetId = appDetails.row[AL_ASSET_ID_COLUMN_INDEX - 1].toString();
         const location = findAssetLocation(assetId);
 
         if (location) {
           const appRowIndex = appDetails.index;
-          const currentUserEmail = Session.getActiveUser().getEmail();
 
           appLogSheet.getRange(appRowIndex, AL_STATUS_COLUMN_INDEX).setValue("已完成");
           appLogSheet.getRange(appRowIndex, AL_REVIEW_TIME_COLUMN_INDEX).setValue(now);
@@ -1511,6 +1567,16 @@ function processBatchApproval(appIds) {
     if (errors.length > 0) {
       message += `\n失敗或跳過 ${errors.length} 筆 (${errors.join('; ')})。`;
     }
+
+    // 🛡️ 安全性修復：如果有無權限的申請，附加提示訊息
+    if (unauthorizedApps.length > 0) {
+      if (successCount === 0 && errors.length === 0) {
+        // 全部都無權限
+        throw new Error('權限不足：您不是這些申請的指定審核人，無法執行審核操作。');
+      }
+      message += `\n（注意：${unauthorizedApps.length} 筆申請因權限不足已跳過）`;
+    }
+
     return message;
 
   } catch (e) {
@@ -1815,6 +1881,12 @@ function processBatchLending(formData) {
       throw new Error("資料不完整，請填寫所有必填欄位。");
     }
 
+    // 🛡️ 安全性修復：取得當前使用者身分
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = currentUserEmail.toLowerCase();
+    const isAdmin = checkAdminPermissions();
+    const unauthorizedAssets = []; // 🛡️ 收集無權限的資產
+
     const lendingLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(LENDING_LOG_SHEET_NAME);
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [asset.assetId, asset]));
@@ -1824,6 +1896,18 @@ function processBatchLending(formData) {
 
     assetIds.forEach(assetId => {
       const asset = assetMap.get(assetId);
+      if (asset) {
+        // 🛡️ 安全性修復：驗證使用者是否有權出借此資產（只有保管人可出借）
+        if (!isAdmin) {
+          const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
+          if (assetLeaderEmail !== currentUserEmailLower) {
+            unauthorizedAssets.push(assetId);
+            Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權出借資產 ${assetId}（非保管人）`);
+            return; // 跳過此資產
+          }
+        }
+      }
+
       if (asset && asset.assetStatus === '在庫') {
         const location = findAssetLocation(assetId);
         if (location) {
@@ -1844,11 +1928,23 @@ function processBatchLending(formData) {
       }
     });
 
+    // 🛡️ 安全性修復：如果有無權限的資產，處理錯誤
+    if (unauthorizedAssets.length > 0) {
+      if (successCount === 0) {
+        throw new Error(`權限不足：您不是所選財產的保管人，無法執行出借操作。`);
+      }
+    }
+
     if (successCount === 0) {
       throw new Error("處理失敗，勾選的財產可能已被他人借出或狀態已變更。");
     }
 
-    return `成功為 ${successCount} 筆財產辦理出借！`;
+    let resultMessage = `成功為 ${successCount} 筆財產辦理出借！`;
+    if (unauthorizedAssets.length > 0) {
+      resultMessage += `（注意：${unauthorizedAssets.length} 筆財產因權限不足已跳過）`;
+    }
+
+    return resultMessage;
 
   } catch (e) {
     Logger.log("批次出借失敗: " + e.message);
@@ -1909,9 +2005,25 @@ function processBatchReturn(lendIds) {
     }
 
     try {
+        // 🛡️ 安全性修復：取得當前使用者身分
+        const currentUserEmail = Session.getActiveUser().getEmail();
+        const currentUserEmailLower = currentUserEmail.toLowerCase();
+        const isAdmin = checkAdminPermissions();
+        const unauthorizedLends = []; // 🛡️ 收集無權限的歸還
+
         const lendingLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(LENDING_LOG_SHEET_NAME);
         const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, lendingLogSheet.getLastColumn()).getValues();
         const lendingMap = new Map(lendingData.map((row, index) => [row[LL_LEND_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
+
+        // 🛡️ 預先建立資產擁有權映射
+        const allAssets = getAllAssets();
+        const assetOwnerMap = new Map(allAssets.map(asset => [
+            asset.assetId,
+            {
+                leaderEmail: (asset.leaderEmail || '').toLowerCase(),
+                userEmail: (asset.userEmail || '').toLowerCase()
+            }
+        ]));
 
         const now = new Date();
         let successCount = 0;
@@ -1920,6 +2032,17 @@ function processBatchReturn(lendIds) {
             const lendDetails = lendingMap.get(lendId);
             if (lendDetails && lendDetails.row[LL_STATUS_COLUMN_INDEX - 1] === '出借中') {
                 const assetId = lendDetails.row[2];
+
+                // 🛡️ 安全性修復：驗證使用者是否有權歸還此資產
+                if (!isAdmin) {
+                    const ownership = assetOwnerMap.get(assetId);
+                    if (!ownership ||
+                        (ownership.leaderEmail !== currentUserEmailLower && ownership.userEmail !== currentUserEmailLower)) {
+                        unauthorizedLends.push(lendId);
+                        Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權歸還資產 ${assetId}`);
+                        return; // 跳過此記錄
+                    }
+                }
 
                 // 1. 更新「出借紀錄」
                 const lendRowIndex = lendDetails.index;
@@ -1935,8 +2058,20 @@ function processBatchReturn(lendIds) {
                 successCount++;
             }
         });
-        
-        return `成功將 ${successCount} 筆財產狀態更新為「在庫」！`;
+
+        // 🛡️ 安全性修復：如果有無權限的記錄，處理錯誤
+        if (unauthorizedLends.length > 0) {
+            if (successCount === 0) {
+                throw new Error('權限不足：您不是這些資產的保管人或使用人，無法執行歸還操作。');
+            }
+        }
+
+        let resultMessage = `成功將 ${successCount} 筆財產狀態更新為「在庫」！`;
+        if (unauthorizedLends.length > 0) {
+            resultMessage += `（注意：${unauthorizedLends.length} 筆記錄因權限不足已跳過）`;
+        }
+
+        return resultMessage;
 
     } catch (e) {
         Logger.log("批次歸還失敗: " + e.message);
@@ -2032,6 +2167,12 @@ function processBatchScrapping(formData) {
       throw new Error("資料不完整，請至少勾選一筆財產並選擇報廢原因。");
     }
 
+    // 🛡️ 安全性修復：取得當前使用者身分
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = currentUserEmail.toLowerCase();
+    const isAdmin = checkAdminPermissions();
+    const unauthorizedAssets = []; // 🛡️ 收集無權限的資產
+
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [asset.assetId, asset]));
 
@@ -2042,6 +2183,18 @@ function processBatchScrapping(formData) {
 
     assetIds.forEach(assetId => {
       const asset = assetMap.get(assetId);
+
+      // 🛡️ 安全性修復：驗證使用者是否有權報廢此資產
+      if (asset && !isAdmin) {
+        const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
+        const assetUserEmail = (asset.userEmail || '').toLowerCase();
+        if (assetLeaderEmail !== currentUserEmailLower && assetUserEmail !== currentUserEmailLower) {
+          unauthorizedAssets.push(assetId);
+          Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權報廢資產 ${assetId}`);
+          return; // 跳過此資產
+        }
+      }
+
       if (asset && asset.assetStatus !== '已報廢' && asset.assetStatus !== '報廢中') {
         const location = findAssetLocation(assetId);
         if (location) {
@@ -2066,6 +2219,13 @@ function processBatchScrapping(formData) {
         }
       }
     });
+
+    // 🛡️ 安全性修復：如果有無權限的資產，處理錯誤
+    if (unauthorizedAssets.length > 0) {
+      if (successCount === 0) {
+        throw new Error(`權限不足：您不是所選財產的保管人或使用人，無法執行報廢操作。`);
+      }
+    }
 
     if (successCount === 0) {
       throw new Error("處理失敗，勾選的財產可能已在報廢流程中或狀態已變更。");
@@ -2107,7 +2267,12 @@ function processBatchScrapping(formData) {
       }
     }
 
-    return `成功為 ${successCount} 筆財產提交報廢申請，請列印報廢申請單。`;
+    let resultMessage = `成功為 ${successCount} 筆財產提交報廢申請，請列印報廢申請單。`;
+    if (unauthorizedAssets.length > 0) {
+      resultMessage += `（注意：${unauthorizedAssets.length} 筆財產因權限不足已跳過）`;
+    }
+
+    return resultMessage;
 
   } catch (e) {
     Logger.log("批次報廢申請失敗: " + e.message);

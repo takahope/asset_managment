@@ -152,20 +152,38 @@
             const end = start + rowsPerPage;
             const paginatedItems = filteredAssets.slice(start, end);
 
-            let tableHtml = '';
+            // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
+            assetListBody.innerHTML = '';
             paginatedItems.forEach(asset => {
+                const row = document.createElement('tr');
                 const statusClass = asset.status === '出借中' ? 'badge-warning' : 'badge-success';
-                tableHtml += `<tr>
-                    <td><input type="checkbox" class="asset-checkbox" value="${asset.id}"></td>
-                    <td>${asset.id}</td>
-                    <td>${asset.assetName}</td>
-                    <td>${asset.userName}</td>
-                    <td>${asset.leaderName}</td>
-                    <td>${asset.location}</td>
-                    <td><span class="badge ${statusClass}">${asset.status}</span></td>
-                </tr>`;
+
+                // Checkbox 儲存格
+                const checkboxTd = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'asset-checkbox';
+                checkbox.value = asset.id;
+                checkboxTd.appendChild(checkbox);
+                row.appendChild(checkboxTd);
+
+                // 文字欄位使用 textContent 安全設定
+                [asset.id, asset.assetName, asset.userName, asset.leaderName, asset.location].forEach(data => {
+                    const td = document.createElement('td');
+                    td.textContent = data || '';
+                    row.appendChild(td);
+                });
+
+                // 狀態欄位
+                const statusTd = document.createElement('td');
+                const badge = document.createElement('span');
+                badge.className = `badge ${statusClass}`;
+                badge.textContent = asset.status;
+                statusTd.appendChild(badge);
+                row.appendChild(statusTd);
+
+                assetListBody.appendChild(row);
             });
-            assetListBody.innerHTML = tableHtml;
 
             renderPaginationControls();
             document.querySelectorAll('.asset-checkbox').forEach(cb => cb.addEventListener('change', updateSelectedCount));
