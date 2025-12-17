@@ -110,6 +110,17 @@
     const text = document.getElementById('progress-runner-text');
     const percent = document.getElementById('progress-runner-percent');
 
+    // ✨ 先重置 GIF 動畫（確保每次呼叫都能重新播放）
+    const runnerImg = document.getElementById('runnerImage');
+    if (runnerImg && runnerImg.src) {
+      const originalSrc = runnerImg.src;
+      runnerImg.src = '';
+      // 使用 setTimeout 確保瀏覽器有時間釋放 GIF 的解碼狀態
+      setTimeout(() => {
+        runnerImg.src = originalSrc;
+      }, 10);
+    }
+
     // 如果進度條已經在運行中，只更新文字，不重置進度
     if (_runnerInterval) {
       text.textContent = statusText;
@@ -123,15 +134,6 @@
     percent.textContent = '0%';
     text.textContent = statusText;
     overlay.classList.add('active');
-
-    // 強制重新播放 GIF 動畫（清空再重設 src）
-    const runnerImg = document.getElementById('runnerImage');
-    if (runnerImg) {
-      const originalSrc = runnerImg.src;
-      runnerImg.src = '';
-      runnerImg.offsetHeight; // 觸發 reflow
-      runnerImg.src = originalSrc;
-    }
 
     // 模擬進度增長
     _runnerInterval = setInterval(() => {
