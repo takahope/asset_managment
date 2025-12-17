@@ -11,7 +11,6 @@
 </head>
 <body>
     <?!= include('shared-nav'); ?>
-    <?!= include('progress_bar_basic'); ?>
     <?!= include('progress_bar_addnew'); ?>
 
     <div id="main-form" style="display:none;" class="container-fluid">
@@ -149,7 +148,7 @@
 
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('main-form').style.display = 'none';
-            showProgressBar('正在載入選單資料...');
+            showProgressBarAddnew('正在載入選單資料...');
 
             // ✨ 新增：設定資訊資產連動邏輯
             setupItAssetDependency();
@@ -161,7 +160,7 @@
         });
 
         function initForm(data) {
-            hideProgressBar('載入完成');
+            hideProgressBarAddnew('載入完成');
             setTimeout(() => {
                 document.getElementById('main-form').style.display = 'block';
                 
@@ -308,7 +307,7 @@
 
                 // 重新載入下拉選單資料
                 document.getElementById('main-form').style.display = 'none';
-                showProgressBar('準備繼續新增...');
+                showProgressBarAddnew('準備繼續新增...');
 
                 google.script.run
                     .withSuccessHandler(initForm)
@@ -319,7 +318,7 @@
 
         // 專門處理初始載入錯誤
         function onLoadError(error) {
-            hideProgressBar('載入失敗', 300);
+            hideProgressBarAddnew('載入失敗', 300);
             setTimeout(() => {
                 document.getElementById('main-form').style.display = 'block';
                 showError(error);
