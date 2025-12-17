@@ -101,6 +101,7 @@
         let allAssets = [];
 
         document.addEventListener("DOMContentLoaded", () => {
+            toggleTableVisibility(false);
             showProgressBarbacktrace('正在載入已報廢資產資料...');
             google.script.run
                 .withSuccessHandler(populatePage)
@@ -134,8 +135,7 @@
 
             filterAndRender();
             hideProgressBarbacktrace('資料載入完成！', 300);
-            document.getElementById('table-container').style.display = 'block';
-            document.getElementById('restore-section').style.display = 'block';
+            toggleTableVisibility(true);
         }
 
         function populateFilters(assets) {
@@ -285,6 +285,7 @@
 
             if (!confirmation) return;
 
+            toggleTableVisibility(false);
             showProgressBarbacktrace('正在回溯資產狀態...');
             google.script.run
                 .withSuccessHandler(handleRestoreResult)
@@ -295,8 +296,7 @@
         function handleRestoreResult(result) {
             // 步驟 1：隱藏進度條，但保持表格隱藏（避免舊資料閃現）
             hideProgressBarbacktrace('回溯完成！', 0);
-            document.getElementById('table-container').style.display = 'none';
-            document.getElementById('restore-section').style.display = 'none';
+            toggleTableVisibility(false);
 
             // 步驟 2：顯示結果訊息（3 秒後自動消失）
             showMessage(result.replace(/\n/g, '<br>') + ' 正在重新載入資料...', result.includes('成功') ? 'alert-success' : 'alert-warning');
@@ -308,8 +308,7 @@
         }
 
         function loadData() {
-            document.getElementById('table-container').style.display = 'none';
-            document.getElementById('restore-section').style.display = 'none';
+            toggleTableVisibility(false);
             showProgressBarbacktrace('正在重新載入資料...');
             google.script.run
                 .withSuccessHandler(populatePage)
@@ -330,6 +329,20 @@
                 statusDiv.textContent = '';
                 statusDiv.className = '';
             }, 3000);
+        }
+
+        /**
+         * 切換表格和按鈕區域的顯示狀態
+         * @param {boolean} show - true 顯示表格，false 隱藏表格
+         */
+        function toggleTableVisibility(show) {
+            if (show) {
+                document.getElementById('table-container').style.display = 'block';
+                document.getElementById('restore-section').style.display = 'block';
+            } else {
+                document.getElementById('table-container').style.display = 'none';
+                document.getElementById('restore-section').style.display = 'none';
+            }
         }
 
         function showError(error) {
