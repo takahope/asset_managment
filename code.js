@@ -336,6 +336,143 @@ function openReviewDashboard() {
 // --- Web App 核心功能 (使用者介面相關) ---
 // =================================================================
 
+// =================================================================
+// --- 全域存取控制 (Global Access Control) ---
+// =================================================================
+
+/**
+ * 取得系統存取白名單（含快取）
+ * 來源：保管人信箱 + 資產管理員 + 回報管理員
+ * @returns {string[]} 允許存取的 Email 陣列（已小寫化）
+ */
+function getAllowedEmails() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'system_access_allowlist';
+
+  // 嘗試從快取讀取
+  const cachedList = cache.get(cacheKey);
+  if (cachedList) {
+    Logger.log("從快取中讀取系統存取白名單。");
+    return JSON.parse(cachedList);
+  }
+
+  Logger.log("快取未命中，從 Google Sheet 建立系統存取白名單。");
+
+  // 來源 1：保管人信箱（B 欄）
+  let keeperEmails = [];
+  try {
+    const keeperSheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+      .getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    if (keeperSheet && keeperSheet.getLastRow() > 1) {
+      const range = keeperSheet.getRange(2, 2, keeperSheet.getLastRow() - 1, 1); // B2:B
+      keeperEmails = range.getValues()
+        .map(row => row[0])
+        .filter(email => email && String(email).includes('@'))
+        .map(email => String(email).toLowerCase().trim());
+    }
+  } catch (e) {
+    Logger.log("讀取保管人信箱時發生錯誤：" + e.message);
+  }
+
+  // 來源 2 & 3：管理員名單（防呆機制）
+  const adminEmails = getAdminEmails().map(e => String(e).toLowerCase().trim());
+  const reportAdmins = getReportAdmins().map(e => String(e).toLowerCase().trim());
+
+  // 合併並去重複
+  const allEmails = [...new Set([...keeperEmails, ...adminEmails, ...reportAdmins])];
+
+  // 存入快取（10 分鐘）
+  if (allEmails.length > 0) {
+    cache.put(cacheKey, JSON.stringify(allEmails), 600);
+    Logger.log(`已將 ${allEmails.length} 筆授權 Email 存入快取。`);
+  }
+
+  return allEmails;
+}
+
+/**
+ * 建立存取拒絕頁面
+ * @param {string} userEmail 被拒絕存取的使用者 Email
+ * @returns {HtmlOutput} 存取拒絕頁面
+ */
+function createAccessDeniedPage(userEmail) {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>權限不足</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      text-align: center;
+      max-width: 450px;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #dc3545;
+      margin-bottom: 16px;
+      font-size: 24px;
+    }
+    p {
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .email {
+      background: #f8f9fa;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-family: monospace;
+      color: #333;
+      display: inline-block;
+      margin: 8px 0;
+    }
+    .contact {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      font-size: 14px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">&#128683;</div>
+    <h1>權限不足</h1>
+    <p>您的帳號未在系統授權名單中，無法存取此應用程式。</p>
+    <div class="email">${userEmail}</div>
+    <p class="contact">如需存取權限，請聯繫系統管理員。</p>
+  </div>
+</body>
+</html>`;
+
+  return HtmlService.createHtmlOutput(html)
+    .setTitle('權限不足')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+}
+
+// =================================================================
+// --- 路由入口 (Web App Entry Point) ---
+// =================================================================
+
 /**
  * 當使用者打開網頁應用程式的網址時執行
  */
@@ -346,6 +483,16 @@ function openReviewDashboard() {
 //
 //}
 function doGet(e) {
+  // ===== 全域存取控制 =====
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const allowedEmails = getAllowedEmails();
+
+  if (!allowedEmails.includes(currentUserEmail.toLowerCase())) {
+    Logger.log(`存取被拒絕：${currentUserEmail} 不在授權名單中。`);
+    return createAccessDeniedPage(currentUserEmail);
+  }
+  // ===== 全域存取控制結束 =====
+
   const page = e.parameter.page;
   let template;
   let title;
