@@ -244,12 +244,20 @@
                 google.script.run
                     .withSuccessHandler(response => {
                         if (response.success) {
-                            // 原地更新資料，避免跨域重載問題
-                            alert('申請已成功取消。正在更新資料...');
-                            google.script.run
-                                .withSuccessHandler(populatePage)
-                                .withFailureHandler(showError)
-                                .getUserStateData();
+                            // 1. 先讓進度條完成（跑到 100% 並顯示完成文字）
+                            showLoading(false);
+
+                            // 2. 等待進度條完全隱藏後（300ms + 100ms 緩衝）再彈出 alert
+                            setTimeout(() => {
+                                alert('申請已成功取消。');
+
+                                // 3. 用戶按 OK 後，顯示新的載入動畫重新載入資料
+                                showLoading(true, '正在更新資料...');
+                                google.script.run
+                                    .withSuccessHandler(populatePage)
+                                    .withFailureHandler(showError)
+                                    .getUserStateData();
+                            }, 400); // 總延遲：300ms (進度條隱藏) + 100ms (緩衝)
                         } else {
                             showLoading(false);
                             showError({ message: response.error });
