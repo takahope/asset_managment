@@ -66,9 +66,7 @@
                   <button id="submit-scrap-btn" class="btn btn-danger" onclick="submitScrapConfirmation()">確認報廢所選項目</button>
                 </div>
             </div>
-            
-            <hr>
-            <button class="btn btn-secondary" onclick="google.script.host.close()">關閉</button>
+
             <div id="status-message" class="mt-3"></div>
         </div>
 
@@ -80,10 +78,40 @@
 
     <?!= include('progress_bar_basic'); ?>
     <script>
+        /**
+         * 統一控制表格和相關元素的顯示/隱藏
+         * @param {string} containerId - 表格容器 ID
+         * @param {string} buttonId - 操作按鈕 ID
+         * @param {string} emptyMessageId - 空訊息 ID
+         * @param {boolean} show - 是否顯示表格
+         */
+        function toggleTableVisibility(containerId, buttonId, emptyMessageId, show) {
+            const container = document.getElementById(containerId);
+            const button = document.getElementById(buttonId);
+            const emptyMessage = document.getElementById(emptyMessageId);
+
+            if (show) {
+                container.style.display = 'block';
+                button.style.display = 'inline-block';
+                emptyMessage.style.display = 'none';
+            } else {
+                container.style.display = 'none';
+                button.style.display = 'none';
+                emptyMessage.style.display = 'block';
+            }
+        }
+
         document.addEventListener("DOMContentLoaded", loadData);
 
         function loadData() {
-            showLoading(true);
+            // 隱藏所有表格
+            toggleTableVisibility('upload-table-container', 'submit-upload-btn', 'no-upload-message', false);
+            toggleTableVisibility('scrap-table-container', 'submit-scrap-btn', 'no-scrap-message', false);
+
+            // 隱藏主內容，顯示進度條
+            document.getElementById('main-content').style.display = 'none';
+            showProgressBar('正在載入管理員待辦事項...');
+
             google.script.run
                 .withSuccessHandler(populateLists)
                 .withFailureHandler(showError)
@@ -95,16 +123,17 @@
                 showPermissionError(response.error);
                 return;
             }
-            showLoading(false);
+            hideProgressBar('資料載入完成！', 300);
+            setTimeout(() => {
+                document.getElementById('main-content').style.display = 'block';
+            }, 300);
             
             // --- 填充「待上傳」列表 ---
             const assetsForUpload = response.assetsForUpload;
             const uploadListBody = document.getElementById('upload-list');
             uploadListBody.innerHTML = '';
             if (assetsForUpload && assetsForUpload.length > 0) {
-                document.getElementById('upload-table-container').style.display = 'block';
-                document.getElementById('submit-upload-btn').style.display = 'inline-block';
-                document.getElementById('no-upload-message').style.display = 'none';
+                toggleTableVisibility('upload-table-container', 'submit-upload-btn', 'no-upload-message', true);
                 // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
                 // 輔助函式：建立變更顯示儲存格
                 function createChangeTd(oldVal, newVal, hasChange, fallback) {
@@ -185,9 +214,7 @@
                     uploadListBody.appendChild(row);
                 });
             } else {
-                document.getElementById('upload-table-container').style.display = 'none';
-                document.getElementById('submit-upload-btn').style.display = 'none';
-                document.getElementById('no-upload-message').style.display = 'block';
+                toggleTableVisibility('upload-table-container', 'submit-upload-btn', 'no-upload-message', false);
             }
 
             // --- 填充「待報廢」列表 ---
@@ -195,9 +222,7 @@
             const scrapListBody = document.getElementById('scrap-list');
             scrapListBody.innerHTML = '';
              if (assetsForScrap && assetsForScrap.length > 0) {
-                document.getElementById('scrap-table-container').style.display = 'block';
-                document.getElementById('submit-scrap-btn').style.display = 'inline-block';
-                document.getElementById('no-scrap-message').style.display = 'none';
+                toggleTableVisibility('scrap-table-container', 'submit-scrap-btn', 'no-scrap-message', true);
                 // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
                 assetsForScrap.forEach(asset => {
                     const row = document.createElement('tr');
@@ -221,9 +246,7 @@
                     scrapListBody.appendChild(row);
                 });
             } else {
-                document.getElementById('scrap-table-container').style.display = 'none';
-                document.getElementById('submit-scrap-btn').style.display = 'none';
-                document.getElementById('no-scrap-message').style.display = 'block';
+                toggleTableVisibility('scrap-table-container', 'submit-scrap-btn', 'no-scrap-message', false);
             }
 
             // 綁定全選事件
@@ -237,20 +260,43 @@
         
         function submitUploadConfirmation() {
             const selectedIds = Array.from(document.querySelectorAll('.upload-checkbox:checked')).map(cb => cb.value);
-            if (selectedIds.length === 0) { showMessage('請勾選要送出更新的項目。', 'alert-warning'); return; }
-            showLoading(true, '正在更新上傳狀態...');
-            google.script.run.withSuccessHandler(handleSuccess).withFailureHandler(showError).processUploadConfirmation(selectedIds);
+            if (selectedIds.length === 0) {
+                showMessage('請勾選要送出更新的項目。', 'alert-warning');
+                return;
+            }
+
+            // 隱藏主內容和表格
+            document.getElementById('main-content').style.display = 'none';
+            toggleTableVisibility('upload-table-container', 'submit-upload-btn', 'no-upload-message', false);
+            toggleTableVisibility('scrap-table-container', 'submit-scrap-btn', 'no-scrap-message', false);
+
+            showProgressBar('正在更新上傳狀態...');
+            google.script.run
+                .withSuccessHandler(handleSuccess)
+                .withFailureHandler(showError)
+                .processUploadConfirmation(selectedIds);
         }
         
         function submitScrapConfirmation() {
             const selectedIds = Array.from(document.querySelectorAll('.scrap-checkbox:checked')).map(cb => cb.value);
-            if (selectedIds.length === 0) { showMessage('請勾選要確認報廢的項目。', 'alert-warning'); return; }
-            
+            if (selectedIds.length === 0) {
+                showMessage('請勾選要確認報廢的項目。', 'alert-warning');
+                return;
+            }
+
             const confirmation = confirm(`您確定要將 ${selectedIds.length} 筆財產的狀態更新為「已報廢」嗎？`);
             if (!confirmation) return;
 
-            showLoading(true, '正在確認報廢...');
-            google.script.run.withSuccessHandler(handleSuccess).withFailureHandler(showError).processScrapConfirmation(selectedIds);
+            // 隱藏主內容和表格
+            document.getElementById('main-content').style.display = 'none';
+            toggleTableVisibility('upload-table-container', 'submit-upload-btn', 'no-upload-message', false);
+            toggleTableVisibility('scrap-table-container', 'submit-scrap-btn', 'no-scrap-message', false);
+
+            showProgressBar('正在確認報廢...');
+            google.script.run
+                .withSuccessHandler(handleSuccess)
+                .withFailureHandler(showError)
+                .processScrapConfirmation(selectedIds);
         }
         
         function handleSuccess(message) {
@@ -271,24 +317,16 @@
             document.getElementById('error-content').style.display = 'block';
         }
         function showError(error) {
-            showLoading(false);
+            hideProgressBar('載入失敗', 0);  // 立即隱藏
+            setTimeout(() => {
+                document.getElementById('main-content').style.display = 'block';
+            }, 0);
             showMessage('錯誤：' + error.message, 'alert-danger');
         }
         function showMessage(msg, className) {
             const statusDiv = document.getElementById('status-message');
             statusDiv.className = `alert ${className}`;
             statusDiv.textContent = msg;
-        }
-        function showLoading(isLoading, text = '正在載入...') {
-            const content = document.getElementById('main-content');
-            if (isLoading) {
-                if (typeof showProgressBar === 'function') showProgressBar(text);
-                content.style.display = 'none';
-                document.getElementById('status-message').innerHTML = '';
-            } else {
-                if (typeof hideProgressBar === 'function') hideProgressBar();
-                content.style.display = 'block';
-            }
         }
     </script>
 </body>
