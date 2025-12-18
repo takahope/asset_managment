@@ -312,7 +312,7 @@
 
         /**
          * 處理回溯成功的響應
-         * @param {string} result - 後端返回的字符串訊息
+         * @param {Object} result - 後端返回的物件 { success, message, count, failed }
          */
         function handleRestoreSuccess(result) {
             // 步驟 1：完成進度條（跑到 100% 並顯示完成文字）
@@ -321,14 +321,11 @@
 
             // 步驟 2：等待進度條完全隱藏後彈出 alert（300ms 隱藏 + 100ms 緩衝）
             setTimeout(() => {
-                // 解析後端返回的字符串訊息判斷成功/失敗
-                const isSuccess = result.includes('成功');
-                const message = isSuccess
-                    ? '資產已成功回溯為「在庫」狀態。'
-                    : result;
-                alert(message);
+                // 直接顯示後端返回的訊息
+                alert(result.message);
 
-                // 步驟 3：用戶按 OK 後，顯示新的載入動畫重新載入資料
+                // 步驟 3：無論成功與否，都重新載入資料以確保狀態同步
+                // (即使回溯失敗，也可能因為狀態已經變更，所以重載是安全的)
                 toggleTableVisibility(false);
                 showFlyProgressBar('正在更新資料...');
                 google.script.run
@@ -339,12 +336,14 @@
         }
 
         /**
-         * 處理回溯失敗的錯誤
+         * 處理回溯失敗的錯誤 (系統錯誤或例外)
          * @param {Object} error - 錯誤對象
          */
         function handleRestoreError(error) {
             hideFlyProgressBar('回溯失敗', 0);
-            showError({ message: error.message || '回溯操作失敗，請稍後再試。' });
+            alert('錯誤：' + (error.message || '回溯操作失敗，請稍後再試。'));
+            // ⚠️ 關鍵修復：錯誤後恢復表格顯示，避免 UI 卡死
+            toggleTableVisibility(true);
         }
 
         /**

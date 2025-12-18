@@ -299,7 +299,11 @@
             toggleTableVisibility(false);
 
             // 步驟 2：顯示結果訊息（3 秒後自動消失）
-            showMessage(result.replace(/\n/g, '<br>') + ' 正在重新載入資料...', result.includes('成功') ? 'alert-success' : 'alert-warning');
+            // result 現在是物件 { success, message, count, failed }
+            const message = result.message.replace(/\n/g, '<br>') + ' 正在重新載入資料...';
+            const className = result.success ? 'alert-success' : 'alert-warning';
+            
+            showMessage(message, className);
 
             // 步驟 3：短暫延遲後啟動重新載入進度條（讓用戶先看到綠色訊息）
             setTimeout(() => {
