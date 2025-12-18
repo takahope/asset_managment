@@ -67,6 +67,7 @@
         let isAdmin = false;
         let currentUserEmail = '';
         let webAppUrl = ''; // ✨ 新增：儲存 Web App 的基礎 URL
+        let tableDisplayTimer = null; // 追蹤表格顯示的 setTimeout ID
 
         document.addEventListener("DOMContentLoaded", () => {
             showLoading(true, '正在載入財產狀態資料...');
@@ -103,7 +104,7 @@
 
             filterAndRender(); // 初始渲染
             showLoading(false);
-            document.getElementById('table-container').style.display = 'block';
+            // 移除重複邏輯：showLoading(false) 已經會在 300ms 後自動顯示表格
         }
 
         function populateFilters(assets) {
@@ -246,6 +247,12 @@
                         if (response.success) {
                             // 1. 先讓進度條完成（跑到 100% 並顯示完成文字）
                             showLoading(false);
+                            // 立即取消表格顯示計時器並隱藏表格，防止在 alert 前顯示舊表格
+                            if (tableDisplayTimer) {
+                                clearTimeout(tableDisplayTimer);
+                                tableDisplayTimer = null;
+                            }
+                            toggleTableVisibility(false);
 
                             // 2. 等待進度條完全隱藏後（300ms + 100ms 緩衝）再彈出 alert
                             setTimeout(() => {
@@ -268,13 +275,32 @@
             }
         }
 
+        /**
+         * 統一控制表格的顯示/隱藏
+         * @param {boolean} show - true 顯示表格，false 隱藏表格
+         */
+        function toggleTableVisibility(show) {
+            const tableContainer = document.getElementById('table-container');
+            tableContainer.style.display = show ? 'block' : 'none';
+        }
+
         function showLoading(isLoading, statusText = '正在載入資料...') {
             if (isLoading) {
+                // 清除任何待執行的表格顯示計時器
+                if (tableDisplayTimer) {
+                    clearTimeout(tableDisplayTimer);
+                    tableDisplayTimer = null;
+                }
                 showFlyProgressBar(statusText);
-                document.getElementById('table-container').style.display = 'none';
+                toggleTableVisibility(false); // 隱藏表格
             } else {
                 hideFlyProgressBar('資料載入完成！', 300);
-                document.getElementById('table-container').style.display = 'block';
+                // 延遲顯示表格，確保進度條完全隱藏後才顯示
+                // 保存 timer ID 以便需要時可以取消
+                tableDisplayTimer = setTimeout(() => {
+                    toggleTableVisibility(true);
+                    tableDisplayTimer = null;
+                }, 300);
             }
         }
 
