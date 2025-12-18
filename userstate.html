@@ -67,10 +67,10 @@
         let isAdmin = false;
         let currentUserEmail = '';
         let webAppUrl = ''; // ✨ 新增：儲存 Web App 的基礎 URL
-        let tableDisplayTimer = null; // 追蹤表格顯示的 setTimeout ID
 
         document.addEventListener("DOMContentLoaded", () => {
-            showLoading(true, '正在載入財產狀態資料...');
+            toggleTableVisibility(false);
+            showFlyProgressBar('正在載入財產狀態資料...');
             google.script.run.withSuccessHandler(url => {
                 webAppUrl = url; // ✨ 獲取 URL
                 // 確保先取得 URL 再載入頁面資料
@@ -103,8 +103,10 @@
             document.getElementById('search-box').addEventListener('input', filterAndRender);
 
             filterAndRender(); // 初始渲染
-            showLoading(false);
-            // 移除重複邏輯：showLoading(false) 已經會在 300ms 後自動顯示表格
+            hideFlyProgressBar('資料載入完成！', 300);
+            setTimeout(() => {
+                toggleTableVisibility(true);
+            }, 300);
         }
 
         function populateFilters(assets) {
@@ -241,17 +243,13 @@
         function promptCancel(assetId, status) {
             const confirmation = confirm(`您確定要取消這筆 [${status}] 狀態的申請嗎？\n\n財產編號：${assetId}\n\n此操作將會把財產狀態恢復為「在庫」。`);
             if (confirmation) {
-                showLoading(true, '正在取消申請...');
+                toggleTableVisibility(false);
+                showFlyProgressBar('正在取消申請...');
                 google.script.run
                     .withSuccessHandler(response => {
                         if (response.success) {
                             // 1. 先讓進度條完成（跑到 100% 並顯示完成文字）
-                            showLoading(false);
-                            // 立即取消表格顯示計時器並隱藏表格，防止在 alert 前顯示舊表格
-                            if (tableDisplayTimer) {
-                                clearTimeout(tableDisplayTimer);
-                                tableDisplayTimer = null;
-                            }
+                            hideFlyProgressBar('取消完成！', 300);
                             toggleTableVisibility(false);
 
                             // 2. 等待進度條完全隱藏後（300ms + 100ms 緩衝）再彈出 alert
@@ -259,14 +257,15 @@
                                 alert('申請已成功取消。');
 
                                 // 3. 用戶按 OK 後，顯示新的載入動畫重新載入資料
-                                showLoading(true, '正在更新資料...');
+                                toggleTableVisibility(false);
+                                showFlyProgressBar('正在更新資料...');
                                 google.script.run
                                     .withSuccessHandler(populatePage)
                                     .withFailureHandler(showError)
                                     .getUserStateData();
                             }, 400); // 總延遲：300ms (進度條隱藏) + 100ms (緩衝)
                         } else {
-                            showLoading(false);
+                            hideFlyProgressBar('取消失敗', 0);
                             showError({ message: response.error });
                         }
                     })
@@ -284,28 +283,8 @@
             tableContainer.style.display = show ? 'block' : 'none';
         }
 
-        function showLoading(isLoading, statusText = '正在載入資料...') {
-            if (isLoading) {
-                // 清除任何待執行的表格顯示計時器
-                if (tableDisplayTimer) {
-                    clearTimeout(tableDisplayTimer);
-                    tableDisplayTimer = null;
-                }
-                showFlyProgressBar(statusText);
-                toggleTableVisibility(false); // 隱藏表格
-            } else {
-                hideFlyProgressBar('資料載入完成！', 300);
-                // 延遲顯示表格，確保進度條完全隱藏後才顯示
-                // 保存 timer ID 以便需要時可以取消
-                tableDisplayTimer = setTimeout(() => {
-                    toggleTableVisibility(true);
-                    tableDisplayTimer = null;
-                }, 300);
-            }
-        }
-
         function showError(error) {
-            showLoading(false);
+            hideFlyProgressBar('載入失敗', 0);
             const statusDiv = document.getElementById('status-message');
             statusDiv.className = 'alert alert-danger';
             statusDiv.textContent = '錯誤：' + error.message;
