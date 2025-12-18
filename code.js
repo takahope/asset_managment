@@ -2445,11 +2445,21 @@ function restoreFromScrap(assetIds) {
       message += `\n以下資產回溯失敗（可能狀態非「已報廢」或找不到資料）：${failedIds.join(', ')}`;
     }
 
-    return message;
+    return {
+      success: successCount > 0,
+      message: message,
+      count: successCount,
+      failed: failedIds
+    };
 
   } catch (e) {
     Logger.log("回溯報廢資產失敗: " + e.message);
-    return "回溯失敗：" + e.message;
+    return {
+      success: false,
+      message: "回溯失敗：" + e.message,
+      count: 0,
+      failed: []
+    };
   }
 }
 
