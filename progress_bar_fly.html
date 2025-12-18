@@ -111,14 +111,33 @@
     const percent = document.getElementById('progress-fly-percent');
 
     // ✨ 先重置 GIF 動畫（確保每次呼叫都能重新播放）
+    // 使用多種方式查找 img 元素（優先順序：getElementById > querySelector > runner內的img）
     const runnerImg = document.getElementById('runnerImage');
-    if (runnerImg && runnerImg.src) {
-      const originalSrc = runnerImg.src;
-      runnerImg.src = '';
-      // 使用 setTimeout 確保瀏覽器有時間釋放 GIF 的解碼狀態
+    const runnerImgByQuery = document.querySelector('#runnerImage');
+    const runnerImgByTag = runner ? runner.querySelector('img') : null;
+    const imgElement = runnerImg || runnerImgByQuery || runnerImgByTag;
+
+    if (imgElement && imgElement.src) {
+      const originalSrc = imgElement.src;
+      const originalDisplay = imgElement.style.display;
+
+      // 增強型 GIF 重置邏輯（5 步驟）：
+      // 1. 隱藏元素，強制瀏覽器停止 GIF 解碼
+      imgElement.style.display = 'none';
+
+      // 2. 清空 src（使用 about:blank 而不是空字符串，避免被轉換為頁面 URL）
+      imgElement.src = 'about:blank';
+
+      // 3. 強制重排（reflow）以確保瀏覽器處理了變更
+      void imgElement.offsetHeight;
+
+      // 4. 使用 50ms 延遲來確保瀏覽器有足夠時間釋放資源
       setTimeout(() => {
-        runnerImg.src = originalSrc;
-      }, 10);
+        // 5. 恢復顯示並重新設定 src（添加時間戳避免快取）
+        imgElement.style.display = originalDisplay;
+        const timestamp = new Date().getTime();
+        imgElement.src = originalSrc + '#' + timestamp;
+      }, 50);
     }
 
     // 如果進度條已經在運行中，只更新文字，不重置進度
