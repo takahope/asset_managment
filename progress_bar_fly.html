@@ -152,23 +152,9 @@
     const runner = document.getElementById('runner');
     const text = document.getElementById('progress-fly-text');
     const percent = document.getElementById('progress-fly-percent');
-    const runnerImg = document.getElementById('runnerImage');
 
-    // ✨ 1. 先重置 GIF 動畫，防止卡在最後一幀
-    if (runnerImg && runnerImg.src) {
-      const originalSrc = runnerImg.src;
-      runnerImg.src = '';
-      // 使用 setTimeout 確保瀏覽器有時間釋放 GIF 的解碼狀態
-      setTimeout(() => {
-        runnerImg.src = originalSrc;
-      }, 10);
-    }
-
-    // ✨ 2. 檢查進度條是否還在跑，如果在跑就先停止
-    if (_flyProgressInterval) {
-      clearInterval(_flyProgressInterval);
-      _flyProgressInterval = null;
-    }
+    clearInterval(_flyProgressInterval);
+    _flyProgressInterval = null; // 重置標記，允許下次重新啟動進度條
 
     // 跳到 100%
     bar.style.width = '100%';
