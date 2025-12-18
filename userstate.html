@@ -225,6 +225,8 @@
 
                 // 操作按鈕（使用 addEventListener 替代 onclick）
                 const actionTd = document.createElement('td');
+
+                // 原有的取消邏輯（待接收/轉移中/報廢中）
                 if (canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中')) {
                     const cancelBtn = document.createElement('button');
                     cancelBtn.className = 'btn btn-sm btn-danger';
@@ -233,6 +235,16 @@
                     cancelBtn.addEventListener('click', () => promptCancel(asset.assetId, asset.status));
                     actionTd.appendChild(cancelBtn);
                 }
+
+                // 新增：已報廢狀態的回溯按鈕（僅限管理員）
+                if (isAdmin && asset.status === '已報廢') {
+                    const restoreBtn = document.createElement('button');
+                    restoreBtn.className = 'btn btn-sm btn-warning';
+                    restoreBtn.textContent = '回溯';
+                    restoreBtn.addEventListener('click', () => promptRestore(asset.assetId));
+                    actionTd.appendChild(restoreBtn);
+                }
+
                 row.appendChild(actionTd);
 
                 listBody.appendChild(row);
@@ -272,6 +284,67 @@
                     .withFailureHandler(showError)
                     .cancelTransferOrScrap(assetId);
             }
+        }
+
+        /**
+         * 處理「已報廢」資產的回溯操作（僅限管理員）
+         * @param {string} assetId - 資產編號
+         */
+        function promptRestore(assetId) {
+            const confirmation = confirm(
+                `您確定要將此「已報廢」資產回溯為「在庫」狀態嗎？\n\n` +
+                `財產編號：${assetId}\n\n` +
+                `注意：此操作會保留原報廢記錄並添加回溯標記。`
+            );
+
+            if (!confirmation) return;
+
+            // 隱藏表格，顯示進度條
+            toggleTableVisibility(false);
+            showFlyProgressBar('正在回溯資產狀態...');
+
+            // 調用後端函數（注意：傳遞數組）
+            google.script.run
+                .withSuccessHandler(handleRestoreSuccess)
+                .withFailureHandler(handleRestoreError)
+                .restoreFromScrap([assetId]);  // ⚠️ 關鍵：傳遞單元素數組
+        }
+
+        /**
+         * 處理回溯成功的響應
+         * @param {string} result - 後端返回的字符串訊息
+         */
+        function handleRestoreSuccess(result) {
+            // 步驟 1：完成進度條（跑到 100% 並顯示完成文字）
+            hideFlyProgressBar('回溯完成！', 300);
+            toggleTableVisibility(false);
+
+            // 步驟 2：等待進度條完全隱藏後彈出 alert（300ms 隱藏 + 100ms 緩衝）
+            setTimeout(() => {
+                // 解析後端返回的字符串訊息判斷成功/失敗
+                const isSuccess = result.includes('成功');
+                const message = isSuccess
+                    ? '資產已成功回溯為「在庫」狀態。'
+                    : result;
+                alert(message);
+
+                // 步驟 3：用戶按 OK 後，顯示新的載入動畫重新載入資料
+                toggleTableVisibility(false);
+                showFlyProgressBar('正在更新資料...');
+                google.script.run
+                    .withSuccessHandler(populatePage)
+                    .withFailureHandler(showError)
+                    .getUserStateData();
+            }, 400); // 總延遲：300ms (進度條隱藏) + 100ms (緩衝)
+        }
+
+        /**
+         * 處理回溯失敗的錯誤
+         * @param {Object} error - 錯誤對象
+         */
+        function handleRestoreError(error) {
+            hideFlyProgressBar('回溯失敗', 0);
+            showError({ message: error.message || '回溯操作失敗，請稍後再試。' });
         }
 
         /**
