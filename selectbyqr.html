@@ -1,0 +1,1016 @@
+<!-- Quagga2 條碼掃描庫 -->
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+<style>
+/* ========== 浮動購物車按鈕樣式 ========== */
+.scan-cart-fab {
+  position: fixed;
+  bottom: 80px;
+  right: 30px;
+  width: 60px;
+  height: 60px;
+  background: #4a90e2;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 999;
+  color: white;
+  font-size: 24px;
+}
+
+.scan-cart-fab:hover {
+  transform: scale(1.1);
+  background: #357abd;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+
+.cart-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* ========== 側邊欄樣式 ========== */
+.scan-cart-sidebar {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100vh;
+  background: white;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+  transition: right 0.3s ease;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+}
+
+.scan-cart-sidebar.active {
+  right: 0;
+}
+
+.sidebar-header {
+  padding: 20px;
+  background: #4a90e2;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sidebar-header h5 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.sidebar-header .btn-close {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.sidebar-header .btn-close:hover {
+  transform: rotate(90deg);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.sidebar-footer {
+  padding: 15px 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.item-count {
+  font-size: 14px;
+  color: #666;
+}
+
+.item-count strong {
+  color: #4a90e2;
+  font-size: 16px;
+}
+
+/* ========== 購物車項目樣式 ========== */
+.cart-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid #eee;
+  transition: background 0.2s;
+}
+
+.cart-item:hover {
+  background: #f8f9fa;
+}
+
+.item-info {
+  flex: 1;
+  min-width: 0;
+  padding-right: 10px;
+}
+
+.item-info strong {
+  display: block;
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.item-info small {
+  display: block;
+  font-size: 12px;
+  color: #888;
+}
+
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-state i {
+  font-size: 48px;
+  color: #ddd;
+  margin-bottom: 10px;
+}
+
+.empty-state p {
+  color: #999;
+  margin: 0;
+}
+
+/* ========== 遮罩層樣式 ========== */
+.scan-cart-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  z-index: 1000;
+  transition: opacity 0.3s ease;
+}
+
+.scan-cart-overlay.active {
+  display: block;
+}
+
+/* ========== 掃描區域樣式 ========== */
+.scanner-zone {
+  background: #f8f9fa;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.scanner-header h6 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.scanner-header i {
+  margin-right: 8px;
+  color: #4a90e2;
+}
+
+.btn-close-scanner {
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.btn-close-scanner:hover {
+  color: #e74c3c;
+}
+
+#ScanCart_reader {
+  width: 100%;
+  max-width: 640px;
+  height: 300px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 15px;
+  position: relative;
+}
+
+#ScanCart_reader video,
+#ScanCart_reader canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.manual-input {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.manual-input input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.manual-input input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 0.2rem rgba(74,144,226,0.25);
+}
+
+.manual-input button {
+  padding: 10px 20px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.manual-input button:hover {
+  background: #357abd;
+}
+
+#ScanCart_scanStatus {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.scan-status-success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.scan-status-error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* ========== 飛行動畫樣式 ========== */
+.flying-item {
+  position: fixed;
+  z-index: 9999;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #4a90e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+  pointer-events: none;
+}
+
+.cart-bounce {
+  animation: bounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes bounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* ========== Toast 提示樣式 ========== */
+#ScanCart_toastContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scan-toast {
+  min-width: 250px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: slideIn 0.3s ease;
+}
+
+.scan-toast.toast-success {
+  background: #28a745;
+}
+
+.scan-toast.toast-error {
+  background: #dc3545;
+}
+
+.scan-toast.toast-warning {
+  background: #ffc107;
+  color: #333;
+}
+
+.scan-toast.toast-info {
+  background: #17a2b8;
+}
+
+.scan-toast.slide-out {
+  animation: slideOut 0.3s ease forwards;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* ========== RWD 適配 ========== */
+@media (max-width: 768px) {
+  .scan-cart-sidebar {
+    width: 100vw;
+    right: -100vw;
+  }
+
+  .scan-cart-sidebar.active {
+    right: 0;
+  }
+
+  .scan-cart-fab {
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+
+  .cart-badge {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+
+  #ScanCart_reader {
+    height: 250px;
+  }
+}
+</style>
+
+<!-- ========== HTML 結構區 ========== -->
+
+<!-- 浮動購物車按鈕 -->
+<div id="ScanCart_fab" class="scan-cart-fab" onclick="ScanCart_toggleSidebar()">
+  <i class="fa-solid fa-cart-flatbed"></i>
+  <span id="ScanCart_badge" class="cart-badge">0</span>
+</div>
+
+<!-- 側邊欄 -->
+<div id="ScanCart_sidebar" class="scan-cart-sidebar">
+  <div class="sidebar-header">
+    <h5><i class="fa-solid fa-list-check"></i> 掃描清單</h5>
+    <button class="btn-close" onclick="ScanCart_toggleSidebar()">&times;</button>
+  </div>
+
+  <div id="ScanCart_itemList" class="sidebar-content">
+    <div class="empty-state">
+      <i class="fa-solid fa-cart-shopping"></i>
+      <p>清單是空的</p>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <button class="btn btn-danger btn-sm" onclick="ScanCart_clearCart()">
+      <i class="fas fa-trash"></i> 清空
+    </button>
+    <span class="item-count">共 <strong id="ScanCart_count">0</strong> 項</span>
+  </div>
+</div>
+
+<!-- 遮罩層 -->
+<div id="ScanCart_overlay" class="scan-cart-overlay" onclick="ScanCart_toggleSidebar()"></div>
+
+<!-- 掃描區模板 -->
+<template id="ScanCart_scannerTemplate">
+  <div class="scanner-header">
+    <h6><i class="fa-solid fa-camera"></i> 條碼掃描</h6>
+    <button class="btn-close-scanner" onclick="ScanCart_toggleScanner()">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <div id="ScanCart_reader"></div>
+
+  <div class="manual-input">
+    <input type="text" id="ScanCart_manualInput" placeholder="或使用外接掃描機輸入條碼，按 Enter 確認">
+  </div>
+
+  <div id="ScanCart_scanStatus"></div>
+</template>
+
+<!-- ========== JavaScript 邏輯區 ========== -->
+<script>
+(function() {
+  'use strict';
+
+  // ========== 全局變數 ==========
+  let ScanCart_cart = [];
+  let ScanCart_scanner = null;
+  let ScanCart_lastScanned = '';
+  let ScanCart_cooldown = false;
+  let ScanCart_assetIndex = {};
+  let ScanCart_initialized = false;
+  let ScanCart_currentStream = null;
+
+  // ========== 音效 Base64 (嗶聲) ==========
+  const BEEP_SOUND = 'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAAESAAzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMz////////////////////////////////////////////////////////////AAABLAMAAIEQAABgAAACRAAAAAAAAARIAAAAAAAAAAAAAAAAAAAAAA==';
+  const ScanCart_audioPlayer = new Audio(BEEP_SOUND);
+  ScanCart_audioPlayer.volume = 0.5;
+
+  // ========== 初始化函數 ==========
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(ScanCart_init, 500);
+  });
+
+  window.ScanCart_init = function() {
+    if (window.ScanCart_initialized) return;
+    window.ScanCart_initialized = true;
+
+    console.log('[ScanCart] 初始化模組...');
+
+    // 建立資產索引
+    ScanCart_buildIndex();
+
+    // 註冊事件監聽器
+    ScanCart_registerListeners();
+
+    // Hook 分頁渲染函數
+    ScanCart_hookPagination();
+
+    // 插入掃描區 HTML 模板
+    const template = document.getElementById('ScanCart_scannerTemplate');
+    if (template) {
+      const zone = document.getElementById('ScanCart_scannerZone');
+      if (zone) {
+        zone.appendChild(template.content.cloneNode(true));
+        console.log('[ScanCart] 掃描區模板已插入');
+      }
+    }
+
+    // 初始化 UI
+    ScanCart_updateCartUI();
+
+    console.log('[ScanCart] 模組初始化完成');
+  };
+
+  function ScanCart_buildIndex() {
+    if (typeof allAssets !== 'undefined' && allAssets) {
+      allAssets.forEach(asset => {
+        ScanCart_assetIndex[asset.id] = asset;
+      });
+      console.log(`[ScanCart] 已建立 ${Object.keys(ScanCart_assetIndex).length} 筆資產索引`);
+    } else {
+      console.warn('[ScanCart] allAssets 尚未載入，稍後重試');
+      setTimeout(ScanCart_buildIndex, 1000);
+    }
+  }
+
+  function ScanCart_registerListeners() {
+    // 監聽 checkbox 變化（使用事件委託）
+    const assetList = document.getElementById('asset-list');
+    if (assetList) {
+      assetList.addEventListener('change', ScanCart_onCheckboxChange);
+      console.log('[ScanCart] 已註冊 checkbox 監聽器');
+    }
+
+    // 監聽外接掃描機輸入框（延遲綁定，因為模板尚未插入）
+    setTimeout(() => {
+      const manualInput = document.getElementById('ScanCart_manualInput');
+      if (manualInput) {
+        manualInput.addEventListener('keypress', ScanCart_onManualInput);
+        console.log('[ScanCart] 已註冊外接掃描機監聽器');
+      }
+    }, 1000);
+  }
+
+  function ScanCart_hookPagination() {
+    if (typeof window.renderTableForPage !== 'function') {
+      console.warn('[ScanCart] renderTableForPage 函數不存在，稍後重試');
+      setTimeout(ScanCart_hookPagination, 1000);
+      return;
+    }
+
+    const originalRender = window.renderTableForPage;
+    window.renderTableForPage = function(assets, rows, page) {
+      originalRender.call(this, assets, rows, page);
+
+      // 渲染後同步購物車狀態到新頁面
+      ScanCart_cart.forEach(assetId => {
+        const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+        if (checkbox && !checkbox.checked) {
+          checkbox.checked = true;
+        }
+      });
+
+      if (typeof updateSelectedCount === 'function') {
+        updateSelectedCount();
+      }
+    };
+    console.log('[ScanCart] 已 Hook renderTableForPage 函數');
+  }
+
+  // ========== 購物車管理函數 ==========
+  window.ScanCart_addToCart = function(assetId) {
+    // 檢查是否已在購物車
+    if (ScanCart_cart.includes(assetId)) {
+      ScanCart_showToast('此資產已在清單中', 'warning');
+      return;
+    }
+
+    // 加入購物車
+    ScanCart_cart.push(assetId);
+
+    // 勾選對應 checkbox（如果在當前頁）
+    const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+    if (checkbox && !checkbox.checked) {
+      checkbox.checked = true;
+    }
+
+    // 更新計數與 UI
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+    ScanCart_updateCartUI();
+    ScanCart_playSuccessSound();
+    ScanCart_animateFlyToCart(assetId);
+  };
+
+  window.ScanCart_removeItem = function(assetId) {
+    // 從購物車移除
+    const index = ScanCart_cart.indexOf(assetId);
+    if (index > -1) {
+      ScanCart_cart.splice(index, 1);
+    }
+
+    // 取消勾選對應 checkbox
+    const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+    if (checkbox) {
+      checkbox.checked = false;
+    }
+
+    // 更新 UI
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+    ScanCart_updateCartUI();
+  };
+
+  window.ScanCart_clearCart = function() {
+    if (ScanCart_cart.length === 0) return;
+
+    if (!confirm('確定要清空掃描清單嗎？')) return;
+
+    // 取消所有對應 checkbox
+    ScanCart_cart.forEach(assetId => {
+      const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+      if (checkbox) checkbox.checked = false;
+    });
+
+    // 清空購物車
+    ScanCart_cart = [];
+
+    // 更新 UI
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+    ScanCart_updateCartUI();
+    ScanCart_showToast('清單已清空', 'info');
+  };
+
+  window.ScanCart_updateCartUI = function() {
+    const listContainer = document.getElementById('ScanCart_itemList');
+    const badge = document.getElementById('ScanCart_badge');
+    const count = document.getElementById('ScanCart_count');
+
+    if (!listContainer || !badge || !count) return;
+
+    const itemCount = ScanCart_cart.length;
+    badge.textContent = itemCount;
+    count.textContent = itemCount;
+
+    if (itemCount === 0) {
+      listContainer.innerHTML = `
+        <div class="empty-state">
+          <i class="fa-solid fa-cart-shopping"></i>
+          <p>清單是空的</p>
+        </div>
+      `;
+      return;
+    }
+
+    listContainer.innerHTML = ScanCart_cart.map(assetId => {
+      const asset = ScanCart_assetIndex[assetId] ||
+                    (typeof allAssets !== 'undefined' ? allAssets.find(a => a.id === assetId) : null);
+
+      if (!asset) return '';
+
+      return `
+        <div class="cart-item">
+          <div class="item-info">
+            <strong>${asset.assetName || '未知資產'}</strong>
+            <small class="text-muted">${asset.id} | ${asset.location || '未知地點'}</small>
+          </div>
+          <button class="btn btn-sm btn-outline-danger" onclick="ScanCart_removeItem('${assetId}')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      `;
+    }).join('');
+  };
+
+  // ========== 同步機制函數 ==========
+  window.ScanCart_syncFromCheckboxes = function() {
+    ScanCart_cart = Array.from(document.querySelectorAll('.asset-checkbox:checked'))
+      .map(cb => cb.value);
+    ScanCart_updateCartUI();
+    console.log('[ScanCart] 已從 checkboxes 同步購物車');
+  };
+
+  function ScanCart_onCheckboxChange(event) {
+    if (!event.target.classList.contains('asset-checkbox')) return;
+
+    const assetId = event.target.value;
+
+    if (event.target.checked) {
+      // 勾選：加入購物車（避免重複）
+      if (!ScanCart_cart.includes(assetId)) {
+        ScanCart_cart.push(assetId);
+        ScanCart_updateCartUI();
+      }
+    } else {
+      // 取消勾選：從購物車移除
+      const index = ScanCart_cart.indexOf(assetId);
+      if (index > -1) {
+        ScanCart_cart.splice(index, 1);
+        ScanCart_updateCartUI();
+      }
+    }
+  }
+
+  // ========== 掃描功能函數 ==========
+  window.ScanCart_toggleScanner = function() {
+    const zone = document.getElementById('ScanCart_scannerZone');
+    if (!zone) return;
+
+    if (zone.style.display === 'none' || !zone.style.display) {
+      // 開啟掃描器
+      zone.style.display = 'block';
+      ScanCart_startScanner();
+
+      // 自動聚焦到輸入框
+      setTimeout(() => {
+        const input = document.getElementById('ScanCart_manualInput');
+        if (input) input.focus();
+      }, 100);
+    } else {
+      // 關閉掃描器
+      zone.style.display = 'none';
+      ScanCart_stopScanner();
+    }
+  };
+
+  function ScanCart_startScanner() {
+    if (ScanCart_scanner) return;
+
+    if (typeof Quagga === 'undefined') {
+      alert('Quagga2 庫未載入，請檢查網路連線');
+      return;
+    }
+
+    const readerEl = document.getElementById('ScanCart_reader');
+    if (!readerEl) {
+      console.error('[ScanCart] 找不到掃描區元素');
+      return;
+    }
+
+    Quagga.init({
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: readerEl,
+        constraints: {
+          width: { min: 640 },
+          height: { min: 480 },
+          aspectRatio: { min: 1, max: 2 },
+          facingMode: "environment"
+        }
+      },
+      decoder: {
+        readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
+      },
+      locate: true,
+      numOfWorkers: 2
+    }, (err) => {
+      if (err) {
+        console.error('[ScanCart] 無法啟動相機:', err);
+        alert('無法啟動相機：' + err.message);
+        ScanCart_updateScanStatus('相機啟動失敗：' + err.message, 'error');
+        return;
+      }
+
+      Quagga.start();
+      ScanCart_scanner = true;
+      Quagga.onDetected(ScanCart_onDetected);
+
+      // 儲存當前串流
+      setTimeout(() => {
+        const video = document.querySelector('#ScanCart_reader video');
+        if (video && video.srcObject) {
+          ScanCart_currentStream = video.srcObject;
+        }
+      }, 500);
+
+      console.log('[ScanCart] 掃描器已啟動');
+      ScanCart_updateScanStatus('掃描器運作中...', 'success');
+    });
+  }
+
+  function ScanCart_stopScanner() {
+    if (!ScanCart_scanner) return;
+
+    Quagga.offDetected(ScanCart_onDetected);
+    Quagga.stop();
+
+    // 停止所有媒體串流
+    if (ScanCart_currentStream) {
+      ScanCart_currentStream.getTracks().forEach(track => track.stop());
+      ScanCart_currentStream = null;
+    }
+
+    // 清空 DOM
+    const reader = document.getElementById('ScanCart_reader');
+    if (reader) {
+      while (reader.firstChild) reader.removeChild(reader.firstChild);
+    }
+
+    ScanCart_scanner = null;
+    console.log('[ScanCart] 掃描器已停止');
+    ScanCart_updateScanStatus('', '');
+  }
+
+  function ScanCart_onDetected(data) {
+    const rawCode = data.codeResult.code;
+
+    // 防重複機制（2 秒冷卻）
+    if (rawCode === ScanCart_lastScanned && ScanCart_cooldown) {
+      console.log('[ScanCart] 重複掃描已忽略:', rawCode);
+      return;
+    }
+
+    ScanCart_lastScanned = rawCode;
+    ScanCart_cooldown = true;
+    setTimeout(() => {
+      ScanCart_cooldown = false;
+      ScanCart_lastScanned = '';
+    }, 2000);
+
+    console.log('[ScanCart] 掃描到條碼:', rawCode);
+    ScanCart_processBarcode(rawCode);
+  }
+
+  function ScanCart_processBarcode(rawCode) {
+    // 格式化條碼
+    const formattedCode = ScanCart_formatBarcode(rawCode);
+    console.log('[ScanCart] 格式化條碼:', rawCode, '->', formattedCode);
+
+    // 查找資產（優先使用索引）
+    const asset = ScanCart_assetIndex[formattedCode] ||
+                  ScanCart_assetIndex[rawCode] ||
+                  (typeof allAssets !== 'undefined' ?
+                    allAssets.find(a => a.id === formattedCode || a.id === rawCode) : null);
+
+    if (asset) {
+      ScanCart_addToCart(asset.id);
+      ScanCart_showToast(`已加入：${asset.assetName}`, 'success');
+      ScanCart_updateScanStatus(`✓ 已加入：${asset.assetName}`, 'success');
+    } else {
+      ScanCart_showToast(`未找到資產：${formattedCode}`, 'error');
+      ScanCart_updateScanStatus(`✗ 未找到資產：${formattedCode}`, 'error');
+    }
+  }
+
+  function ScanCart_formatBarcode(barcode) {
+    if (!barcode) return '';
+    const cleanCode = barcode.toString().trim();
+
+    // 20 碼去前 2 位，其他保留
+    let processed = cleanCode.length === 20 ? cleanCode.substring(2) : cleanCode;
+
+    if (processed.length < 11) return processed;
+
+    // 格式化為 XXXXXXX-XXXX-XXXXXXX
+    return processed.substring(0, 7) + '-' +
+           processed.substring(7, 11) + '-' +
+           processed.substring(11);
+  }
+
+  function ScanCart_onManualInput(event) {
+    if (event.key !== 'Enter') return;
+
+    const input = event.target;
+    const code = input.value.trim();
+
+    if (!code) return;
+
+    console.log('[ScanCart] 外接掃描機輸入:', code);
+    ScanCart_processBarcode(code);
+
+    // 清空輸入框並保持聚焦
+    input.value = '';
+    input.focus();
+  }
+
+  function ScanCart_updateScanStatus(message, type) {
+    const statusEl = document.getElementById('ScanCart_scanStatus');
+    if (!statusEl) return;
+
+    if (!message) {
+      statusEl.textContent = '';
+      statusEl.className = '';
+      return;
+    }
+
+    statusEl.textContent = message;
+    statusEl.className = type === 'success' ? 'scan-status-success' : 'scan-status-error';
+  }
+
+  // ========== UI 交互函數 ==========
+  window.ScanCart_toggleSidebar = function() {
+    const sidebar = document.getElementById('ScanCart_sidebar');
+    const overlay = document.getElementById('ScanCart_overlay');
+
+    if (!sidebar || !overlay) return;
+
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
+  };
+
+  // ========== 視覺效果函數 ==========
+  function ScanCart_playSuccessSound() {
+    ScanCart_audioPlayer.currentTime = 0;
+    ScanCart_audioPlayer.play().catch(e => console.log('[ScanCart] 音效播放被阻擋:', e));
+  }
+
+  function ScanCart_animateFlyToCart(assetId) {
+    const fab = document.getElementById('ScanCart_fab');
+    const scannerEl = document.getElementById('ScanCart_reader');
+
+    if (!fab || !scannerEl) return;
+
+    const startRect = scannerEl.getBoundingClientRect();
+    const endRect = fab.getBoundingClientRect();
+
+    const ghost = document.createElement('div');
+    ghost.className = 'flying-item';
+    ghost.style.top = `${startRect.top + startRect.height / 2 - 30}px`;
+    ghost.style.left = `${startRect.left + startRect.width / 2 - 30}px`;
+    ghost.innerHTML = '<i class="fa-solid fa-box"></i>';
+    document.body.appendChild(ghost);
+
+    requestAnimationFrame(() => {
+      ghost.style.top = `${endRect.top + endRect.height / 2 - 10}px`;
+      ghost.style.left = `${endRect.left + endRect.width / 2 - 10}px`;
+      ghost.style.width = '20px';
+      ghost.style.height = '20px';
+      ghost.style.opacity = '0.5';
+      ghost.style.fontSize = '12px';
+    });
+
+    setTimeout(() => {
+      ghost.remove();
+
+      // 購物車跳動
+      fab.classList.add('cart-bounce');
+      setTimeout(() => fab.classList.remove('cart-bounce'), 400);
+    }, 600);
+  }
+
+  window.ScanCart_showToast = function(msg, type = 'info') {
+    let container = document.getElementById('ScanCart_toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'ScanCart_toastContainer';
+      document.body.appendChild(container);
+    }
+
+    const typeClass = {
+      success: 'toast-success',
+      error: 'toast-error',
+      warning: 'toast-warning',
+      info: 'toast-info'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `scan-toast ${typeClass[type] || 'toast-info'}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('slide-out');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  };
+
+  // ========== 暴露清空函數供 apply.html 使用 ==========
+  window.ScanCart_resetOnSubmit = function() {
+    ScanCart_cart = [];
+    ScanCart_updateCartUI();
+    console.log('[ScanCart] 已重置購物車（提交後）');
+  };
+
+  console.log('[ScanCart] 模組已載入，等待初始化...');
+})();
+</script>
