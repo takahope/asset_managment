@@ -738,6 +738,11 @@
         ScanCart_updateCartUI();
       }
     }
+
+    // ✨ 同步更新「已勾選 X 筆財產」計數
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
   }
 
   // ========== 掃描功能函數 ==========
