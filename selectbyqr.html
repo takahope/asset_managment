@@ -259,41 +259,6 @@
   object-fit: cover;
 }
 
-.manual-input {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.manual-input input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.manual-input input:focus {
-  outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 0.2rem rgba(74,144,226,0.25);
-}
-
-.manual-input button {
-  padding: 10px 20px;
-  background: #4a90e2;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
-}
-
-.manual-input button:hover {
-  background: #357abd;
-}
-
 #ScanCart_scanStatus {
   margin-top: 10px;
   padding: 10px;
@@ -484,10 +449,6 @@
 
   <div id="ScanCart_reader"></div>
 
-  <div class="manual-input">
-    <input type="text" id="ScanCart_manualInput" placeholder="或使用外接掃描機輸入條碼，按 Enter 確認">
-  </div>
-
   <div id="ScanCart_scanStatus"></div>
 </template>
 
@@ -623,15 +584,6 @@
       assetList.addEventListener('change', ScanCart_onCheckboxChange);
       console.log('[ScanCart] 已註冊 checkbox 監聽器');
     }
-
-    // 監聽外接掃描機輸入框（延遲綁定，因為模板尚未插入）
-    setTimeout(() => {
-      const manualInput = document.getElementById('ScanCart_manualInput');
-      if (manualInput) {
-        manualInput.addEventListener('keypress', ScanCart_onManualInput);
-        console.log('[ScanCart] 已註冊外接掃描機監聽器');
-      }
-    }, 1000);
   }
 
   function ScanCart_hookPagination() {
@@ -958,22 +910,6 @@
     return processed.substring(0, 7) + '-' +
            processed.substring(7, 11) + '-' +
            processed.substring(11);
-  }
-
-  function ScanCart_onManualInput(event) {
-    if (event.key !== 'Enter') return;
-
-    const input = event.target;
-    const code = input.value.trim();
-
-    if (!code) return;
-
-    console.log('[ScanCart] 外接掃描機輸入:', code);
-    ScanCart_processBarcode(code);
-
-    // 清空輸入框並保持聚焦
-    input.value = '';
-    input.focus();
   }
 
   function ScanCart_updateScanStatus(message, type) {
