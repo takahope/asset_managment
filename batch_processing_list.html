@@ -1,0 +1,683 @@
+<!-- ========== 批次處理清單模組 (batch_processing_list.html) ========== -->
+<!-- 命名空間：BatchList_ -->
+<!-- 功能：批次處理清單管理、側邊欄 UI、Checkbox 同步、Toast 提示、飛行動畫 -->
+
+<style>
+/* ========== 浮動清單按鈕樣式 ========== */
+.batch-list-fab {
+  position: fixed;
+  bottom: 80px;
+  right: 30px;
+  width: 60px;
+  height: 60px;
+  background: #4a90e2;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 999;
+  color: white;
+  font-size: 24px;
+}
+
+.batch-list-fab:hover {
+  transform: scale(1.1);
+  background: #357abd;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+
+.batch-list-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* ========== 側邊欄樣式 ========== */
+.batch-list-sidebar {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100vh;
+  background: white;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+  transition: right 0.3s ease;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+}
+
+.batch-list-sidebar.active {
+  right: 0;
+}
+
+.batch-list-sidebar .sidebar-header {
+  padding: 20px;
+  background: #4a90e2;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.batch-list-sidebar .sidebar-header h5 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.batch-list-sidebar .sidebar-header .btn-close {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.batch-list-sidebar .sidebar-header .btn-close:hover {
+  transform: rotate(90deg);
+}
+
+.batch-list-sidebar .sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.batch-list-sidebar .sidebar-footer {
+  padding: 15px 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.batch-list-sidebar .item-count {
+  font-size: 14px;
+  color: #666;
+}
+
+.batch-list-sidebar .item-count strong {
+  color: #4a90e2;
+  font-size: 16px;
+}
+
+/* ========== 清單項目樣式 ========== */
+.batch-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid #eee;
+  transition: background 0.2s;
+}
+
+.batch-list-item:hover {
+  background: #f8f9fa;
+}
+
+.batch-list-item .item-info {
+  flex: 1;
+  min-width: 0;
+  padding-right: 10px;
+}
+
+.batch-list-item .item-info strong {
+  display: block;
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.batch-list-item .item-info small {
+  display: block;
+  font-size: 12px;
+  color: #888;
+}
+
+.batch-list-empty {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.batch-list-empty i {
+  font-size: 48px;
+  color: #ddd;
+  margin-bottom: 10px;
+}
+
+.batch-list-empty p {
+  color: #999;
+  margin: 0;
+}
+
+/* ========== 遮罩層樣式 ========== */
+.batch-list-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  z-index: 1000;
+  transition: opacity 0.3s ease;
+}
+
+.batch-list-overlay.active {
+  display: block;
+}
+
+/* ========== 飛行動畫樣式 ========== */
+.batch-list-flying-item {
+  position: fixed;
+  z-index: 9999;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #4a90e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+  pointer-events: none;
+}
+
+.batch-list-fab.bounce {
+  animation: batchListBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes batchListBounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* ========== Toast 提示樣式 ========== */
+#BatchList_toastContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.batch-list-toast {
+  min-width: 250px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: batchListSlideIn 0.3s ease;
+}
+
+.batch-list-toast.toast-success {
+  background: #28a745;
+}
+
+.batch-list-toast.toast-error {
+  background: #dc3545;
+}
+
+.batch-list-toast.toast-warning {
+  background: #ffc107;
+  color: #333;
+}
+
+.batch-list-toast.toast-info {
+  background: #17a2b8;
+}
+
+.batch-list-toast.slide-out {
+  animation: batchListSlideOut 0.3s ease forwards;
+}
+
+@keyframes batchListSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes batchListSlideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* ========== RWD 適配 ========== */
+@media (max-width: 768px) {
+  .batch-list-sidebar {
+    width: 100vw;
+    right: -100vw;
+  }
+
+  .batch-list-sidebar.active {
+    right: 0;
+  }
+
+  .batch-list-fab {
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+
+  .batch-list-badge {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+}
+</style>
+
+<!-- ========== HTML 結構區 ========== -->
+
+<!-- 浮動清單按鈕 -->
+<div id="BatchList_fab" class="batch-list-fab" onclick="BatchList_toggleSidebar()">
+  <i class="fa-solid fa-cart-flatbed"></i>
+  <span id="BatchList_badge" class="batch-list-badge">0</span>
+</div>
+
+<!-- 側邊欄 -->
+<div id="BatchList_sidebar" class="batch-list-sidebar">
+  <div class="sidebar-header">
+    <h5><i class="fa-solid fa-list-check"></i> 批次處理清單</h5>
+    <button class="btn-close" onclick="BatchList_toggleSidebar()">&times;</button>
+  </div>
+
+  <div id="BatchList_itemList" class="sidebar-content">
+    <div class="batch-list-empty">
+      <i class="fa-solid fa-cart-shopping"></i>
+      <p>清單是空的</p>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <button class="btn btn-danger btn-sm" onclick="BatchList_clearAll()">
+      <i class="fas fa-trash"></i> 清空
+    </button>
+    <span class="item-count">共 <strong id="BatchList_count">0</strong> 項</span>
+  </div>
+</div>
+
+<!-- 遮罩層 -->
+<div id="BatchList_overlay" class="batch-list-overlay" onclick="BatchList_toggleSidebar()"></div>
+
+<!-- ========== JavaScript 邏輯區 ========== -->
+<script>
+(function() {
+  'use strict';
+
+  // ========== 全局變數 ==========
+  let BatchList_items = [];
+  let BatchList_assetIndex = {};
+  let BatchList_initialized = false;
+
+  // ========== 初始化函數 ==========
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(BatchList_init, 500);
+  });
+
+  window.BatchList_init = function() {
+    if (window.BatchList_initialized) return;
+    window.BatchList_initialized = true;
+
+    console.log('[BatchList] 初始化模組...');
+
+    // 建立資產索引
+    BatchList_buildIndex();
+
+    // 註冊事件監聽器
+    BatchList_registerListeners();
+
+    // Hook 分頁渲染函數
+    BatchList_hookPagination();
+
+    // 初始化 UI
+    BatchList_updateUI();
+
+    console.log('[BatchList] 模組初始化完成');
+  };
+
+  function BatchList_buildIndex() {
+    if (typeof allAssets !== 'undefined' && allAssets) {
+      allAssets.forEach(asset => {
+        BatchList_assetIndex[asset.id] = asset;
+      });
+      console.log(`[BatchList] 已建立 ${Object.keys(BatchList_assetIndex).length} 筆資產索引`);
+    } else {
+      console.warn('[BatchList] allAssets 尚未載入，稍後重試');
+      setTimeout(BatchList_buildIndex, 1000);
+    }
+  }
+
+  function BatchList_registerListeners() {
+    // 監聽 checkbox 變化（使用事件委託）
+    const assetList = document.getElementById('asset-list');
+    if (assetList) {
+      assetList.addEventListener('change', BatchList_onCheckboxChange);
+      console.log('[BatchList] 已註冊 checkbox 監聽器');
+    }
+  }
+
+  function BatchList_hookPagination() {
+    if (typeof window.renderTableForPage !== 'function') {
+      console.warn('[BatchList] renderTableForPage 函數不存在，稍後重試');
+      setTimeout(BatchList_hookPagination, 1000);
+      return;
+    }
+
+    const originalRender = window.renderTableForPage;
+    window.renderTableForPage = function(assets, rows, page) {
+      originalRender.call(this, assets, rows, page);
+
+      // 渲染後同步清單狀態到新頁面
+      BatchList_items.forEach(assetId => {
+        const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+        if (checkbox && !checkbox.checked) {
+          checkbox.checked = true;
+        }
+      });
+
+      if (typeof updateSelectedCount === 'function') {
+        updateSelectedCount();
+      }
+    };
+    console.log('[BatchList] 已 Hook renderTableForPage 函數');
+  }
+
+  // ========== 清單管理函數 ==========
+  window.BatchList_addItem = function(assetId) {
+    // 檢查是否已在清單中
+    if (BatchList_items.includes(assetId)) {
+      BatchList_showToast('此資產已在清單中', 'warning');
+      return false;
+    }
+
+    // 加入清單
+    BatchList_items.push(assetId);
+
+    // 勾選對應 checkbox（如果在當前頁）
+    const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+    if (checkbox && !checkbox.checked) {
+      checkbox.checked = true;
+    }
+
+    // 更新計數與 UI
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+    BatchList_updateUI();
+
+    return true;
+  };
+
+  window.BatchList_removeItem = function(assetId) {
+    // 從清單移除
+    const index = BatchList_items.indexOf(assetId);
+    if (index > -1) {
+      BatchList_items.splice(index, 1);
+    }
+
+    // 取消勾選對應 checkbox
+    const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+    if (checkbox) {
+      checkbox.checked = false;
+    }
+
+    // 更新 UI
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+    BatchList_updateUI();
+  };
+
+  window.BatchList_clearAll = function() {
+    if (BatchList_items.length === 0) return;
+
+    if (!confirm('確定要清空批次處理清單嗎？')) return;
+
+    // 取消所有對應 checkbox
+    BatchList_items.forEach(assetId => {
+      const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+      if (checkbox) checkbox.checked = false;
+    });
+
+    // 清空清單
+    BatchList_items = [];
+
+    // 更新 UI
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+    BatchList_updateUI();
+    BatchList_showToast('清單已清空', 'info');
+  };
+
+  window.BatchList_getItems = function() {
+    return BatchList_items.slice(); // 返回副本
+  };
+
+  window.BatchList_hasItem = function(assetId) {
+    return BatchList_items.includes(assetId);
+  };
+
+  window.BatchList_findAsset = function(assetId) {
+    return BatchList_assetIndex[assetId] || null;
+  };
+
+  window.BatchList_updateUI = function() {
+    const listContainer = document.getElementById('BatchList_itemList');
+    const badge = document.getElementById('BatchList_badge');
+    const count = document.getElementById('BatchList_count');
+
+    if (!listContainer || !badge || !count) return;
+
+    const itemCount = BatchList_items.length;
+    badge.textContent = itemCount;
+    count.textContent = itemCount;
+
+    if (itemCount === 0) {
+      listContainer.innerHTML = `
+        <div class="batch-list-empty">
+          <i class="fa-solid fa-cart-shopping"></i>
+          <p>清單是空的</p>
+        </div>
+      `;
+      return;
+    }
+
+    listContainer.innerHTML = BatchList_items.map(assetId => {
+      const asset = BatchList_assetIndex[assetId] ||
+                    (typeof allAssets !== 'undefined' ? allAssets.find(a => a.id === assetId) : null);
+
+      if (!asset) return '';
+
+      return `
+        <div class="batch-list-item">
+          <div class="item-info">
+            <strong>${asset.assetName || '未知資產'}</strong>
+            <small class="text-muted">${asset.id} | ${asset.location || '未知地點'}</small>
+          </div>
+          <button class="btn btn-sm btn-outline-danger" onclick="BatchList_removeItem('${assetId}')">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      `;
+    }).join('');
+  };
+
+  // ========== 同步機制函數 ==========
+  window.BatchList_syncFromCheckboxes = function() {
+    BatchList_items = Array.from(document.querySelectorAll('.asset-checkbox:checked'))
+      .map(cb => cb.value);
+    BatchList_updateUI();
+    console.log('[BatchList] 已從 checkboxes 同步清單');
+  };
+
+  function BatchList_onCheckboxChange(event) {
+    if (!event.target.classList.contains('asset-checkbox')) return;
+
+    const assetId = event.target.value;
+
+    if (event.target.checked) {
+      // 勾選：加入清單（避免重複）
+      if (!BatchList_items.includes(assetId)) {
+        BatchList_items.push(assetId);
+        BatchList_updateUI();
+      }
+    } else {
+      // 取消勾選：從清單移除
+      const index = BatchList_items.indexOf(assetId);
+      if (index > -1) {
+        BatchList_items.splice(index, 1);
+        BatchList_updateUI();
+      }
+    }
+
+    // 同步更新「已勾選 X 筆財產」計數
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+  }
+
+  // ========== UI 交互函數 ==========
+  window.BatchList_toggleSidebar = function() {
+    const sidebar = document.getElementById('BatchList_sidebar');
+    const overlay = document.getElementById('BatchList_overlay');
+
+    if (!sidebar || !overlay) return;
+
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
+  };
+
+  // ========== 視覺效果函數 ==========
+  window.BatchList_animateFlyToCart = function(sourceElement) {
+    const fab = document.getElementById('BatchList_fab');
+
+    if (!fab) return;
+
+    let startRect;
+    if (sourceElement && sourceElement.getBoundingClientRect) {
+      startRect = sourceElement.getBoundingClientRect();
+    } else {
+      // 如果沒有指定來源元素，使用頁面中心
+      startRect = {
+        top: window.innerHeight / 2,
+        left: window.innerWidth / 2,
+        width: 0,
+        height: 0
+      };
+    }
+
+    const endRect = fab.getBoundingClientRect();
+
+    const ghost = document.createElement('div');
+    ghost.className = 'batch-list-flying-item';
+    ghost.style.top = `${startRect.top + startRect.height / 2 - 30}px`;
+    ghost.style.left = `${startRect.left + startRect.width / 2 - 30}px`;
+    ghost.innerHTML = '<i class="fa-solid fa-box"></i>';
+    document.body.appendChild(ghost);
+
+    requestAnimationFrame(() => {
+      ghost.style.top = `${endRect.top + endRect.height / 2 - 10}px`;
+      ghost.style.left = `${endRect.left + endRect.width / 2 - 10}px`;
+      ghost.style.width = '20px';
+      ghost.style.height = '20px';
+      ghost.style.opacity = '0.5';
+      ghost.style.fontSize = '12px';
+    });
+
+    setTimeout(() => {
+      ghost.remove();
+
+      // 清單按鈕跳動
+      fab.classList.add('bounce');
+      setTimeout(() => fab.classList.remove('bounce'), 400);
+    }, 600);
+  };
+
+  window.BatchList_showToast = function(msg, type = 'info') {
+    let container = document.getElementById('BatchList_toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'BatchList_toastContainer';
+      document.body.appendChild(container);
+    }
+
+    const typeClass = {
+      success: 'toast-success',
+      error: 'toast-error',
+      warning: 'toast-warning',
+      info: 'toast-info'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `batch-list-toast ${typeClass[type] || 'toast-info'}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('slide-out');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  };
+
+  // ========== 暴露重置函數供外部使用 ==========
+  window.BatchList_resetOnSubmit = function() {
+    BatchList_items = [];
+    BatchList_updateUI();
+    console.log('[BatchList] 已重置清單（提交後）');
+  };
+
+  console.log('[BatchList] 模組已載入，等待初始化...');
+})();
+</script>
