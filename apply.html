@@ -167,6 +167,9 @@
     <?!= include('shared-nav'); ?>
     <?!= include('progress_bar_basic'); ?>
     <?!= include('progress_bar_fly'); ?>
+    <!-- 批次處理清單模組（購物車功能）- 須在 selectbyqr 之前引入 -->
+    <?!= include('batch_processing_list'); ?>
+    <!-- 掃描模組（依賴上方模組） -->
     <?!= include('selectbyqr'); ?>
 
     <div class="container-fluid" style="max-width: 1200px;">
@@ -202,7 +205,7 @@
                             </div>
                             <input type="text" class="form-control" id="search-box" placeholder="輸入產編、名稱或地點搜尋，或掃描條碼按 Enter">
                             <div class="input-group-append">
-                                <button class="btn btn-outline-secondary" type="button" onclick="ScanCart_toggleScanner()" title="開啟條碼掃描器">
+                                <button class="btn btn-outline-secondary" type="button" onclick="Scanner_toggle()" title="開啟條碼掃描器">
                                     <i class="fa-solid fa-barcode"></i> 掃描
                                 </button>
                             </div>
@@ -211,7 +214,7 @@
                 </div>
 
                 <!-- 掃描區域（預設隱藏，點擊掃描按鈕後展開） -->
-                <div id="ScanCart_scannerZone" style="display: none;"></div>
+                <div id="Scanner_zone" class="scanner-zone" style="display: none;"></div>
 
                 <div class="asset-table-container">
                     <table class="table table-hover table-sm mb-0">
@@ -686,8 +689,8 @@
                 checkbox.type = 'checkbox';
                 checkbox.className = 'asset-checkbox';
                 checkbox.value = asset.id;
-                // ✨ 同步購物車狀態：如果資產在購物車中，自動勾選
-                if (typeof ScanCart_cart !== 'undefined' && ScanCart_cart.includes(asset.id)) {
+                // ✨ 同步清單狀態：如果資產在批次處理清單中，自動勾選
+                if (typeof BatchList_hasItem === 'function' && BatchList_hasItem(asset.id)) {
                     checkbox.checked = true;
                 }
                 checkboxTd.appendChild(checkbox);
@@ -774,9 +777,9 @@
             });
             updateSelectedCount();
 
-            // ✨ 同步到購物車
-            if (typeof ScanCart_syncFromCheckboxes === 'function') {
-                ScanCart_syncFromCheckboxes();
+            // ✨ 同步到批次處理清單
+            if (typeof BatchList_syncFromCheckboxes === 'function') {
+                BatchList_syncFromCheckboxes();
             }
         }
 
