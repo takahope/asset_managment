@@ -510,6 +510,61 @@
   const ScanCart_audioPlayer = new Audio(BEEP_SOUND);
   ScanCart_audioPlayer.volume = 0.5;
 
+  // ========== 增強搜尋框：支援 Enter 鍵智能掃描 ==========
+  /**
+   * 增強搜尋框，支援 Enter 鍵智能掃描
+   * 參考 qr_code_template.html 的 Enter 鍵處理邏輯
+   *
+   * 核心設計：
+   * - 監聽搜尋框的 Enter 鍵事件
+   * - 嘗試將輸入內容格式化為條碼
+   * - 查找對應資產（優先使用索引，降級查找 allAssets）
+   * - 找到資產 → 掃描模式：加入購物車 + 清空輸入框 + Toast 提示
+   * - 找不到資產 → 搜尋模式：保持原搜尋功能（input 事件已觸發即時搜尋）
+   */
+  window.ScanCart_enhanceSearchBox = function() {
+    const searchBox = document.getElementById('search-box');
+    if (!searchBox) {
+      console.warn('[ScanCart] 找不到 search-box 元素，跳過增強');
+      return;
+    }
+
+    // 監聽 Enter 鍵
+    searchBox.addEventListener('keypress', function(e) {
+      if (e.key !== 'Enter') return;
+
+      const inputValue = searchBox.value.trim();
+      if (!inputValue) return;
+
+      // 嘗試作為條碼處理（參考 qr_code_template.html:683-763）
+      const formattedCode = ScanCart_formatBarcode(inputValue);
+
+      // 查找資產（優先使用索引，降級查找 allAssets）
+      const asset = ScanCart_assetIndex[formattedCode] ||
+                    ScanCart_assetIndex[inputValue] ||
+                    (typeof allAssets !== 'undefined' ?
+                      allAssets.find(a => a.id === formattedCode || a.id === inputValue) : null);
+
+      if (asset) {
+        // 找到資產 → 掃描模式
+        e.preventDefault(); // 阻止預設行為
+        ScanCart_addToCart(asset.id);
+        ScanCart_showToast(`已加入：${asset.assetName}`, 'success');
+
+        // 清空輸入框
+        searchBox.value = '';
+
+        // 觸發 input 事件以更新搜尋過濾（恢復顯示所有資產）
+        searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+        console.log('[ScanCart] Enter 鍵掃描成功:', asset.id);
+      }
+      // 找不到資產 → 保持搜尋狀態，不做任何處理
+    });
+
+    console.log('[ScanCart] ✓ 已增強搜尋框，支援 Enter 鍵掃描');
+  };
+
   // ========== 初始化函數 ==========
   document.addEventListener('DOMContentLoaded', () => {
     setTimeout(ScanCart_init, 500);
@@ -529,6 +584,9 @@
 
     // Hook 分頁渲染函數
     ScanCart_hookPagination();
+
+    // 增強搜尋框（支援 Enter 鍵智能掃描）
+    ScanCart_enhanceSearchBox();
 
     // 插入掃描區 HTML 模板
     const template = document.getElementById('ScanCart_scannerTemplate');
