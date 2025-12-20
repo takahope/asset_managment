@@ -49,14 +49,20 @@
   color: #e74c3c;
 }
 
-#Scanner_reader {
+/* 掃描器容器 */
+.scanner-reader-container {
+  position: relative;
   width: 100%;
   max-width: 640px;
+  margin-bottom: 15px;
+}
+
+#Scanner_reader {
+  width: 100%;
   height: 300px;
   background: #000;
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 15px;
   position: relative;
 }
 
@@ -65,6 +71,44 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 掃描框線覆蓋層 */
+.scanner-frame-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid #4a90e2;
+  border-radius: 8px;
+  margin: 30px;
+  opacity: 0.6;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+}
+
+/* 水平掃描線 */
+.scanner-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #e74c3c;
+  opacity: 0.8;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: scanLine 2s ease-in-out infinite;
+}
+
+@keyframes scanLine {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 #Scanner_scanStatus {
@@ -104,7 +148,13 @@
     </button>
   </div>
 
-  <div id="Scanner_reader"></div>
+  <div class="scanner-reader-container">
+    <div id="Scanner_reader"></div>
+    <!-- 掃描框線 -->
+    <div class="scanner-frame-overlay"></div>
+    <!-- 水平掃描線 -->
+    <div class="scanner-line"></div>
+  </div>
 
   <div id="Scanner_scanStatus"></div>
 </template>
