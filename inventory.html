@@ -595,6 +595,11 @@
                 status: asset.inventoryResult
             }));
 
+            // ✨ 切換會話時重建 BatchList 索引，避免使用舊會話的資料
+            if (typeof BatchList_rebuildIndex === 'function') {
+                BatchList_rebuildIndex();
+            }
+
             details.forEach(asset => {
                 const resultClass = asset.inventoryResult === '正常' ? 'result-normal' :
                                   asset.inventoryResult === '遺失' ? 'result-missing' :
@@ -781,6 +786,14 @@
             document.getElementById('session-detail-card').style.display = 'none';
             document.getElementById('start-session-card').style.display = 'block';
             document.getElementById('search-box').value = '';
+
+            // ✨ 清空 window.allAssets，避免資料殘留
+            window.allAssets = [];
+
+            // ✨ 清空 BatchList 索引
+            if (typeof BatchList_rebuildIndex === 'function') {
+                BatchList_rebuildIndex();
+            }
 
             // ✨ 恢復空狀態提示
             const assetsList = document.getElementById('assets-list');
