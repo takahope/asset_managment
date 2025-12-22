@@ -244,11 +244,11 @@
       // 嘗試作為條碼處理
       const formattedCode = Scanner_formatBarcode(inputValue);
 
-      // 使用 BatchList 模組查找資產
-      const asset = BatchList_findAsset(formattedCode) ||
-                    BatchList_findAsset(inputValue) ||
-                    (typeof allAssets !== 'undefined' ?
-                      allAssets.find(a => a.id === formattedCode || a.id === inputValue) : null);
+      // ✨ 修改查找順序：優先使用最新的 window.allAssets，避免使用舊索引
+      const asset = (typeof allAssets !== 'undefined' ?
+                      allAssets.find(a => a.id === formattedCode || a.id === inputValue) : null) ||
+                    BatchList_findAsset(formattedCode) ||
+                    BatchList_findAsset(inputValue);
 
       if (asset) {
         // 找到資產 → 掃描模式

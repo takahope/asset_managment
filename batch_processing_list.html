@@ -387,6 +387,9 @@
   };
 
   function BatchList_buildIndex() {
+    // ✨ 清空舊索引，避免切換會話時資料殘留
+    BatchList_assetIndex = {};
+
     if (typeof allAssets !== 'undefined' && allAssets) {
       allAssets.forEach(asset => {
         BatchList_assetIndex[asset.id] = asset;
@@ -397,6 +400,12 @@
       setTimeout(BatchList_buildIndex, 1000);
     }
   }
+
+  // ✨ 暴露強制重建索引的函數（供切換會話時呼叫）
+  window.BatchList_rebuildIndex = function() {
+    console.log('[BatchList] 強制重建索引');
+    BatchList_buildIndex();
+  };
 
   function BatchList_registerListeners() {
     // 監聽 checkbox 變化（使用事件委託）
