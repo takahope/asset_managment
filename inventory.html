@@ -538,6 +538,17 @@
                 .getInventoryDetails(inventoryId);
         }
 
+        // ========== 分頁相容函數 ==========
+        // 此函數供 BatchList 模組使用，inventory.html 沒有分頁功能，
+        // 但需要此函數避免 BatchList 模組持續重試
+        function renderTableForPage() {
+            // inventory.html 沒有分頁，此函數僅為相容性而存在
+            // 重新渲染當前的資產列表以同步 checkbox 狀態
+            if (currentSessionDetails && currentSessionDetails.length > 0) {
+                displaySessionDetails(currentSessionDetails);
+            }
+        }
+
         function displaySessionDetails(details) {
             const total = details.length;
             const verified = details.filter(d => d.inventoryResult !== '未盤點').length;
