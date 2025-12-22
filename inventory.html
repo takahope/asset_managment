@@ -84,6 +84,11 @@
             border-bottom: 1px solid #eee;
         }
 
+        .asset-item-header .btn {
+            font-size: 0.85rem;
+            padding: 4px 10px;
+        }
+
         .asset-checkbox {
             width: 20px;
             height: 20px;
@@ -576,8 +581,13 @@
                                    data-asset-id="${asset.assetId}"
                                    onchange="toggleAssetSelection('${asset.assetId}')">
                             <div class="asset-item-name">${asset.assetId} - ${asset.assetName}</div>
+                            <button class="btn btn-sm btn-outline-primary ml-auto"
+                                    onclick="openMarkModal('${asset.assetId}')"
+                                    title="標記此資產">
+                                <i class="fa-solid fa-edit"></i> 單筆確認
+                            </button>
                         </div>
-                        <div class="asset-item-body" ondblclick="openMarkModal('${asset.assetId}')">
+                        <div class="asset-item-body">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <small class="text-muted">保管人: ${asset.keeperName} | 地點: ${asset.location}</small>
