@@ -4298,6 +4298,97 @@ function markAssetInventory(inventoryId, assetId, result, remarks) {
 }
 
 /**
+ * 批次標記資產盤點結果
+ * @param {string} inventoryId - 盤點 ID
+ * @param {Array<{assetId: string, result: string, remarks: string}>} assetResults - 資產結果陣列
+ * @returns {Object} {success: boolean, count: number, message: string}
+ */
+function markBatchInventory(inventoryId, assetResults) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserName = currentUserEmail.split('@')[0];
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    if (!inventoryDetailSheet) {
+      return { success: false, message: '找不到盤點明細工作表' };
+    }
+
+    // 取得所有明細資料
+    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+
+    let successCount = 0;
+    let errorMessages = [];
+    const now = new Date();
+
+    // 建立資產 ID 索引以加快查找
+    const assetRowMap = new Map();
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowInventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
+      const rowAssetId = row[ID_ASSET_ID_COLUMN_INDEX - 1];
+
+      if (rowInventoryId === inventoryId) {
+        assetRowMap.set(rowAssetId, i + 2); // +2 因為從第 2 行開始
+      }
+    }
+
+    // 批次處理每個資產
+    assetResults.forEach(item => {
+      try {
+        const rowIndex = assetRowMap.get(item.assetId);
+
+        if (!rowIndex) {
+          errorMessages.push(`找不到資產 ${item.assetId} 的盤點明細`);
+          return;
+        }
+
+        // 更新盤點結果
+        inventoryDetailSheet.getRange(rowIndex, ID_INVENTORY_RESULT_COLUMN_INDEX).setValue(item.result);
+        inventoryDetailSheet.getRange(rowIndex, ID_REMARKS_COLUMN_INDEX).setValue(item.remarks || '');
+        inventoryDetailSheet.getRange(rowIndex, ID_VERIFICATION_TIME_COLUMN_INDEX).setValue(now);
+        inventoryDetailSheet.getRange(rowIndex, ID_VERIFIED_BY_COLUMN_INDEX).setValue(currentUserName);
+
+        successCount++;
+      } catch (error) {
+        errorMessages.push(`標記 ${item.assetId} 時發生錯誤: ${error.message}`);
+      }
+    });
+
+    // 更新盤點進度（只需執行一次）
+    if (successCount > 0) {
+      updateInventoryProgress(inventoryId);
+    }
+
+    // 記錄日誌
+    const logMessage = `批次標記 ${successCount} 筆資產 by ${currentUserName}`;
+    Logger.log(`[Inventory] ${logMessage}`);
+
+    // 組合回應訊息
+    if (errorMessages.length > 0) {
+      return {
+        success: true,
+        count: successCount,
+        message: `成功標記 ${successCount} 筆，${errorMessages.length} 筆失敗\n${errorMessages.slice(0, 5).join('\n')}${errorMessages.length > 5 ? '\n...' : ''}`
+      };
+    }
+
+    return {
+      success: true,
+      count: successCount,
+      message: `成功標記 ${successCount} 筆資產`
+    };
+
+  } catch (error) {
+    Logger.log('[Inventory] 批次標記失敗: ' + error.message);
+    return {
+      success: false,
+      message: '批次標記失敗: ' + error.message
+    };
+  }
+}
+
+/**
  * 更新盤點進度
  * @param {string} inventoryId - 盤點ID
  */

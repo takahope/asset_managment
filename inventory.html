@@ -3,6 +3,8 @@
 <head>
     <base target="_top">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- 引入 FontAwesome 增加圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
             padding: 20px;
@@ -47,6 +49,64 @@
         .progress-container { margin: 15px 0; }
         .stats-box { padding: 15px; background-color: #f5f5f5; border-radius: 5px; margin-top: 15px; }
 
+        /* 批次操作相關樣式 */
+        #batch-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        #batch-actions .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* 資產卡片 checkbox 樣式 */
+        .asset-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 0;
+            transition: all 0.2s;
+        }
+
+        .asset-item:has(.asset-checkbox:checked) {
+            border-color: #007bff;
+            background-color: #e7f3ff;
+        }
+
+        .asset-item-header {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            gap: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .asset-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .asset-item-body {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .asset-item-body:hover {
+            background-color: #f8f9fa;
+        }
+
+        .asset-item-name {
+            font-weight: bold;
+            color: #333;
+            flex-grow: 1;
+            margin: 0;
+        }
+
         /* 移動端優化 - 避免卡片內捲動 */
         @media (max-width: 768px) {
             body { padding: 10px; }
@@ -56,6 +116,8 @@
 </head>
 <body>
     <?!= include('shared-nav'); ?>
+    <?!= include('batch_processing_list'); ?>
+    <?!= include('selectbyqr'); ?>
 
     <div id="loader-container" class="text-center">
         <div class="loader"></div>
@@ -140,9 +202,29 @@
                     </div>
                 </div>
 
+                <!-- 掃描器區域 -->
+                <div id="Scanner_zone" class="scanner-zone" style="display:none;"></div>
+
+                <!-- 批次操作按鈕區 -->
+                <div id="batch-actions" style="margin-bottom: 15px;">
+                    <button class="btn btn-success btn-sm" onclick="openBatchMarkModal()">
+                        <i class="fa-solid fa-check-double"></i> 批次盤點確認
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="selectAllAssets()">
+                        <i class="fa-solid fa-check-square"></i> 全選
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="deselectAllAssets()">
+                        <i class="fa-regular fa-square"></i> 取消全選
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="Scanner_toggle()">
+                        <i class="fa-solid fa-camera"></i> 開啟掃描器
+                    </button>
+                    
+                </div>
+
                 <div class="form-group">
-                    <label for="asset-search">搜尋資產：</label>
-                    <input type="text" class="form-control" id="asset-search" placeholder="輸入產編或名稱...">
+                    <label for="search-box">搜尋資產：</label>
+                    <input type="text" class="form-control" id="search-box" placeholder="輸入產編或名稱，或掃描條碼按 Enter">
                 </div>
 
                 <div id="assets-list" style="border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
@@ -222,6 +304,44 @@
         </div>
     </div>
 
+    <!-- 批次標記彈窗 -->
+    <div class="modal fade" id="batchMarkModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">批次標記盤點結果</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <p>已選擇 <strong id="batch-selected-count">0</strong> 項資產</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="batchResult"><b>盤點結果：</b></label>
+                        <select class="form-control" id="batchResult">
+                            <option value="正常">正常</option>
+                            <option value="遺失">遺失</option>
+                            <option value="損壞">損壞</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="batchRemarks">備註（選填）：</label>
+                        <textarea class="form-control" id="batchRemarks" rows="3" placeholder="此備註將套用到所有選中的資產"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="batch-submit-btn" onclick="submitBatchMark()">
+                        <span class="btn-text">確認標記</span>
+                        <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -229,6 +349,7 @@
         let inventoryData = null;
         let currentSessionId = null;
         let currentSessionDetails = [];
+        let selectedAssets = new Set(); // 儲存選中的資產 ID
 
         document.addEventListener("DOMContentLoaded", function() {
             loadInventoryData();
@@ -246,7 +367,7 @@
             });
 
             // Asset search handler
-            document.getElementById('asset-search').addEventListener('input', function() {
+            document.getElementById('search-box').addEventListener('input', function() {
                 filterAssetsList(this.value);
             });
         });
@@ -429,6 +550,15 @@
                 return;
             }
 
+            // 暴露給 Scanner 模組使用（讓 Enter 鍵掃描功能可以找到資產）
+            window.allAssets = details.map(asset => ({
+                id: asset.assetId,
+                assetName: asset.assetName,
+                keeperName: asset.keeperName,
+                location: asset.location,
+                status: asset.inventoryResult
+            }));
+
             details.forEach(asset => {
                 const resultClass = asset.inventoryResult === '正常' ? 'result-normal' :
                                   asset.inventoryResult === '遺失' ? 'result-missing' :
@@ -436,22 +566,56 @@
                                   'result-unverified';
 
                 const resultBadge = `<span class="badge-result ${resultClass}">${asset.inventoryResult}</span>`;
+                const escapedName = (asset.assetName || '').replace(/'/g, "\\'");
 
                 assetsList.innerHTML += `
-                    <div class="asset-item" onclick="openMarkModal('${asset.assetId}')">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <b>${asset.assetId}</b> - ${asset.assetName}<br>
-                                <small class="text-muted">保管人: ${asset.keeperName} | 地點: ${asset.location}</small>
-                                ${asset.remarks ? '<br><small class="text-info">備註: ' + asset.remarks + '</small>' : ''}
-                            </div>
-                            <div>
-                                ${resultBadge}
+                    <div class="asset-item">
+                        <div class="asset-item-header">
+                            <input type="checkbox"
+                                   class="asset-checkbox"
+                                   data-asset-id="${asset.assetId}"
+                                   onchange="toggleAssetSelection('${asset.assetId}')">
+                            <div class="asset-item-name">${asset.assetId} - ${asset.assetName}</div>
+                        </div>
+                        <div class="asset-item-body" ondblclick="openMarkModal('${asset.assetId}')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted">保管人: ${asset.keeperName} | 地點: ${asset.location}</small>
+                                    ${asset.remarks ? '<br><small class="text-info">備註: ' + asset.remarks + '</small>' : ''}
+                                </div>
+                                <div>
+                                    ${resultBadge}
+                                </div>
                             </div>
                         </div>
                     </div>
                 `;
             });
+
+            // 同步 checkbox 狀態（從 selectedAssets 和 BatchList 雙向同步）
+            setTimeout(() => {
+                // 從 selectedAssets 同步
+                selectedAssets.forEach(assetId => {
+                    const checkbox = document.querySelector(`input[data-asset-id="${assetId}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+
+                // 從 BatchList 同步（Scanner Enter 鍵掃描會直接加入 BatchList）
+                if (typeof BatchList_getItems === 'function') {
+                    const batchItems = BatchList_getItems();
+                    batchItems.forEach(assetId => {
+                        const checkbox = document.querySelector(`input[data-asset-id="${assetId}"]`);
+                        if (checkbox && !checkbox.checked) {
+                            checkbox.checked = true;
+                            selectedAssets.add(assetId);
+                        }
+                    });
+                }
+
+                updateBatchUI();
+            }, 100);
         }
 
         function filterAssetsList(searchTerm) {
@@ -572,10 +736,146 @@
         function backToStart() {
             currentSessionId = null;
             currentSessionDetails = [];
+            selectedAssets.clear();
             document.getElementById('session-detail-card').style.display = 'none';
             document.getElementById('start-session-card').style.display = 'block';
-            document.getElementById('asset-search').value = '';
+            document.getElementById('search-box').value = '';
         }
+
+        // ========== 批次處理函數 ==========
+
+        function toggleAssetSelection(assetId) {
+            const checkbox = document.querySelector(`input[data-asset-id="${assetId}"]`);
+
+            if (checkbox && checkbox.checked) {
+                selectedAssets.add(assetId);
+                // 同步到 BatchList 模組
+                if (typeof BatchList_addItem === 'function') {
+                    BatchList_addItem(assetId);
+                }
+            } else {
+                selectedAssets.delete(assetId);
+                // 同步到 BatchList 模組
+                if (typeof BatchList_removeItem === 'function') {
+                    BatchList_removeItem(assetId);
+                }
+            }
+
+            updateBatchUI();
+        }
+
+        function updateBatchUI() {
+            const count = selectedAssets.size;
+
+            // 更新計數
+            const countEl = document.getElementById('batch-selected-count');
+            if (countEl) {
+                countEl.textContent = count;
+            }
+        }
+
+        function selectAllAssets() {
+            const checkboxes = document.querySelectorAll('.asset-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+                const assetId = cb.dataset.assetId;
+                selectedAssets.add(assetId);
+                if (typeof BatchList_addItem === 'function') {
+                    BatchList_addItem(assetId);
+                }
+            });
+            updateBatchUI();
+        }
+
+        function deselectAllAssets() {
+            const checkboxes = document.querySelectorAll('.asset-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+            });
+            selectedAssets.clear();
+
+            // 清空 BatchList
+            if (typeof BatchList_removeItem === 'function') {
+                checkboxes.forEach(cb => {
+                    BatchList_removeItem(cb.dataset.assetId);
+                });
+            }
+
+            updateBatchUI();
+        }
+
+        function openBatchMarkModal() {
+            if (selectedAssets.size === 0) {
+                alert('請先選擇要標記的資產');
+                return;
+            }
+
+            document.getElementById('batch-selected-count').textContent = selectedAssets.size;
+            $('#batchMarkModal').modal('show');
+        }
+
+        function submitBatchMark() {
+            const result = document.getElementById('batchResult').value;
+            const remarks = document.getElementById('batchRemarks').value.trim();
+
+            if (!result) {
+                alert('請選擇盤點結果');
+                return;
+            }
+
+            const assetResults = Array.from(selectedAssets).map(assetId => ({
+                assetId: assetId,
+                result: result,
+                remarks: remarks
+            }));
+
+            // 顯示處理中
+            const submitBtn = document.getElementById('batch-submit-btn');
+            const btnText = submitBtn.querySelector('.btn-text');
+            const spinner = submitBtn.querySelector('.spinner-border');
+            submitBtn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'inline-block';
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    submitBtn.disabled = false;
+                    btnText.style.display = 'inline';
+                    spinner.style.display = 'none';
+
+                    if (response.success) {
+                        // 關閉彈窗
+                        $('#batchMarkModal').modal('hide');
+
+                        // 顯示成功訊息
+                        if (typeof BatchList_showToast === 'function') {
+                            BatchList_showToast(response.message, 'success');
+                        } else {
+                            alert(response.message);
+                        }
+
+                        // 清空選擇
+                        deselectAllAssets();
+
+                        // 清空批次備註
+                        document.getElementById('batchRemarks').value = '';
+
+                        // 重新載入資產列表
+                        refreshSessionDetails();
+                    } else {
+                        alert('標記失敗：' + response.message);
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    submitBtn.disabled = false;
+                    btnText.style.display = 'inline';
+                    spinner.style.display = 'none';
+                    alert('標記失敗：' + error.message);
+                })
+                .markBatchInventory(currentSessionId, assetResults);
+        }
+
+        // ========== 批次處理函數結束 ==========
 
         function loadHistory() {
             google.script.run
