@@ -13,7 +13,8 @@ const KEEPER_EMAIL_MAP_SHEET_NAME = "保管人/信箱";
 const KEEPER_LOCATION_MAP_SHEET_NAME = "存置地點列表";
 const LENDING_LOG_SHEET_NAME = "出借紀錄"; // ✨ **新增：出借紀錄工作表**
 const ADMIN_LIST_SHEET_NAME = "管理員名單"; // ✨ **新增：管理員權限列表**
-
+const INVENTORY_LOG_SHEET_NAME = "盤點紀錄"; // ✨ **新增：資產盤點紀錄工作表**
+const INVENTORY_DETAIL_SHEET_NAME = "盤點明細"; // ✨ **新增：資產盤點明細工作表**
 
 
 // --- 欄位索引設定 (A欄是1, B欄是2, ...) ---
@@ -93,6 +94,29 @@ const AL_TRANSFER_TYPE_COLUMN_INDEX = 15;    // ✨ 新增：轉移類型（地�
 const AL_APPROVER_EMAIL_COLUMN_INDEX = 16;  // ✨ 新增：實際審核者Email（方案D）
 const AL_APPLICANT_EMAIL_COLUMN_INDEX = 17;  // Q 欄：申請操作人員 Email
 const AL_DOC_URL_COLUMN_INDEX = 18;  // R 欄：轉移文件連結
+
+// --- ✨ **新增：「盤點紀錄」工作表中的欄位索引** ---
+const IL_INVENTORY_ID_COLUMN_INDEX = 1;        // A欄: 盤點ID
+const IL_INVENTORY_DATE_COLUMN_INDEX = 2;      // B欄: 盤點日期
+const IL_INVENTORY_PERSON_COLUMN_INDEX = 3;    // C欄: 盤點人
+const IL_INVENTORY_EMAIL_COLUMN_INDEX = 4;     // D欄: 盤點人Email
+const IL_INVENTORY_FILTER_COLUMN_INDEX = 5;    // E欄: 盤點範圍 (篩選條件)
+const IL_VERIFIED_COUNT_COLUMN_INDEX = 6;      // F欄: 已盤點數量
+const IL_TOTAL_COUNT_COLUMN_INDEX = 7;         // G欄: 總數量
+const IL_STATUS_COLUMN_INDEX = 8;              // H欄: 狀態
+const IL_COMPLETION_TIME_COLUMN_INDEX = 9;     // I欄: 完成時間
+
+// --- ✨ **新增：「盤點明細」工作表中的欄位索引** ---
+const ID_INVENTORY_ID_COLUMN_INDEX = 1;        // A欄: 盤點ID
+const ID_ASSET_ID_COLUMN_INDEX = 2;            // B欄: 財產編號
+const ID_ASSET_NAME_COLUMN_INDEX = 3;          // C欄: 財產名稱
+const ID_KEEPER_NAME_COLUMN_INDEX = 4;         // D欄: 保管人
+const ID_LOCATION_COLUMN_INDEX = 5;            // E欄: 地點
+const ID_ORIGINAL_STATUS_COLUMN_INDEX = 6;     // F欄: 原狀態
+const ID_INVENTORY_RESULT_COLUMN_INDEX = 7;    // G欄: 盤點結果
+const ID_REMARKS_COLUMN_INDEX = 8;             // H欄: 備註
+const ID_VERIFICATION_TIME_COLUMN_INDEX = 9;   // I欄: 盤點時間
+const ID_VERIFIED_BY_COLUMN_INDEX = 10;        // J欄: 盤點人
 
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
@@ -550,6 +574,11 @@ function doGet(e) {
     case 'scrapHistory':
       template = HtmlService.createTemplateFromFile('scrapHistory');
       title = "已報廢資產管理";
+      break;
+     // ✨ **新增的路由：資產盤點** ✨
+    case 'inventory':
+      template = HtmlService.createTemplateFromFile('inventory');
+      title = "資產盤點管理";
       break;
     default:
       // 預設顯示入口網站
@@ -3940,4 +3969,485 @@ function addNewAsset(form) {
   sheet.appendRow(row);
   
   return "成功新增 " + (form.assetType === 'property' ? "財產" : "物品") + "：" + form.assetId;
+}
+
+
+// =================================================================
+// --- ✨ 資產盤點功能 (Asset Inventory Functions) ---
+// =================================================================
+
+/**
+ * 取得盤點頁面所需的資料
+ * @returns {object} 包含資產列表、地點選項、保管人選項和現有盤點會話
+ */
+function getInventoryData() {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const allAssets = getAllAssets();
+
+    // 只取得狀態為「在庫」的資產
+    const availableAssets = allAssets.filter(asset => asset.assetStatus === '在庫');
+
+    // 提取唯一的地點
+    const locations = [...new Set(availableAssets.map(a => a.location))].filter(Boolean).sort();
+
+    // 提取唯一的保管人
+    const keepers = [...new Set(availableAssets.map(a => a.leaderName))].filter(Boolean).sort();
+
+    // 取得使用者的進行中盤點會話
+    const activeSessions = getActiveInventorySessions(currentUserEmail);
+
+    // 注意: 不返回完整的 assets 陣列,因為其中包含 Date 物件無法序列化
+    // 前端只需要 locations, keepers 和 activeSessions
+    return {
+      assets: [], // 空陣列,避免序列化 Date 物件
+      locations: locations,
+      keepers: keepers,
+      activeSessions: activeSessions,
+      currentUserEmail: currentUserEmail
+    };
+  } catch (e) {
+    Logger.log(`getInventoryData 失敗: ${e.message}`);
+    throw e;
+  }
+}
+
+/**
+ * 取得使用者的進行中盤點會話
+ * @param {string} userEmail - 使用者電子郵件
+ * @returns {Array} 進行中的盤點會話列表
+ */
+function getActiveInventorySessions(userEmail) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+
+    // 如果工作表不存在，建立它
+    if (!inventoryLogSheet) {
+      createInventorySheets();
+      return [];
+    }
+
+    if (inventoryLogSheet.getLastRow() <= 1) {
+      return [];
+    }
+
+    const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    const activeSessions = [];
+
+    for (let row of data) {
+      const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
+      const status = row[IL_STATUS_COLUMN_INDEX - 1];
+
+      if (sessionEmail.toLowerCase() === userEmail.toLowerCase() && status === '進行中') {
+        const rawDate = row[IL_INVENTORY_DATE_COLUMN_INDEX - 1];
+        const inventoryDateStr = rawDate instanceof Date
+          ? Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
+          : String(rawDate);
+
+        activeSessions.push({
+          inventoryId: row[IL_INVENTORY_ID_COLUMN_INDEX - 1],
+          inventoryDate: inventoryDateStr,
+          inventoryPerson: row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1],
+          filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
+          verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
+          totalCount: row[IL_TOTAL_COUNT_COLUMN_INDEX - 1],
+          status: status
+        });
+      }
+    }
+
+    return activeSessions;
+  } catch (e) {
+    Logger.log(`getActiveInventorySessions 失敗: ${e.message}`);
+    return [];
+  }
+}
+
+/**
+ * 建立盤點工作表（如果不存在）
+ */
+function createInventorySheets() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 建立盤點紀錄工作表
+    let inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+    if (!inventoryLogSheet) {
+      inventoryLogSheet = ss.insertSheet(INVENTORY_LOG_SHEET_NAME);
+      inventoryLogSheet.appendRow(['盤點ID', '盤點日期', '盤點人', '盤點人Email', '盤點範圍', '已盤點數量', '總數量', '狀態', '完成時間']);
+      inventoryLogSheet.getRange(1, 1, 1, 9).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
+      Logger.log('已建立盤點紀錄工作表');
+    }
+
+    // 建立盤點明細工作表
+    let inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+    if (!inventoryDetailSheet) {
+      inventoryDetailSheet = ss.insertSheet(INVENTORY_DETAIL_SHEET_NAME);
+      inventoryDetailSheet.appendRow(['盤點ID', '財產編號', '財產名稱', '保管人', '地點', '原狀態', '盤點結果', '備註', '盤點時間', '盤點人']);
+      inventoryDetailSheet.getRange(1, 1, 1, 10).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
+      Logger.log('已建立盤點明細工作表');
+    }
+
+    return true;
+  } catch (e) {
+    Logger.log(`建立盤點工作表失敗: ${e.message}`);
+    throw e;
+  }
+}
+
+/**
+ * 開始新的盤點會話
+ * @param {object} options - 盤點選項 { filterType, filterValue, assetIds }
+ * @returns {object} 包含 inventoryId 和訊息
+ */
+function startInventorySession(options) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const currentUserName = Session.getActiveUser().getEmail().split('@')[0]; // 簡單取得名稱
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 確保工作表存在
+    createInventorySheets();
+
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    // 產生唯一的盤點ID
+    const inventoryId = 'INV' + new Date().getTime();
+    const inventoryDate = new Date();
+
+    // 建立篩選描述
+    let filterDescription = '全部';
+    if (options.filterType === 'location') {
+      filterDescription = `地點: ${options.filterValue}`;
+    } else if (options.filterType === 'keeper') {
+      filterDescription = `保管人: ${options.filterValue}`;
+    }
+
+    // 取得要盤點的資產
+    const allAssets = getAllAssets();
+    let assetsToInventory = allAssets.filter(asset => {
+      if (asset.assetStatus !== '在庫') return false;
+
+      if (options.filterType === 'all') return true;
+      if (options.filterType === 'location') return asset.location === options.filterValue;
+      if (options.filterType === 'keeper') return asset.leaderName === options.filterValue;
+      if (options.filterType === 'selected') return options.assetIds.includes(asset.assetId);
+
+      return false;
+    });
+
+    if (assetsToInventory.length === 0) {
+      throw new Error('沒有符合條件的資產可供盤點');
+    }
+
+    // 在盤點紀錄表新增一筆記錄
+    inventoryLogSheet.appendRow([
+      inventoryId,
+      inventoryDate,
+      currentUserName,
+      currentUserEmail,
+      filterDescription,
+      0, // 已盤點數量
+      assetsToInventory.length, // 總數量
+      '進行中',
+      '' // 完成時間
+    ]);
+
+    // 在盤點明細表新增資產記錄
+    const detailRows = assetsToInventory.map(asset => [
+      inventoryId,
+      asset.assetId,
+      asset.assetName,
+      asset.leaderName,
+      asset.location,
+      asset.assetStatus,
+      '未盤點', // 盤點結果
+      '', // 備註
+      '', // 盤點時間
+      '' // 盤點人
+    ]);
+
+    if (detailRows.length > 0) {
+      inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 10).setValues(detailRows);
+    }
+
+    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產`);
+
+    return {
+      success: true,
+      inventoryId: inventoryId,
+      totalCount: assetsToInventory.length,
+      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產待盤點`
+    };
+
+  } catch (e) {
+    Logger.log(`startInventorySession 失敗: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 取得盤點會話的明細
+ * @param {string} inventoryId - 盤點ID
+ * @returns {Array} 盤點明細列表
+ */
+function getInventoryDetails(inventoryId) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    if (!inventoryDetailSheet || inventoryDetailSheet.getLastRow() <= 1) {
+      return [];
+    }
+
+    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+    const details = [];
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        const rawVerificationTime = row[ID_VERIFICATION_TIME_COLUMN_INDEX - 1];
+        const verificationTimeStr = rawVerificationTime instanceof Date
+          ? Utilities.formatDate(rawVerificationTime, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
+          : (rawVerificationTime ? String(rawVerificationTime) : '');
+
+        details.push({
+          rowIndex: i + 2,
+          assetId: row[ID_ASSET_ID_COLUMN_INDEX - 1],
+          assetName: row[ID_ASSET_NAME_COLUMN_INDEX - 1],
+          keeperName: row[ID_KEEPER_NAME_COLUMN_INDEX - 1],
+          location: row[ID_LOCATION_COLUMN_INDEX - 1],
+          originalStatus: row[ID_ORIGINAL_STATUS_COLUMN_INDEX - 1],
+          inventoryResult: row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1],
+          remarks: row[ID_REMARKS_COLUMN_INDEX - 1],
+          verificationTime: verificationTimeStr,
+          verifiedBy: row[ID_VERIFIED_BY_COLUMN_INDEX - 1]
+        });
+      }
+    }
+
+    return details;
+  } catch (e) {
+    Logger.log(`getInventoryDetails 失敗: ${e.message}`);
+    throw e;
+  }
+}
+
+/**
+ * 標記資產盤點結果
+ * @param {string} inventoryId - 盤點ID
+ * @param {string} assetId - 資產ID
+ * @param {string} result - 盤點結果（正常/遺失/損壞）
+ * @param {string} remarks - 備註
+ * @returns {object} 操作結果
+ */
+function markAssetInventory(inventoryId, assetId, result, remarks) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserName = currentUserEmail.split('@')[0];
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    if (!inventoryDetailSheet) {
+      throw new Error('找不到盤點明細工作表');
+    }
+
+    // 找到對應的明細記錄
+    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+    let rowIndex = -1;
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId &&
+          row[ID_ASSET_ID_COLUMN_INDEX - 1] === assetId) {
+        rowIndex = i + 2;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      throw new Error(`找不到盤點明細記錄 (inventoryId: ${inventoryId}, assetId: ${assetId})`);
+    }
+
+    // 更新盤點結果
+    inventoryDetailSheet.getRange(rowIndex, ID_INVENTORY_RESULT_COLUMN_INDEX).setValue(result);
+    inventoryDetailSheet.getRange(rowIndex, ID_REMARKS_COLUMN_INDEX).setValue(remarks || '');
+    inventoryDetailSheet.getRange(rowIndex, ID_VERIFICATION_TIME_COLUMN_INDEX).setValue(new Date());
+    inventoryDetailSheet.getRange(rowIndex, ID_VERIFIED_BY_COLUMN_INDEX).setValue(currentUserName);
+
+    // 更新盤點紀錄中的已盤點數量
+    updateInventoryProgress(inventoryId);
+
+    Logger.log(`成功標記資產盤點: ${assetId} - ${result}`);
+
+    return { success: true, message: '已成功標記盤點結果' };
+
+  } catch (e) {
+    Logger.log(`markAssetInventory 失敗: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 更新盤點進度
+ * @param {string} inventoryId - 盤點ID
+ */
+function updateInventoryProgress(inventoryId) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    // 計算已盤點數量
+    const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+    let verifiedCount = 0;
+
+    for (let row of detailData) {
+      if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        const result = row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1];
+        if (result && result !== '未盤點') {
+          verifiedCount++;
+        }
+      }
+    }
+
+    // 更新盤點紀錄
+    const logData = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    for (let i = 0; i < logData.length; i++) {
+      if (logData[i][IL_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        inventoryLogSheet.getRange(i + 2, IL_VERIFIED_COUNT_COLUMN_INDEX).setValue(verifiedCount);
+        break;
+      }
+    }
+
+  } catch (e) {
+    Logger.log(`updateInventoryProgress 失敗: ${e.message}`);
+  }
+}
+
+/**
+ * 完成盤點會話
+ * @param {string} inventoryId - 盤點ID
+ * @returns {object} 操作結果和統計資訊
+ */
+function completeInventorySession(inventoryId) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    // 統計盤點結果
+    const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+    let stats = {
+      total: 0,
+      normal: 0,
+      missing: 0,
+      damaged: 0,
+      unverified: 0
+    };
+
+    for (let row of detailData) {
+      if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        stats.total++;
+        const result = row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1];
+        if (result === '正常') stats.normal++;
+        else if (result === '遺失') stats.missing++;
+        else if (result === '損壞') stats.damaged++;
+        else stats.unverified++;
+      }
+    }
+
+    // 檢查是否還有未盤點的項目
+    if (stats.unverified > 0) {
+      return {
+        success: false,
+        error: `還有 ${stats.unverified} 筆資產尚未盤點，請完成所有資產的盤點後再結束會話`,
+        stats: stats
+      };
+    }
+
+    // 更新盤點紀錄狀態為已完成
+    const logData = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    for (let i = 0; i < logData.length; i++) {
+      if (logData[i][IL_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        inventoryLogSheet.getRange(i + 2, IL_STATUS_COLUMN_INDEX).setValue('已完成');
+        inventoryLogSheet.getRange(i + 2, IL_COMPLETION_TIME_COLUMN_INDEX).setValue(new Date());
+        break;
+      }
+    }
+
+    Logger.log(`成功完成盤點會話: ${inventoryId}`);
+
+    return {
+      success: true,
+      message: '盤點會話已完成',
+      stats: stats
+    };
+
+  } catch (e) {
+    Logger.log(`completeInventorySession 失敗: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 取得盤點歷史記錄
+ * @param {boolean} allRecords - 是否取得所有記錄（管理員用）
+ * @returns {Array} 盤點歷史記錄
+ */
+function getInventoryHistory(allRecords) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+
+    if (!inventoryLogSheet || inventoryLogSheet.getLastRow() <= 1) {
+      return [];
+    }
+
+    const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    const history = [];
+
+    for (let row of data) {
+      const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
+
+      // 如果不是管理員模式，只顯示自己的記錄
+      if (!allRecords && sessionEmail.toLowerCase() !== currentUserEmail) {
+        continue;
+      }
+
+      const rawInventoryDate = row[IL_INVENTORY_DATE_COLUMN_INDEX - 1];
+      const inventoryDateStr = rawInventoryDate instanceof Date
+        ? Utilities.formatDate(rawInventoryDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
+        : String(rawInventoryDate);
+
+      const rawCompletionTime = row[IL_COMPLETION_TIME_COLUMN_INDEX - 1];
+      const completionTimeStr = rawCompletionTime instanceof Date
+        ? Utilities.formatDate(rawCompletionTime, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
+        : (rawCompletionTime ? String(rawCompletionTime) : '');
+
+      history.push({
+        inventoryId: row[IL_INVENTORY_ID_COLUMN_INDEX - 1],
+        inventoryDate: inventoryDateStr,
+        inventoryPerson: row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1],
+        inventoryEmail: sessionEmail,
+        filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
+        verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
+        totalCount: row[IL_TOTAL_COUNT_COLUMN_INDEX - 1],
+        status: row[IL_STATUS_COLUMN_INDEX - 1],
+        completionTime: completionTimeStr
+      });
+    }
+
+    // 按日期倒序排列
+    history.sort((a, b) => new Date(b.inventoryDate) - new Date(a.inventoryDate));
+
+    return history;
+
+  } catch (e) {
+    Logger.log(`getInventoryHistory 失敗: ${e.message}`);
+    return [];
+  }
 }
