@@ -279,6 +279,11 @@
     <span class="nav-text">報廢歷史</span>
   </button>
 
+  <button type="button" class="nav-item" onclick="goToInventory()" title="盤點">
+    <span class="nav-icon">📋</span>
+    <span class="nav-text">盤點</span>
+  </button>
+
   <!-- 底部系統功能區 -->
   <div class="mt-auto">
     <div class="nav-divider"></div>
@@ -428,6 +433,15 @@
     if (_portalWebAppUrl) {
       const userStateUrl = _portalWebAppUrl + '?page=userstate';
       navigateWithLoader(userStateUrl);
+    } else {
+      alert('頁面初始化中，請稍候...');
+    }
+  }
+
+  function goToInventory() {
+    if (_portalWebAppUrl) {
+      const scrapHistoryUrl = _portalWebAppUrl + '?page=inventory';
+      navigateWithLoader(scrapHistoryUrl);
     } else {
       alert('頁面初始化中，請稍候...');
     }
