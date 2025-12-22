@@ -541,6 +541,20 @@
             google.script.run
                 .withSuccessHandler(function(details) {
                     currentSessionDetails = details;
+
+                    // 初始化全域資產列表與 BatchList 索引 (基於完整會話資料)
+                    window.allAssets = details.map(asset => ({
+                        id: asset.assetId,
+                        assetName: asset.assetName,
+                        keeperName: asset.keeperName,
+                        location: asset.location,
+                        status: asset.inventoryResult
+                    }));
+
+                    if (typeof BatchList_rebuildIndex === 'function') {
+                        BatchList_rebuildIndex();
+                    }
+
                     displaySessionDetails(details);
                 })
                 .withFailureHandler(function(error) {
@@ -584,20 +598,6 @@
             if (details.length === 0) {
                 assetsList.innerHTML = '<p class="text-muted">沒有資產需要盤點</p>';
                 return;
-            }
-
-            // 暴露給 Scanner 模組使用（讓 Enter 鍵掃描功能可以找到資產）
-            window.allAssets = details.map(asset => ({
-                id: asset.assetId,
-                assetName: asset.assetName,
-                keeperName: asset.keeperName,
-                location: asset.location,
-                status: asset.inventoryResult
-            }));
-
-            // ✨ 切換會話時重建 BatchList 索引，避免使用舊會話的資料
-            if (typeof BatchList_rebuildIndex === 'function') {
-                BatchList_rebuildIndex();
             }
 
             details.forEach(asset => {
