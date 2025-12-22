@@ -928,6 +928,15 @@
                 statusMsg.textContent = '';
                 statusMsg.className = '';
 
+                // 清空批次處理清單與勾選狀態，避免舊選取殘留
+                if (typeof BatchList_resetOnSubmit === 'function') {
+                    BatchList_resetOnSubmit();
+                }
+                document.querySelectorAll('.asset-checkbox:checked').forEach(cb => cb.checked = false);
+                const selectAll = document.getElementById('select-all');
+                if (selectAll) selectAll.checked = false;
+                updateSelectedCount();
+
                 // 重置表單狀態
                 document.getElementById('select-all').checked = false;
                 document.getElementById('search-box').value = '';
