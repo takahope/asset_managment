@@ -527,6 +527,13 @@
             document.getElementById('start-session-card').style.display = 'none';
             document.getElementById('session-detail-card').style.display = 'block';
 
+            // 切換會話時先清空本地選取與批次清單，避免跨會話殘留
+            selectedAssets.clear();
+            if (typeof BatchList_resetForSessionChange === 'function') {
+                BatchList_resetForSessionChange();
+            }
+            updateBatchUI();
+
             // ✨ 切換會話時先清空資產列表，顯示載入中
             const assetsList = document.getElementById('assets-list');
             assetsList.innerHTML = `

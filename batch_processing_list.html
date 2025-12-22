@@ -687,6 +687,19 @@
     console.log('[BatchList] 已重置清單（提交後）');
   };
 
+  // 供切換盤點會話時呼叫，無提示直接清空並收合側欄
+  window.BatchList_resetForSessionChange = function() {
+    BatchList_items = [];
+    BatchList_updateUI();
+
+    const sidebar = document.getElementById('BatchList_sidebar');
+    const overlay = document.getElementById('BatchList_overlay');
+    if (sidebar) sidebar.classList.remove('active');
+    if (overlay) overlay.classList.remove('active');
+
+    console.log('[BatchList] 已重置清單（切換盤點會話）');
+  };
+
   console.log('[BatchList] 模組已載入，等待初始化...');
 })();
 </script>
