@@ -3994,15 +3994,19 @@ function getInventoryData() {
     // 提取唯一的保管人
     const keepers = [...new Set(availableAssets.map(a => a.leaderName))].filter(Boolean).sort();
 
+    // 提取唯一的使用人 (只從財產總表,因為物品總表沒有使用人欄位)
+    const users = [...new Set(availableAssets.map(a => a.userName))].filter(Boolean).sort();
+
     // 取得使用者的進行中盤點會話
     const activeSessions = getActiveInventorySessions(currentUserEmail);
 
     // 注意: 不返回完整的 assets 陣列,因為其中包含 Date 物件無法序列化
-    // 前端只需要 locations, keepers 和 activeSessions
+    // 前端只需要 locations, keepers, users 和 activeSessions
     return {
       assets: [], // 空陣列,避免序列化 Date 物件
       locations: locations,
       keepers: keepers,
+      users: users,
       activeSessions: activeSessions,
       currentUserEmail: currentUserEmail
     };
@@ -4123,6 +4127,8 @@ function startInventorySession(options) {
       filterDescription = `地點: ${options.filterValue}`;
     } else if (options.filterType === 'keeper') {
       filterDescription = `保管人: ${options.filterValue}`;
+    } else if (options.filterType === 'user') {
+      filterDescription = `使用人: ${options.filterValue}`;
     }
 
     // 取得要盤點的資產
@@ -4133,6 +4139,7 @@ function startInventorySession(options) {
       if (options.filterType === 'all') return true;
       if (options.filterType === 'location') return asset.location === options.filterValue;
       if (options.filterType === 'keeper') return asset.leaderName === options.filterValue;
+      if (options.filterType === 'user') return asset.userName === options.filterValue;
       if (options.filterType === 'selected') return options.assetIds.includes(asset.assetId);
 
       return false;

@@ -63,6 +63,10 @@
                         <input class="form-check-input" type="radio" name="filterType" id="filter-keeper" value="keeper">
                         <label class="form-check-label" for="filter-keeper">依保管人篩選</label>
                     </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="filterType" id="filter-user" value="user">
+                        <label class="form-check-label" for="filter-user">依使用人篩選</label>
+                    </div>
                 </div>
 
                 <div class="form-group" id="location-select-group" style="display:none;">
@@ -73,6 +77,11 @@
                 <div class="form-group" id="keeper-select-group" style="display:none;">
                     <label for="keeper-select">選擇保管人：</label>
                     <select id="keeper-select" class="form-control"></select>
+                </div>
+
+                <div class="form-group" id="user-select-group" style="display:none;">
+                    <label for="user-select">選擇使用人：</label>
+                    <select id="user-select" class="form-control"></select>
                 </div>
 
                 <button class="btn btn-primary" id="start-session-btn" onclick="startNewSession()">
@@ -197,6 +206,8 @@
                         this.value === 'location' ? 'block' : 'none';
                     document.getElementById('keeper-select-group').style.display =
                         this.value === 'keeper' ? 'block' : 'none';
+                    document.getElementById('user-select-group').style.display =
+                        this.value === 'user' ? 'block' : 'none';
                 });
             });
 
@@ -245,6 +256,13 @@
             keeperSelect.innerHTML = '<option value="">請選擇保管人</option>';
             data.keepers.forEach(keeper => {
                 keeperSelect.innerHTML += `<option value="${keeper}">${keeper}</option>`;
+            });
+
+            // Populate user select
+            const userSelect = document.getElementById('user-select');
+            userSelect.innerHTML = '<option value="">請選擇使用人</option>';
+            data.users.forEach(user => {
+                userSelect.innerHTML += `<option value="${user}">${user}</option>`;
             });
         }
 
@@ -299,6 +317,12 @@
                 filterValue = document.getElementById('keeper-select').value;
                 if (!filterValue) {
                     alert('請選擇保管人');
+                    return;
+                }
+            } else if (filterType === 'user') {
+                filterValue = document.getElementById('user-select').value;
+                if (!filterValue) {
+                    alert('請選擇使用人');
                     return;
                 }
             }
