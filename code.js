@@ -4206,7 +4206,7 @@ function startInventorySession(options) {
     // 取得要盤點的資產
     const allAssets = getAllAssets();
     let assetsToInventory = allAssets.filter(asset => {
-      if (asset.assetStatus !== '在庫') return false;
+      if (asset.assetStatus !== '在庫' && asset.assetStatus !== '出借中' && asset.assetStatus !== '待接收') return false;
 
       if (options.filterType === 'all') return true;
       if (options.filterType === 'location') return asset.location === options.filterValue;
