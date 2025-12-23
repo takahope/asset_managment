@@ -3988,6 +3988,9 @@ function getInventoryData() {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const allAssets = getAllAssets();
 
+    // 檢查是否為管理員
+    const isAdmin = checkAdminPermissions();
+
     // 只取得狀態為「在庫」的資產
     const availableAssets = allAssets.filter(asset => asset.assetStatus === '在庫');
 
@@ -4000,8 +4003,8 @@ function getInventoryData() {
     // 提取唯一的使用人 (只從財產總表,因為物品總表沒有使用人欄位)
     const users = [...new Set(availableAssets.map(a => a.userName))].filter(Boolean).sort();
 
-    // 取得使用者的進行中盤點會話
-    const activeSessions = getActiveInventorySessions(currentUserEmail);
+    // 取得進行中盤點會話（管理員可以看到所有會話）
+    const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin);
 
     // 注意: 不返回完整的 assets 陣列,因為其中包含 Date 物件無法序列化
     // 前端只需要 locations, keepers, users 和 activeSessions
@@ -4011,7 +4014,8 @@ function getInventoryData() {
       keepers: keepers,
       users: users,
       activeSessions: activeSessions,
-      currentUserEmail: currentUserEmail
+      currentUserEmail: currentUserEmail,
+      isAdmin: isAdmin // 新增：告知前端當前使用者是否為管理員
     };
   } catch (e) {
     Logger.log(`getInventoryData 失敗: ${e.message}`);
@@ -4022,9 +4026,10 @@ function getInventoryData() {
 /**
  * 取得使用者的進行中盤點會話
  * @param {string} userEmail - 使用者電子郵件
+ * @param {boolean} isAdminMode - 是否為管理員模式（可選，預設 false）
  * @returns {Array} 進行中的盤點會話列表
  */
-function getActiveInventorySessions(userEmail) {
+function getActiveInventorySessions(userEmail, isAdminMode) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
@@ -4046,7 +4051,12 @@ function getActiveInventorySessions(userEmail) {
       const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
       const status = row[IL_STATUS_COLUMN_INDEX - 1];
 
-      if (sessionEmail.toLowerCase() === userEmail.toLowerCase() && status === '進行中') {
+      // 管理員模式：顯示所有進行中的會話
+      // 一般模式：只顯示自己的會話
+      const shouldInclude = status === '進行中' &&
+        (isAdminMode || sessionEmail.toLowerCase() === userEmail.toLowerCase());
+
+      if (shouldInclude) {
         const rawDate = row[IL_INVENTORY_DATE_COLUMN_INDEX - 1];
         const inventoryDateStr = rawDate instanceof Date
           ? Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
@@ -4056,6 +4066,7 @@ function getActiveInventorySessions(userEmail) {
           inventoryId: row[IL_INVENTORY_ID_COLUMN_INDEX - 1],
           inventoryDate: inventoryDateStr,
           inventoryPerson: row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1],
+          inventoryEmail: sessionEmail, // 新增：管理員需要知道會話屬於誰
           filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
           verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
           totalCount: row[IL_TOTAL_COUNT_COLUMN_INDEX - 1],
@@ -4068,6 +4079,47 @@ function getActiveInventorySessions(userEmail) {
   } catch (e) {
     Logger.log(`getActiveInventorySessions 失敗: ${e.message}`);
     return [];
+  }
+}
+
+/**
+ * 檢查使用者是否為盤點會話的擁有者或管理員
+ * @param {string} inventoryId - 盤點 ID
+ * @returns {boolean} 是否有權限操作此會話
+ */
+function checkInventorySessionOwner(inventoryId) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+
+    // 檢查是否為管理員
+    const isAdmin = checkAdminPermissions();
+    if (isAdmin) {
+      return true; // 管理員可以操作所有會話
+    }
+
+    // 檢查是否為會話擁有者
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+
+    if (!inventoryLogSheet) {
+      Logger.log('找不到盤點紀錄工作表');
+      return false;
+    }
+
+    const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+
+    for (let row of data) {
+      if (row[IL_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
+        return sessionEmail.toLowerCase() === currentUserEmail;
+      }
+    }
+
+    Logger.log(`找不到盤點會話: ${inventoryId}`);
+    return false;
+  } catch (e) {
+    Logger.log(`checkInventorySessionOwner 失敗: ${e.message}`);
+    return false;
   }
 }
 
@@ -4205,6 +4257,12 @@ function startInventorySession(options) {
  */
 function getInventoryDetails(inventoryId) {
   try {
+    // 🛡️ 權限檢查：確認使用者是會話擁有者或管理員
+    if (!checkInventorySessionOwner(inventoryId)) {
+      Logger.log(`權限不足：使用者 ${Session.getActiveUser().getEmail()} 嘗試存取會話 ${inventoryId}`);
+      throw new Error('權限不足：您無法存取此盤點會話');
+    }
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
 
@@ -4255,6 +4313,12 @@ function getInventoryDetails(inventoryId) {
  */
 function markAssetInventory(inventoryId, assetId, result, remarks) {
   try {
+    // 🛡️ 權限檢查：確認使用者是會話擁有者或管理員
+    if (!checkInventorySessionOwner(inventoryId)) {
+      Logger.log(`權限不足：使用者 ${Session.getActiveUser().getEmail()} 嘗試標記會話 ${inventoryId} 的資產 ${assetId}`);
+      return { success: false, error: '權限不足：您無法標記此盤點會話的資產' };
+    }
+
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserName = currentUserEmail.split('@')[0];
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -4308,6 +4372,12 @@ function markAssetInventory(inventoryId, assetId, result, remarks) {
  */
 function markBatchInventory(inventoryId, assetResults) {
   try {
+    // 🛡️ 權限檢查：確認使用者是會話擁有者或管理員
+    if (!checkInventorySessionOwner(inventoryId)) {
+      Logger.log(`權限不足：使用者 ${Session.getActiveUser().getEmail()} 嘗試批次標記會話 ${inventoryId}`);
+      return { success: false, message: '權限不足：您無法標記此盤點會話的資產' };
+    }
+
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserName = currentUserEmail.split('@')[0];
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -4435,6 +4505,15 @@ function updateInventoryProgress(inventoryId) {
  */
 function completeInventorySession(inventoryId) {
   try {
+    // 🛡️ 權限檢查：確認使用者是會話擁有者或管理員
+    if (!checkInventorySessionOwner(inventoryId)) {
+      Logger.log(`權限不足：使用者 ${Session.getActiveUser().getEmail()} 嘗試完成會話 ${inventoryId}`);
+      return {
+        success: false,
+        error: '權限不足：您無法完成此盤點會話'
+      };
+    }
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
     const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
