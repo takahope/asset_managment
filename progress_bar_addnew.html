@@ -130,13 +130,33 @@
     loadingText.textContent = statusText;
     overlay.classList.add('active');
 
-    // 強制重新播放 GIF 動畫（清空再重設 src）
-    const loaderImg = document.getElementById('progress-loader-image-addnew');
-    if (loaderImg) {
+    // ✨ 強制重新播放 GIF 動畫（增強型 5 步驟重置邏輯）
+    // 使用多種方式查找 img 元素（優先順序：getElementById > querySelector）
+    const loaderImgById = document.getElementById('progress-loader-image-addnew');
+    const loaderImgByQuery = document.querySelector('#progress-loader-image-addnew');
+    const loaderImg = loaderImgById || loaderImgByQuery;
+
+    if (loaderImg && loaderImg.src) {
       const originalSrc = loaderImg.src;
-      loaderImg.src = '';
-      loaderImg.offsetHeight; // 觸發 reflow
-      loaderImg.src = originalSrc;
+      const originalDisplay = loaderImg.style.display;
+
+      // 增強型 GIF 重置邏輯（5 步驟）：
+      // 1. 隱藏元素，強制瀏覽器停止 GIF 解碼
+      loaderImg.style.display = 'none';
+
+      // 2. 清空 src（使用 about:blank 而不是空字符串，避免被轉換為頁面 URL）
+      loaderImg.src = 'about:blank';
+
+      // 3. 強制重排（reflow）以確保瀏覽器處理了變更
+      void loaderImg.offsetHeight;
+
+      // 4. 使用 50ms 延遲來確保瀏覽器有足夠時間釋放資源
+      setTimeout(() => {
+        // 5. 恢復顯示並重新設定 src（添加時間戳避免快取）
+        loaderImg.style.display = originalDisplay;
+        const timestamp = new Date().getTime();
+        loaderImg.src = originalSrc + '#' + timestamp;
+      }, 50);
     }
 
     // 模擬進度增長
