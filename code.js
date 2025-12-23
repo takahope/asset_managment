@@ -27,6 +27,7 @@ const INVENTORY_DETAIL_SHEET_NAME = "盤點明細"; // ✨ **新增：資產盤�
 const PROPERTY_COLUMN_INDICES = {
   ASSET_ID: 1,      // A欄: 財產編號
   ASSET_NAME: 2,    // B欄: 財產名稱
+  MODEL_BRAND: 4,   // D欄: 型號/廠牌
   PURCHASE_DATE: 6, // F欄: 取得日期
   USE_LIFE: 7,      // G欄: 使用年限
   ASSET_CATEGORY: 12, // L欄: 財產類別
@@ -53,6 +54,7 @@ const PROPERTY_COLUMN_INDICES = {
 const ITEM_COLUMN_INDICES = {
   ASSET_ID: 1,      // A欄: 物品編號
   ASSET_NAME: 2,    // B欄: 物品名稱
+  MODEL_BRAND: 4,   // D欄: 型號/廠牌
   PURCHASE_DATE: 5, // E欄: 取得日期
   USE_LIFE: 6,      // F欄: 使用年限
   ASSET_CATEGORY: 10, // J欄: 財產類別
@@ -3929,6 +3931,7 @@ function addNewAsset(form) {
   // 填入資料 (注意：indices 是 1-based，陣列是 0-based，所以要 -1)
   row[indices.ASSET_ID - 1] = form.assetId;
   row[indices.ASSET_NAME - 1] = form.assetName;
+  row[indices.MODEL_BRAND - 1] = form.modelBrand || ""; // ✨ 新增型號/廠牌
   row[indices.PURCHASE_DATE - 1] = form.purchaseDate ? new Date(form.purchaseDate) : "";
   row[indices.USE_LIFE - 1] = form.useLife;
   row[indices.ASSET_CATEGORY - 1] = form.category;
