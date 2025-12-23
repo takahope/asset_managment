@@ -111,6 +111,26 @@
             flex-grow: 1;
             margin: 0;
         }
+        
+        /* 新增：儀表板樣式 */
+        .dashboard-card {
+            border-left: 4px solid #17a2b8;
+        }
+        .keeper-stat-row {
+            transition: background 0.2s;
+        }
+        .keeper-stat-row:hover {
+            background-color: #f8f9fa;
+        }
+        .progress-sm {
+            height: 6px;
+            margin-top: 5px;
+        }
+        
+        /* 視圖切換按鈕 */
+        .view-switch-btn {
+            margin-bottom: 15px;
+        }
 
         /* 移動端優化 - 避免卡片內捲動 */
         @media (max-width: 768px) {
@@ -193,10 +213,63 @@
 
         <!-- Inventory Session Detail -->
         <div class="card section-card" id="session-detail-card" style="display:none;">
-            <div class="card-header bg-info text-white">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">盤點進行中 - <span id="session-id-display"></span></h5>
+                <span class="badge badge-light" id="user-role-badge">載入中...</span>
             </div>
             <div class="card-body">
+                
+                <!-- ✨ 新增：監控儀表板 (預設隱藏，點擊展開) -->
+                <div class="card mb-4 dashboard-card">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center" 
+                         style="cursor:pointer;" onclick="$('#dashboard-content').collapse('toggle')">
+                        <h6 class="mb-0 text-info"><i class="fa-solid fa-chart-line"></i> 盤點進度監控儀表板</h6>
+                        <i class="fa-solid fa-chevron-down text-muted"></i>
+                    </div>
+                    <div id="dashboard-content" class="collapse">
+                        <div class="card-body">
+                            <div class="row text-center mb-3">
+                                <div class="col-6">
+                                    <h3 class="display-4" id="dashboard-total-progress">0%</h3>
+                                    <small class="text-muted">總體完成率</small>
+                                </div>
+                                <div class="col-6">
+                                    <h3 class="display-4" id="dashboard-my-progress">0%</h3>
+                                    <small class="text-muted">我的完成率</small>
+                                </div>
+                            </div>
+                            
+                            <h6 class="border-bottom pb-2 mb-3">各保管人進度</h6>
+                            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>保管人</th>
+                                            <th class="text-center">進度</th>
+                                            <th class="text-right">完成/應盤</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dashboard-keeper-list">
+                                        <!-- JS 動態插入 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 視圖切換 (管理員可見) -->
+                <div class="view-switch-btn btn-group btn-group-toggle" data-toggle="buttons" id="view-mode-group" style="display:none;">
+                    <label class="btn btn-outline-primary active">
+                        <input type="radio" name="viewMode" value="mine" checked> 
+                        <i class="fa-solid fa-user"></i> 只看我的任務
+                    </label>
+                    <label class="btn btn-outline-secondary">
+                        <input type="radio" name="viewMode" value="all"> 
+                        <i class="fa-solid fa-users"></i> 查看全部資產
+                    </label>
+                </div>
+
                 <div class="progress-container">
                     <div class="d-flex justify-content-between mb-2">
                         <span>進度：<span id="progress-text">0/0</span></span>
@@ -238,10 +311,18 @@
                     </div>
                 </div>
 
-                <div id="assets-list" style="border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
-                    <div class="text-center text-muted py-5" id="empty-state-hint">
-                        <i class="fa-solid fa-clipboard-list fa-3x mb-3" style="opacity: 0.3;"></i>
-                        <p class="mb-0">請點選進行中的盤點或新增盤點任務</p>
+                <!-- 資產清單容器 -->
+                <div id="assets-list-container">
+                        <div class="alert alert-info" id="my-task-hint" style="display:none;">
+                        <i class="fa-solid fa-clipboard-check"></i> 
+                        <strong>您好，<span id="current-user-name"></span>！</strong> 
+                        以下是系統自動指派給您的 <span id="my-task-count">0</span> 筆盤點任務。
+                    </div>
+                    <div id="assets-list" style="border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
+                        <div class="text-center text-muted py-5" id="empty-state-hint">
+                            <i class="fa-solid fa-clipboard-list fa-3x mb-3" style="opacity: 0.3;"></i>
+                            <p class="mb-0">請點選進行中的盤點或新增盤點任務</p>
+                        </div>
                     </div>
                 </div>
 
@@ -365,6 +446,8 @@
         let currentSessionDetails = [];
         let selectedAssets = new Set(); // 儲存選中的資產 ID
         let isAdmin = false; // 儲存當前使用者是否為管理員
+        let currentUserEmail = ''; // 新增：儲存當前使用者 Email
+        let currentViewMode = 'mine'; // 預設視圖：我的任務
 
         document.addEventListener("DOMContentLoaded", function() {
             loadInventoryData();
@@ -381,9 +464,16 @@
                 });
             });
 
-            // Asset search handler
+            // Asset search handler - modified to use renderAssetsList
             document.getElementById('search-box').addEventListener('input', function() {
-                filterAssetsList(this.value);
+                // filterAssetsList(this.value); // Old
+                renderAssetsList(); // New
+            });
+
+            // 監聽視圖切換
+            $("input[name='viewMode']").change(function() {
+                currentViewMode = $(this).val();
+                renderAssetsList();
             });
         });
 
@@ -395,14 +485,18 @@
                 .withSuccessHandler(function(data) {
                     inventoryData = data;
                     isAdmin = data.isAdmin || false; // 儲存管理員狀態
+                    currentUserEmail = data.currentUserEmail; // 從後端獲取
+                    
+                    // 設定使用者名稱顯示
+                    const userNameElements = document.querySelectorAll('#current-user-name');
+                    userNameElements.forEach(el => el.textContent = currentUserEmail ? currentUserEmail.split('@')[0] : '使用者');
+
                     populateFilters(data);
                     displayActiveSessions(data.activeSessions);
                     loadHistory();
 
                     document.getElementById('loader-container').style.display = 'none';
                     document.getElementById('main-content').style.display = 'block';
-
-                    // ✨ 已移除自動載入邏輯，讓使用者手動選擇要載入的會話
                 })
                 .withFailureHandler(function(error) {
                     alert('載入資料失敗：' + error.message);
@@ -548,6 +642,11 @@
             }
             updateBatchUI();
 
+            // 重置視圖模式
+            currentViewMode = 'mine';
+            $("input[name='viewMode'][value='mine']").prop('checked', true).parent().addClass('active');
+            $("input[name='viewMode'][value='all']").parent().removeClass('active');
+
             // ✨ 切換會話時先清空資產列表，顯示載入中
             const assetsList = document.getElementById('assets-list');
             assetsList.innerHTML = `
@@ -569,14 +668,29 @@
                         assetName: asset.assetName,
                         keeperName: asset.keeperName,
                         location: asset.location,
-                        status: asset.inventoryResult
+                        status: asset.inventoryResult,
+                        assignedUser: asset.assignedUser
                     }));
 
                     if (typeof BatchList_rebuildIndex === 'function') {
                         BatchList_rebuildIndex();
                     }
 
-                    displaySessionDetails(details);
+                    // 1. 渲染儀表板
+                    renderDashboard(details);
+
+                    // 2. 決定是否顯示視圖切換按鈕 (管理員或發起人可切換)
+                    // 這裡簡單判斷：如果是管理員，顯示切換按鈕
+                    if (isAdmin) {
+                        $('#view-mode-group').show();
+                        $('#user-role-badge').text('管理員視角').addClass('badge-danger').removeClass('badge-success');
+                    } else {
+                        $('#view-mode-group').hide();
+                        $('#user-role-badge').text('保管人視角').addClass('badge-success').removeClass('badge-danger');
+                    }
+
+                    // 3. 渲染列表 (根據當前視圖模式)
+                    renderAssetsList();
                 })
                 .withFailureHandler(function(error) {
                     // ✨ 新增錯誤處理與重試按鈕
@@ -593,31 +707,119 @@
                 .getInventoryDetails(inventoryId);
         }
 
-        // ========== 分頁相容函數 ==========
-        // 此函數供 BatchList 模組使用，inventory.html 沒有分頁功能，
-        // 但需要此函數避免 BatchList 模組持續重試
+        // ✨ 新增：渲染儀表板
+        function renderDashboard(details) {
+            const total = details.length;
+            const verified = details.filter(d => d.inventoryResult !== '未盤點').length;
+            const totalPercent = total > 0 ? Math.round((verified / total) * 100) : 0;
+
+            // 計算我的進度
+            const myTasks = details.filter(d => d.assignedUser && d.assignedUser.toLowerCase() === currentUserEmail);
+            const myVerified = myTasks.filter(d => d.inventoryResult !== '未盤點').length;
+            const myPercent = myTasks.length > 0 ? Math.round((myVerified / myTasks.length) * 100) : 0;
+
+            $('#dashboard-total-progress').text(totalPercent + '%');
+            $('#dashboard-my-progress').text(myPercent + '%');
+            
+            // 調用後端獲取分組統計 (或是前端自己算也可以，這裡前端算比較快)
+            const statsMap = {};
+            details.forEach(item => {
+                const user = item.assignedUser ? item.assignedUser.toLowerCase() : '未指派';
+                const name = item.keeperName || user; // 顯示名稱優先用保管人姓名
+                
+                if (!statsMap[user]) {
+                    statsMap[user] = { name: name, total: 0, verified: 0 };
+                }
+                statsMap[user].total++;
+                if (item.inventoryResult !== '未盤點') statsMap[user].verified++;
+            });
+
+            const tbody = $('#dashboard-keeper-list');
+            tbody.empty();
+
+            Object.entries(statsMap)
+                .sort((a, b) => {
+                    const pa = a[1].total > 0 ? a[1].verified / a[1].total : 0;
+                    const pb = b[1].total > 0 ? b[1].verified / b[1].total : 0;
+                    return pa - pb; // 完成率低的在前
+                })
+                .forEach(([email, stat]) => {
+                    const percent = stat.total > 0 ? Math.round((stat.verified / stat.total) * 100) : 0;
+                    let colorClass = 'bg-danger';
+                    if (percent >= 50) colorClass = 'bg-warning';
+                    if (percent >= 100) colorClass = 'bg-success';
+
+                    const isMe = email.toLowerCase() === currentUserEmail ? ' <span class="badge badge-info">我</span>' : '';
+                    const displayName = email === '未指派' ? '<span class="text-danger">⚠️ 未指派</span>' : stat.name;
+
+                    tbody.append(
+                        `<tr class="keeper-stat-row">
+                            <td>${displayName} ${isMe}</td>
+                            <td class="align-middle">
+                                <div class="progress progress-sm">
+                                    <div class="progress-bar ${colorClass}" style="width: ${percent}%"></div>
+                                </div>
+                                <small class="text-muted">${percent}%</small>
+                            </td>
+                            <td class="text-right"><small>${stat.verified} / ${stat.total}</small></td>
+                        </tr>`
+                    );
+                });
+        }
+
+        // ✨ 修改：渲染資產列表 (支援過濾)
+        function renderAssetsList() {
+            if (!currentSessionDetails) return; 
+            
+            let filteredAssets = currentSessionDetails;
+
+            // 視圖過濾邏輯
+            if (currentViewMode === 'mine') {
+                filteredAssets = currentSessionDetails.filter(asset => 
+                    asset.assignedUser && asset.assignedUser.toLowerCase() === currentUserEmail
+                );
+                $('#my-task-hint').show();
+                $('#my-task-count').text(filteredAssets.length);
+            } else {
+                $('#my-task-hint').hide();
+            }
+
+            // 搜尋過濾邏輯 (疊加)
+            const searchTerm = $('#search-box').val().toLowerCase();
+            if (searchTerm) {
+                filteredAssets = filteredAssets.filter(asset =>
+                    asset.assetId.toLowerCase().includes(searchTerm) ||
+                    asset.assetName.toLowerCase().includes(searchTerm) ||
+                    (asset.location && asset.location.toLowerCase().includes(searchTerm))
+                );
+            }
+
+            // 更新進度條 (顯示當前視圖的進度)
+            const total = filteredAssets.length;
+            const verified = filteredAssets.filter(d => d.inventoryResult !== '未盤點').length;
+            const percentage = total > 0 ? Math.round((verified / total) * 100) : 0;
+            
+            $('#progress-text').text(`${verified}/${total}`);
+            $('#progress-percentage').text(`${percentage}%`);
+            $('#progress-bar').css('width', `${percentage}%`);
+
+            displaySessionDetails(filteredAssets); // 複用原本的顯示函式
+        }
+
+        // ========== 分頁相容函數 ========== 
         function renderTableForPage() {
             // inventory.html 沒有分頁，此函數僅為相容性而存在
-            // 重新渲染當前的資產列表以同步 checkbox 狀態
             if (currentSessionDetails && currentSessionDetails.length > 0) {
-                displaySessionDetails(currentSessionDetails);
+                renderAssetsList(); // 呼叫 renderAssetsList 保持視圖過濾
             }
         }
 
         function displaySessionDetails(details) {
-            const total = details.length;
-            const verified = details.filter(d => d.inventoryResult !== '未盤點').length;
-            const percentage = total > 0 ? Math.round((verified / total) * 100) : 0;
-
-            document.getElementById('progress-text').textContent = `${verified}/${total}`;
-            document.getElementById('progress-percentage').textContent = `${percentage}%`;
-            document.getElementById('progress-bar').style.width = `${percentage}%`;
-
             const assetsList = document.getElementById('assets-list');
             assetsList.innerHTML = '';
 
             if (details.length === 0) {
-                assetsList.innerHTML = '<p class="text-muted">沒有資產需要盤點</p>';
+                assetsList.innerHTML = '<p class="text-muted text-center py-3">沒有資產需要盤點 (或符合搜尋條件)</p>';
                 return;
             }
 
@@ -628,7 +830,7 @@
                                   'result-unverified';
 
                 const resultBadge = `<span class="badge-result ${resultClass}">${asset.inventoryResult}</span>`;
-                const escapedName = (asset.assetName || '').replace(/'/g, "\\'");
+                const escapedName = (asset.assetName || '').replace(/'/g, "'");
 
                 assetsList.innerHTML += `
                     <div class="asset-item">
@@ -641,7 +843,7 @@
                             <button class="btn btn-sm btn-outline-primary ml-auto"
                                     onclick="openMarkModal('${asset.assetId}')"
                                     title="標記此資產">
-                                <i class="fa-solid fa-edit"></i> 單筆確認
+                                <i class="fa-solid fa-edit"></i>單筆確認
                             </button>
                         </div>
                         <div class="asset-item-body">
@@ -686,14 +888,8 @@
         }
 
         function filterAssetsList(searchTerm) {
-            if (!currentSessionDetails) return;
-
-            const filtered = currentSessionDetails.filter(asset =>
-                asset.assetId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                asset.assetName.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-
-            displaySessionDetails(filtered);
+            // 已被 renderAssetsList 取代，此為相容性保留
+            renderAssetsList();
         }
 
         function openMarkModal(assetId) {
@@ -725,7 +921,7 @@
             const result = document.querySelector('input[name="inventoryResult"]:checked').value;
             const remarks = document.getElementById('inventory-remarks').value;
 
-            const btn = $('#markAssetModal').find('.btn-primary');
+            const btn = $("#markAssetModal").find('.btn-primary');
             btn.prop('disabled', true);
             btn.find('.btn-text').hide();
             btn.find('.spinner-border').show();
@@ -807,6 +1003,11 @@
             document.getElementById('session-detail-card').style.display = 'none';
             document.getElementById('start-session-card').style.display = 'block';
             document.getElementById('search-box').value = '';
+            
+            // 重置儀表板
+            $('#dashboard-keeper-list').empty();
+            $('#dashboard-total-progress').text('0%');
+            $('#dashboard-my-progress').text('0%');
 
             // ✨ 清空 window.allAssets，避免資料殘留
             window.allAssets = [];
@@ -826,7 +1027,7 @@
             `;
         }
 
-        // ========== 批次處理函數 ==========
+        // ========== 批次處理函數 ========== 
 
         function toggleAssetSelection(assetId) {
             const checkbox = document.querySelector(`input[data-asset-id="${assetId}"]`);
@@ -959,7 +1160,7 @@
                 .markBatchInventory(currentSessionId, assetResults);
         }
 
-        // ========== 批次處理函數結束 ==========
+        // ========== 批次處理函數結束 ========== 
 
         function loadHistory() {
             google.script.run
