@@ -221,15 +221,21 @@
                     <button class="btn btn-outline-secondary btn-sm" onclick="deselectAllAssets()">
                         <i class="fa-regular fa-square"></i> 取消全選
                     </button>
-                    <button class="btn btn-primary btn-sm" onclick="Scanner_toggle()">
-                        <i class="fa-solid fa-camera"></i> 開啟掃描器
-                    </button>
-                    
                 </div>
 
                 <div class="form-group">
                     <label for="search-box">搜尋資產：</label>
-                    <input type="text" class="form-control" id="search-box" placeholder="輸入產編或名稱，或掃描條碼按 Enter">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                        </div>
+                        <input type="text" class="form-control" id="search-box" placeholder="輸入產編、名稱或地點搜尋，或掃描條碼按 Enter">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" onclick="Scanner_toggle()" title="開啟條碼掃描器">
+                                <i class="fa-solid fa-barcode"></i> 掃描
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="assets-list" style="border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
