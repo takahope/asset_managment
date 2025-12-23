@@ -284,6 +284,11 @@
     <span class="nav-text">盤點</span>
   </button>
 
+  <button type="button" class="nav-item" onclick="goToGoogleForm()" title="填寫表單">
+    <span class="nav-icon">📝</span>
+    <span class="nav-text">問題回報/功能建議</span>
+  </button>
+
   <!-- 底部系統功能區 -->
   <div class="mt-auto">
     <div class="nav-divider"></div>
@@ -454,6 +459,17 @@
     } else {
       alert('頁面初始化中，請稍候...');
     }
+  }
+
+  /**
+   * 開啟外部 Google 表單
+   */
+  function goToGoogleForm() {
+    // ⚠️ 請記得替換成您的表單網址
+    const formUrl = 'https://forms.gle/PhwYCeDQM7kUD2dF8';
+    
+    // 在新分頁開啟 (推薦)
+    window.open(formUrl, '_blank');
   }
 
   // 自動在背景獲取一次 Portal 的 URL
