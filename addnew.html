@@ -52,6 +52,10 @@
                             <label for="assetName" class="required-field">名稱</label>
                             <input type="text" class="form-control" id="assetName" required placeholder="例如：ASUS 筆記型電腦">
                         </div>
+                        <div class="form-group col-md-4">
+                            <label for="modelBrand">型號/廠牌</label>
+                            <input type="text" class="form-control" id="modelBrand" placeholder="例如：ASUS VivoBook 15">
+                        </div>
                          <div class="form-group col-md-4">
                             <label for="category">類別</label>
                             <input type="text" class="form-control" id="category" list="categoryList" placeholder="選擇或輸入類別">
@@ -250,6 +254,7 @@
                 assetType: document.querySelector('input[name="assetType"]:checked').value,
                 assetId: document.getElementById('assetId').value.trim(),
                 assetName: document.getElementById('assetName').value.trim(),
+                modelBrand: document.getElementById('modelBrand').value.trim(),    // ✨ 新增型號/廠牌
                 category: document.getElementById('category').value.trim(),
                 purchaseDate: document.getElementById('purchaseDate').value,
                 useLife: document.getElementById('useLife').value,
