@@ -453,7 +453,7 @@
 
                 // 管理員模式：顯示會話擁有者資訊
                 const ownerInfo = isAdmin && session.inventoryEmail
-                    ? `<br><small class="text-info"><i class="fa-solid fa-user"></i> ${session.inventoryPerson} (${session.inventoryEmail})</small>`
+                    ? `<br><small class="text-info"><i class="fa-solid fa-user"></i> 盤點人：${session.inventoryPerson} (${session.inventoryEmail})</small>`
                     : '';
 
                 list.innerHTML += `
@@ -983,7 +983,7 @@
 
                         // 管理員模式：顯示會話擁有者資訊
                         const ownerInfo = isAdmin && record.inventoryEmail
-                            ? `<br><small class="text-info"><i class="fa-solid fa-user"></i> ${record.inventoryPerson} (${record.inventoryEmail})</small>`
+                            ? `<br><small class="text-info"><i class="fa-solid fa-user"></i> 盤點人：${record.inventoryPerson} (${record.inventoryEmail})</small>`
                             : '';
 
                         historyList.innerHTML += `
