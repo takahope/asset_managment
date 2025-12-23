@@ -364,6 +364,7 @@
         let currentSessionId = null;
         let currentSessionDetails = [];
         let selectedAssets = new Set(); // 儲存選中的資產 ID
+        let isAdmin = false; // 儲存當前使用者是否為管理員
 
         document.addEventListener("DOMContentLoaded", function() {
             loadInventoryData();
@@ -393,6 +394,7 @@
             google.script.run
                 .withSuccessHandler(function(data) {
                     inventoryData = data;
+                    isAdmin = data.isAdmin || false; // 儲存管理員狀態
                     populateFilters(data);
                     displayActiveSessions(data.activeSessions);
                     loadHistory();
@@ -449,12 +451,18 @@
                     ? Math.round((session.verifiedCount / session.totalCount) * 100)
                     : 0;
 
+                // 管理員模式：顯示會話擁有者資訊
+                const ownerInfo = isAdmin && session.inventoryEmail
+                    ? `<br><small class="text-info"><i class="fa-solid fa-user"></i> ${session.inventoryPerson} (${session.inventoryEmail})</small>`
+                    : '';
+
                 list.innerHTML += `
                     <div class="session-item" onclick="loadSessionDetails('${session.inventoryId}')">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <b>${session.inventoryId}</b><br>
                                 <small class="text-muted">範圍: ${session.filter}</small>
+                                ${ownerInfo}
                             </div>
                             <div class="text-right">
                                 <div>${session.verifiedCount} / ${session.totalCount}</div>
@@ -973,6 +981,11 @@
                             '<span class="badge badge-success">已完成</span>' :
                             '<span class="badge badge-warning">進行中</span>';
 
+                        // 管理員模式：顯示會話擁有者資訊
+                        const ownerInfo = isAdmin && record.inventoryEmail
+                            ? `<br><small class="text-info"><i class="fa-solid fa-user"></i> ${record.inventoryPerson} (${record.inventoryEmail})</small>`
+                            : '';
+
                         historyList.innerHTML += `
                             <div class="session-item">
                                 <div class="d-flex justify-content-between align-items-center">
@@ -983,6 +996,7 @@
                                             開始時間: ${date}<br>
                                             ${record.status === '已完成' ? '完成時間: ' + completionDate : ''}
                                         </small>
+                                        ${ownerInfo}
                                     </div>
                                     <div class="text-right">
                                         <div>${record.verifiedCount} / ${record.totalCount}</div>
@@ -996,7 +1010,7 @@
                 .withFailureHandler(function(error) {
                     console.error('載入歷史記錄失敗：', error);
                 })
-                .getInventoryHistory(false);
+                .getInventoryHistory(isAdmin); // 管理員模式：查看所有記錄
         }
     </script>
 </body>
