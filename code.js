@@ -4044,6 +4044,20 @@ function getActiveInventorySessions(userEmail, isAdminMode) {
       return [];
     }
 
+    // 建立 Email 到姓名的映射（從「保管人/信箱」表）
+    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    const emailToNameMap = new Map();
+    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+      keeperData.forEach(row => {
+        const name = row[0];
+        const email = row[1];
+        if (email) {
+          emailToNameMap.set(String(email).toLowerCase(), name);
+        }
+      });
+    }
+
     const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
     const activeSessions = [];
 
@@ -4062,10 +4076,13 @@ function getActiveInventorySessions(userEmail, isAdminMode) {
           ? Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
           : String(rawDate);
 
+        // 從映射表查詢真實姓名，找不到則使用原始的 inventoryPerson
+        const inventoryPersonName = emailToNameMap.get(String(sessionEmail).toLowerCase()) || row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1];
+
         activeSessions.push({
           inventoryId: row[IL_INVENTORY_ID_COLUMN_INDEX - 1],
           inventoryDate: inventoryDateStr,
-          inventoryPerson: row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1],
+          inventoryPerson: inventoryPersonName, // 使用從映射表查詢的真實姓名
           inventoryEmail: sessionEmail, // 新增：管理員需要知道會話屬於誰
           filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
           verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
@@ -4587,6 +4604,20 @@ function getInventoryHistory(allRecords) {
       return [];
     }
 
+    // 建立 Email 到姓名的映射（從「保管人/信箱」表）
+    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    const emailToNameMap = new Map();
+    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+      keeperData.forEach(row => {
+        const name = row[0];
+        const email = row[1];
+        if (email) {
+          emailToNameMap.set(String(email).toLowerCase(), name);
+        }
+      });
+    }
+
     const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
     const history = [];
 
@@ -4608,10 +4639,13 @@ function getInventoryHistory(allRecords) {
         ? Utilities.formatDate(rawCompletionTime, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
         : (rawCompletionTime ? String(rawCompletionTime) : '');
 
+      // 從映射表查詢真實姓名，找不到則使用原始的 inventoryPerson
+      const inventoryPersonName = emailToNameMap.get(String(sessionEmail).toLowerCase()) || row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1];
+
       history.push({
         inventoryId: row[IL_INVENTORY_ID_COLUMN_INDEX - 1],
         inventoryDate: inventoryDateStr,
-        inventoryPerson: row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1],
+        inventoryPerson: inventoryPersonName, // 使用從映射表查詢的真實姓名
         inventoryEmail: sessionEmail,
         filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
         verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
