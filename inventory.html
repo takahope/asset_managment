@@ -758,7 +758,9 @@
                         const searchText = [
                             asset.assetId,
                             asset.assetName,
-                            asset.location
+                            asset.location,
+                            asset.keeperName,
+                            asset.userName
                         ].filter(Boolean).join(' ').toLowerCase();
                         asset.searchText = searchText;
                         return asset;
