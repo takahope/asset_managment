@@ -3988,6 +3988,7 @@ function getInventoryData() {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const allAssets = getAllAssets();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
     // 檢查是否為管理員
     const isAdmin = checkAdminPermissions();
@@ -4004,6 +4005,20 @@ function getInventoryData() {
     // 提取唯一的使用人 (只從財產總表,因為物品總表沒有使用人欄位)
     const users = [...new Set(availableAssets.map(a => a.userName))].filter(Boolean).sort();
 
+    // 建立 Email -> 姓名 對照表（用於前端顯示指派人員）
+    const emailToNameMap = {};
+    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+      keeperData.forEach(row => {
+        const name = row[0];
+        const email = row[1];
+        if (email) {
+          emailToNameMap[String(email).toLowerCase()] = name || String(email).split('@')[0];
+        }
+      });
+    }
+
     // 取得進行中盤點會話（管理員可以看到所有會話）
     const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin);
 
@@ -4015,6 +4030,7 @@ function getInventoryData() {
       keepers: keepers,
       users: users,
       activeSessions: activeSessions,
+      emailToNameMap: emailToNameMap,
       currentUserEmail: currentUserEmail,
       isAdmin: isAdmin // 新增：告知前端當前使用者是否為管理員
     };

@@ -447,6 +447,7 @@
         let selectedAssets = new Set(); // 儲存選中的資產 ID
         let isAdmin = false; // 儲存當前使用者是否為管理員
         let currentUserEmail = ''; // 新增：儲存當前使用者 Email
+        let emailToNameMap = {}; // 指派人員 Email -> 姓名
         let currentViewMode = 'mine'; // 預設視圖：我的任務
 
         document.addEventListener("DOMContentLoaded", function() {
@@ -486,6 +487,7 @@
                     inventoryData = data;
                     isAdmin = data.isAdmin || false; // 儲存管理員狀態
                     currentUserEmail = data.currentUserEmail; // 從後端獲取
+                    emailToNameMap = data.emailToNameMap || {};
                     
                     // 設定使用者名稱顯示
                     const userNameElements = document.querySelectorAll('#current-user-name');
@@ -725,10 +727,12 @@
             const statsMap = {};
             details.forEach(item => {
                 const user = item.assignedUser ? item.assignedUser.toLowerCase() : '未指派';
-                const name = item.keeperName || user; // 顯示名稱優先用保管人姓名
+                const displayName = user === '未指派'
+                    ? '未指派'
+                    : (emailToNameMap[user] || (item.assignedUser || '').split('@')[0] || user);
                 
                 if (!statsMap[user]) {
-                    statsMap[user] = { name: name, total: 0, verified: 0 };
+                    statsMap[user] = { name: displayName, total: 0, verified: 0 };
                 }
                 statsMap[user].total++;
                 if (item.inventoryResult !== '未盤點') statsMap[user].verified++;
