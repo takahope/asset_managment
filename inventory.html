@@ -570,13 +570,20 @@
         function displayActiveSessions(sessions) {
             const card = document.getElementById('active-sessions-card');
             const list = document.getElementById('active-sessions-list');
+            const startCard = document.getElementById('start-session-card');
 
             if (sessions.length === 0) {
                 card.style.display = 'none';
+                if (startCard) {
+                    startCard.style.display = isAdmin ? 'block' : 'none';
+                }
                 return;
             }
 
             card.style.display = 'block';
+            if (startCard) {
+                startCard.style.display = 'none';
+            }
             list.innerHTML = '';
 
             sessions.forEach(session => {
@@ -1031,7 +1038,7 @@
                 const metaWrap = document.createElement('div');
                 const metaText = document.createElement('small');
                 metaText.className = 'text-muted';
-                metaText.textContent = `保管人: ${asset.keeperName || ''} | 地點: ${asset.location || ''}`;
+                metaText.textContent = `使用人: ${asset.userName || '-'} | 保管人: ${asset.keeperName || '-'} | 地點: ${asset.location || '-'}`;
                 metaWrap.appendChild(metaText);
 
                 if (asset.remarks) {
