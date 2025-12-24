@@ -311,6 +311,8 @@
                     </div>
                 </div>
 
+                <div id="inventory-pagination" class="d-flex justify-content-between align-items-center mb-2"></div>
+
                 <!-- 資產清單容器 -->
                 <div id="assets-list-container">
                         <div class="alert alert-info" id="my-task-hint" style="display:none;">
@@ -479,6 +481,10 @@
         let currentUserGroup = ''; // 指派人員所屬組別
         let currentViewMode = 'mine'; // 預設視圖：我的任務
         let pendingStartOptions = null; // 管理員分派方式暫存
+        let filteredSessionAssets = [];
+        let currentPage = 1;
+        const rowsPerPage = 80;
+        let searchDebounceTimer = null;
 
         document.addEventListener("DOMContentLoaded", function() {
             loadInventoryData();
@@ -497,14 +503,13 @@
 
             // Asset search handler - modified to use renderAssetsList
             document.getElementById('search-box').addEventListener('input', function() {
-                // filterAssetsList(this.value); // Old
-                renderAssetsList(); // New
+                scheduleSearchRender();
             });
 
             // 監聽視圖切換
             $("input[name='viewMode']").change(function() {
                 currentViewMode = $(this).val();
-                renderAssetsList();
+                renderAssetsList(true);
             });
         });
 
@@ -626,6 +631,15 @@
             return currentUserGroup && normalized === currentUserGroup;
         }
 
+        function scheduleSearchRender() {
+            if (searchDebounceTimer) {
+                clearTimeout(searchDebounceTimer);
+            }
+            searchDebounceTimer = setTimeout(() => {
+                renderAssetsList(true);
+            }, 180);
+        }
+
         function startNewSession() {
             const filterType = document.querySelector('input[name="filterType"]:checked').value;
             let filterValue = '';
@@ -736,13 +750,23 @@
                     <p class="text-muted mt-3">正在載入盤點資料...</p>
                 </div>
             `;
+            document.getElementById('inventory-pagination').innerHTML = '';
 
             google.script.run
                 .withSuccessHandler(function(details) {
-                    currentSessionDetails = details;
+                    currentSessionDetails = details.map(asset => {
+                        const searchText = [
+                            asset.assetId,
+                            asset.assetName,
+                            asset.location
+                        ].filter(Boolean).join(' ').toLowerCase();
+                        asset.searchText = searchText;
+                        return asset;
+                    });
+                    currentPage = 1;
 
                     // 初始化全域資產列表與 BatchList 索引 (基於完整會話資料)
-                    window.allAssets = details.map(asset => ({
+                    window.allAssets = currentSessionDetails.map(asset => ({
                         id: asset.assetId,
                         assetName: asset.assetName,
                         keeperName: asset.keeperName,
@@ -854,8 +878,8 @@
                 });
         }
 
-        // ✨ 修改：渲染資產列表 (支援過濾)
-        function renderAssetsList() {
+        // ✨ 修改：渲染資產列表 (支援過濾與分頁)
+        function renderAssetsList(resetPage = false) {
             if (!currentSessionDetails) return; 
             
             let filteredAssets = currentSessionDetails;
@@ -872,33 +896,87 @@
             }
 
             // 搜尋過濾邏輯 (疊加)
-            const searchTerm = $('#search-box').val().toLowerCase();
+            const searchTerm = $('#search-box').val().trim().toLowerCase();
             if (searchTerm) {
                 filteredAssets = filteredAssets.filter(asset =>
-                    asset.assetId.toLowerCase().includes(searchTerm) ||
-                    asset.assetName.toLowerCase().includes(searchTerm) ||
-                    (asset.location && asset.location.toLowerCase().includes(searchTerm))
+                    asset.searchText && asset.searchText.includes(searchTerm)
                 );
             }
 
+            filteredSessionAssets = filteredAssets;
+            if (resetPage) {
+                currentPage = 1;
+            }
+
+            const pageCount = Math.max(1, Math.ceil(filteredSessionAssets.length / rowsPerPage));
+            if (currentPage > pageCount) {
+                currentPage = pageCount;
+            }
+
             // 更新進度條 (顯示當前視圖的進度)
-            const total = filteredAssets.length;
-            const verified = filteredAssets.filter(d => d.inventoryResult !== '未盤點').length;
+            const total = filteredSessionAssets.length;
+            const verified = filteredSessionAssets.filter(d => d.inventoryResult !== '未盤點').length;
             const percentage = total > 0 ? Math.round((verified / total) * 100) : 0;
             
             $('#progress-text').text(`${verified}/${total}`);
             $('#progress-percentage').text(`${percentage}%`);
             $('#progress-bar').css('width', `${percentage}%`);
 
-            displaySessionDetails(filteredAssets); // 複用原本的顯示函式
+            renderPage(currentPage);
+            renderPagination(pageCount);
         }
 
         // ========== 分頁相容函數 ========== 
         function renderTableForPage() {
-            // inventory.html 沒有分頁，此函數僅為相容性而存在
             if (currentSessionDetails && currentSessionDetails.length > 0) {
-                renderAssetsList(); // 呼叫 renderAssetsList 保持視圖過濾
+                renderAssetsList();
             }
+        }
+
+        function renderPage(page) {
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const paginatedAssets = filteredSessionAssets.slice(start, end);
+            displaySessionDetails(paginatedAssets);
+        }
+
+        function renderPagination(pageCount) {
+            const paginationContainer = document.getElementById('inventory-pagination');
+            paginationContainer.innerHTML = '';
+
+            if (pageCount <= 1) return;
+
+            const info = document.createElement('div');
+            info.className = 'text-muted';
+            info.textContent = `第 ${currentPage} / ${pageCount} 頁 (共 ${filteredSessionAssets.length} 筆)`;
+            paginationContainer.appendChild(info);
+
+            const nav = document.createElement('div');
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'btn btn-sm btn-outline-secondary mr-2';
+            prevBtn.textContent = '上一頁';
+            prevBtn.disabled = currentPage <= 1;
+            prevBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage -= 1;
+                    renderAssetsList();
+                }
+            });
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn btn-sm btn-outline-secondary';
+            nextBtn.textContent = '下一頁';
+            nextBtn.disabled = currentPage >= pageCount;
+            nextBtn.addEventListener('click', () => {
+                if (currentPage < pageCount) {
+                    currentPage += 1;
+                    renderAssetsList();
+                }
+            });
+
+            nav.appendChild(prevBtn);
+            nav.appendChild(nextBtn);
+            paginationContainer.appendChild(nav);
         }
 
         function displaySessionDetails(details) {
@@ -910,43 +988,71 @@
                 return;
             }
 
+            const fragment = document.createDocumentFragment();
             details.forEach(asset => {
                 const resultClass = asset.inventoryResult === '正常' ? 'result-normal' :
                                   asset.inventoryResult === '遺失' ? 'result-missing' :
                                   asset.inventoryResult === '損壞' ? 'result-damaged' :
                                   'result-unverified';
 
-                const resultBadge = `<span class="badge-result ${resultClass}">${asset.inventoryResult}</span>`;
-                const escapedName = (asset.assetName || '').replace(/'/g, "'");
+                const item = document.createElement('div');
+                item.className = 'asset-item';
 
-                assetsList.innerHTML += `
-                    <div class="asset-item">
-                        <div class="asset-item-header">
-                            <input type="checkbox"
-                                   class="asset-checkbox"
-                                   data-asset-id="${asset.assetId}"
-                                   onchange="toggleAssetSelection('${asset.assetId}')">
-                            <div class="asset-item-name">${asset.assetId} - ${asset.assetName}</div>
-                            <button class="btn btn-sm btn-outline-primary ml-auto"
-                                    onclick="openMarkModal('${asset.assetId}')"
-                                    title="標記此資產">
-                                <i class="fa-solid fa-edit"></i>單筆確認
-                            </button>
-                        </div>
-                        <div class="asset-item-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <small class="text-muted">保管人: ${asset.keeperName} | 地點: ${asset.location}</small>
-                                    ${asset.remarks ? '<br><small class="text-info">備註: ' + asset.remarks + '</small>' : ''}
-                                </div>
-                                <div>
-                                    ${resultBadge}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                const header = document.createElement('div');
+                header.className = 'asset-item-header';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'asset-checkbox';
+                checkbox.dataset.assetId = asset.assetId;
+                checkbox.addEventListener('change', () => toggleAssetSelection(asset.assetId));
+                header.appendChild(checkbox);
+
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'asset-item-name';
+                nameDiv.textContent = `${asset.assetId} - ${asset.assetName || ''}`;
+                header.appendChild(nameDiv);
+
+                const actionBtn = document.createElement('button');
+                actionBtn.className = 'btn btn-sm btn-outline-primary ml-auto';
+                actionBtn.title = '標記此資產';
+                actionBtn.addEventListener('click', () => openMarkModal(asset.assetId));
+                actionBtn.innerHTML = '<i class="fa-solid fa-edit"></i>單筆確認';
+                header.appendChild(actionBtn);
+
+                const body = document.createElement('div');
+                body.className = 'asset-item-body';
+
+                const bodyRow = document.createElement('div');
+                bodyRow.className = 'd-flex justify-content-between align-items-center';
+
+                const metaWrap = document.createElement('div');
+                const metaText = document.createElement('small');
+                metaText.className = 'text-muted';
+                metaText.textContent = `保管人: ${asset.keeperName || ''} | 地點: ${asset.location || ''}`;
+                metaWrap.appendChild(metaText);
+
+                if (asset.remarks) {
+                    const remark = document.createElement('small');
+                    remark.className = 'text-info d-block';
+                    remark.textContent = `備註: ${asset.remarks}`;
+                    metaWrap.appendChild(remark);
+                }
+
+                const badge = document.createElement('span');
+                badge.className = `badge-result ${resultClass}`;
+                badge.textContent = asset.inventoryResult;
+
+                bodyRow.appendChild(metaWrap);
+                bodyRow.appendChild(badge);
+                body.appendChild(bodyRow);
+
+                item.appendChild(header);
+                item.appendChild(body);
+                fragment.appendChild(item);
             });
+
+            assetsList.appendChild(fragment);
 
             // 同步 checkbox 狀態（從 selectedAssets 和 BatchList 雙向同步）
             setTimeout(() => {
@@ -1087,9 +1193,12 @@
             currentSessionId = null;
             currentSessionDetails = [];
             selectedAssets.clear();
+            filteredSessionAssets = [];
+            currentPage = 1;
             document.getElementById('session-detail-card').style.display = 'none';
             document.getElementById('start-session-card').style.display = isAdmin ? 'block' : 'none';
             document.getElementById('search-box').value = '';
+            document.getElementById('inventory-pagination').innerHTML = '';
             
             // 重置儀表板
             $('#dashboard-keeper-list').empty();
@@ -1147,31 +1256,36 @@
         }
 
         function selectAllAssets() {
-            const checkboxes = document.querySelectorAll('.asset-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = true;
-                const assetId = cb.dataset.assetId;
+            const targetAssets = filteredSessionAssets.length ? filteredSessionAssets : currentSessionDetails;
+            targetAssets.forEach(asset => {
+                const assetId = asset.assetId;
                 selectedAssets.add(assetId);
                 if (typeof BatchList_addItem === 'function') {
                     BatchList_addItem(assetId);
                 }
             });
+            const checkboxes = document.querySelectorAll('.asset-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+            });
             updateBatchUI();
         }
 
         function deselectAllAssets() {
-            const checkboxes = document.querySelectorAll('.asset-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = false;
-            });
+            const assetIds = Array.from(selectedAssets);
             selectedAssets.clear();
 
             // 清空 BatchList
             if (typeof BatchList_removeItem === 'function') {
-                checkboxes.forEach(cb => {
-                    BatchList_removeItem(cb.dataset.assetId);
+                assetIds.forEach(assetId => {
+                    BatchList_removeItem(assetId);
                 });
             }
+
+            const checkboxes = document.querySelectorAll('.asset-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+            });
 
             updateBatchUI();
         }
