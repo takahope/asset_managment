@@ -28,9 +28,10 @@
             border: none;
         }
 
-        .session-item { cursor: pointer; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; }
+        .session-item { cursor: pointer; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; position: relative; }
         .session-item:hover { background-color: #f0f0f0; }
-        .session-item.active { background-color: #e3f2fd; border-color: #2196F3; }
+        .session-item.active { background-color: #fff3cd; border-color: #f1c40f; box-shadow: 0 0 0 2px rgba(241, 196, 15, 0.35); }
+        .session-item.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background-color: #f1c40f; border-radius: 5px 0 0 5px; }
 
         /* 資產清單容器 - 移除固定高度,避免內部捲動 */
         .asset-item {
@@ -636,6 +637,7 @@
                 const percentage = session.totalCount > 0
                     ? Math.round((session.verifiedCount / session.totalCount) * 100)
                     : 0;
+                const isActive = currentSessionId && session.inventoryId === currentSessionId;
 
                 // 管理員模式：顯示會話擁有者資訊
                 const ownerInfo = isAdmin && session.inventoryEmail
@@ -643,7 +645,7 @@
                     : '';
 
                 list.innerHTML += `
-                    <div class="session-item" onclick="loadSessionDetails('${session.inventoryId}')">
+                    <div class="session-item${isActive ? ' active' : ''}" data-inventory-id="${session.inventoryId}" onclick="loadSessionDetails('${session.inventoryId}')">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <b>${session.inventoryId}</b><br>
@@ -660,6 +662,14 @@
                         </div>
                     </div>
                 `;
+            });
+        }
+
+        function highlightActiveSession(inventoryId) {
+            const items = document.querySelectorAll('#active-sessions-list .session-item');
+            items.forEach(item => {
+                const isActive = item.dataset.inventoryId === inventoryId;
+                item.classList.toggle('active', isActive);
             });
         }
 
@@ -777,6 +787,7 @@
 
         function loadSessionDetails(inventoryId) {
             currentSessionId = inventoryId;
+            highlightActiveSession(inventoryId);
             document.getElementById('session-id-display').textContent = inventoryId;
             document.getElementById('start-session-card').style.display = 'none';
             document.getElementById('session-detail-card').style.display = 'block';
