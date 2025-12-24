@@ -4236,9 +4236,17 @@ function startInventorySession(options) {
 
     // ✨ 核心邏輯：準備寫入明細表，並自動分發任務
     const detailRows = assetsToInventory.map(asset => {
-      // 自動分發：指派給保管人 (Email)
-      // 若無保管人 Email，則留空 (未指派)
-      const assignedUser = asset.leaderEmail ? asset.leaderEmail.toLowerCase() : '';
+      // 自動分發：
+      // - 財產總表 → 指派給使用人
+      // - 物品總表 → 指派給保管人
+      // 若缺少使用人或保管人 Email，則留空 (未指派)
+      let assignedEmail = '';
+      if (asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME) {
+        assignedEmail = asset.userEmail || asset.leaderEmail || '';
+      } else {
+        assignedEmail = asset.leaderEmail || '';
+      }
+      const assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
 
       return [
         inventoryId,
@@ -4260,13 +4268,13 @@ function startInventorySession(options) {
       inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 11).setValues(detailRows);
     }
 
-    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，已自動分發。`);
+    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，已依資產類型自動分發。`);
 
     return {
       success: true,
       inventoryId: inventoryId,
       totalCount: assetsToInventory.length,
-      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。任務已自動分發給各保管人。`
+      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。任務已依資產類型自動分發。`
     };
 
   } catch (e) {
