@@ -4005,19 +4005,26 @@ function getInventoryData() {
     // 提取唯一的使用人 (只從財產總表,因為物品總表沒有使用人欄位)
     const users = [...new Set(availableAssets.map(a => a.userName))].filter(Boolean).sort();
 
-    // 建立 Email -> 姓名 對照表（用於前端顯示指派人員）
+    // 建立 Email -> 姓名 / 組別 對照表（用於前端顯示指派人員與分派判斷）
     const emailToNameMap = {};
+    const emailToGroupMap = {};
     const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
     if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
       keeperData.forEach(row => {
         const name = row[0];
         const email = row[1];
+        const groupName = row[6];
         if (email) {
-          emailToNameMap[String(email).toLowerCase()] = name || String(email).split('@')[0];
+          const normalizedEmail = String(email).toLowerCase();
+          emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
+          if (groupName) {
+            emailToGroupMap[normalizedEmail] = String(groupName).trim();
+          }
         }
       });
     }
+    const currentUserGroup = emailToGroupMap[currentUserEmail] || '未分組';
 
     // 取得進行中盤點會話（管理員可以看到所有會話）
     const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin);
@@ -4031,6 +4038,7 @@ function getInventoryData() {
       users: users,
       activeSessions: activeSessions,
       emailToNameMap: emailToNameMap,
+      currentUserGroup: currentUserGroup,
       currentUserEmail: currentUserEmail,
       isAdmin: isAdmin // 新增：告知前端當前使用者是否為管理員
     };
@@ -4250,6 +4258,24 @@ function startInventorySession(options) {
       '' // 完成時間
     ]);
 
+    // 建立 Email -> 組別 對照表（僅組別分派時使用）
+    const emailToGroupMap = {};
+    if (options.assignmentMode === 'group') {
+      const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+      if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+        const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+        keeperData.forEach(row => {
+          const email = row[1];
+          const groupName = row[6];
+          if (email) {
+            emailToGroupMap[String(email).toLowerCase()] = groupName ? String(groupName).trim() : '';
+          }
+        });
+      }
+    }
+
+    const assignmentMode = options.assignmentMode === 'group' ? 'group' : 'person';
+
     // ✨ 核心邏輯：準備寫入明細表，並自動分發任務
     const detailRows = assetsToInventory.map(asset => {
       // 自動分發：
@@ -4262,7 +4288,14 @@ function startInventorySession(options) {
       } else {
         assignedEmail = asset.leaderEmail || '';
       }
-      const assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
+      let assignedUser = '';
+      if (assignmentMode === 'group') {
+        const normalizedEmail = assignedEmail ? assignedEmail.toLowerCase() : '';
+        const groupName = normalizedEmail ? emailToGroupMap[normalizedEmail] : '';
+        assignedUser = groupName || '未分組';
+      } else {
+        assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
+      }
 
       return [
         inventoryId,
@@ -4284,13 +4317,13 @@ function startInventorySession(options) {
       inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 11).setValues(detailRows);
     }
 
-    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，已依資產類型自動分發。`);
+    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`);
 
     return {
       success: true,
       inventoryId: inventoryId,
       totalCount: assetsToInventory.length,
-      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。任務已依資產類型自動分發。`
+      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。任務已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`
     };
 
   } catch (e) {
