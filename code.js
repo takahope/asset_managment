@@ -48,7 +48,8 @@ const PROPERTY_COLUMN_INDICES = {
   IS_IT_ASSET: 24,      // X欄: 是否為資訊資產
   IS_ACTUALLY_COMPUTER: 25, // Y欄: 是否為電腦 (原X欄)
   IS_ISO_SCOPE: 26,     // Z欄: 是否在ISO驗證範圍內
-  NOTES: 30             // AD欄: 備註
+  NOTES: 30,            // AD欄: 備註
+  DEFAULT_GROUP: 31     // AE欄: 預設組別
 };
 
 const ITEM_COLUMN_INDICES = {
@@ -73,7 +74,8 @@ const ITEM_COLUMN_INDICES = {
   IS_IT_ASSET: 24,      // X欄 是否為資訊資產
   IS_ACTUALLY_COMPUTER: 25, // Y欄 是否為電腦
   IS_ISO_SCOPE: 26,     // Z欄 是否在ISO驗證範圍內
-  NOTES: 30             // AD欄: 備註
+  NOTES: 30,            // AD欄: 備註
+  DEFAULT_GROUP: 31     // AE欄: 預設組別
 };
 
 
@@ -169,6 +171,7 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
       isItAsset: row[indices.IS_IT_ASSET - 1],
       isActuallyComputer: row[indices.IS_ACTUALLY_COMPUTER - 1],
       isIsoScope: row[indices.IS_ISO_SCOPE - 1],
+      defaultGroup: indices.DEFAULT_GROUP ? row[indices.DEFAULT_GROUP - 1] : null,
       sourceSheet: sourceSheet
     };
 }
@@ -4301,9 +4304,14 @@ function startInventorySession(options) {
       }
       let assignedUser = '';
       if (assignmentMode === 'group') {
-        const normalizedEmail = assignedEmail ? assignedEmail.toLowerCase() : '';
-        const groupName = normalizedEmail ? emailToGroupMap[normalizedEmail] : '';
-        assignedUser = groupName || '未分組';
+        const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
+        if (defaultGroup) {
+          assignedUser = defaultGroup;
+        } else {
+          const normalizedEmail = assignedEmail ? assignedEmail.toLowerCase() : '';
+          const groupName = normalizedEmail ? emailToGroupMap[normalizedEmail] : '';
+          assignedUser = groupName || '未分組';
+        }
       } else {
         assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
       }
