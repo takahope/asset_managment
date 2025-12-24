@@ -113,13 +113,14 @@ const ID_INVENTORY_ID_COLUMN_INDEX = 1;        // A欄: 盤點ID
 const ID_ASSET_ID_COLUMN_INDEX = 2;            // B欄: 財產編號
 const ID_ASSET_NAME_COLUMN_INDEX = 3;          // C欄: 財產名稱
 const ID_KEEPER_NAME_COLUMN_INDEX = 4;         // D欄: 保管人
-const ID_LOCATION_COLUMN_INDEX = 5;            // E欄: 地點
-const ID_ORIGINAL_STATUS_COLUMN_INDEX = 6;     // F欄: 原狀態
-const ID_INVENTORY_RESULT_COLUMN_INDEX = 7;    // G欄: 盤點結果
-const ID_REMARKS_COLUMN_INDEX = 8;             // H欄: 備註
-const ID_VERIFICATION_TIME_COLUMN_INDEX = 9;   // I欄: 盤點時間
-const ID_VERIFIED_BY_COLUMN_INDEX = 10;        // J欄: 盤點人
-const ID_ASSIGNED_USER_COLUMN_INDEX = 11;      // ✨ K欄: 指派人員 (New!)
+const ID_USER_NAME_COLUMN_INDEX = 5;           // E欄: 使用人
+const ID_LOCATION_COLUMN_INDEX = 6;            // F欄: 地點
+const ID_ORIGINAL_STATUS_COLUMN_INDEX = 7;     // G欄: 原狀態
+const ID_INVENTORY_RESULT_COLUMN_INDEX = 8;    // H欄: 盤點結果
+const ID_REMARKS_COLUMN_INDEX = 9;             // I欄: 備註
+const ID_VERIFICATION_TIME_COLUMN_INDEX = 10;  // J欄: 盤點時間
+const ID_VERIFIED_BY_COLUMN_INDEX = 11;        // K欄: 盤點人
+const ID_ASSIGNED_USER_COLUMN_INDEX = 12;      // ✨ L欄: 指派人員 (New!)
 
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
@@ -3986,6 +3987,8 @@ function addNewAsset(form) {
  */
 function getInventoryData() {
   try {
+    // 確保盤點明細欄位已完成遷移
+    createInventorySheets();
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const allAssets = getAllAssets();
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -4166,7 +4169,7 @@ function checkInventorySessionOwner(inventoryId) {
 }
 
 /**
- * 建立盤點工作表 (更新版：包含第 11 欄標題)
+ * 建立盤點工作表 (更新版：包含第 12 欄標題)
  */
 function createInventorySheets() {
   try {
@@ -4182,11 +4185,19 @@ function createInventorySheets() {
 
     // 建立盤點明細工作表 (Updated Schema)
     let inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+    const detailHeaders = ['盤點ID', '財產編號', '財產名稱', '保管人', '使用人', '地點', '原狀態', '盤點結果', '備註', '盤點時間', '盤點人', '指派人員'];
     if (!inventoryDetailSheet) {
       inventoryDetailSheet = ss.insertSheet(INVENTORY_DETAIL_SHEET_NAME);
-      // ✨ 新增第 11 欄：指派人員
-      inventoryDetailSheet.appendRow(['盤點ID', '財產編號', '財產名稱', '保管人', '地點', '原狀態', '盤點結果', '備註', '盤點時間', '盤點人', '指派人員']);
-      inventoryDetailSheet.getRange(1, 1, 1, 11).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
+      inventoryDetailSheet.appendRow(detailHeaders);
+      inventoryDetailSheet.getRange(1, 1, 1, detailHeaders.length).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
+    } else {
+      const headerRange = inventoryDetailSheet.getRange(1, 1, 1, inventoryDetailSheet.getLastColumn());
+      const headers = headerRange.getValues()[0].map(value => String(value || '').trim());
+      if (!headers.includes('使用人')) {
+        inventoryDetailSheet.insertColumnAfter(4); // 在保管人後插入「使用人」
+      }
+      inventoryDetailSheet.getRange(1, 1, 1, detailHeaders.length).setValues([detailHeaders]);
+      inventoryDetailSheet.getRange(1, 1, 1, detailHeaders.length).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
     }
 
     return true;
@@ -4297,24 +4308,27 @@ function startInventorySession(options) {
         assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
       }
 
+      const userName = asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME ? (asset.userName || '') : '';
+
       return [
         inventoryId,
         asset.assetId,
         asset.assetName,
         asset.leaderName,
+        userName,
         asset.location,
         asset.assetStatus,
         '未盤點', // 盤點結果
         '', // 備註
         '', // 盤點時間
         '', // 盤點人
-        assignedUser // ✨ 新增：指派人員 (Col 11)
+        assignedUser // ✨ 指派人員 (Col 12)
       ];
     });
 
     if (detailRows.length > 0) {
-      // 寫入資料 (注意：現在是 11 欄)
-      inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 11).setValues(detailRows);
+      // 寫入資料 (注意：現在是 12 欄)
+      inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 12).setValues(detailRows);
     }
 
     Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`);
@@ -4353,8 +4367,8 @@ function getInventoryDetails(inventoryId) {
       return [];
     }
 
-    // 讀取包含第 11 欄的資料
-    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, 11).getValues();
+    // 讀取包含第 12 欄的資料
+    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, 12).getValues();
     const details = [];
 
     for (let i = 0; i < data.length; i++) {
@@ -4370,6 +4384,7 @@ function getInventoryDetails(inventoryId) {
           assetId: row[ID_ASSET_ID_COLUMN_INDEX - 1],
           assetName: row[ID_ASSET_NAME_COLUMN_INDEX - 1],
           keeperName: row[ID_KEEPER_NAME_COLUMN_INDEX - 1],
+          userName: row[ID_USER_NAME_COLUMN_INDEX - 1],
           location: row[ID_LOCATION_COLUMN_INDEX - 1],
           originalStatus: row[ID_ORIGINAL_STATUS_COLUMN_INDEX - 1],
           inventoryResult: row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1],
