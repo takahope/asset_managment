@@ -118,6 +118,7 @@
         }
         .keeper-stat-row {
             transition: background 0.2s;
+            cursor: pointer;
         }
         .keeper-stat-row:hover {
             background-color: #f8f9fa;
@@ -467,6 +468,41 @@
         </div>
     </div>
 
+    <div class="modal fade" id="assignmentAssetsModal" tabindex="-1" role="dialog" aria-labelledby="assignmentAssetsTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assignmentAssetsTitle">分派清單</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="assignment-assets-meta" class="text-muted mb-2"></div>
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="thead-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th>財產編號</th>
+                                    <th>財產名稱</th>
+                                    <th>使用人</th>
+                                    <th>保管人</th>
+                                    <th>地點</th>
+                                    <th>盤點結果</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignment-assets-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="assignment-assets-pagination" class="d-flex justify-content-between align-items-center mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -485,6 +521,9 @@
         let currentPage = 1;
         const rowsPerPage = 80;
         let searchDebounceTimer = null;
+        let dashboardStatsMap = {};
+        const assignmentRowsPerPage = 50;
+        let assignmentModalState = { key: '', title: '', assets: [], page: 1 };
 
         document.addEventListener("DOMContentLoaded", function() {
             loadInventoryData();
@@ -510,6 +549,13 @@
             $("input[name='viewMode']").change(function() {
                 currentViewMode = $(this).val();
                 renderAssetsList(true);
+            });
+
+            $('#dashboard-keeper-list').on('click', '.keeper-stat-row', function() {
+                const assignmentKey = $(this).data('assignKey');
+                if (!assignmentKey) return;
+                const stat = dashboardStatsMap[assignmentKey] || { name: assignmentKey };
+                openAssignmentAssets(assignmentKey, stat.name);
             });
         });
 
@@ -852,6 +898,8 @@
                 if (item.inventoryResult !== '未盤點') statsMap[assignmentKey].verified++;
             });
 
+            dashboardStatsMap = statsMap;
+
             const tbody = $('#dashboard-keeper-list');
             tbody.empty();
 
@@ -872,8 +920,9 @@
                         : (email === currentUserGroup ? ' <span class="badge badge-info">我</span>' : '');
                     const displayName = email === '未指派' ? '<span class="text-danger">⚠️ 未指派</span>' : stat.name;
 
+                    const safeKey = String(email).replace(/"/g, '&quot;');
                     tbody.append(
-                        `<tr class="keeper-stat-row">
+                        `<tr class="keeper-stat-row" data-assign-key="${safeKey}">
                             <td>${displayName} ${isMe}</td>
                             <td class="align-middle">
                                 <div class="progress progress-sm">
@@ -885,6 +934,111 @@
                         </tr>`
                     );
                 });
+        }
+
+        function openAssignmentAssets(assignmentKey, displayName) {
+            const normalizedKey = assignmentKey || '未指派';
+            const assets = currentSessionDetails.filter(asset => (getAssignmentKey(asset.assignedUser) || '未指派') === normalizedKey);
+            assignmentModalState = {
+                key: normalizedKey,
+                title: displayName || normalizedKey,
+                assets: assets,
+                page: 1
+            };
+            renderAssignmentModal();
+            $('#assignmentAssetsModal').modal('show');
+        }
+
+        function renderAssignmentModal() {
+            const titleEl = document.getElementById('assignmentAssetsTitle');
+            const metaEl = document.getElementById('assignment-assets-meta');
+            const bodyEl = document.getElementById('assignment-assets-body');
+            const paginationEl = document.getElementById('assignment-assets-pagination');
+
+            const total = assignmentModalState.assets.length;
+            const pageCount = Math.max(1, Math.ceil(total / assignmentRowsPerPage));
+            if (assignmentModalState.page > pageCount) {
+                assignmentModalState.page = pageCount;
+            }
+
+            const titleLabel = assignmentModalState.key === '未指派'
+                ? '未指派'
+                : (assignmentModalState.key.includes('@')
+                    ? `${assignmentModalState.title} (${assignmentModalState.key})`
+                    : assignmentModalState.title);
+            titleEl.textContent = `分派清單 - ${titleLabel}`;
+            metaEl.textContent = `共 ${total} 筆資產`;
+
+            bodyEl.innerHTML = '';
+            if (total === 0) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 6;
+                cell.className = 'text-center text-muted';
+                cell.textContent = '沒有符合條件的資產';
+                row.appendChild(cell);
+                bodyEl.appendChild(row);
+            } else {
+                const start = (assignmentModalState.page - 1) * assignmentRowsPerPage;
+                const end = start + assignmentRowsPerPage;
+                const pageAssets = assignmentModalState.assets.slice(start, end);
+                const fragment = document.createDocumentFragment();
+
+                pageAssets.forEach(asset => {
+                    const row = document.createElement('tr');
+                    const cells = [
+                        asset.assetId,
+                        asset.assetName,
+                        asset.userName,
+                        asset.keeperName,
+                        asset.location,
+                        asset.inventoryResult
+                    ];
+                    cells.forEach(value => {
+                        const td = document.createElement('td');
+                        td.textContent = value || '';
+                        row.appendChild(td);
+                    });
+                    fragment.appendChild(row);
+                });
+
+                bodyEl.appendChild(fragment);
+            }
+
+            paginationEl.innerHTML = '';
+            if (pageCount <= 1) return;
+
+            const info = document.createElement('div');
+            info.className = 'text-muted';
+            info.textContent = `第 ${assignmentModalState.page} / ${pageCount} 頁`;
+            paginationEl.appendChild(info);
+
+            const nav = document.createElement('div');
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'btn btn-sm btn-outline-secondary mr-2';
+            prevBtn.textContent = '上一頁';
+            prevBtn.disabled = assignmentModalState.page <= 1;
+            prevBtn.addEventListener('click', () => {
+                if (assignmentModalState.page > 1) {
+                    assignmentModalState.page -= 1;
+                    renderAssignmentModal();
+                }
+            });
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn btn-sm btn-outline-secondary';
+            nextBtn.textContent = '下一頁';
+            nextBtn.disabled = assignmentModalState.page >= pageCount;
+            nextBtn.addEventListener('click', () => {
+                if (assignmentModalState.page < pageCount) {
+                    assignmentModalState.page += 1;
+                    renderAssignmentModal();
+                }
+            });
+
+            nav.appendChild(prevBtn);
+            nav.appendChild(nextBtn);
+            paginationEl.appendChild(nav);
         }
 
         // ✨ 修改：渲染資產列表 (支援過濾與分頁)
