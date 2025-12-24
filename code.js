@@ -4033,7 +4033,7 @@ function getInventoryData() {
     const currentUserGroup = emailToGroupMap[currentUserEmail] || '未分組';
 
     // 取得進行中盤點會話（管理員可以看到所有會話）
-    const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin);
+    const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin, currentUserGroup);
 
     // 注意: 不返回完整的 assets 陣列,因為其中包含 Date 物件無法序列化
     // 前端只需要 locations, keepers, users 和 activeSessions
@@ -4058,9 +4058,10 @@ function getInventoryData() {
  * 取得使用者的進行中盤點會話
  * @param {string} userEmail - 使用者電子郵件
  * @param {boolean} isAdminMode - 是否為管理員模式（可選，預設 false）
+ * @param {string} userGroup - 使用者所屬組別
  * @returns {Array} 進行中的盤點會話列表
  */
-function getActiveInventorySessions(userEmail, isAdminMode) {
+function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
@@ -4089,17 +4090,47 @@ function getActiveInventorySessions(userEmail, isAdminMode) {
       });
     }
 
+    const normalizedUserEmail = String(userEmail || '').toLowerCase();
+    const normalizedUserGroup = userGroup ? String(userGroup).trim() : '';
+    let assignedMap = null;
+
+    if (!isAdminMode) {
+      const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+      if (inventoryDetailSheet && inventoryDetailSheet.getLastRow() > 1) {
+        const detailRows = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
+        assignedMap = new Map();
+        detailRows.forEach(row => {
+          const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
+          const assignedRaw = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
+          if (!inventoryId || !assignedRaw) return;
+          let assignedValue = String(assignedRaw).trim();
+          if (!assignedValue) return;
+          if (assignedValue.includes('@')) {
+            assignedValue = assignedValue.toLowerCase();
+          }
+          if (!assignedMap.has(inventoryId)) {
+            assignedMap.set(inventoryId, new Set());
+          }
+          assignedMap.get(inventoryId).add(assignedValue);
+        });
+      }
+    }
+
     const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
     const activeSessions = [];
 
     for (let row of data) {
+      const inventoryId = row[IL_INVENTORY_ID_COLUMN_INDEX - 1];
       const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
       const status = row[IL_STATUS_COLUMN_INDEX - 1];
 
       // 管理員模式：顯示所有進行中的會話
       // 一般模式：只顯示自己的會話
+      const assignedSet = assignedMap ? assignedMap.get(inventoryId) : null;
+      const isAssignedByEmail = assignedSet ? assignedSet.has(normalizedUserEmail) : false;
+      const isAssignedByGroup = assignedSet && normalizedUserGroup ? assignedSet.has(normalizedUserGroup) : false;
       const shouldInclude = status === '進行中' &&
-        (isAdminMode || sessionEmail.toLowerCase() === userEmail.toLowerCase());
+        (isAdminMode || (sessionEmail && sessionEmail.toLowerCase() === normalizedUserEmail) || isAssignedByEmail || isAssignedByGroup);
 
       if (shouldInclude) {
         const rawDate = row[IL_INVENTORY_DATE_COLUMN_INDEX - 1];
@@ -4111,7 +4142,7 @@ function getActiveInventorySessions(userEmail, isAdminMode) {
         const inventoryPersonName = emailToNameMap.get(String(sessionEmail).toLowerCase()) || row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1];
 
         activeSessions.push({
-          inventoryId: row[IL_INVENTORY_ID_COLUMN_INDEX - 1],
+          inventoryId: inventoryId,
           inventoryDate: inventoryDateStr,
           inventoryPerson: inventoryPersonName, // 使用從映射表查詢的真實姓名
           inventoryEmail: sessionEmail, // 新增：管理員需要知道會話屬於誰
