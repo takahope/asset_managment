@@ -437,6 +437,34 @@
         </div>
     </div>
 
+    <div class="modal fade" id="assignmentModeModal" tabindex="-1" role="dialog" aria-labelledby="assignmentModeTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assignmentModeTitle">選擇分派方式</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">請選擇本次盤點的分派方式：</p>
+                    <div class="custom-control custom-radio mb-2">
+                        <input type="radio" id="assignment-mode-person" name="assignmentMode" class="custom-control-input" value="person" checked>
+                        <label class="custom-control-label" for="assignment-mode-person">依照人名分派</label>
+                    </div>
+                    <div class="custom-control custom-radio">
+                        <input type="radio" id="assignment-mode-group" name="assignmentMode" class="custom-control-input" value="group">
+                        <label class="custom-control-label" for="assignment-mode-group">依照組別分派</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmAssignmentMode()">開始盤點</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -448,7 +476,9 @@
         let isAdmin = false; // 儲存當前使用者是否為管理員
         let currentUserEmail = ''; // 新增：儲存當前使用者 Email
         let emailToNameMap = {}; // 指派人員 Email -> 姓名
+        let currentUserGroup = ''; // 指派人員所屬組別
         let currentViewMode = 'mine'; // 預設視圖：我的任務
+        let pendingStartOptions = null; // 管理員分派方式暫存
 
         document.addEventListener("DOMContentLoaded", function() {
             loadInventoryData();
@@ -488,6 +518,7 @@
                     isAdmin = data.isAdmin || false; // 儲存管理員狀態
                     currentUserEmail = data.currentUserEmail; // 從後端獲取
                     emailToNameMap = data.emailToNameMap || {};
+                    currentUserGroup = data.currentUserGroup || '';
                     
                     // 設定使用者名稱顯示
                     const userNameElements = document.querySelectorAll('#current-user-name');
@@ -496,6 +527,7 @@
                     populateFilters(data);
                     displayActiveSessions(data.activeSessions);
                     loadHistory();
+                    document.getElementById('start-session-card').style.display = isAdmin ? 'block' : 'none';
 
                     document.getElementById('loader-container').style.display = 'none';
                     document.getElementById('main-content').style.display = 'block';
@@ -573,6 +605,27 @@
             });
         }
 
+        function normalizeAssignment(value) {
+            return value ? String(value).trim() : '';
+        }
+
+        function isEmailAssignment(value) {
+            return value.includes('@');
+        }
+
+        function getAssignmentKey(value) {
+            const normalized = normalizeAssignment(value);
+            if (!normalized) return '';
+            return isEmailAssignment(normalized) ? normalized.toLowerCase() : normalized;
+        }
+
+        function isAssignmentMine(value) {
+            const normalized = normalizeAssignment(value);
+            if (!normalized) return false;
+            if (isEmailAssignment(normalized)) return normalized.toLowerCase() === currentUserEmail;
+            return currentUserGroup && normalized === currentUserGroup;
+        }
+
         function startNewSession() {
             const filterType = document.querySelector('input[name="filterType"]:checked').value;
             let filterValue = '';
@@ -597,16 +650,40 @@
                 }
             }
 
-            const btn = document.getElementById('start-session-btn');
-            btn.disabled = true;
-            btn.querySelector('.btn-text').style.display = 'none';
-            btn.querySelector('.spinner-border').style.display = 'inline-block';
-
             const options = {
                 filterType: filterType,
                 filterValue: filterValue,
                 assetIds: []
             };
+
+            if (isAdmin) {
+                pendingStartOptions = options;
+                $('#assignmentModeModal').modal('show');
+                return;
+            }
+
+            options.assignmentMode = 'person';
+            submitStartSession(options);
+        }
+
+        function confirmAssignmentMode() {
+            if (!pendingStartOptions) {
+                $('#assignmentModeModal').modal('hide');
+                return;
+            }
+            const selectedMode = document.querySelector('input[name="assignmentMode"]:checked');
+            pendingStartOptions.assignmentMode = selectedMode ? selectedMode.value : 'person';
+            const options = pendingStartOptions;
+            pendingStartOptions = null;
+            $('#assignmentModeModal').modal('hide');
+            submitStartSession(options);
+        }
+
+        function submitStartSession(options) {
+            const btn = document.getElementById('start-session-btn');
+            btn.disabled = true;
+            btn.querySelector('.btn-text').style.display = 'none';
+            btn.querySelector('.spinner-border').style.display = 'inline-block';
 
             google.script.run
                 .withSuccessHandler(function(result) {
@@ -716,7 +793,7 @@
             const totalPercent = total > 0 ? Math.round((verified / total) * 100) : 0;
 
             // 計算我的進度
-            const myTasks = details.filter(d => d.assignedUser && d.assignedUser.toLowerCase() === currentUserEmail);
+            const myTasks = details.filter(d => isAssignmentMine(d.assignedUser));
             const myVerified = myTasks.filter(d => d.inventoryResult !== '未盤點').length;
             const myPercent = myTasks.length > 0 ? Math.round((myVerified / myTasks.length) * 100) : 0;
 
@@ -726,16 +803,20 @@
             // 調用後端獲取分組統計 (或是前端自己算也可以，這裡前端算比較快)
             const statsMap = {};
             details.forEach(item => {
-                const user = item.assignedUser ? item.assignedUser.toLowerCase() : '未指派';
-                const displayName = user === '未指派'
+                const assignmentKey = getAssignmentKey(item.assignedUser) || '未指派';
+                const rawAssignment = normalizeAssignment(item.assignedUser);
+                const isEmail = rawAssignment ? isEmailAssignment(rawAssignment) : false;
+                const displayName = assignmentKey === '未指派'
                     ? '未指派'
-                    : (emailToNameMap[user] || (item.assignedUser || '').split('@')[0] || user);
+                    : (isEmail
+                        ? (emailToNameMap[assignmentKey] || rawAssignment.split('@')[0] || assignmentKey)
+                        : assignmentKey);
                 
-                if (!statsMap[user]) {
-                    statsMap[user] = { name: displayName, total: 0, verified: 0 };
+                if (!statsMap[assignmentKey]) {
+                    statsMap[assignmentKey] = { name: displayName, total: 0, verified: 0, isEmail: isEmail };
                 }
-                statsMap[user].total++;
-                if (item.inventoryResult !== '未盤點') statsMap[user].verified++;
+                statsMap[assignmentKey].total++;
+                if (item.inventoryResult !== '未盤點') statsMap[assignmentKey].verified++;
             });
 
             const tbody = $('#dashboard-keeper-list');
@@ -753,7 +834,9 @@
                     if (percent >= 50) colorClass = 'bg-warning';
                     if (percent >= 100) colorClass = 'bg-success';
 
-                    const isMe = email.toLowerCase() === currentUserEmail ? ' <span class="badge badge-info">我</span>' : '';
+                    const isMe = stat.isEmail
+                        ? (email === currentUserEmail ? ' <span class="badge badge-info">我</span>' : '')
+                        : (email === currentUserGroup ? ' <span class="badge badge-info">我</span>' : '');
                     const displayName = email === '未指派' ? '<span class="text-danger">⚠️ 未指派</span>' : stat.name;
 
                     tbody.append(
@@ -780,7 +863,7 @@
             // 視圖過濾邏輯
             if (currentViewMode === 'mine') {
                 filteredAssets = currentSessionDetails.filter(asset => 
-                    asset.assignedUser && asset.assignedUser.toLowerCase() === currentUserEmail
+                    isAssignmentMine(asset.assignedUser)
                 );
                 $('#my-task-hint').show();
                 $('#my-task-count').text(filteredAssets.length);
@@ -1005,7 +1088,7 @@
             currentSessionDetails = [];
             selectedAssets.clear();
             document.getElementById('session-detail-card').style.display = 'none';
-            document.getElementById('start-session-card').style.display = 'block';
+            document.getElementById('start-session-card').style.display = isAdmin ? 'block' : 'none';
             document.getElementById('search-box').value = '';
             
             // 重置儀表板
