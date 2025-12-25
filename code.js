@@ -2585,6 +2585,112 @@ function getScrapHistoryData() {
 }
 
 /**
+ * [供 printScrap.html Tab 2 呼叫] 根據日期範圍獲取已報廢資產清單（管理員專用）
+ * @param {string} startDate - 起始日期 (YYYY-MM-DD)
+ * @param {string} endDate - 結束日期 (YYYY-MM-DD)
+ * @param {string} assetCategory - 資產類別 ("財產" 或 "非消耗品")
+ * @returns {Array} 已報廢資產物件陣列
+ */
+function getScrapAssetsByDateRange(startDate, endDate, assetCategory) {
+  try {
+    Logger.log(`📅 [getScrapAssetsByDateRange] 開始處理 - 日期範圍: ${startDate} ~ ${endDate}, 類別: ${assetCategory}`);
+
+    // 權限檢查
+    if (!checkAdminPermissions()) {
+      throw new Error("您沒有權限執行此操作");
+    }
+
+    // 日期驗證
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new Error("日期格式錯誤");
+    }
+
+    if (start > end) {
+      throw new Error("起始日期不能晚於結束日期");
+    }
+
+    // 設定日期範圍為一整天（00:00:00 ~ 23:59:59）
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    // 獲取所有資產
+    const allAssets = getAllAssets();
+    Logger.log(`📦 總資產數量: ${allAssets.length}`);
+
+    // 篩選條件：
+    // 1. 狀態為「已報廢」
+    // 2. 報廢日期在指定範圍內
+    // 3. 符合資產類別
+    const filteredAssets = allAssets.filter(asset => {
+      // 檢查狀態
+      if (asset.assetStatus !== '已報廢') return false;
+
+      // 檢查類別
+      if (assetCategory === '財產' && asset.sourceSheet !== PROPERTY_MASTER_SHEET_NAME) return false;
+      if (assetCategory === '非消耗品' && asset.sourceSheet !== ITEM_MASTER_SHEET_NAME) return false;
+
+      // 檢查日期（使用 lastModified 欄位）
+      if (!asset.lastModified) return false;
+
+      try {
+        const assetDate = new Date(asset.lastModified);
+        return assetDate >= start && assetDate <= end;
+      } catch (e) {
+        Logger.log(`⚠️  資產 ${asset.assetId} 的日期解析失敗: ${e.message}`);
+        return false;
+      }
+    });
+
+    Logger.log(`✅ 找到 ${filteredAssets.length} 筆符合條件的資產`);
+
+    // 轉換為安全的 DTO 格式（防止 Date 序列化問題）
+    const results = filteredAssets.map(asset => {
+      let scrapDateStr = '';
+      if (asset.lastModified) {
+        try {
+          scrapDateStr = Utilities.formatDate(
+            new Date(asset.lastModified),
+            Session.getScriptTimeZone(),
+            "yyyy/MM/dd"
+          );
+        } catch (e) {
+          Logger.log(`⚠️  資產 ${asset.assetId} 的日期格式化失敗: ${e.message}`);
+          scrapDateStr = '';
+        }
+      }
+
+      return {
+        assetId: String(asset.assetId || ''),
+        assetName: String(asset.assetName || ''),
+        modelBrand: String(asset.modelBrand || ''),
+        leaderName: String(asset.leaderName || ''),
+        userName: String(asset.userName || ''),
+        location: String(asset.location || ''),
+        scrapDate: scrapDateStr,
+        scrapReason: String(asset.remarks || '')
+      };
+    });
+
+    // 按報廢日期降序排列
+    results.sort((a, b) => {
+      if (!a.scrapDate && !b.scrapDate) return 0;
+      if (!a.scrapDate) return 1;
+      if (!b.scrapDate) return -1;
+      return b.scrapDate.localeCompare(a.scrapDate);
+    });
+
+    return results;
+
+  } catch (e) {
+    Logger.log('❌ [getScrapAssetsByDateRange] 錯誤: ' + e.message);
+    throw new Error('獲取資料失敗：' + e.message);
+  }
+}
+
+/**
  * [供 scrapHistory.html 呼叫] 將已報廢資產回溯為在庫狀態
  * 僅管理員可執行
  * @param {string[]} assetIds - 要回溯的資產編號陣列
@@ -3157,6 +3263,58 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
   } catch (e) {
     Logger.log(`createScrapDocForApplicant 失敗: ${e.message} at ${e.stack}`);
     throw new Error("產生報表文件時發生錯誤: " + e.message);
+  }
+}
+
+/**
+ * [供 printScrap.html Tab 2 呼叫] 根據日期範圍生成報廢申請單（管理員專用）
+ * @param {string} startDate - 起始日期 (YYYY-MM-DD)
+ * @param {string} endDate - 結束日期 (YYYY-MM-DD)
+ * @param {string} assetCategory - 資產類別 ("財產" 或 "非消耗品")
+ * @returns {Object} { fileUrl: 文件URL, assetCount: 資產數量, assetIds: 資產ID陣列, dateRange: 日期範圍 }
+ */
+function createScrapDocByDateRange(startDate, endDate, assetCategory) {
+  try {
+    Logger.log(`📄 [createScrapDocByDateRange] 開始生成文件 - 日期範圍: ${startDate} ~ ${endDate}, 類別: ${assetCategory}`);
+
+    // 權限檢查
+    if (!checkAdminPermissions()) {
+      throw new Error("您沒有權限執行此操作");
+    }
+
+    // 獲取日期範圍內的資產
+    const assets = getScrapAssetsByDateRange(startDate, endDate, assetCategory);
+
+    if (!assets || assets.length === 0) {
+      throw new Error("該日期範圍內沒有已報廢的資產");
+    }
+
+    Logger.log(`✅ 找到 ${assets.length} 筆資產，準備生成文件`);
+
+    // 提取所有資產ID
+    const assetIds = assets.map(asset => asset.assetId);
+
+    // 獲取管理員名稱作為申請人
+    const adminName = getAdminName();
+    Logger.log(`👤 管理員名稱: ${adminName}`);
+
+    // 使用現有的 createScrapDoc 函數生成文件
+    // 第三個參數傳入 assetIds 陣列，會觸發「彙總模式」
+    const result = createScrapDoc(adminName, assetCategory, assetIds);
+
+    Logger.log(`📄 文件生成成功: ${result.fileUrl}`);
+
+    // 補充額外資訊
+    return {
+      fileUrl: result.fileUrl,
+      assetCount: assets.length,
+      assetIds: result.assetIds,
+      dateRange: `${startDate} ~ ${endDate}`
+    };
+
+  } catch (e) {
+    Logger.log('❌ [createScrapDocByDateRange] 錯誤: ' + e.message);
+    throw new Error('生成文件失敗：' + e.message);
   }
 }
 
