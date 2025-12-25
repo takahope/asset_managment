@@ -47,12 +47,10 @@
             </div>
         </div>
 
-        <div class="alert alert-warning justify-content-between align-items-center" id="pending-approval-banner" style="display:none;">
-            <div>
-                <i class="fa-solid fa-triangle-exclamation mr-1"></i>
-                <span id="pending-approval-text"></span>
-            </div>
-            <span class="text-primary">點擊此進行處理</span>
+        <div class="alert alert-warning" id="pending-approval-banner" style="display:none;">
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+            <span id="pending-approval-text"></span>
+            <span class="text-primary ml-2">點擊此進行處理</span>
         </div>
 
         <div class="alert alert-warning py-2" id="duplicate-warning" style="display:none;"></div>
@@ -308,7 +306,7 @@
             if (!banner || !text) return;
 
             if (pendingApprovals.length > 0) {
-                text.textContent = `您有 ${pendingApprovals.length} 筆待接收資產，請點擊此進行處理`;
+                text.textContent = `您有 ${pendingApprovals.length} 筆待接收資產。`;
                 banner.style.display = 'flex';
                 banner.classList.add('d-flex');
                 banner.onclick = openPendingApprovalModal;
