@@ -94,6 +94,95 @@
                 margin-bottom: 10px;
             }
         }
+
+        /* Toast 通知樣式 */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 350px;
+        }
+
+        .custom-toast {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+            border-left: 4px solid;
+        }
+
+        .custom-toast.toast-success {
+            border-left-color: #28a745;
+        }
+
+        .custom-toast.toast-error {
+            border-left-color: #dc3545;
+        }
+
+        .custom-toast.toast-warning {
+            border-left-color: #ffc107;
+        }
+
+        .custom-toast.toast-info {
+            border-left-color: #17a2b8;
+        }
+
+        .custom-toast .toast-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .custom-toast .toast-message {
+            flex: 1;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .custom-toast.slide-out {
+            animation: slideOut 0.3s ease-in forwards;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+
+        /* 預覽載入動畫 */
+        #preview-loading {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 20px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        #preview-loading .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3rem;
+        }
     </style>
 </head>
 <body>
@@ -227,6 +316,16 @@
                                             <div class="col-md-2 d-flex align-items-end">
                                                 <button class="btn btn-primary btn-block" onclick="previewScrapAssetsByDate()">預覽</button>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 載入中提示 -->
+                                    <div id="preview-loading" style="display: none;">
+                                        <div class="text-center py-5">
+                                            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                                                <span class="sr-only">載入中...</span>
+                                            </div>
+                                            <p class="mt-3 text-muted">正在搜尋符合條件的資產，請稍候...</p>
                                         </div>
                                     </div>
 
@@ -718,7 +817,7 @@
 
             files.forEach(file => {
                 const row = document.createElement('tr');
-                
+
                 const nameTd = document.createElement('td');
                 nameTd.textContent = file.name;
                 row.appendChild(nameTd);
@@ -745,6 +844,49 @@
         }
 
         /**
+         * 顯示 Toast 通知（替代 showMessage）
+         * @param {string} msg - 訊息內容
+         * @param {string} type - 類型：'success', 'error', 'warning', 'info'
+         * @param {number} duration - 顯示時長（毫秒），預設 3000ms
+         */
+        function showToast(msg, type = 'info', duration = 3000) {
+            console.log(`🎉 [showToast] ${type}: ${msg}`);
+
+            // 取得或創建 Toast 容器
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 350px;';
+                document.body.appendChild(container);
+            }
+
+            // 圖示對應
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+
+            // 創建 Toast 元素
+            const toast = document.createElement('div');
+            toast.className = `custom-toast toast-${type}`;
+            toast.innerHTML = `
+                <div class="toast-icon">${icons[type] || icons.info}</div>
+                <div class="toast-message">${msg}</div>
+            `;
+
+            container.appendChild(toast);
+
+            // 自動移除
+            setTimeout(() => {
+                toast.classList.add('slide-out');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        /**
          * 預覽指定日期範圍的已報廢資產
          */
         function previewScrapAssetsByDate() {
@@ -755,18 +897,18 @@
 
             // 驗證日期輸入
             if (!startDate || !endDate) {
-                showMessage('請選擇起始和結束日期', 'alert-warning');
+                showToast('請選擇起始和結束日期', 'warning');  // ✨ 改用 Toast
                 return;
             }
 
             if (new Date(startDate) > new Date(endDate)) {
-                showMessage('起始日期不能晚於結束日期', 'alert-warning');
+                showToast('起始日期不能晚於結束日期', 'warning');  // ✨ 改用 Toast
                 return;
             }
 
-            // 隱藏預覽容器並顯示載入狀態
+            // ✨ 顯示 Spinner 載入動畫
             document.getElementById('preview-container').style.display = 'none';
-            showMessage('正在載入資料...', 'alert-info');
+            document.getElementById('preview-loading').style.display = 'block';
 
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
             console.log(`📅 日期範圍: ${startDate} ~ ${endDate}, 類別: ${assetCategory}`);
@@ -775,7 +917,9 @@
                 .withSuccessHandler(renderPreviewTable)
                 .withFailureHandler(error => {
                     console.error('❌ [previewScrapAssetsByDate] 錯誤:', error);
-                    showMessage('載入失敗：' + (error.message || error), 'alert-danger');
+                    // ✨ 隱藏 Spinner，顯示錯誤 Toast
+                    document.getElementById('preview-loading').style.display = 'none';
+                    showToast('載入失敗：' + (error.message || error), 'error');
                 })
                 .getScrapAssetsByDateRange(startDate, endDate, assetCategory);
         }
@@ -786,6 +930,9 @@
          */
         function renderPreviewTable(assets) {
             console.log('📦 [renderPreviewTable] 收到資料:', assets);
+
+            // ✨ 隱藏 Spinner
+            document.getElementById('preview-loading').style.display = 'none';
 
             const container = document.getElementById('preview-container');
             const listBody = document.getElementById('preview-list');
@@ -805,7 +952,7 @@
                 }
 
                 if (assets.length === 0) {
-                    showMessage('該日期範圍內沒有已報廢的資產', 'alert-info');
+                    showToast('該日期範圍內沒有已報廢的資產', 'info');  // ✨ 改用 Toast
                     container.style.display = 'none';
                     return;
                 }
@@ -832,12 +979,12 @@
 
                 // 更新標題顯示數量
                 titleElement.textContent = `📊 預覽符合條件的資產（${assets.length} 筆）`;
-                showMessage(`✅ 找到 ${assets.length} 筆符合條件的資產`, 'alert-success');
+                showToast(`✅ 找到 ${assets.length} 筆符合條件的資產`, 'success');  // ✨ 改用 Toast
                 container.style.display = 'block';
 
             } catch (e) {
                 console.error('❌ [renderPreviewTable] 錯誤:', e);
-                showMessage('渲染失敗：' + e.message, 'alert-danger');
+                showToast('渲染失敗：' + e.message, 'error');  // ✨ 改用 Toast
                 container.style.display = 'none';
             }
         }
@@ -853,7 +1000,7 @@
             const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
 
             if (!startDate || !endDate) {
-                showMessage('請選擇起始和結束日期', 'alert-warning');
+                showToast('請選擇起始和結束日期', 'warning');  // ✨ 改用 Toast
                 return;
             }
 
@@ -867,7 +1014,7 @@
                 .withSuccessHandler(result => {
                     console.log('✅ [generateScrapDocByDate] 文件生成成功:', result);
                     hidePrintProgressBar('申請單生成完成！');
-                    showMessage(`📄 報廢申請單已成功生成（共 ${result.assetCount} 筆資產）`, 'alert-success');
+                    showToast(`📄 報廢申請單已成功生成（共 ${result.assetCount} 筆資產）`, 'success');  // ✨ 改用 Toast
 
                     // 開啟文件
                     window.open(result.fileUrl, '_blank');
@@ -884,7 +1031,7 @@
                 .withFailureHandler(error => {
                     console.error('❌ [generateScrapDocByDate] 錯誤:', error);
                     hidePrintProgressBar('生成失敗');
-                    showMessage('生成失敗：' + (error.message || error), 'alert-danger');
+                    showToast('生成失敗：' + (error.message || error), 'error');  // ✨ 改用 Toast
 
                     // 重置按鈕
                     btn.disabled = false;
