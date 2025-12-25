@@ -4023,6 +4023,41 @@ function getScrapDocHistory(assetCategory) {
   });
 }
 
+/**
+ * [供 printScrap.html 呼叫] 讀取報廢輸出資料夾中的檔案
+ * 用於 "查看資料夾檔案" 功能 (直接讀取 Drive)
+ */
+function getScrapDriveFiles() {
+  if (!SCRAP_OUTPUT_FOLDER_ID) throw new Error("尚未設定 SCRAP_OUTPUT_FOLDER_ID");
+
+  try {
+    const folder = DriveApp.getFolderById(SCRAP_OUTPUT_FOLDER_ID);
+    const files = folder.getFiles();
+    const fileList = [];
+
+    while (files.hasNext()) {
+      const file = files.next();
+      fileList.push({
+        name: file.getName(),
+        url: file.getUrl(),
+        lastUpdated: Utilities.formatDate(file.getLastUpdated(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm"),
+        id: file.getId(),
+        size: Math.round(file.getSize() / 1024) + " KB"
+      });
+    }
+
+    // 依最後修改時間排序 (新 -> 舊)
+    fileList.sort((a, b) => {
+        return b.lastUpdated.localeCompare(a.lastUpdated);
+    });
+
+    return fileList;
+  } catch (e) {
+    Logger.log("getScrapDriveFiles Error: " + e.toString());
+    throw new Error("讀取資料夾失敗: " + e.message);
+  }
+}
+
 // =================================================================
 // --- ✨ 全新功能模組：新增財產/物品 (addnew.html) ✨ ---
 // =================================================================
