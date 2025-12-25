@@ -15,13 +15,30 @@
         .nav-tabs {
             margin-bottom: 0;
             border-bottom: 2px solid #dee2e6;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .nav-tabs .nav-item {
+            display: inline-block;
+            margin-bottom: -1px;
+            width: auto;
+            height: auto;
         }
         .nav-tabs .nav-link {
             color: #495057;
             font-weight: 500;
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border: 1px solid transparent;
+            border-radius: 0.25rem 0.25rem 0 0;
+        }
+        .nav-tabs .nav-link:hover {
+            border-color: #e9ecef #e9ecef #dee2e6;
         }
         .nav-tabs .nav-link.active {
             color: #007bff;
+            background-color: #fff;
+            border-color: #dee2e6 #dee2e6 #fff;
             border-bottom: 3px solid #007bff;
         }
 
