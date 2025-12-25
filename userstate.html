@@ -3,6 +3,7 @@
 <head>
     <base target="_top">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { padding: 20px; }
         #status-message { margin-top: 15px; }
@@ -43,6 +44,14 @@
                 <label for="search-box">關鍵字搜尋：</label>
                 <input type="text" id="search-box" class="form-control" placeholder="搜尋產編、名稱、保管人...">
             </div>
+        </div>
+
+        <div class="alert alert-warning justify-content-between align-items-center" id="pending-approval-banner" style="display:none;">
+            <div>
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                <span id="pending-approval-text"></span>
+            </div>
+            <span class="text-primary">點擊此進行處理</span>
         </div>
 
         <div class="alert alert-warning py-2" id="duplicate-warning" style="display:none;"></div>
@@ -102,12 +111,65 @@
         </div>
     </div>
 
+    <div class="modal fade" id="pendingApprovalModal" tabindex="-1" role="dialog" aria-labelledby="pendingApprovalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pendingApprovalTitle">待接收資產清單</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-row mb-2">
+                        <div class="form-group col-md-5">
+                            <label for="pending-location-filter">依原保管地點篩選</label>
+                            <select id="pending-location-filter" class="form-control">
+                                <option value="">-- 顯示全部 --</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-7">
+                            <label for="pending-search-box">關鍵字搜尋 (產編/產名/原保管人)</label>
+                            <input type="text" id="pending-search-box" class="form-control" placeholder="輸入關鍵字">
+                        </div>
+                    </div>
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="thead-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th style="width: 4%;"><input type="checkbox" id="pending-select-all"></th>
+                                    <th style="width: 12%;">財產編號</th>
+                                    <th style="width: 16%;">財產名稱</th>
+                                    <th style="width: 14%;">保管人變更</th>
+                                    <th style="width: 14%;">使用人變更</th>
+                                    <th style="width: 12%;">地點變更</th>
+                                    <th style="width: 10%;">轉移類型</th>
+                                    <th style="width: 12%;">申請時間</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pending-approval-list"></tbody>
+                        </table>
+                    </div>
+                    <div id="pending-pagination" class="d-flex justify-content-between align-items-center mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger" onclick="submitPendingRejection()">拒絕所選</button>
+                    <button type="button" class="btn btn-success" onclick="submitPendingApproval()">接受所選</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let allAssets = [];
         let isAdmin = false;
         let currentUserEmail = '';
         let webAppUrl = ''; // ✨ 新增：儲存 Web App 的基礎 URL
         let duplicateGroups = [];
+        let pendingApprovals = [];
+        let filteredPendingApprovals = [];
+        let pendingCurrentPage = 1;
+        const pendingRowsPerPage = 50;
 
         document.addEventListener("DOMContentLoaded", () => {
             toggleTableVisibility(false);
@@ -143,6 +205,7 @@
             document.getElementById('leader-filter').addEventListener('change', filterAndRender);
             document.getElementById('search-box').addEventListener('input', filterAndRender);
 
+            initPendingApprovalNotice();
             filterAndRender(); // 初始渲染
             hideFlyProgressBar('資料載入完成！', 300);
             setTimeout(() => {
@@ -217,6 +280,262 @@
             renderTable(filteredAssets);
         }
 
+        function initPendingApprovalNotice() {
+            loadPendingApprovals();
+        }
+
+        function loadPendingApprovals() {
+            google.script.run
+                .withSuccessHandler(response => {
+                    if (response && response.error) {
+                        console.warn('載入待接收清單失敗：', response.error);
+                        return;
+                    }
+                    pendingApprovals = (response && response.approvals) ? response.approvals : [];
+                    updatePendingBanner();
+                })
+                .withFailureHandler(error => {
+                    console.warn('載入待接收清單失敗：', error.message);
+                })
+                .getPendingApprovals();
+        }
+
+        function updatePendingBanner() {
+            const banner = document.getElementById('pending-approval-banner');
+            const text = document.getElementById('pending-approval-text');
+            if (!banner || !text) return;
+
+            if (pendingApprovals.length > 0) {
+                text.textContent = `您有 ${pendingApprovals.length} 筆待接收資產，請點擊此進行處理`;
+                banner.style.display = 'flex';
+                banner.classList.add('d-flex');
+                banner.onclick = openPendingApprovalModal;
+            } else {
+                text.textContent = '';
+                banner.style.display = 'none';
+                banner.classList.remove('d-flex');
+                banner.onclick = null;
+            }
+        }
+
+        function openPendingApprovalModal() {
+            if (!pendingApprovals || pendingApprovals.length === 0) return;
+
+            if (!document.getElementById('pendingApprovalModal').dataset.initialized) {
+                document.getElementById('pending-location-filter').addEventListener('change', filterPendingApprovals);
+                document.getElementById('pending-search-box').addEventListener('input', filterPendingApprovals);
+                document.getElementById('pending-select-all').addEventListener('change', (event) => {
+                    document.querySelectorAll('.pending-approval-checkbox').forEach(cb => {
+                        cb.checked = event.target.checked;
+                    });
+                });
+                document.getElementById('pendingApprovalModal').dataset.initialized = 'true';
+            }
+
+            populatePendingFilters();
+            filterPendingApprovals();
+            $('#pendingApprovalModal').modal('show');
+        }
+
+        function populatePendingFilters() {
+            const locationFilter = document.getElementById('pending-location-filter');
+            locationFilter.innerHTML = '<option value="">-- 顯示全部 --</option>';
+            const uniqueLocations = [...new Set(pendingApprovals.map(item => item.oldLocation))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+            uniqueLocations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                locationFilter.appendChild(option);
+            });
+        }
+
+        function filterPendingApprovals() {
+            const locationFilter = document.getElementById('pending-location-filter').value.toUpperCase();
+            const searchFilter = document.getElementById('pending-search-box').value.toUpperCase();
+
+            filteredPendingApprovals = pendingApprovals.filter(item => {
+                const locationMatch = (locationFilter === '') || (item.oldLocation && item.oldLocation.toUpperCase() === locationFilter);
+                const searchMatch = item.assetId.toUpperCase().includes(searchFilter) ||
+                                    (item.assetName && item.assetName.toUpperCase().includes(searchFilter)) ||
+                                    (item.oldKeeper && item.oldKeeper.toUpperCase().includes(searchFilter));
+                return locationMatch && searchMatch;
+            });
+
+            pendingCurrentPage = 1;
+            renderPendingPage(pendingCurrentPage);
+        }
+
+        function renderPendingPage(page) {
+            pendingCurrentPage = page;
+            const listBody = document.getElementById('pending-approval-list');
+            const pagination = document.getElementById('pending-pagination');
+            listBody.innerHTML = '';
+
+            if (filteredPendingApprovals.length === 0) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 8;
+                cell.className = 'text-center text-muted';
+                cell.textContent = '沒有符合條件的項目。';
+                row.appendChild(cell);
+                listBody.appendChild(row);
+                pagination.textContent = '';
+                return;
+            }
+
+            const start = (page - 1) * pendingRowsPerPage;
+            const end = start + pendingRowsPerPage;
+            const items = filteredPendingApprovals.slice(start, end);
+
+            const fragment = document.createDocumentFragment();
+            items.forEach(item => {
+                const row = document.createElement('tr');
+
+                const checkboxTd = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'pending-approval-checkbox';
+                checkbox.value = item.appId;
+                checkboxTd.appendChild(checkbox);
+                row.appendChild(checkboxTd);
+
+                const cells = [
+                    item.assetId,
+                    item.assetName,
+                    item.oldKeeper,
+                    item.newKeeper || '—',
+                    item.newUser || '—',
+                    item.newLocation || '—',
+                    item.transferType || '地點',
+                    item.applyTime
+                ];
+
+                cells.forEach(value => {
+                    const td = document.createElement('td');
+                    td.textContent = value || '';
+                    row.appendChild(td);
+                });
+                fragment.appendChild(row);
+            });
+
+            listBody.appendChild(fragment);
+            renderPendingPagination();
+            document.getElementById('pending-select-all').checked = false;
+        }
+
+        function renderPendingPagination() {
+            const pagination = document.getElementById('pending-pagination');
+            const totalPages = Math.ceil(filteredPendingApprovals.length / pendingRowsPerPage);
+
+            if (filteredPendingApprovals.length === 0) {
+                pagination.innerHTML = '<span class="text-muted">沒有符合篩選條件的項目。</span>';
+                return;
+            }
+            if (totalPages <= 1) {
+                pagination.innerHTML = `<span class="text-muted">共 ${filteredPendingApprovals.length} 筆資料</span>`;
+                return;
+            }
+
+            const info = document.createElement('span');
+            info.className = 'text-muted';
+            info.textContent = `共 ${filteredPendingApprovals.length} 筆資料，第 ${pendingCurrentPage} / ${totalPages} 頁`;
+
+            const nav = document.createElement('ul');
+            nav.className = 'pagination mb-0';
+
+            const prev = document.createElement('li');
+            prev.className = `page-item ${pendingCurrentPage === 1 ? 'disabled' : ''}`;
+            const prevLink = document.createElement('a');
+            prevLink.className = 'page-link';
+            prevLink.textContent = '上一頁';
+            prevLink.addEventListener('click', () => {
+                if (pendingCurrentPage > 1) renderPendingPage(pendingCurrentPage - 1);
+            });
+            prev.appendChild(prevLink);
+
+            const next = document.createElement('li');
+            next.className = `page-item ${pendingCurrentPage === totalPages ? 'disabled' : ''}`;
+            const nextLink = document.createElement('a');
+            nextLink.className = 'page-link';
+            nextLink.textContent = '下一頁';
+            nextLink.addEventListener('click', () => {
+                if (pendingCurrentPage < totalPages) renderPendingPage(pendingCurrentPage + 1);
+            });
+            next.appendChild(nextLink);
+
+            nav.appendChild(prev);
+            nav.appendChild(next);
+
+            pagination.innerHTML = '';
+            pagination.appendChild(info);
+            pagination.appendChild(nav);
+        }
+
+        function submitPendingApproval() {
+            const selected = Array.from(document.querySelectorAll('.pending-approval-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('請至少勾選一個項目再送出。');
+                return;
+            }
+
+            showFlyProgressBar('正在處理接收作業...');
+            google.script.run
+                .withSuccessHandler(message => {
+                    hideFlyProgressBar('處理完成！', 300);
+                    $('#pendingApprovalModal').modal('hide');
+                    alert(message);
+                    loadPendingApprovals();
+                    refreshUserStateData();
+                })
+                .withFailureHandler(error => {
+                    hideFlyProgressBar('處理失敗！', 300);
+                    alert('處理失敗：' + error.message);
+                })
+                .processBatchApproval(selected);
+        }
+
+        function submitPendingRejection() {
+            const selected = Array.from(document.querySelectorAll('.pending-approval-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('請至少勾選一個項目再送出。');
+                return;
+            }
+            if (!confirm(`確定要拒絕所選的 ${selected.length} 筆待接收資產嗎？`)) {
+                return;
+            }
+
+            showFlyProgressBar('正在處理拒絕作業...');
+            google.script.run
+                .withSuccessHandler(message => {
+                    hideFlyProgressBar('處理完成！', 300);
+                    $('#pendingApprovalModal').modal('hide');
+                    alert(message);
+                    loadPendingApprovals();
+                    refreshUserStateData();
+                })
+                .withFailureHandler(error => {
+                    hideFlyProgressBar('處理失敗！', 300);
+                    alert('處理失敗：' + error.message);
+                })
+                .processBatchRejection(selected);
+        }
+
+        function refreshUserStateData() {
+            google.script.run
+                .withSuccessHandler(response => {
+                    if (response.error) {
+                        showError({ message: response.error });
+                        return;
+                    }
+                    allAssets = response.assets;
+                    isAdmin = response.isAdmin;
+                    currentUserEmail = response.userEmail;
+                    filterAndRender();
+                })
+                .withFailureHandler(showError)
+                .getUserStateData();
+        }
+
         function updateDuplicateWarning(assets) {
             const warningEl = document.getElementById('duplicate-warning');
             if (!warningEl) return;
@@ -225,7 +544,7 @@
             duplicateGroups = result.duplicateGroups;
 
             if (result.duplicateCount > 0) {
-                warningEl.innerHTML = `偵測到 ${result.duplicateCount} 筆重複產編，已合併顯示並以去重數量計算。<span class="text-primary ml-2">點擊查看詳情</span>`;
+                warningEl.innerHTML = `偵測到 ${result.duplicateCount} 筆重複產編。<span class="text-primary ml-2">點擊查看詳情</span>`;
                 warningEl.style.display = 'block';
                 warningEl.style.cursor = 'pointer';
                 warningEl.onclick = openDuplicateAssetsModal;

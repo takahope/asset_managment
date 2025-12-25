@@ -1773,6 +1773,101 @@ function processBatchApproval(appIds) {
   }
 }
 
+/**
+ * [供 userstate.html 呼叫] 批次拒絕待接收資產
+ * @param {Array<string>} appIds - 申請紀錄 ID 清單
+ * @returns {string} 處理結果訊息
+ */
+function processBatchRejection(appIds) {
+  Logger.log("\n\n--- processBatchRejection 開始執行 ---");
+  if (!appIds || appIds.length === 0) {
+    return "您沒有選擇任何項目。";
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow(), appLogSheet.getLastColumn()).getValues();
+    const appLogMap = new Map(appLogData.map((row, index) => [row[AL_APP_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
+
+    const now = new Date();
+    let successCount = 0;
+    const errors = [];
+    const unauthorizedApps = [];
+
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = currentUserEmail.toLowerCase();
+    const isAdmin = checkAdminPermissions();
+
+    appIds.forEach(appId => {
+      const appDetails = appLogMap.get(appId);
+      if (!appDetails) {
+        errors.push(`找不到申請紀錄：${appId}`);
+        return;
+      }
+
+      if (appDetails.row[AL_STATUS_COLUMN_INDEX - 1] !== "待接收") {
+        return;
+      }
+
+      const newLeaderEmail = (appDetails.row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
+      const newUserEmail = (appDetails.row.length > AL_NEW_USER_EMAIL_COLUMN_INDEX - 1
+        ? appDetails.row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1]
+        : '').toLowerCase();
+      const transferType = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
+        ? appDetails.row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
+        : '地點';
+
+      if (!isAdmin) {
+        let canReject = false;
+        if (transferType === '保管人+使用人') {
+          canReject = newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
+        } else if (transferType === '使用人') {
+          canReject = newUserEmail === currentUserEmailLower;
+        } else {
+          canReject = newLeaderEmail === currentUserEmailLower;
+        }
+
+        if (!canReject) {
+          unauthorizedApps.push(appId);
+          Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權拒絕申請 ${appId}`);
+          return;
+        }
+      }
+
+      const assetId = appDetails.row[AL_ASSET_ID_COLUMN_INDEX - 1].toString();
+      const location = findAssetLocation(assetId);
+      if (location) {
+        const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+        location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue("在庫");
+        location.sheet.getRange(location.rowIndex, indices.APPLICATION_TIME).setValue('');
+        location.sheet.getRange(location.rowIndex, indices.TRANSFER_TIME).setValue('');
+      }
+
+      const appRowIndex = appDetails.index;
+      appLogSheet.getRange(appRowIndex, AL_STATUS_COLUMN_INDEX).setValue("已取消");
+      appLogSheet.getRange(appRowIndex, AL_REVIEW_TIME_COLUMN_INDEX).setValue(now);
+      appLogSheet.getRange(appRowIndex, AL_APPROVER_EMAIL_COLUMN_INDEX).setValue(currentUserEmail);
+
+      successCount++;
+    });
+
+    let message = `已拒絕 ${successCount} 筆待接收資產。`;
+    if (unauthorizedApps.length > 0) {
+      message += `\n${unauthorizedApps.length} 筆因權限不足未處理。`;
+    }
+    if (errors.length > 0) {
+      message += `\n${errors.join('；')}`;
+    }
+
+    Logger.log(message);
+    return message;
+  } catch (e) {
+    Logger.log(`processBatchRejection 失敗: ${e.message}`);
+    return `拒絕作業失敗：${e.message}`;
+  }
+}
+
 // =================================================================
 // --- 資產管理員更新功能 (後端) ---
 // =================================================================
