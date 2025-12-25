@@ -196,14 +196,14 @@
                                     <table class="table table-hover">
                                         <thead>
                                             <tr>
-                                                <th>申請/保管人</th>
-                                                <th>日期</th>
-                                                <th>包含筆數</th>
+                                                <th>檔案名稱</th>
+                                                <th>最後修改時間</th>
+                                                <th>大小</th>
                                                 <th>操作</th>
                                             </tr>
                                         </thead>
                                         <tbody id="history-list">
-                                            <!-- History items will be populated here -->
+                                            <!-- File items will be populated here -->
                                         </tbody>
                                     </table>
                                 </div>
@@ -697,36 +697,49 @@
         function showHistory() {
             $('#historyModal').modal('show');
             const listBody = document.getElementById('history-list');
-            listBody.innerHTML = '<tr><td colspan="4" class="text-center">載入中...</td></tr>';
+            listBody.innerHTML = '<tr><td colspan="4" class="text-center">正在讀取中...</td></tr>';
 
-            const assetCategory = document.querySelector('input[name="assetCategory"]:checked').value;
             google.script.run
-                .withSuccessHandler(renderHistoryTable)
+                .withSuccessHandler(renderDriveFileList)
                 .withFailureHandler(error => {
                     listBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">載入失敗: ${error.message}</td></tr>`;
                 })
-                .getScrapDocHistory(assetCategory);
+                .getScrapDriveFiles();
         }
 
-        function renderHistoryTable(history) {
+        function renderDriveFileList(files) {
             const listBody = document.getElementById('history-list');
             listBody.innerHTML = '';
 
-            if (!history || history.length === 0) {
-                listBody.innerHTML = '<tr><td colspan="4" class="text-center">沒有歷史紀錄</td></tr>';
+            if (!files || files.length === 0) {
+                listBody.innerHTML = '<tr><td colspan="4" class="text-center">無紀錄</td></tr>';
                 return;
             }
 
-            history.forEach(doc => {
+            files.forEach(file => {
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${doc.applicant}</td>
-                    <td>${doc.date}</td>
-                    <td>${doc.count}</td>
-                    <td>
-                        <a href="${doc.url}" target="_blank" class="btn btn-sm btn-primary">開啟文件</a>
-                    </td>
-                `;
+                
+                const nameTd = document.createElement('td');
+                nameTd.textContent = file.name;
+                row.appendChild(nameTd);
+
+                const dateTd = document.createElement('td');
+                dateTd.textContent = file.lastUpdated;
+                row.appendChild(dateTd);
+
+                const sizeTd = document.createElement('td');
+                sizeTd.textContent = file.size;
+                row.appendChild(sizeTd);
+
+                const btnTd = document.createElement('td');
+                const link = document.createElement('a');
+                link.href = file.url;
+                link.target = "_blank";
+                link.className = "btn btn-sm btn-primary";
+                link.textContent = "開啟";
+                btnTd.appendChild(link);
+                row.appendChild(btnTd);
+
                 listBody.appendChild(row);
             });
         }
