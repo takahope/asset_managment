@@ -63,13 +63,14 @@
                     <thead class="thead-light" style="position: sticky; top: 0;">
                         <tr>
                             <th style="width: 4%;"><input type="checkbox" id="select-all"></th>
-                            <th style="width: 11%;">財產編號</th>
-                            <th style="width: 13%;">財產名稱</th>
-                            <th style="width: 15%;">保管人變更</th>
-                            <th style="width: 15%;">使用人變更</th>
-                            <th style="width: 15%;">地點變更</th>
-                            <th style="width: 13%;">轉移類型</th>
-                            <th style="width: 14%;">申請時間</th>
+                            <th style="width: 10%;">財產編號</th>
+                            <th style="width: 11%;">財產名稱</th>
+                            <th style="width: 12%;">型號/廠牌</th>
+                            <th style="width: 14%;">保管人變更</th>
+                            <th style="width: 14%;">使用人變更</th>
+                            <th style="width: 13%;">地點變更</th>
+                            <th style="width: 11%;">轉移類型</th>
+                            <th style="width: 11%;">申請時間</th>
                         </tr>
                     </thead>
                     <tbody id="approval-list"></tbody>
@@ -232,6 +233,10 @@
                 const assetNameTd = document.createElement('td');
                 assetNameTd.textContent = item.assetName;
                 row.appendChild(assetNameTd);
+
+                const modelBrandTd = document.createElement('td');
+                modelBrandTd.textContent = item.modelBrand || '';
+                row.appendChild(modelBrandTd);
 
                 // 輔助函式：建立變更顯示儲存格
                 function createChangeTd(oldVal, newVal, hasChange) {
