@@ -138,13 +138,14 @@
                             <thead class="thead-light" style="position: sticky; top: 0;">
                                 <tr>
                                     <th style="width: 4%;"><input type="checkbox" id="pending-select-all"></th>
-                                    <th style="width: 12%;">財產編號</th>
-                                    <th style="width: 16%;">財產名稱</th>
+                                    <th style="width: 10%;">財產編號</th>
+                                    <th style="width: 11%;">財產名稱</th>
+                                    <th style="width: 12%;">型號/廠牌</th>
                                     <th style="width: 14%;">保管人變更</th>
                                     <th style="width: 14%;">使用人變更</th>
-                                    <th style="width: 12%;">地點變更</th>
-                                    <th style="width: 10%;">轉移類型</th>
-                                    <th style="width: 12%;">申請時間</th>
+                                    <th style="width: 13%;">地點變更</th>
+                                    <th style="width: 11%;">轉移類型</th>
+                                    <th style="width: 11%;">申請時間</th>
                                 </tr>
                             </thead>
                             <tbody id="pending-approval-list"></tbody>
@@ -374,7 +375,7 @@
             if (filteredPendingApprovals.length === 0) {
                 const row = document.createElement('tr');
                 const cell = document.createElement('td');
-                cell.colSpan = 8;
+                cell.colSpan = 9;  // 更新為 9 欄（增加了型號/廠牌）
                 cell.className = 'text-center text-muted';
                 cell.textContent = '沒有符合條件的項目。';
                 row.appendChild(cell);
@@ -391,6 +392,7 @@
             items.forEach(item => {
                 const row = document.createElement('tr');
 
+                // Checkbox 儲存格
                 const checkboxTd = document.createElement('td');
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -399,22 +401,75 @@
                 checkboxTd.appendChild(checkbox);
                 row.appendChild(checkboxTd);
 
-                const cells = [
-                    item.assetId,
-                    item.assetName,
-                    item.oldKeeper,
-                    item.newKeeper || '—',
-                    item.newUser || '—',
-                    item.newLocation || '—',
-                    item.transferType || '地點',
-                    item.applyTime
-                ];
+                // 資產編號和名稱
+                const assetIdTd = document.createElement('td');
+                assetIdTd.textContent = item.assetId;
+                row.appendChild(assetIdTd);
 
-                cells.forEach(value => {
+                const assetNameTd = document.createElement('td');
+                assetNameTd.textContent = item.assetName;
+                row.appendChild(assetNameTd);
+
+                // 型號/廠牌
+                const modelBrandTd = document.createElement('td');
+                modelBrandTd.textContent = item.modelBrand || '';
+                row.appendChild(modelBrandTd);
+
+                // 輔助函式：建立變更顯示儲存格（與 review.html 一致）
+                function createChangeTd(oldVal, newVal, hasChange) {
                     const td = document.createElement('td');
-                    td.textContent = value || '';
-                    row.appendChild(td);
-                });
+                    if (hasChange) {
+                        td.appendChild(document.createTextNode(oldVal || ''));
+                        const arrow = document.createElement('span');
+                        arrow.className = 'text-primary';
+                        arrow.textContent = ' → ';
+                        td.appendChild(arrow);
+                        td.appendChild(document.createTextNode(newVal || ''));
+                    } else {
+                        td.textContent = oldVal || '';
+                    }
+                    return td;
+                }
+
+                // 保管人變更
+                const keeperHasChange = item.newKeeper && item.oldKeeper !== item.newKeeper;
+                row.appendChild(createChangeTd(item.oldKeeper, item.newKeeper, keeperHasChange));
+
+                // 使用人變更
+                const oldUser = item.oldUser || item.userName || '';
+                const newUser = item.newUser || '';
+                const userHasChange = newUser && oldUser !== newUser;
+                row.appendChild(createChangeTd(oldUser, newUser, userHasChange));
+
+                // 地點變更
+                const locationHasChange = item.newLocation && item.oldLocation !== item.newLocation;
+                row.appendChild(createChangeTd(item.oldLocation, item.newLocation, locationHasChange));
+
+                // 轉移類型 Badge（與 review.html 一致）
+                const transferType = item.transferType || '地點';
+                const typeTd = document.createElement('td');
+                const typeBadgeEl = document.createElement('span');
+                if (transferType.includes('保管人') && transferType.includes('使用人')) {
+                    typeBadgeEl.className = 'badge badge-danger';
+                    typeBadgeEl.textContent = '保管人+使用人';
+                } else if (transferType.includes('保管人')) {
+                    typeBadgeEl.className = 'badge badge-warning';
+                    typeBadgeEl.textContent = '保管人';
+                } else if (transferType.includes('使用人')) {
+                    typeBadgeEl.className = 'badge badge-info';
+                    typeBadgeEl.textContent = '使用人';
+                } else {
+                    typeBadgeEl.className = 'badge badge-secondary';
+                    typeBadgeEl.textContent = '地點';
+                }
+                typeTd.appendChild(typeBadgeEl);
+                row.appendChild(typeTd);
+
+                // 申請時間
+                const applyTimeTd = document.createElement('td');
+                applyTimeTd.textContent = item.applyTime;
+                row.appendChild(applyTimeTd);
+
                 fragment.appendChild(row);
             });
 
