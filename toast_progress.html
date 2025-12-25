@@ -1,0 +1,161 @@
+<style>
+  /* Toast 容器定位 (右上角) */
+  .toast-progress-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1060;
+    width: calc(100% - 2rem);
+    max-width: 350px;
+  }
+
+  /* 商務專業風格 (Enterprise) */
+  .enterprise-toast {
+    border-left: 5px solid #0d6efd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background-color: #fff;
+  }
+
+  .enterprise-toast .toast-header {
+    background: white;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .enterprise-toast .toast-body {
+    padding: 15px;
+  }
+
+  .enterprise-toast .progress {
+    height: 8px;
+    border-radius: 4px;
+    background-color: #e9ecef;
+  }
+
+  .enterprise-toast .progress-bar {
+    background-color: #0d6efd;
+    transition: width 0.3s ease-out;
+  }
+
+  /* 狀態文字樣式 */
+  .toast-status-text {
+    font-size: 13px;
+    color: #495057;
+  }
+
+  .toast-percent-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0d6efd;
+  }
+</style>
+
+<!-- Toast 容器 -->
+<div id="toastProgressContainer" class="toast-progress-container"></div>
+
+<script>
+  let _toastProgressInterval = null;
+  let _currentToast = null;
+
+  /**
+   * 顯示 Toast 進度條
+   * @param {string} statusText - 狀態文字
+   */
+  function showToastProgress(statusText = '正在處理中...') {
+    const container = document.getElementById('toastProgressContainer');
+    if (!container) return;
+
+    // 如果已有進度條在運行,只更新文字
+    if (_toastProgressInterval && _currentToast) {
+      const statusTextEl = _currentToast.querySelector('.toast-status-text');
+      if (statusTextEl) {
+        statusTextEl.textContent = statusText;
+      }
+      return;
+    }
+
+    // 生成唯一 ID
+    const toastId = 'toast-progress-' + Date.now();
+
+    // 構建 Toast HTML (不包含關閉按鈕)
+    const toastHTML = `
+      <div id="${toastId}" class="toast enterprise-toast" role="alert" aria-live="assertive" aria-atomic="true" data-autohide="false">
+        <div class="toast-header">
+          <strong class="mr-auto">處理進度</strong>
+        </div>
+        <div class="toast-body">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="toast-status-text">${statusText}</span>
+            <span class="toast-percent-text">0%</span>
+          </div>
+          <div class="progress">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 插入 Toast
+    container.insertAdjacentHTML('beforeend', toastHTML);
+    _currentToast = document.getElementById(toastId);
+
+    // 顯示 Toast (Bootstrap 4 語法)
+    $(_currentToast).toast('show');
+
+    // 模擬進度增長
+    let progress = 0;
+    const progressBar = _currentToast.querySelector('.progress-bar');
+    const percentText = _currentToast.querySelector('.toast-percent-text');
+
+    _toastProgressInterval = setInterval(() => {
+      if (progress < 90) {
+        progress++;
+        progressBar.style.width = progress + '%';
+        percentText.textContent = progress + '%';
+      }
+    }, 30); // 每 30ms 增加 1%
+  }
+
+  /**
+   * 隱藏 Toast 進度條並顯示完成訊息
+   * @param {string} completionText - 完成文字
+   * @param {number} delay - 延遲時間 (毫秒)
+   */
+  function hideToastProgress(completionText = '處理完成!', delay = 300) {
+    if (!_currentToast) return;
+
+    // 停止進度模擬
+    if (_toastProgressInterval) {
+      clearInterval(_toastProgressInterval);
+      _toastProgressInterval = null;
+    }
+
+    // 更新 UI 元素
+    const progressBar = _currentToast.querySelector('.progress-bar');
+    const statusText = _currentToast.querySelector('.toast-status-text');
+    const percentText = _currentToast.querySelector('.toast-percent-text');
+
+    // 跳到 100%
+    progressBar.style.width = '100%';
+    percentText.textContent = '100%';
+    statusText.textContent = completionText;
+
+    // 移除動畫效果,變為綠色
+    progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+    progressBar.classList.add('bg-success');
+
+    // 延遲後隱藏並移除
+    setTimeout(() => {
+      $(_currentToast).toast('hide');
+
+      // Toast 隱藏動畫完成後移除元素
+      setTimeout(() => {
+        if (_currentToast && _currentToast.parentNode) {
+          _currentToast.remove();
+        }
+        _currentToast = null;
+      }, 500); // Bootstrap toast 隱藏動畫時間
+    }, delay);
+  }
+</script>
