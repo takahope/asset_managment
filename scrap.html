@@ -56,12 +56,13 @@
                     <thead class="thead-light" style="position: sticky; top: 0;">
                         <tr>
                             <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
-                            <th style="width: 20%;">財產編號</th>
-                            <th style="width: 25%;">財產名稱</th>
-                            <th style="width: 12%;">使用人</th>
-                            <th style="width: 12%;">保管人</th>
-                            <th style="width: 13%;">目前地點</th>
-                            <th style="width: 13%;">目前狀態</th>
+                            <th style="width: 18%;">財產編號</th>
+                            <th style="width: 18%;">財產名稱</th>
+                            <th style="width: 15%;">型號/廠牌</th>
+                            <th style="width: 11%;">使用人</th>
+                            <th style="width: 11%;">保管人</th>
+                            <th style="width: 11%;">目前地點</th>
+                            <th style="width: 11%;">目前狀態</th>
                         </tr>
                     </thead>
                     <tbody id="asset-list"></tbody>
@@ -168,7 +169,7 @@
                 row.appendChild(checkboxTd);
 
                 // 文字欄位使用 textContent 安全設定
-                [asset.id, asset.assetName, asset.userName, asset.leaderName, asset.location].forEach(data => {
+                [asset.id, asset.assetName, asset.modelBrand, asset.userName, asset.leaderName, asset.location].forEach(data => {
                     const td = document.createElement('td');
                     td.textContent = data || '';
                     row.appendChild(td);

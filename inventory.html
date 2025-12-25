@@ -492,6 +492,7 @@
                                 <tr>
                                     <th>財產編號</th>
                                     <th>財產名稱</th>
+                                    <th>型號/廠牌</th>
                                     <th>使用人</th>
                                     <th>保管人</th>
                                     <th>地點</th>
@@ -559,10 +560,10 @@
         let pendingStartOptions = null; // 管理員分派方式暫存
         let filteredSessionAssets = [];
         let currentPage = 1;
-        const rowsPerPage = 80;
+        const rowsPerPage = 500;
         let searchDebounceTimer = null;
         let dashboardStatsMap = {};
-        const assignmentRowsPerPage = 50;
+        const assignmentRowsPerPage = 500;
         let assignmentModalState = { key: '', title: '', assets: [], page: 1 };
         let duplicateAssetGroups = [];
 
@@ -1040,6 +1041,7 @@
                     const cells = [
                         asset.assetId,
                         asset.assetName,
+                        asset.modelBrand,
                         asset.userName,
                         asset.keeperName,
                         asset.location,
@@ -1363,7 +1365,7 @@
                 const metaWrap = document.createElement('div');
                 const metaText = document.createElement('small');
                 metaText.className = 'text-muted';
-                metaText.textContent = `使用人: ${asset.userName || '-'} | 保管人: ${asset.keeperName || '-'} | 地點: ${asset.location || '-'}`;
+                metaText.textContent = `型號: ${asset.modelBrand || '-'} | 使用人: ${asset.userName || '-'} | 保管人: ${asset.keeperName || '-'} | 地點: ${asset.location || '-'}`;
                 metaWrap.appendChild(metaText);
 
                 if (asset.remarks) {

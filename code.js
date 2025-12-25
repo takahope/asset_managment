@@ -151,6 +151,7 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
     return {
       assetId: row[indices.ASSET_ID - 1],
       assetName: row[indices.ASSET_NAME - 1],
+      modelBrand: row[indices.MODEL_BRAND - 1] || '',
       purchaseDate: row[indices.PURCHASE_DATE - 1],
       useLife: row[indices.USE_LIFE - 1],
       assetCategory: row[indices.ASSET_CATEGORY - 1],
@@ -614,6 +615,7 @@ function getUserStateData() {
   const results = filteredData.map(asset => ({
     assetId: asset.assetId,
     assetName: asset.assetName,
+    modelBrand: asset.modelBrand || '',
     leader: asset.leaderName,
     leaderEmail: asset.leaderEmail, // ✨ Add leaderEmail
     location: asset.location,
@@ -765,6 +767,7 @@ function getTransferData() {
     .map(asset => ({
       id: asset.assetId,
       assetName: asset.assetName,
+      modelBrand: asset.modelBrand || '',
       location: asset.location,
       category: asset.assetCategory,
       userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
@@ -1433,10 +1436,11 @@ function getPendingApprovals() {
     
     const allAssets = getAllAssets();
     const assetIdToInfoMap = new Map(allAssets.map(asset => [
-      asset.assetId, 
-      { 
-        assetName: asset.assetName, 
-        userName: asset.userName || '無' 
+      asset.assetId,
+      {
+        assetName: asset.assetName,
+        modelBrand: asset.modelBrand || '',
+        userName: asset.userName || '無'
       }
     ]));
     
@@ -1463,7 +1467,7 @@ function getPendingApprovals() {
       })
       .map(row => {
         const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
-        const assetInfo = assetIdToInfoMap.get(assetId) || { assetName: '（找不到名稱）', userName: '無' };
+        const assetInfo = assetIdToInfoMap.get(assetId) || { assetName: '（找不到名稱）', modelBrand: '', userName: '無' };
 
         // ✨ 讀取轉移類型資訊（如果有的話）
         const transferType = row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
@@ -1483,6 +1487,7 @@ function getPendingApprovals() {
           applyTime: new Date(row[AL_APP_TIME_COLUMN_INDEX - 1]).toLocaleString('zh-TW'),
           assetId: assetId,
           assetName: assetInfo.assetName,
+          modelBrand: assetInfo.modelBrand,
           userName: assetInfo.userName,
           oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
           oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
@@ -2020,6 +2025,7 @@ function getLendingData() {
       .map(asset => ({
         id: asset.assetId,
         assetName: asset.assetName,
+        modelBrand: asset.modelBrand || '',
         leaderName: asset.leaderName,
         location: asset.location,
         userName: asset.userName || '無' // 使用者名稱，物品總表顯示「無」
@@ -2153,6 +2159,7 @@ function getLentOutAssets() {
 
         const allAssets = getAllAssets();
         const assetKeeperMap = new Map(allAssets.map(asset => [asset.assetId, asset.leaderEmail]));
+        const assetIdToModelMap = new Map(allAssets.map(asset => [asset.assetId, asset.modelBrand]));
 
         const lentAssets = lendingData
             .filter(row => {
@@ -2161,15 +2168,19 @@ function getLentOutAssets() {
                 const status = row[LL_STATUS_COLUMN_INDEX - 1];
                 return keeperEmail === currentUserEmail && status === '出借中';
             })
-            .map(row => ({
-                lendId: row[0],
-                applyTime: new Date(row[1]).toLocaleDateString('zh-TW'),
-                assetId: row[2],
-                borrower: row[4],
-                expectedReturnDate: new Date(row[5]).toLocaleDateString('zh-TW'),
-                reason: row[7],
-                lendingLocation: row[9] || '' // ✨ 新增：讀取 J 欄 (索引為9) 的出借後地點
-            }));
+            .map(row => {
+                const assetId = row[2];
+                return {
+                    lendId: row[0],
+                    applyTime: new Date(row[1]).toLocaleDateString('zh-TW'),
+                    assetId: assetId,
+                    modelBrand: assetIdToModelMap.get(assetId) || '',
+                    borrower: row[4],
+                    expectedReturnDate: new Date(row[5]).toLocaleDateString('zh-TW'),
+                    reason: row[7],
+                    lendingLocation: row[9] || '' // ✨ 新增：讀取 J 欄 (索引為9) 的出借後地點
+                };
+            });
 
         return { assets: lentAssets };
     } catch (e) {
@@ -2325,6 +2336,7 @@ function getScrappableAssets() {
       .map(asset => ({
         id: asset.assetId,
         assetName: asset.assetName, // 財產名稱
+        modelBrand: asset.modelBrand || '',
         location: asset.location,
         status: asset.assetStatus,
         category: asset.assetCategory,
@@ -2538,6 +2550,7 @@ function getScrapHistoryData() {
       return {
         assetId: String(asset.assetId || ''),
         assetName: String(asset.assetName || ''),
+        modelBrand: String(asset.modelBrand || ''),
         assetCategory: String(asset.assetCategory || ''),
         leaderName: String(asset.leaderName || ''),
         userName: String(asset.userName || ''),
@@ -2789,6 +2802,7 @@ function getAllScrappableItems(assetCategory) {
     return {
       assetId: String(asset.assetId || ''),
       assetName: String(asset.assetName || ''),
+      modelBrand: String(asset.modelBrand || ''),
       originalKeeper: String(asset.leaderName || ''),
       originalUser: String(asset.userName || ''), // 物品總表可能無此欄位，轉為空字串
       scrapDate: scrapDateStr,                    // 傳送格式化後的字串，而非 Date 物件
@@ -3299,6 +3313,7 @@ function getAllTransferableItems(assetCategory) {
         items.push({
           assetId: asset.assetId,
           assetName: asset.assetName,
+          modelBrand: asset.modelBrand || '',
           oldKeeper: transfer.oldKeeper,
           oldUser: transfer.oldUser || '',
           oldLocation: transfer.oldLocation,
