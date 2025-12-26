@@ -309,11 +309,13 @@
                 text.textContent = `您有 ${pendingApprovals.length} 筆待接收資產。`;
                 banner.style.display = 'flex';
                 banner.classList.add('d-flex');
+                banner.style.cursor = 'pointer';
                 banner.onclick = openPendingApprovalModal;
             } else {
                 text.textContent = '';
                 banner.style.display = 'none';
                 banner.classList.remove('d-flex');
+                banner.style.cursor = '';
                 banner.onclick = null;
             }
         }
