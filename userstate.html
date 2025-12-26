@@ -5,10 +5,54 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { padding: 20px; }
+        body {
+            padding: 20px;
+            background-color: #f4f7f6;
+        }
+
+        /* 響應式容器 */
+        .container-responsive {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 卡片樣式 */
+        .section-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            padding: 25px;
+            margin-bottom: 25px;
+            border: none;
+        }
+
+        .section-card h4 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
         #status-message { margin-top: 15px; }
-        .table-container { max-height: 60vh; overflow-y: auto; }
-        .duplicate-group-row { background-color: #fff7e6; font-weight: 600; }
+
+        /* 表格容器 - 移除固定高度，避免內部滾動 */
+        .table-container {
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+
+        .duplicate-group-row {
+            background-color: #fff7e6;
+            font-weight: 600;
+        }
+
+        /* 移動端優化 */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .container-responsive { padding: 0; }
+            .section-card { padding: 15px; margin-bottom: 15px; }
+        }
     </style>
 </head>
 <body>
@@ -20,9 +64,11 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <div id="main-content">
-        <h4>財產狀態查詢</h4>
-        
-        <div class="form-row">
+        <div class="container-responsive">
+            <div class="section-card">
+                <h4>財產狀態查詢</h4>
+
+                <div class="form-row">
             <div class="form-group col-md-3">
                 <label for="status-filter">依狀態篩選：</label>
                 <select id="status-filter" class="form-control">
@@ -46,8 +92,10 @@
                 <input type="text" id="search-box" class="form-control" placeholder="搜尋產編、名稱、保管人...">
             </div>
         </div>
+            </div> <!-- 關閉 section-card -->
 
-        <div class="alert alert-warning" id="pending-approval-banner" style="display:none;">
+            <div class="section-card">
+                <div class="alert alert-warning" id="pending-approval-banner" style="display:none;">
             <i class="fa-solid fa-triangle-exclamation mr-1"></i>
             <span id="pending-approval-text"></span>
             <span class="text-primary ml-2">點擊此進行處理</span>
@@ -75,6 +123,8 @@
             </table>
         </div>
         <div id="status-message"></div>
+            </div> <!-- 關閉 section-card -->
+        </div> <!-- 關閉 container-responsive -->
     </div>
 
     <div class="modal fade" id="duplicateAssetsModal" tabindex="-1" role="dialog" aria-labelledby="duplicateAssetsTitle" aria-hidden="true">
