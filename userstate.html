@@ -441,7 +441,7 @@
 
     <!-- React 應用 -->
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useCallback } = React;
 
         // Icons (參考 onepage_example.html)
         const IconBase = ({ children, size = 20, className = "" }) => (
@@ -463,8 +463,27 @@
 
         const SearchIcon = (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>;
 
+        // LoadingCard 組件 - 卡片載入佔位符
+        const LoadingCard = () => (
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex flex-col items-center justify-center h-32 gap-3">
+                    <i className="fas fa-spinner fa-spin text-4xl text-blue-500"></i>
+                    <p className="text-sm text-slate-500 font-medium">載入中...</p>
+                </div>
+            </div>
+        );
+
         // DashboardCards 組件
-        const DashboardCards = ({ counts, onClick }) => {
+        const DashboardCards = ({ counts, onClick, isLoading }) => {
+            // 載入狀態渲染
+            if (isLoading) {
+                return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                        {[1, 2, 3, 4, 5].map(i => <LoadingCard key={i} />)}
+                    </div>
+                );
+            }
+
             const cards = [
                 {
                     id: 'pending',
@@ -651,8 +670,8 @@
                                 <tr>
                                     <th className="px-4 py-3 font-semibold text-slate-600">財產編號</th>
                                     <th className="px-4 py-3 font-semibold text-slate-600">財產名稱</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600">型號/廠牌</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600">使用者</th>
+                                    <th className="pl-4 pr-1 py-3 font-semibold text-slate-600">型號/廠牌</th>
+                                    <th className="pl-1 pr-4 py-3 font-semibold text-slate-600 whitespace-nowrap">使用者</th>
                                     <th className="px-4 py-3 font-semibold text-slate-600">保管人</th>
                                     <th className="px-4 py-3 font-semibold text-slate-600">保管位置</th>
                                     <th className="px-4 py-3 font-semibold text-slate-600">財產類別</th>
@@ -670,8 +689,8 @@
                                         <tr key={`${asset.assetId}-${index}`} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-4 py-3 font-mono text-slate-600">{asset.assetId}</td>
                                             <td className="px-4 py-3 font-medium text-slate-800">{asset.assetName}</td>
-                                            <td className="px-4 py-3 text-slate-600">{asset.modelBrand || ''}</td>
-                                            <td className="px-4 py-3 text-slate-600">{asset.userName}</td>
+                                            <td className="pl-4 pr-1 py-3 text-slate-600">{asset.modelBrand || ''}</td>
+                                            <td className="pl-1 pr-4 py-3 text-slate-600 whitespace-nowrap">{asset.userName}</td>
                                             <td className="px-4 py-3 text-slate-600">{asset.leader}</td>
                                             <td className="px-4 py-3 text-slate-600">{asset.location}</td>
                                             <td className="px-4 py-3 text-slate-600">
@@ -863,10 +882,12 @@
                 search: ''
             });
             const [activeModal, setActiveModal] = useState(null);
+            const [isLoadingCards, setIsLoadingCards] = useState(false);
 
             // 載入資料
             const loadData = () => {
                 showFlyProgressBar('正在載入財產狀態資料...');
+                setIsLoadingCards(true); // 初始載入時也顯示卡片載入動畫
 
                 google.script.run
                     .withSuccessHandler(url => {
@@ -910,15 +931,85 @@
                                     .getInventoryData();
 
                                 setIsReady(true);
+                                setIsLoadingCards(false); // 數據載入完成後關閉卡片動畫
                                 hideFlyProgressBar('資料載入完成！', 300);
                             })
                             .withFailureHandler(error => {
+                                setIsLoadingCards(false); // 失敗時也關閉卡片動畫
                                 hideFlyProgressBar('載入失敗', 0);
                                 alert('錯誤：' + error.message);
                             })
                             .getUserStateData();
                     })
                     .getAppUrl();
+            };
+
+            // 重新整理卡片數據（並行載入）
+            const refreshCardData = useCallback(async () => {
+                const MIN_LOADING_DURATION = 500; // 最短顯示時間 500ms
+                setIsLoadingCards(true);
+                const startTime = Date.now();
+
+                try {
+                    // 並行載入三個 API
+                    const [pendingResponse, inventoryResponse, assetsResponse] = await Promise.allSettled([
+                        new Promise((resolve, reject) => {
+                            google.script.run
+                                .withSuccessHandler(resolve)
+                                .withFailureHandler(reject)
+                                .getPendingApprovals();
+                        }),
+                        new Promise((resolve, reject) => {
+                            google.script.run
+                                .withSuccessHandler(resolve)
+                                .withFailureHandler(reject)
+                                .getInventoryData();
+                        }),
+                        new Promise((resolve, reject) => {
+                            google.script.run
+                                .withSuccessHandler(resolve)
+                                .withFailureHandler(reject)
+                                .getUserStateData();
+                        })
+                    ]);
+
+                    // 處理成功的結果
+                    if (pendingResponse.status === 'fulfilled' && pendingResponse.value?.approvals) {
+                        setPendingApprovalsData(pendingResponse.value.approvals);
+                    }
+                    if (inventoryResponse.status === 'fulfilled' && inventoryResponse.value) {
+                        setInventorySessions(inventoryResponse.value);
+                    }
+                    if (assetsResponse.status === 'fulfilled' && assetsResponse.value?.assets) {
+                        setAllAssets(assetsResponse.value.assets);
+                    }
+
+                    // 檢查失敗的請求
+                    const failures = [pendingResponse, inventoryResponse, assetsResponse]
+                        .filter(r => r.status === 'rejected');
+                    if (failures.length > 0) {
+                        console.warn('部分數據載入失敗：', failures);
+                        alert('部分數據載入失敗，請稍後重試。');
+                    }
+
+                    // 確保最短顯示時間
+                    const elapsedTime = Date.now() - startTime;
+                    const remainingTime = Math.max(0, MIN_LOADING_DURATION - elapsedTime);
+
+                    setTimeout(() => {
+                        setIsLoadingCards(false);
+                    }, remainingTime);
+
+                } catch (error) {
+                    setIsLoadingCards(false);
+                    console.error('重新整理失敗：', error);
+                    alert('重新整理失敗：' + error.message);
+                }
+            }, []);
+
+            // 重新整理按鈕點擊處理
+            const handleRefreshCards = () => {
+                refreshCardData();
             };
 
             useEffect(() => {
@@ -1105,12 +1196,39 @@
 
             return (
                 <div className="ml-[88px] p-6 max-w-[1600px] mx-auto">
-                    <div className="mb-6">
-                        <h1 className="text-3xl font-bold text-slate-800">財產狀態查詢</h1>
-                        <p className="text-slate-500 mt-1">歡迎回來，今天是 {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <div className="mb-6 flex justify-between items-center">
+                        {/* 左側：標題 */}
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-800">財產狀態查詢</h1>
+                            <p className="text-slate-500 mt-1">
+                                歡迎回來，今天是 {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </p>
+                        </div>
+
+                        {/* 右側：重新整理按鈕 + 載入狀態指示 */}
+                        <div className="flex items-center gap-3">
+                            {/* 載入狀態文字 */}
+                            {isLoadingCards && (
+                                <span className="text-sm text-slate-500 flex items-center gap-2">
+                                    <i className="fas fa-spinner fa-spin text-blue-500"></i>
+                                    正在載入統計數據...
+                                </span>
+                            )}
+
+                            {/* 重新整理按鈕 */}
+                            <button
+                                onClick={handleRefreshCards}
+                                disabled={isLoadingCards}
+                                className="w-12 h-12 rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center group"
+                                title="重新整理統計數據"
+                                aria-label="重新整理"
+                            >
+                                <i className={`fas fa-sync-alt text-lg transition-transform ${isLoadingCards ? 'animate-spin' : 'group-hover:rotate-180'}`}></i>
+                            </button>
+                        </div>
                     </div>
 
-                    <DashboardCards counts={cardCounts} onClick={handleCardClick} />
+                    <DashboardCards counts={cardCounts} onClick={handleCardClick} isLoading={isLoadingCards} />
 
                     <FilterSection
                         filters={filters}
