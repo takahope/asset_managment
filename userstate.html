@@ -2,56 +2,37 @@
 <html>
 <head>
     <base target="_top">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React 18 + ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Bootstrap CSS (僅用於 Modal) -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        body {
-            padding: 20px;
-            background-color: #f4f7f6;
+        body, html {
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc;
         }
 
-        /* 響應式容器 */
-        .container-responsive {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        /* 自定義滾動條樣式 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* 卡片樣式 */
-        .section-card {
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            padding: 25px;
-            margin-bottom: 25px;
-            border: none;
-        }
-
-        .section-card h4 {
-            border-bottom: 2px solid #eee;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        #status-message { margin-top: 15px; }
-
-        /* 表格容器 - 移除固定高度，避免內部滾動 */
-        .table-container {
-            border-radius: 8px;
-            border: 1px solid #eee;
-        }
-
+        /* 配合 shared-nav 側邊欄 */
         .duplicate-group-row {
             background-color: #fff7e6;
             font-weight: 600;
-        }
-
-        /* 移動端優化 */
-        @media (max-width: 768px) {
-            body { padding: 10px; }
-            .container-responsive { padding: 0; }
-            .section-card { padding: 15px; margin-bottom: 15px; }
         }
     </style>
 </head>
@@ -63,70 +44,9 @@
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    <div id="main-content">
-        <div class="container-responsive">
-            <div class="section-card">
-                <h4>財產狀態查詢</h4>
+    <div id="react-root"></div>
 
-                <div class="form-row">
-            <div class="form-group col-md-3">
-                <label for="status-filter">依狀態篩選：</label>
-                <select id="status-filter" class="form-control">
-                    <option value="">-- 顯示全部 --</option>
-                </select>
-            </div>
-            <div class="form-group col-md-3">
-                <label for="category-filter">依財產類別篩選：</label>
-                <select id="category-filter" class="form-control">
-                    <option value="">-- 顯示全部 --</option>
-                </select>
-            </div>
-            <div id="leader-filter-container" class="form-group col-md-3" style="display: none;">
-                <label for="leader-filter">依保管人篩選：</label>
-                <select id="leader-filter" class="form-control">
-                    <option value="">-- 顯示全部 --</option>
-                </select>
-            </div>
-            <div class="form-group col-md-3">
-                <label for="search-box">關鍵字搜尋：</label>
-                <input type="text" id="search-box" class="form-control" placeholder="搜尋產編、名稱、保管人...">
-            </div>
-        </div>
-            </div> <!-- 關閉 section-card -->
-
-            <div class="section-card">
-                <div class="alert alert-warning" id="pending-approval-banner" style="display:none;">
-            <i class="fa-solid fa-triangle-exclamation mr-1"></i>
-            <span id="pending-approval-text"></span>
-            <span class="text-primary ml-2">點擊此進行處理</span>
-        </div>
-
-        <div class="alert alert-warning py-2" id="duplicate-warning" style="display:none;"></div>
-
-        <div id="table-container" class="table-container" style="display:none;">
-            <table class="table table-hover table-sm">
-                <thead class="thead-light" style="position: sticky; top: 0;">
-                    <tr>
-                        <th style="width: 15%;">財產編號</th>
-                        <th style="width: 18%;">財產名稱</th>
-                        <th style="width: 13%;">型號/廠牌</th>
-                        <th style="width: 11%;">使用者</th>
-                        <th style="width: 11%;">保管人</th>
-                        <th style="width: 11%;">保管位置</th>
-                        <th style="width: 11%;">財產類別</th>
-                        <th style="width: 7%;">狀態</th>
-                        <th style="width: 3%;">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="asset-list">
-                </tbody>
-            </table>
-        </div>
-        <div id="status-message"></div>
-            </div> <!-- 關閉 section-card -->
-        </div> <!-- 關閉 container-responsive -->
-    </div>
-
+    <!-- Bootstrap Modals (保留現有結構) -->
     <div class="modal fade" id="duplicateAssetsModal" tabindex="-1" role="dialog" aria-labelledby="duplicateAssetsTitle" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
@@ -210,168 +130,17 @@
         </div>
     </div>
 
+    <!-- 全域函數橋接 jQuery Modal -->
     <script>
-        let allAssets = [];
-        let isAdmin = false;
-        let currentUserEmail = '';
-        let webAppUrl = ''; // ✨ 新增：儲存 Web App 的基礎 URL
-        let duplicateGroups = [];
-        let pendingApprovals = [];
-        let filteredPendingApprovals = [];
-        let pendingCurrentPage = 1;
-        const pendingRowsPerPage = 50;
+        // 全域變數供 React 與 jQuery 共享
+        window.pendingApprovals = [];
+        window.filteredPendingApprovals = [];
+        window.pendingCurrentPage = 1;
+        window.pendingRowsPerPage = 50;
+        window.duplicateGroups = [];
 
-        document.addEventListener("DOMContentLoaded", () => {
-            toggleTableVisibility(false);
-            showFlyProgressBar('正在載入財產狀態資料...');
-            google.script.run.withSuccessHandler(url => {
-                webAppUrl = url; // ✨ 獲取 URL
-                // 確保先取得 URL 再載入頁面資料
-                google.script.run
-                    .withSuccessHandler(populatePage)
-                    .withFailureHandler(showError)
-                    .getUserStateData();
-            }).getAppUrl();
-        });
-
-        function populatePage(response) {
-            if (response.error) {
-                showError({ message: response.error });
-                return;
-            }
-
-            isAdmin = response.isAdmin;
-            allAssets = response.assets;
-            currentUserEmail = response.userEmail; // ✨ 儲存當前使用者 Email
-
-            populateFilters(allAssets);
-
-            if (isAdmin) {
-                document.getElementById('leader-filter-container').style.display = 'block';
-            }
-
-            document.getElementById('status-filter').addEventListener('change', filterAndRender);
-            document.getElementById('category-filter').addEventListener('change', filterAndRender);
-            document.getElementById('leader-filter').addEventListener('change', filterAndRender);
-            document.getElementById('search-box').addEventListener('input', filterAndRender);
-
-            initPendingApprovalNotice();
-            filterAndRender(); // 初始渲染
-            hideFlyProgressBar('資料載入完成！', 300);
-            setTimeout(() => {
-                toggleTableVisibility(true);
-            }, 300);
-        }
-
-        function populateFilters(assets) {
-            const statusSet = new Set();
-            const categorySet = new Set();
-            const leaderSet = new Set();
-            assets.forEach(asset => {
-                statusSet.add(asset.status);
-                categorySet.add(asset.category);
-                if (isAdmin) leaderSet.add(asset.leader);
-            });
-
-            const statusFilter = document.getElementById('status-filter');
-            statusFilter.innerHTML = '<option value="">-- 顯示全部 --</option>'; // 清空舊選項
-            statusSet.forEach(status => {
-                if(status) {
-                    const option = document.createElement('option');
-                    option.value = status;
-                    option.textContent = status;
-                    statusFilter.appendChild(option);
-                }
-            });
-
-            const categoryFilter = document.getElementById('category-filter');
-            categoryFilter.innerHTML = '<option value="">-- 顯示全部 --</option>'; // 清空舊選項
-            categorySet.forEach(category => {
-                if(category) {
-                    const option = document.createElement('option');
-                    option.value = category;
-                    option.textContent = category;
-                    categoryFilter.appendChild(option);
-                }
-            });
-
-            if (isAdmin) {
-                const leaderFilter = document.getElementById('leader-filter');
-                leaderFilter.innerHTML = '<option value="">-- 顯示全部 --</option>'; // 清空舊選項
-                leaderSet.forEach(leader => {
-                    if(leader) {
-                        const option = document.createElement('option');
-                        option.value = leader;
-                        option.textContent = leader;
-                        leaderFilter.appendChild(option);
-                    }
-                });
-            }
-        }
-
-        function filterAndRender() {
-            const statusFilterValue = document.getElementById('status-filter').value;
-            const categoryFilterValue = document.getElementById('category-filter').value;
-            const leaderFilterValue = isAdmin ? document.getElementById('leader-filter').value : '';
-            const searchValue = document.getElementById('search-box').value.toUpperCase();
-
-            const filteredAssets = allAssets.filter(asset => {
-                const statusMatch = !statusFilterValue || asset.status === statusFilterValue;
-                const categoryMatch = !categoryFilterValue || asset.category === categoryFilterValue;
-                const leaderMatch = !leaderFilterValue || asset.leader === leaderFilterValue;
-                const searchMatch = !searchValue || 
-                                    asset.assetId.toUpperCase().includes(searchValue) ||
-                                    asset.assetName.toUpperCase().includes(searchValue) ||
-                                    asset.leader.toUpperCase().includes(searchValue);
-                return statusMatch && categoryMatch && leaderMatch && searchMatch;
-            });
-
-            updateDuplicateWarning(filteredAssets);
-            renderTable(filteredAssets);
-        }
-
-        function initPendingApprovalNotice() {
-            loadPendingApprovals();
-        }
-
-        function loadPendingApprovals() {
-            google.script.run
-                .withSuccessHandler(response => {
-                    if (response && response.error) {
-                        console.warn('載入待接收清單失敗：', response.error);
-                        return;
-                    }
-                    pendingApprovals = (response && response.approvals) ? response.approvals : [];
-                    updatePendingBanner();
-                })
-                .withFailureHandler(error => {
-                    console.warn('載入待接收清單失敗：', error.message);
-                })
-                .getPendingApprovals();
-        }
-
-        function updatePendingBanner() {
-            const banner = document.getElementById('pending-approval-banner');
-            const text = document.getElementById('pending-approval-text');
-            if (!banner || !text) return;
-
-            if (pendingApprovals.length > 0) {
-                text.textContent = `您有 ${pendingApprovals.length} 筆待接收資產。`;
-                banner.style.display = 'flex';
-                banner.classList.add('d-flex');
-                banner.style.cursor = 'pointer';
-                banner.onclick = openPendingApprovalModal;
-            } else {
-                text.textContent = '';
-                banner.style.display = 'none';
-                banner.classList.remove('d-flex');
-                banner.style.cursor = '';
-                banner.onclick = null;
-            }
-        }
-
-        function openPendingApprovalModal() {
-            if (!pendingApprovals || pendingApprovals.length === 0) return;
+        window.openPendingApprovalModal = () => {
+            if (!window.pendingApprovals || window.pendingApprovals.length === 0) return;
 
             if (!document.getElementById('pendingApprovalModal').dataset.initialized) {
                 document.getElementById('pending-location-filter').addEventListener('change', filterPendingApprovals);
@@ -387,12 +156,18 @@
             populatePendingFilters();
             filterPendingApprovals();
             $('#pendingApprovalModal').modal('show');
-        }
+        };
+
+        window.openDuplicateAssetsModal = () => {
+            if (!window.duplicateGroups || window.duplicateGroups.length === 0) return;
+            renderDuplicateAssetsModal();
+            $('#duplicateAssetsModal').modal('show');
+        };
 
         function populatePendingFilters() {
             const locationFilter = document.getElementById('pending-location-filter');
             locationFilter.innerHTML = '<option value="">-- 顯示全部 --</option>';
-            const uniqueLocations = [...new Set(pendingApprovals.map(item => item.oldLocation))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+            const uniqueLocations = [...new Set(window.pendingApprovals.map(item => item.oldLocation))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
             uniqueLocations.forEach(loc => {
                 const option = document.createElement('option');
                 option.value = loc;
@@ -405,7 +180,7 @@
             const locationFilter = document.getElementById('pending-location-filter').value.toUpperCase();
             const searchFilter = document.getElementById('pending-search-box').value.toUpperCase();
 
-            filteredPendingApprovals = pendingApprovals.filter(item => {
+            window.filteredPendingApprovals = window.pendingApprovals.filter(item => {
                 const locationMatch = (locationFilter === '') || (item.oldLocation && item.oldLocation.toUpperCase() === locationFilter);
                 const searchMatch = item.assetId.toUpperCase().includes(searchFilter) ||
                                     (item.assetName && item.assetName.toUpperCase().includes(searchFilter)) ||
@@ -413,20 +188,20 @@
                 return locationMatch && searchMatch;
             });
 
-            pendingCurrentPage = 1;
-            renderPendingPage(pendingCurrentPage);
+            window.pendingCurrentPage = 1;
+            renderPendingPage(window.pendingCurrentPage);
         }
 
         function renderPendingPage(page) {
-            pendingCurrentPage = page;
+            window.pendingCurrentPage = page;
             const listBody = document.getElementById('pending-approval-list');
             const pagination = document.getElementById('pending-pagination');
             listBody.innerHTML = '';
 
-            if (filteredPendingApprovals.length === 0) {
+            if (window.filteredPendingApprovals.length === 0) {
                 const row = document.createElement('tr');
                 const cell = document.createElement('td');
-                cell.colSpan = 9;  // 更新為 9 欄（增加了型號/廠牌）
+                cell.colSpan = 9;
                 cell.className = 'text-center text-muted';
                 cell.textContent = '沒有符合條件的項目。';
                 row.appendChild(cell);
@@ -435,15 +210,14 @@
                 return;
             }
 
-            const start = (page - 1) * pendingRowsPerPage;
-            const end = start + pendingRowsPerPage;
-            const items = filteredPendingApprovals.slice(start, end);
+            const start = (page - 1) * window.pendingRowsPerPage;
+            const end = start + window.pendingRowsPerPage;
+            const items = window.filteredPendingApprovals.slice(start, end);
 
             const fragment = document.createDocumentFragment();
             items.forEach(item => {
                 const row = document.createElement('tr');
 
-                // Checkbox 儲存格
                 const checkboxTd = document.createElement('td');
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -452,7 +226,6 @@
                 checkboxTd.appendChild(checkbox);
                 row.appendChild(checkboxTd);
 
-                // 資產編號和名稱
                 const assetIdTd = document.createElement('td');
                 assetIdTd.textContent = item.assetId;
                 row.appendChild(assetIdTd);
@@ -461,12 +234,10 @@
                 assetNameTd.textContent = item.assetName;
                 row.appendChild(assetNameTd);
 
-                // 型號/廠牌
                 const modelBrandTd = document.createElement('td');
                 modelBrandTd.textContent = item.modelBrand || '';
                 row.appendChild(modelBrandTd);
 
-                // 輔助函式：建立變更顯示儲存格（與 review.html 一致）
                 function createChangeTd(oldVal, newVal, hasChange) {
                     const td = document.createElement('td');
                     if (hasChange) {
@@ -482,21 +253,17 @@
                     return td;
                 }
 
-                // 保管人變更
                 const keeperHasChange = item.newKeeper && item.oldKeeper !== item.newKeeper;
                 row.appendChild(createChangeTd(item.oldKeeper, item.newKeeper, keeperHasChange));
 
-                // 使用人變更
                 const oldUser = item.oldUser || item.userName || '';
                 const newUser = item.newUser || '';
                 const userHasChange = newUser && oldUser !== newUser;
                 row.appendChild(createChangeTd(oldUser, newUser, userHasChange));
 
-                // 地點變更
                 const locationHasChange = item.newLocation && item.oldLocation !== item.newLocation;
                 row.appendChild(createChangeTd(item.oldLocation, item.newLocation, locationHasChange));
 
-                // 轉移類型 Badge（與 review.html 一致）
                 const transferType = item.transferType || '地點';
                 const typeTd = document.createElement('td');
                 const typeBadgeEl = document.createElement('span');
@@ -516,7 +283,6 @@
                 typeTd.appendChild(typeBadgeEl);
                 row.appendChild(typeTd);
 
-                // 申請時間
                 const applyTimeTd = document.createElement('td');
                 applyTimeTd.textContent = item.applyTime;
                 row.appendChild(applyTimeTd);
@@ -531,41 +297,41 @@
 
         function renderPendingPagination() {
             const pagination = document.getElementById('pending-pagination');
-            const totalPages = Math.ceil(filteredPendingApprovals.length / pendingRowsPerPage);
+            const totalPages = Math.ceil(window.filteredPendingApprovals.length / window.pendingRowsPerPage);
 
-            if (filteredPendingApprovals.length === 0) {
+            if (window.filteredPendingApprovals.length === 0) {
                 pagination.innerHTML = '<span class="text-muted">沒有符合篩選條件的項目。</span>';
                 return;
             }
             if (totalPages <= 1) {
-                pagination.innerHTML = `<span class="text-muted">共 ${filteredPendingApprovals.length} 筆資料</span>`;
+                pagination.innerHTML = `<span class="text-muted">共 ${window.filteredPendingApprovals.length} 筆資料</span>`;
                 return;
             }
 
             const info = document.createElement('span');
             info.className = 'text-muted';
-            info.textContent = `共 ${filteredPendingApprovals.length} 筆資料，第 ${pendingCurrentPage} / ${totalPages} 頁`;
+            info.textContent = `共 ${window.filteredPendingApprovals.length} 筆資料，第 ${window.pendingCurrentPage} / ${totalPages} 頁`;
 
             const nav = document.createElement('ul');
             nav.className = 'pagination mb-0';
 
             const prev = document.createElement('li');
-            prev.className = `page-item ${pendingCurrentPage === 1 ? 'disabled' : ''}`;
+            prev.className = `page-item ${window.pendingCurrentPage === 1 ? 'disabled' : ''}`;
             const prevLink = document.createElement('a');
             prevLink.className = 'page-link';
             prevLink.textContent = '上一頁';
             prevLink.addEventListener('click', () => {
-                if (pendingCurrentPage > 1) renderPendingPage(pendingCurrentPage - 1);
+                if (window.pendingCurrentPage > 1) renderPendingPage(window.pendingCurrentPage - 1);
             });
             prev.appendChild(prevLink);
 
             const next = document.createElement('li');
-            next.className = `page-item ${pendingCurrentPage === totalPages ? 'disabled' : ''}`;
+            next.className = `page-item ${window.pendingCurrentPage === totalPages ? 'disabled' : ''}`;
             const nextLink = document.createElement('a');
             nextLink.className = 'page-link';
             nextLink.textContent = '下一頁';
             nextLink.addEventListener('click', () => {
-                if (pendingCurrentPage < totalPages) renderPendingPage(pendingCurrentPage + 1);
+                if (window.pendingCurrentPage < totalPages) renderPendingPage(window.pendingCurrentPage + 1);
             });
             next.appendChild(nextLink);
 
@@ -590,8 +356,7 @@
                     hideToastProgress('處理完成！', 300);
                     $('#pendingApprovalModal').modal('hide');
                     alert(message);
-                    loadPendingApprovals();
-                    refreshUserStateData();
+                    window.refreshReactData && window.refreshReactData();
                 })
                 .withFailureHandler(error => {
                     hideToastProgress('處理失敗！', 300);
@@ -616,8 +381,7 @@
                     hideToastProgress('處理完成！', 300);
                     $('#pendingApprovalModal').modal('hide');
                     alert(message);
-                    loadPendingApprovals();
-                    refreshUserStateData();
+                    window.refreshReactData && window.refreshReactData();
                 })
                 .withFailureHandler(error => {
                     hideToastProgress('處理失敗！', 300);
@@ -626,83 +390,11 @@
                 .processBatchRejection(selected);
         }
 
-        function refreshUserStateData() {
-            google.script.run
-                .withSuccessHandler(response => {
-                    if (response.error) {
-                        showError({ message: response.error });
-                        return;
-                    }
-                    allAssets = response.assets;
-                    isAdmin = response.isAdmin;
-                    currentUserEmail = response.userEmail;
-                    filterAndRender();
-                })
-                .withFailureHandler(showError)
-                .getUserStateData();
-        }
-
-        function updateDuplicateWarning(assets) {
-            const warningEl = document.getElementById('duplicate-warning');
-            if (!warningEl) return;
-
-            const result = dedupeAssets(assets);
-            duplicateGroups = result.duplicateGroups;
-
-            if (result.duplicateCount > 0) {
-                warningEl.innerHTML = `偵測到 ${result.duplicateCount} 筆重複產編。<span class="text-primary ml-2">點擊查看詳情</span>`;
-                warningEl.style.display = 'block';
-                warningEl.style.cursor = 'pointer';
-                warningEl.onclick = openDuplicateAssetsModal;
-            } else {
-                warningEl.textContent = '';
-                warningEl.style.display = 'none';
-                warningEl.style.cursor = '';
-                warningEl.onclick = null;
-            }
-        }
-
-        function dedupeAssets(assets) {
-            const map = new Map();
-            const duplicates = new Map();
-            let duplicateCount = 0;
-
-            assets.forEach(asset => {
-                const key = String(asset.assetId || '').trim();
-                if (map.has(key)) {
-                    duplicateCount += 1;
-                    const existing = map.get(key);
-                    if (!duplicates.has(key)) {
-                        duplicates.set(key, [existing]);
-                    }
-                    duplicates.get(key).push(asset);
-                } else {
-                    map.set(key, asset);
-                }
-            });
-
-            const duplicateGroups = Array.from(duplicates.entries()).map(([assetId, items]) => ({
-                assetId: assetId,
-                items: items
-            }));
-
-            return {
-                duplicateCount: duplicateCount,
-                duplicateGroups: duplicateGroups
-            };
-        }
-
-        function openDuplicateAssetsModal() {
-            if (!duplicateGroups || duplicateGroups.length === 0) return;
-            renderDuplicateAssetsModal();
-            $('#duplicateAssetsModal').modal('show');
-        }
-
         function renderDuplicateAssetsModal() {
             const metaEl = document.getElementById('duplicate-assets-meta');
             const bodyEl = document.getElementById('duplicate-assets-body');
 
-            const groups = duplicateGroups.slice().sort((a, b) => {
+            const groups = window.duplicateGroups.slice().sort((a, b) => {
                 if (!a.assetId && !b.assetId) return 0;
                 if (!a.assetId) return 1;
                 if (!b.assetId) return -1;
@@ -745,194 +437,730 @@
 
             bodyEl.appendChild(fragment);
         }
+    </script>
 
-        function renderTable(assets) {
-            const listBody = document.getElementById('asset-list');
-            listBody.innerHTML = '';
+    <!-- React 應用 -->
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
 
-            if (!assets || assets.length === 0) {
-                listBody.innerHTML = '<tr><td colspan="8" class="text-center">沒有符合條件的資料。</td></tr>';
-                return;
-            }
+        // Icons (參考 onepage_example.html)
+        const IconBase = ({ children, size = 20, className = "" }) => (
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width={size}
+                height={size}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={className}
+            >
+                {children}
+            </svg>
+        );
 
+        const SearchIcon = (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>;
+
+        // DashboardCards 組件
+        const DashboardCards = ({ counts, onClick }) => {
+            const cards = [
+                {
+                    id: 'pending',
+                    label: '待接收',
+                    count: counts.pending,
+                    color: 'bg-blue-500',
+                    icon: '📥',
+                    description: '需要您確認接收的資產'
+                },
+                {
+                    id: 'lent',
+                    label: '出借中',
+                    count: counts.lent,
+                    color: 'bg-green-500',
+                    icon: '📤',
+                    description: '目前出借的資產'
+                },
+                {
+                    id: 'scrapPending',
+                    label: '報廢中需列印申請單',
+                    count: counts.scrapPending,
+                    color: 'bg-orange-500',
+                    icon: '🗑️',
+                    description: '報廢中的資產（可列印申請單）'
+                },
+                {
+                    id: 'transferPending',
+                    label: '轉移中需列印轉移申請單',
+                    count: counts.transferPending,
+                    color: 'bg-purple-500',
+                    icon: '🔄',
+                    description: '轉移中的資產（可列印申請單）'
+                },
+                {
+                    id: 'inventory',
+                    label: '待盤點',
+                    count: counts.inventory,
+                    color: 'bg-red-500',
+                    icon: '📋',
+                    description: '需要您完成的盤點任務'
+                }
+            ];
+
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                    {cards.map(card => (
+                        <button
+                            key={card.id}
+                            onClick={() => onClick(card.id)}
+                            className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer text-left"
+                        >
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-2xl">{card.icon}</span>
+                                <div className={`w-2 h-12 rounded-full ${card.color}`}></div>
+                            </div>
+                            <p className="text-sm text-slate-500 mb-1">{card.label}</p>
+                            <p className="text-3xl font-bold text-slate-800">{card.count}</p>
+                            <p className="text-xs text-slate-400 mt-2">{card.description}</p>
+                        </button>
+                    ))}
+                </div>
+            );
+        };
+
+        // FilterSection 組件
+        const FilterSection = ({ filters, onFilterChange, isAdmin, allAssets }) => {
+            const statusOptions = useMemo(() =>
+                [...new Set(allAssets.map(a => a.status))].filter(Boolean).sort()
+            , [allAssets]);
+
+            const categoryOptions = useMemo(() =>
+                [...new Set(allAssets.map(a => a.category))].filter(Boolean).sort()
+            , [allAssets]);
+
+            const leaderOptions = useMemo(() =>
+                [...new Set(allAssets.map(a => a.leader))].filter(Boolean).sort()
+            , [allAssets]);
+
+            return (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">依狀態篩選</label>
+                            <select
+                                value={filters.status}
+                                onChange={(e) => onFilterChange('status', e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">-- 顯示全部 --</option>
+                                {statusOptions.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">依財產類別篩選</label>
+                            <select
+                                value={filters.category}
+                                onChange={(e) => onFilterChange('category', e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">-- 顯示全部 --</option>
+                                {categoryOptions.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {isAdmin && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">依保管人篩選</label>
+                                <select
+                                    value={filters.leader}
+                                    onChange={(e) => onFilterChange('leader', e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">-- 顯示全部 --</option>
+                                    {leaderOptions.map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">關鍵字搜尋</label>
+                            <div className="relative">
+                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <input
+                                    type="text"
+                                    value={filters.search}
+                                    onChange={(e) => onFilterChange('search', e.target.value)}
+                                    placeholder="搜尋產編、名稱、保管人..."
+                                    className="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // AlertBanner 組件
+        const AlertBanner = ({ count, onClick }) => (
+            <div
+                className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 cursor-pointer hover:bg-yellow-100 transition-colors"
+                onClick={onClick}
+            >
+                <div className="flex items-center">
+                    <i className="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
+                    <span className="text-yellow-800">
+                        偵測到 {count} 筆重複產編。
+                        <span className="text-blue-600 ml-2 underline">點擊查看詳情</span>
+                    </span>
+                </div>
+            </div>
+        );
+
+        // AssetTable 組件
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore }) => {
             const statusColors = {
-                '在庫': 'badge-success',
-                '出借中': 'badge-warning',
-                '報廢中': 'badge-danger',
-                '已報廢': 'badge-secondary',
-                '轉移中': 'badge-primary',
-                '待接收': 'badge-primary'
+                '在庫': 'bg-green-50 text-green-700 border-green-200',
+                '出借中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+                '報廢中': 'bg-red-50 text-red-700 border-red-200',
+                '已報廢': 'bg-gray-50 text-gray-700 border-gray-200',
+                '轉移中': 'bg-blue-50 text-blue-700 border-blue-200',
+                '待接收': 'bg-purple-50 text-purple-700 border-purple-200'
             };
 
-            // 🛡️ 安全性修復：使用 DOM API 替代 innerHTML 防止 XSS
-            assets.forEach(asset => {
-                const row = document.createElement('tr');
-                const statusColor = statusColors[asset.status] || 'badge-info';
-                const canCancel = isAdmin || currentUserEmail === asset.leaderEmail || currentUserEmail === asset.userEmail;
+            if (!assets || assets.length === 0) {
+                return (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
+                        <p className="text-slate-500">沒有符合條件的資料。</p>
+                    </div>
+                );
+            }
 
-                // 使用 textContent 安全設定文字內容
-                const cells = [
-                    asset.assetId,
-                    asset.assetName,
-                    asset.modelBrand,
-                    asset.userName,
-                    asset.leader,
-                    asset.location,
-                    asset.category
-                ];
+            return (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                                <tr>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">財產編號</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">財產名稱</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">型號/廠牌</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">使用者</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">保管人</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">保管位置</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">財產類別</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600">狀態</th>
+                                    <th className="px-4 py-3 font-semibold text-slate-600 text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {assets.map((asset, index) => {
+                                    const canCancel = isAdmin ||
+                                                    currentUserEmail === asset.leaderEmail ||
+                                                    currentUserEmail === asset.userEmail;
 
-                cells.forEach(cellData => {
-                    const td = document.createElement('td');
-                    td.textContent = cellData || '';
-                    row.appendChild(td);
+                                    return (
+                                        <tr key={`${asset.assetId}-${index}`} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-4 py-3 font-mono text-slate-600">{asset.assetId}</td>
+                                            <td className="px-4 py-3 font-medium text-slate-800">{asset.assetName}</td>
+                                            <td className="px-4 py-3 text-slate-600">{asset.modelBrand || ''}</td>
+                                            <td className="px-4 py-3 text-slate-600">{asset.userName}</td>
+                                            <td className="px-4 py-3 text-slate-600">{asset.leader}</td>
+                                            <td className="px-4 py-3 text-slate-600">{asset.location}</td>
+                                            <td className="px-4 py-3 text-slate-600">
+                                                <span className="bg-slate-100 px-2 py-1 rounded text-xs">
+                                                    {asset.category}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                                    {asset.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                {canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中') && (
+                                                    <button
+                                                        onClick={() => onCancel(asset.assetId, asset.status)}
+                                                        className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                                                    >
+                                                        取消
+                                                    </button>
+                                                )}
+                                                {isAdmin && asset.status === '已報廢' && (
+                                                    <button
+                                                        onClick={() => onRestore(asset.assetId)}
+                                                        className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium ml-2"
+                                                    >
+                                                        回溯
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        // React Modals
+        const LentAssetsModal = ({ assets, onClose }) => {
+            const lentAssets = assets.filter(a => a.status === '出借中');
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                        <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+                            <h3 className="text-lg font-bold text-slate-800">出借中資產清單</h3>
+                            <button
+                                onClick={onClose}
+                                className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div className="p-6 max-h-[70vh] overflow-y-auto">
+                            {lentAssets.length === 0 ? (
+                                <p className="text-center text-slate-500 py-8">目前沒有出借中的資產。</p>
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <thead className="bg-slate-50 sticky top-0">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">財產編號</th>
+                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">財產名稱</th>
+                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">保管人</th>
+                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">保管位置</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {lentAssets.map((asset, index) => (
+                                            <tr key={`lent-${asset.assetId}-${index}`} className="hover:bg-slate-50">
+                                                <td className="px-4 py-3 font-mono text-slate-600">{asset.assetId}</td>
+                                                <td className="px-4 py-3">{asset.assetName}</td>
+                                                <td className="px-4 py-3">{asset.leader}</td>
+                                                <td className="px-4 py-3">{asset.location}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+                            >
+                                關閉
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ScrapPrintModal = ({ count, webAppUrl, onClose }) => {
+            const handlePrintScrap = () => {
+                const printScrapUrl = webAppUrl + '?page=printScrap';
+                window.open(printScrapUrl, '_top');
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                        <div className="px-6 py-4 border-b bg-orange-50">
+                            <h3 className="text-lg font-bold text-orange-800">列印報廢申請單</h3>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-slate-600 mb-4">
+                                您有 <span className="font-bold text-orange-600 text-xl">{count}</span> 筆報廢中的資產。
+                            </p>
+                            <p className="text-sm text-slate-500 mb-6">
+                                點擊下方按鈕前往列印頁面，選擇需要列印申請單的資產。
+                            </p>
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={onClose}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={handlePrintScrap}
+                                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2"
+                                >
+                                    <i className="fas fa-print"></i>
+                                    前往列印頁面
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TransferPrintModal = ({ count, webAppUrl, onClose }) => {
+            const handlePrintTransfer = () => {
+                const printTransferUrl = webAppUrl + '?page=printTransfer';
+                window.open(printTransferUrl, '_top');
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                        <div className="px-6 py-4 border-b bg-purple-50">
+                            <h3 className="text-lg font-bold text-purple-800">列印轉移申請單</h3>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-slate-600 mb-4">
+                                您有 <span className="font-bold text-purple-600 text-xl">{count}</span> 筆轉移中的資產。
+                            </p>
+                            <p className="text-sm text-slate-500 mb-6">
+                                點擊下方按鈕前往列印頁面，選擇需要列印轉移單的資產。
+                            </p>
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={onClose}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={handlePrintTransfer}
+                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                                >
+                                    <i className="fas fa-print"></i>
+                                    前往列印頁面
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 主 App 組件
+        function App() {
+            const [isReady, setIsReady] = useState(false);
+            const [allAssets, setAllAssets] = useState([]);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [currentUserEmail, setCurrentUserEmail] = useState('');
+            const [webAppUrl, setWebAppUrl] = useState('');
+            const [pendingApprovalsData, setPendingApprovalsData] = useState([]);
+            const [inventorySessions, setInventorySessions] = useState(null);
+            const [filters, setFilters] = useState({
+                status: '',
+                category: '',
+                leader: '',
+                search: ''
+            });
+            const [activeModal, setActiveModal] = useState(null);
+
+            // 載入資料
+            const loadData = () => {
+                showFlyProgressBar('正在載入財產狀態資料...');
+
+                google.script.run
+                    .withSuccessHandler(url => {
+                        setWebAppUrl(url);
+
+                        // 載入使用者資料
+                        google.script.run
+                            .withSuccessHandler(response => {
+                                if (response.error) {
+                                    alert('載入失敗：' + response.error);
+                                    hideFlyProgressBar('載入失敗', 0);
+                                    return;
+                                }
+
+                                setAllAssets(response.assets || []);
+                                setIsAdmin(response.isAdmin);
+                                setCurrentUserEmail(response.userEmail);
+
+                                // 載入待接收資料
+                                google.script.run
+                                    .withSuccessHandler(pendingResponse => {
+                                        if (pendingResponse && pendingResponse.approvals) {
+                                            setPendingApprovalsData(pendingResponse.approvals);
+                                        }
+                                    })
+                                    .withFailureHandler(error => {
+                                        console.warn('載入待接收清單失敗：', error.message);
+                                    })
+                                    .getPendingApprovals();
+
+                                // 載入盤點資料
+                                google.script.run
+                                    .withSuccessHandler(inventoryResponse => {
+                                        if (inventoryResponse) {
+                                            setInventorySessions(inventoryResponse);
+                                        }
+                                    })
+                                    .withFailureHandler(error => {
+                                        console.warn('載入盤點資料失敗：', error.message);
+                                    })
+                                    .getInventoryData();
+
+                                setIsReady(true);
+                                hideFlyProgressBar('資料載入完成！', 300);
+                            })
+                            .withFailureHandler(error => {
+                                hideFlyProgressBar('載入失敗', 0);
+                                alert('錯誤：' + error.message);
+                            })
+                            .getUserStateData();
+                    })
+                    .getAppUrl();
+            };
+
+            useEffect(() => {
+                loadData();
+
+                // 設定全域刷新函數
+                window.refreshReactData = () => {
+                    loadData();
+                };
+            }, []);
+
+            // 同步狀態到全域變數供 jQuery Modal 使用
+            useEffect(() => {
+                window.pendingApprovals = pendingApprovalsData;
+            }, [pendingApprovalsData]);
+
+            // 計算篩選後的資產
+            const filteredAssets = useMemo(() => {
+                return allAssets.filter(asset => {
+                    const statusMatch = !filters.status || asset.status === filters.status;
+                    const categoryMatch = !filters.category || asset.category === filters.category;
+                    const leaderMatch = !filters.leader || asset.leader === filters.leader;
+                    const searchMatch = !filters.search ||
+                        asset.assetId.toUpperCase().includes(filters.search.toUpperCase()) ||
+                        asset.assetName.toUpperCase().includes(filters.search.toUpperCase()) ||
+                        asset.leader.toUpperCase().includes(filters.search.toUpperCase());
+                    return statusMatch && categoryMatch && leaderMatch && searchMatch;
+                });
+            }, [allAssets, filters]);
+
+            // 計算重複產編
+            const duplicateInfo = useMemo(() => {
+                const map = new Map();
+                const duplicates = new Map();
+                let duplicateCount = 0;
+
+                filteredAssets.forEach(asset => {
+                    const key = String(asset.assetId || '').trim();
+                    if (map.has(key)) {
+                        duplicateCount += 1;
+                        const existing = map.get(key);
+                        if (!duplicates.has(key)) {
+                            duplicates.set(key, [existing]);
+                        }
+                        duplicates.get(key).push(asset);
+                    } else {
+                        map.set(key, asset);
+                    }
                 });
 
-                // 狀態 Badge
-                const statusTd = document.createElement('td');
-                const badge = document.createElement('span');
-                badge.className = `badge ${statusColor}`;
-                badge.textContent = asset.status;
-                statusTd.appendChild(badge);
-                row.appendChild(statusTd);
+                const groups = Array.from(duplicates.entries()).map(([assetId, items]) => ({
+                    assetId,
+                    items
+                }));
 
-                // 操作按鈕（使用 addEventListener 替代 onclick）
-                const actionTd = document.createElement('td');
+                return { duplicateCount, groups };
+            }, [filteredAssets]);
 
-                // 原有的取消邏輯（待接收/轉移中/報廢中）
-                if (canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中')) {
-                    const cancelBtn = document.createElement('button');
-                    cancelBtn.className = 'btn btn-sm btn-danger';
-                    cancelBtn.textContent = '取消';
-                    // 使用閉包安全傳遞參數，避免 XSS
-                    cancelBtn.addEventListener('click', () => promptCancel(asset.assetId, asset.status));
-                    actionTd.appendChild(cancelBtn);
+            // 同步重複產編資料到全域變數
+            useEffect(() => {
+                window.duplicateGroups = duplicateInfo.groups;
+            }, [duplicateInfo.groups]);
+
+            // 計算卡片統計數量
+            const cardCounts = useMemo(() => {
+                const inventoryCount = (() => {
+                    if (!inventorySessions || !inventorySessions.activeSessions) return 0;
+
+                    return inventorySessions.activeSessions.filter(session => {
+                        const isMyTask = session.assignedUser && (
+                            session.assignedUser.toLowerCase() === currentUserEmail.toLowerCase() ||
+                            session.assignedUser === inventorySessions.currentUserGroup
+                        );
+                        const isActive = session.status === '進行中';
+                        return isMyTask && isActive;
+                    }).length;
+                })();
+
+                return {
+                    pending: pendingApprovalsData.length,
+                    lent: allAssets.filter(a => a.status === '出借中').length,
+                    scrapPending: allAssets.filter(a => a.status === '報廢中').length,
+                    transferPending: allAssets.filter(a => a.status === '待接收' || a.status === '轉移中').length,
+                    inventory: inventoryCount
+                };
+            }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail]);
+
+            // 處理卡片點擊
+            const handleCardClick = (cardId) => {
+                switch(cardId) {
+                    case 'pending':
+                        window.openPendingApprovalModal();
+                        break;
+                    case 'lent':
+                        setActiveModal('lent');
+                        break;
+                    case 'scrapPending':
+                        setActiveModal('scrapPrint');
+                        break;
+                    case 'transferPending':
+                        setActiveModal('transferPrint');
+                        break;
+                    case 'inventory':
+                        const inventoryUrl = webAppUrl + '?page=inventory';
+                        window.open(inventoryUrl, '_top');
+                        break;
                 }
+            };
 
-                // 新增：已報廢狀態的回溯按鈕（僅限管理員）
-                if (isAdmin && asset.status === '已報廢') {
-                    const restoreBtn = document.createElement('button');
-                    restoreBtn.className = 'btn btn-sm btn-warning';
-                    restoreBtn.textContent = '回溯';
-                    restoreBtn.addEventListener('click', () => promptRestore(asset.assetId));
-                    actionTd.appendChild(restoreBtn);
-                }
+            // 處理篩選變更
+            const handleFilterChange = (filterName, value) => {
+                setFilters(prev => ({
+                    ...prev,
+                    [filterName]: value
+                }));
+            };
 
-                row.appendChild(actionTd);
+            // 處理取消
+            const handleCancel = (assetId, status) => {
+                const confirmation = confirm(
+                    `您確定要取消這筆 [${status}] 狀態的申請嗎？\n\n` +
+                    `財產編號：${assetId}\n\n` +
+                    `此操作將會把財產狀態恢復為「在庫」。`
+                );
 
-                listBody.appendChild(row);
-            });
-        }
+                if (!confirmation) return;
 
-        // ✨ 新增：取消按鈕的處理函式
-        function promptCancel(assetId, status) {
-            const confirmation = confirm(`您確定要取消這筆 [${status}] 狀態的申請嗎？\n\n財產編號：${assetId}\n\n此操作將會把財產狀態恢復為「在庫」。`);
-            if (confirmation) {
-                toggleTableVisibility(false);
                 showFlyProgressBar('正在取消申請...');
+
                 google.script.run
                     .withSuccessHandler(response => {
                         if (response.success) {
-                            // 1. 先讓進度條完成（跑到 100% 並顯示完成文字）
                             hideFlyProgressBar('取消完成！', 300);
-                            toggleTableVisibility(false);
 
-                            // 2. 等待進度條完全隱藏後（300ms + 100ms 緩衝）再彈出 alert
                             setTimeout(() => {
                                 alert('申請已成功取消。');
-
-                                // 3. 用戶按 OK 後，顯示新的載入動畫重新載入資料
-                                toggleTableVisibility(false);
                                 showFlyProgressBar('正在更新資料...');
-                                google.script.run
-                                    .withSuccessHandler(populatePage)
-                                    .withFailureHandler(showError)
-                                    .getUserStateData();
-                            }, 400); // 總延遲：300ms (進度條隱藏) + 100ms (緩衝)
+                                loadData();
+                            }, 400);
                         } else {
                             hideFlyProgressBar('取消失敗', 0);
-                            showError({ message: response.error });
+                            alert('錯誤：' + response.error);
                         }
                     })
-                    .withFailureHandler(showError)
+                    .withFailureHandler(error => {
+                        hideFlyProgressBar('取消失敗', 0);
+                        alert('錯誤：' + error.message);
+                    })
                     .cancelTransferOrScrap(assetId);
-            }
-        }
+            };
 
-        /**
-         * 處理「已報廢」資產的回溯操作（僅限管理員）
-         * @param {string} assetId - 資產編號
-         */
-        function promptRestore(assetId) {
-            const confirmation = confirm(
-                `您確定要將此「已報廢」資產回溯為「在庫」狀態嗎？\n\n` +
-                `財產編號：${assetId}\n\n` +
-                `注意：此操作會保留原報廢記錄並添加回溯標記。`
-            );
+            // 處理回溯
+            const handleRestore = (assetId) => {
+                const confirmation = confirm(
+                    `您確定要將此「已報廢」資產回溯為「在庫」狀態嗎？\n\n` +
+                    `財產編號：${assetId}\n\n` +
+                    `注意：此操作會保留原報廢記錄並添加回溯標記。`
+                );
 
-            if (!confirmation) return;
+                if (!confirmation) return;
 
-            // 隱藏表格，顯示進度條
-            toggleTableVisibility(false);
-            showFlyProgressBar('正在回溯資產狀態...');
+                showFlyProgressBar('正在回溯資產狀態...');
 
-            // 調用後端函數（注意：傳遞數組）
-            google.script.run
-                .withSuccessHandler(handleRestoreSuccess)
-                .withFailureHandler(handleRestoreError)
-                .restoreFromScrap([assetId]);  // ⚠️ 關鍵：傳遞單元素數組
-        }
-
-        /**
-         * 處理回溯成功的響應
-         * @param {Object} result - 後端返回的物件 { success, message, count, failed }
-         */
-        function handleRestoreSuccess(result) {
-            // 步驟 1：完成進度條（跑到 100% 並顯示完成文字）
-            hideFlyProgressBar('回溯完成！', 300);
-            toggleTableVisibility(false);
-
-            // 步驟 2：等待進度條完全隱藏後彈出 alert（300ms 隱藏 + 100ms 緩衝）
-            setTimeout(() => {
-                // 直接顯示後端返回的訊息
-                alert(result.message);
-
-                // 步驟 3：無論成功與否，都重新載入資料以確保狀態同步
-                // (即使回溯失敗，也可能因為狀態已經變更，所以重載是安全的)
-                toggleTableVisibility(false);
-                showFlyProgressBar('正在更新資料...');
                 google.script.run
-                    .withSuccessHandler(populatePage)
-                    .withFailureHandler(showError)
-                    .getUserStateData();
-            }, 400); // 總延遲：300ms (進度條隱藏) + 100ms (緩衝)
+                    .withSuccessHandler(result => {
+                        hideFlyProgressBar('回溯完成！', 300);
+
+                        setTimeout(() => {
+                            alert(result.message);
+                            showFlyProgressBar('正在更新資料...');
+                            loadData();
+                        }, 400);
+                    })
+                    .withFailureHandler(error => {
+                        hideFlyProgressBar('回溯失敗', 0);
+                        alert('錯誤：' + error.message);
+                    })
+                    .restoreFromScrap([assetId]);
+            };
+
+            if (!isReady) {
+                return null;
+            }
+
+            return (
+                <div className="ml-[88px] p-6 max-w-[1600px] mx-auto">
+                    <div className="mb-6">
+                        <h1 className="text-3xl font-bold text-slate-800">財產狀態查詢</h1>
+                        <p className="text-slate-500 mt-1">歡迎回來，今天是 {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    </div>
+
+                    <DashboardCards counts={cardCounts} onClick={handleCardClick} />
+
+                    <FilterSection
+                        filters={filters}
+                        onFilterChange={handleFilterChange}
+                        isAdmin={isAdmin}
+                        allAssets={allAssets}
+                    />
+
+                    {duplicateInfo.duplicateCount > 0 && (
+                        <AlertBanner
+                            count={duplicateInfo.duplicateCount}
+                            onClick={() => window.openDuplicateAssetsModal()}
+                        />
+                    )}
+
+                    <AssetTable
+                        assets={filteredAssets}
+                        isAdmin={isAdmin}
+                        currentUserEmail={currentUserEmail}
+                        onCancel={handleCancel}
+                        onRestore={handleRestore}
+                    />
+
+                    {activeModal === 'lent' && (
+                        <LentAssetsModal
+                            assets={allAssets}
+                            onClose={() => setActiveModal(null)}
+                        />
+                    )}
+
+                    {activeModal === 'scrapPrint' && (
+                        <ScrapPrintModal
+                            count={cardCounts.scrapPending}
+                            webAppUrl={webAppUrl}
+                            onClose={() => setActiveModal(null)}
+                        />
+                    )}
+
+                    {activeModal === 'transferPrint' && (
+                        <TransferPrintModal
+                            count={cardCounts.transferPending}
+                            webAppUrl={webAppUrl}
+                            onClose={() => setActiveModal(null)}
+                        />
+                    )}
+                </div>
+            );
         }
 
-        /**
-         * 處理回溯失敗的錯誤 (系統錯誤或例外)
-         * @param {Object} error - 錯誤對象
-         */
-        function handleRestoreError(error) {
-            hideFlyProgressBar('回溯失敗', 0);
-            alert('錯誤：' + (error.message || '回溯操作失敗，請稍後再試。'));
-            // ⚠️ 關鍵修復：錯誤後恢復表格顯示，避免 UI 卡死
-            toggleTableVisibility(true);
-        }
-
-        /**
-         * 統一控制表格的顯示/隱藏
-         * @param {boolean} show - true 顯示表格，false 隱藏表格
-         */
-        function toggleTableVisibility(show) {
-            const tableContainer = document.getElementById('table-container');
-            tableContainer.style.display = show ? 'block' : 'none';
-        }
-
-        function showError(error) {
-            hideFlyProgressBar('載入失敗', 0);
-            const statusDiv = document.getElementById('status-message');
-            statusDiv.className = 'alert alert-danger';
-            statusDiv.textContent = '錯誤：' + error.message;
-        }
+        ReactDOM.createRoot(document.getElementById('react-root')).render(<App />);
     </script>
 </body>
 </html>
