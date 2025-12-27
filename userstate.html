@@ -906,15 +906,27 @@
                                 setIsAdmin(response.isAdmin);
                                 setCurrentUserEmail(response.userEmail);
 
+                                let pendingLoaded = false;
+                                let inventoryLoaded = false;
+                                const finishCardLoading = () => {
+                                    if (pendingLoaded && inventoryLoaded) {
+                                        setIsLoadingCards(false);
+                                    }
+                                };
+
                                 // 載入待接收資料
                                 google.script.run
                                     .withSuccessHandler(pendingResponse => {
                                         if (pendingResponse && pendingResponse.approvals) {
                                             setPendingApprovalsData(pendingResponse.approvals);
                                         }
+                                        pendingLoaded = true;
+                                        finishCardLoading();
                                     })
                                     .withFailureHandler(error => {
                                         console.warn('載入待接收清單失敗：', error.message);
+                                        pendingLoaded = true;
+                                        finishCardLoading();
                                     })
                                     .getPendingApprovals();
 
@@ -924,14 +936,17 @@
                                         if (inventoryResponse) {
                                             setInventorySessions(inventoryResponse);
                                         }
+                                        inventoryLoaded = true;
+                                        finishCardLoading();
                                     })
                                     .withFailureHandler(error => {
                                         console.warn('載入盤點資料失敗：', error.message);
+                                        inventoryLoaded = true;
+                                        finishCardLoading();
                                     })
                                     .getInventoryData();
 
                                 setIsReady(true);
-                                setIsLoadingCards(false); // 數據載入完成後關閉卡片動畫
                                 hideFlyProgressBar('資料載入完成！', 300);
                             })
                             .withFailureHandler(error => {
