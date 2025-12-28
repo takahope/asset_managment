@@ -1095,12 +1095,12 @@
 
             // 檢查是否收到 null（序列化失敗）
             useEffect(() => {
-                if (details === null) {
+                if (!isLoading && details === null) {
                     console.error('收到的報廢資料為 null，可能是後端序列化失敗');
                     alert('載入失敗：資料格式錯誤');
                     onClose();
                 }
-            }, [details, onClose]);
+            }, [details, isLoading, onClose]);
 
             const handleSelectAll = (e) => {
                 const checked = e.target.checked;
@@ -1335,12 +1335,12 @@
 
             // 檢查是否收到 null（序列化失敗）
             useEffect(() => {
-                if (details === null) {
+                if (!isLoading && details === null) {
                     console.error('收到的轉移資料為 null，可能是後端序列化失敗');
                     alert('載入失敗：資料格式錯誤');
                     onClose();
                 }
-            }, [details, onClose]);
+            }, [details, isLoading, onClose]);
 
             const handleSelectAll = (e) => {
                 const checked = e.target.checked;
@@ -1901,6 +1901,18 @@
                         ]).then(([propertyResult, itemResult]) => {
                             const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
                             const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
+                            const hasInvalidData = (propertyResult.status === 'fulfilled' && !Array.isArray(propertyAssets)) ||
+                                (itemResult.status === 'fulfilled' && !Array.isArray(itemAssets));
+                            if (hasInvalidData) {
+                                console.error('收到的報廢資料格式錯誤，可能是後端序列化失敗', {
+                                    propertyAssets,
+                                    itemAssets
+                                });
+                                alert('載入失敗：資料格式錯誤');
+                                setActiveModal(null);
+                                setIsLoadingScrapDetails(false);
+                                return;
+                            }
 
                             setScrapPendingDetails({
                                 property: propertyAssets,
@@ -1936,6 +1948,18 @@
                         ]).then(([propertyResult, itemResult]) => {
                             const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
                             const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
+                            const hasInvalidData = (propertyResult.status === 'fulfilled' && !Array.isArray(propertyAssets)) ||
+                                (itemResult.status === 'fulfilled' && !Array.isArray(itemAssets));
+                            if (hasInvalidData) {
+                                console.error('收到的轉移資料格式錯誤，可能是後端序列化失敗', {
+                                    propertyAssets,
+                                    itemAssets
+                                });
+                                alert('載入失敗：資料格式錯誤');
+                                setActiveModal(null);
+                                setIsLoadingTransferDetails(false);
+                                return;
+                            }
 
                             setTransferPendingDetails({
                                 property: propertyAssets,
