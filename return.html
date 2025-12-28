@@ -32,11 +32,12 @@
                     <thead class="thead-light" style="position: sticky; top: 0;">
                         <tr>
                             <th style="width: 5%;"><input type="checkbox" id="select-all"></th>
-                            <th style="width: 17%;">財產編號</th>
-                            <th style="width: 15%;">型號/廠牌</th>
-                            <th style="width: 13%;">借用人</th>
-                            <th style="width: 18%;">預計歸還日</th>
-                            <th style="width: 17%;">出借後地點</th>
+                            <th style="width: 12%;">財產編號</th>
+                            <th style="width: 15%;">財產名稱</th>
+                            <th style="width: 13%;">型號/廠牌</th>
+                            <th style="width: 12%;">借用人</th>
+                            <th style="width: 13%;">預計歸還日</th>
+                            <th style="width: 15%;">出借後地點</th>
                             <th style="width: 15%;">出借事由</th>
                         </tr>
                     </thead>
@@ -116,6 +117,7 @@
                     // 其他欄位使用 textContent 安全設定
                     [
                         asset.assetId,
+                        asset.assetName,
                         asset.modelBrand,
                         asset.borrower,
                         asset.expectedReturnDate,
