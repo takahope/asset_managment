@@ -3589,6 +3589,21 @@ function getAllTransferableItems(assetCategory) {
 }
 
 /**
+ * [供 userstate.html 呼叫] 獲取待列印轉移申請單的數量
+ * @returns {number} 待列印的轉移記錄總數（財產 + 物品）
+ */
+function getTransferableItemsCount() {
+  try {
+    const propertyItems = getAllTransferableItems('財產');
+    const itemItems = getAllTransferableItems('物品');
+    return propertyItems.length + itemItems.length;
+  } catch (e) {
+    Logger.log(`getTransferableItemsCount 失敗: ${e.message}`);
+    return 0; // 錯誤時返回 0，避免前端崩潰
+  }
+}
+
+/**
  * [供 printTransfer.html 呼叫] 為指定保管人產生一份彙整的轉移記錄文件
  * @param {string} keeperName - 保管人名稱（簡易模式）或管理員名稱（詳細模式）
  * @param {string} assetCategory - 財產類別：'財產' 或 '物品'

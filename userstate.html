@@ -1075,38 +1075,238 @@
             );
         };
 
-        const ScrapPrintModal = ({ count, webAppUrl, onClose }) => {
-            const handlePrintScrap = () => {
-                const printScrapUrl = webAppUrl + '?page=printScrap';
-                window.open(printScrapUrl, '_top');
+        const ScrapPrintModal = ({ details, isLoading, webAppUrl, onClose, onRefresh }) => {
+            const [selectedCategory, setSelectedCategory] = useState('財產');
+            const [selectedIds, setSelectedIds] = useState([]);
+            const [selectAll, setSelectAll] = useState(false);
+            const [isGenerating, setIsGenerating] = useState(false);
+
+            // 當前類別的資產列表
+            const currentAssets = useMemo(() => {
+                if (!details) return [];
+                return selectedCategory === '財產' ? details.property : details.items;
+            }, [details, selectedCategory]);
+
+            // 切換類別時清空選擇
+            useEffect(() => {
+                setSelectedIds([]);
+                setSelectAll(false);
+            }, [selectedCategory]);
+
+            // 檢查是否收到 null（序列化失敗）
+            useEffect(() => {
+                if (details === null) {
+                    console.error('收到的報廢資料為 null，可能是後端序列化失敗');
+                    alert('載入失敗：資料格式錯誤');
+                    onClose();
+                }
+            }, [details, onClose]);
+
+            const handleSelectAll = (e) => {
+                const checked = e.target.checked;
+                setSelectAll(checked);
+                if (checked) {
+                    setSelectedIds(currentAssets.map(a => a.assetId));
+                } else {
+                    setSelectedIds([]);
+                }
+            };
+
+            const handleSelectOne = (assetId) => {
+                setSelectedIds(prev => {
+                    if (prev.includes(assetId)) {
+                        return prev.filter(id => id !== assetId);
+                    } else {
+                        return [...prev, assetId];
+                    }
+                });
+            };
+
+            const handleGenerateDoc = () => {
+                if (selectedIds.length === 0) {
+                    alert('請至少勾選一個項目來產生報表。');
+                    return;
+                }
+
+                setIsGenerating(true);
+
+                google.script.run
+                    .withSuccessHandler(adminName => {
+                        google.script.run
+                            .withSuccessHandler(result => {
+                                const shouldUpdate = confirm(
+                                    '📄 彙總報表產生成功！\n\n' +
+                                    `是否要在列印後同步更新這些財產的狀態為「已報廢」？\n\n` +
+                                    `⚠️ 重要提醒\n` +
+                                    '選擇【確定】後，這些記錄將不會再出現在待列印清單中\n\n' +
+                                    `✅ 【確定】= 列印後更新狀態，將 ${result.assetIds.length} 筆財產狀態更新為「已報廢」（財產將標記為已報廢，無法再次列印此申請）\n` +
+                                    `❌ 【取消】= 僅列印報表，不更新狀態（需至"總表更新"更新狀態）`
+                                );
+
+                                window.open(result.fileUrl, '_blank');
+
+                                if (shouldUpdate) {
+                                    google.script.run
+                                        .withSuccessHandler(message => {
+                                            alert('✅ ' + message);
+                                            onRefresh();
+                                        })
+                                        .withFailureHandler(error => {
+                                            alert(
+                                                '❌ 狀態更新失敗：' + error.message + '\n' +
+                                                '⚠️  文件已成功產生，但狀態未更新。\n' +
+                                                '💡 請稍後使用「管理後台」手動更新狀態。'
+                                            );
+                                            onRefresh();
+                                        })
+                                        .processScrapConfirmation(result.assetIds);
+                                } else {
+                                    onRefresh();
+                                }
+                                setIsGenerating(false);
+                            })
+                            .withFailureHandler(error => {
+                                alert('生成失敗：' + (error.message || error));
+                                setIsGenerating(false);
+                            })
+                            .createScrapDoc(adminName, selectedCategory, selectedIds);
+                    })
+                    .withFailureHandler(error => {
+                        alert('載入失敗：' + (error.message || error));
+                        setIsGenerating(false);
+                    })
+                    .getAdminName();
             };
 
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-[fadeIn_0.2s_ease-out]">
-                        <div className="px-6 py-4 border-b bg-orange-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out] flex flex-col">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-orange-50 flex justify-between items-center">
                             <h3 className="text-lg font-bold text-orange-800">列印報廢申請單</h3>
+                            <button onClick={onClose} className="text-orange-600 hover:text-orange-800 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
                         </div>
-                        <div className="p-6">
-                            <p className="text-slate-600 mb-4">
-                                您有 <span className="font-bold text-orange-600 text-xl">{count}</span> 筆報廢中的資產。
-                            </p>
-                            <p className="text-sm text-slate-500 mb-6">
-                                點擊下方按鈕前往列印頁面，選擇需要列印申請單的資產。
-                            </p>
-                            <div className="flex gap-3 justify-end">
+
+                        {/* Category Selector */}
+                        <div className="px-6 py-4 border-b bg-orange-50/50">
+                            <label className="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
+                            <label className="inline-flex items-center mr-6">
+                                <input
+                                    type="radio"
+                                    name="scrapCategory"
+                                    value="財產"
+                                    checked={selectedCategory === '財產'}
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                    className="mr-2"
+                                />
+                                <span>財產</span>
+                            </label>
+                            <label className="inline-flex items-center">
+                                <input
+                                    type="radio"
+                                    name="scrapCategory"
+                                    value="物品"
+                                    checked={selectedCategory === '物品'}
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                    className="mr-2"
+                                />
+                                <span>物品</span>
+                            </label>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {isLoading ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <div className="text-center">
+                                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+                                        <p className="mt-4 text-slate-600">載入中...</p>
+                                    </div>
+                                </div>
+                            ) : currentAssets.length === 0 ? (
+                                <div className="text-center py-16 text-slate-500">
+                                    <i className="fas fa-inbox text-5xl mb-4 text-slate-300"></i>
+                                    <p>目前沒有任何狀態為「報廢中」的{selectedCategory}。</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-orange-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectAll}
+                                                        onChange={handleSelectAll}
+                                                        className="rounded"
+                                                    />
+                                                </th>
+                                                <th className="px-3 py-2 text-left">財產編號</th>
+                                                <th className="px-3 py-2 text-left">財產名稱</th>
+                                                <th className="px-3 py-2 text-left">型號/廠牌</th>
+                                                <th className="px-3 py-2 text-left">原保管人</th>
+                                                <th className="px-3 py-2 text-left">原使用人</th>
+                                                <th className="px-3 py-2 text-left">報廢日期</th>
+                                                <th className="px-3 py-2 text-left">報廢原因</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {currentAssets.map(asset => (
+                                                <tr key={asset.assetId} className="border-b hover:bg-orange-50/30">
+                                                    <td className="px-3 py-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedIds.includes(asset.assetId)}
+                                                            onChange={() => handleSelectOne(asset.assetId)}
+                                                            className="rounded"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2">{asset.assetId}</td>
+                                                    <td className="px-3 py-2">{asset.assetName}</td>
+                                                    <td className="px-3 py-2">{asset.modelBrand}</td>
+                                                    <td className="px-3 py-2">{asset.originalKeeper}</td>
+                                                    <td className="px-3 py-2">{asset.originalUser || ''}</td>
+                                                    <td className="px-3 py-2">{asset.scrapDate || ''}</td>
+                                                    <td className="px-3 py-2">{asset.scrapReason || ''}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                            <div className="text-sm text-slate-600">
+                                已選擇 <span className="font-bold text-orange-600">{selectedIds.length}</span> 筆資產
+                            </div>
+                            <div className="flex gap-3">
                                 <button
                                     onClick={onClose}
                                     className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    disabled={isGenerating}
                                 >
                                     取消
                                 </button>
                                 <button
-                                    onClick={handlePrintScrap}
-                                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2"
+                                    onClick={handleGenerateDoc}
+                                    disabled={isGenerating || selectedIds.length === 0}
+                                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <i className="fas fa-print"></i>
-                                    前往列印頁面
+                                    {isGenerating ? (
+                                        <>
+                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                            <span>產生中...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-file-alt"></i>
+                                            <span>生成報廢申請單</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -1115,38 +1315,245 @@
             );
         };
 
-        const TransferPrintModal = ({ count, webAppUrl, onClose }) => {
-            const handlePrintTransfer = () => {
-                const printTransferUrl = webAppUrl + '?page=printTransfer';
-                window.open(printTransferUrl, '_top');
+        const TransferPrintModal = ({ details, isLoading, webAppUrl, onClose, onRefresh }) => {
+            const [selectedCategory, setSelectedCategory] = useState('財產');
+            const [selectedIds, setSelectedIds] = useState([]);
+            const [selectAll, setSelectAll] = useState(false);
+            const [isGenerating, setIsGenerating] = useState(false);
+
+            // 當前類別的資產列表
+            const currentAssets = useMemo(() => {
+                if (!details) return [];
+                return selectedCategory === '財產' ? details.property : details.items;
+            }, [details, selectedCategory]);
+
+            // 切換類別時清空選擇
+            useEffect(() => {
+                setSelectedIds([]);
+                setSelectAll(false);
+            }, [selectedCategory]);
+
+            // 檢查是否收到 null（序列化失敗）
+            useEffect(() => {
+                if (details === null) {
+                    console.error('收到的轉移資料為 null，可能是後端序列化失敗');
+                    alert('載入失敗：資料格式錯誤');
+                    onClose();
+                }
+            }, [details, onClose]);
+
+            const handleSelectAll = (e) => {
+                const checked = e.target.checked;
+                setSelectAll(checked);
+                if (checked) {
+                    setSelectedIds(currentAssets.map(a => a.assetId));
+                } else {
+                    setSelectedIds([]);
+                }
+            };
+
+            const handleSelectOne = (assetId) => {
+                setSelectedIds(prev => {
+                    if (prev.includes(assetId)) {
+                        return prev.filter(id => id !== assetId);
+                    } else {
+                        return [...prev, assetId];
+                    }
+                });
+            };
+
+            const handleGenerateDoc = () => {
+                if (selectedIds.length === 0) {
+                    alert('請至少勾選一個項目來產生報表。');
+                    return;
+                }
+
+                setIsGenerating(true);
+
+                google.script.run
+                    .withSuccessHandler(adminName => {
+                        google.script.run
+                            .withSuccessHandler(result => {
+                                const shouldUpdate = confirm(
+                                    '📄 彙總轉移記錄產生成功！\n\n' +
+                                    '❓ 是否要在生成文件後同步更新這些財產的更新狀態？\n\n' +
+                                    '⚠️  提醒：選擇【確定】後，這些記錄將不會再出現在待列印清單中\n\n' +
+                                    `✅ 【確定】= 標記 ${result.assetIds.length} 筆轉移記錄為已更新（無法再次列印）\n` +
+                                    '❌ 【取消】= 僅開啟文件，不標記狀態（可再次列印，需至"總表更新"更新狀態）'
+                                );
+
+                                window.open(result.fileUrl, '_blank');
+
+                                if (shouldUpdate) {
+                                    google.script.run
+                                        .withSuccessHandler(message => {
+                                            alert('✅ ' + message);
+                                            onRefresh();
+                                        })
+                                        .withFailureHandler(error => {
+                                            alert(
+                                                '❌ 狀態更新失敗：' + error.message + '\n' +
+                                                '⚠️  文件已成功產生，但未標記為已上傳。\n' +
+                                                '💡 請稍後使用「管理後台」手動更新狀態。'
+                                            );
+                                            onRefresh();
+                                        })
+                                        .processUploadConfirmation(result.assetIds);
+                                } else {
+                                    onRefresh();
+                                }
+                                setIsGenerating(false);
+                            })
+                            .withFailureHandler(error => {
+                                alert('生成失敗：' + (error.message || error));
+                                setIsGenerating(false);
+                            })
+                            .createTransferDoc(adminName, selectedCategory, selectedIds);
+                    })
+                    .withFailureHandler(error => {
+                        alert('載入失敗：' + (error.message || error));
+                        setIsGenerating(false);
+                    })
+                    .getAdminName();
             };
 
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-[fadeIn_0.2s_ease-out]">
-                        <div className="px-6 py-4 border-b bg-purple-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out] flex flex-col">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-purple-50 flex justify-between items-center">
                             <h3 className="text-lg font-bold text-purple-800">列印轉移申請單</h3>
+                            <button onClick={onClose} className="text-purple-600 hover:text-purple-800 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
                         </div>
-                        <div className="p-6">
-                            <p className="text-slate-600 mb-4">
-                                您有 <span className="font-bold text-purple-600 text-xl">{count}</span> 筆轉移中的資產。
-                            </p>
-                            <p className="text-sm text-slate-500 mb-6">
-                                點擊下方按鈕前往列印頁面，選擇需要列印轉移單的資產。
-                            </p>
-                            <div className="flex gap-3 justify-end">
+
+                        {/* Category Selector */}
+                        <div className="px-6 py-4 border-b bg-purple-50/50">
+                            <label className="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
+                            <label className="inline-flex items-center mr-6">
+                                <input
+                                    type="radio"
+                                    name="transferCategory"
+                                    value="財產"
+                                    checked={selectedCategory === '財產'}
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                    className="mr-2"
+                                />
+                                <span>財產</span>
+                            </label>
+                            <label className="inline-flex items-center">
+                                <input
+                                    type="radio"
+                                    name="transferCategory"
+                                    value="物品"
+                                    checked={selectedCategory === '物品'}
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                    className="mr-2"
+                                />
+                                <span>物品</span>
+                            </label>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {isLoading ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <div className="text-center">
+                                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                                        <p className="mt-4 text-slate-600">載入中...</p>
+                                    </div>
+                                </div>
+                            ) : currentAssets.length === 0 ? (
+                                <div className="text-center py-16 text-slate-500">
+                                    <i className="fas fa-inbox text-5xl mb-4 text-slate-300"></i>
+                                    <p>目前沒有任何已完成轉移的{selectedCategory}記錄。</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-purple-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectAll}
+                                                        onChange={handleSelectAll}
+                                                        className="rounded"
+                                                    />
+                                                </th>
+                                                <th className="px-3 py-2 text-left">財產編號</th>
+                                                <th className="px-3 py-2 text-left">財產名稱</th>
+                                                <th className="px-3 py-2 text-left">型號/廠牌</th>
+                                                <th className="px-3 py-2 text-left">原保管人</th>
+                                                <th className="px-3 py-2 text-left">原使用人</th>
+                                                <th className="px-3 py-2 text-left">原地點</th>
+                                                <th className="px-3 py-2 text-left">新保管人</th>
+                                                <th className="px-3 py-2 text-left">新使用人</th>
+                                                <th className="px-3 py-2 text-left">新地點</th>
+                                                <th className="px-3 py-2 text-left">轉移類型</th>
+                                                <th className="px-3 py-2 text-left">轉移日期</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {currentAssets.map(asset => (
+                                                <tr key={asset.assetId} className="border-b hover:bg-purple-50/30">
+                                                    <td className="px-3 py-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedIds.includes(asset.assetId)}
+                                                            onChange={() => handleSelectOne(asset.assetId)}
+                                                            className="rounded"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-2">{asset.assetId}</td>
+                                                    <td className="px-3 py-2">{asset.assetName}</td>
+                                                    <td className="px-3 py-2">{asset.modelBrand}</td>
+                                                    <td className="px-3 py-2">{asset.oldKeeper}</td>
+                                                    <td className="px-3 py-2">{asset.oldUser || ''}</td>
+                                                    <td className="px-3 py-2">{asset.oldLocation}</td>
+                                                    <td className="px-3 py-2">{asset.newKeeper}</td>
+                                                    <td className="px-3 py-2">{asset.newUser || ''}</td>
+                                                    <td className="px-3 py-2">{asset.newLocation}</td>
+                                                    <td className="px-3 py-2">{asset.transferType}</td>
+                                                    <td className="px-3 py-2">{asset.transferDate}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                            <div className="text-sm text-slate-600">
+                                已選擇 <span className="font-bold text-purple-600">{selectedIds.length}</span> 筆資產
+                            </div>
+                            <div className="flex gap-3">
                                 <button
                                     onClick={onClose}
                                     className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    disabled={isGenerating}
                                 >
                                     取消
                                 </button>
                                 <button
-                                    onClick={handlePrintTransfer}
-                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                                    onClick={handleGenerateDoc}
+                                    disabled={isGenerating || selectedIds.length === 0}
+                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <i className="fas fa-print"></i>
-                                    前往列印頁面
+                                    {isGenerating ? (
+                                        <>
+                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                            <span>產生中...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-file-alt"></i>
+                                            <span>生成轉移申請單</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -1174,6 +1581,11 @@
             const [isLoadingCards, setIsLoadingCards] = useState(false);
             const [lentAssetsDetails, setLentAssetsDetails] = useState(null);
             const [isLoadingLentDetails, setIsLoadingLentDetails] = useState(false);
+            const [scrapPendingDetails, setScrapPendingDetails] = useState(null);
+            const [transferPendingDetails, setTransferPendingDetails] = useState(null);
+            const [transferPendingCount, setTransferPendingCount] = useState(0);
+            const [isLoadingScrapDetails, setIsLoadingScrapDetails] = useState(false);
+            const [isLoadingTransferDetails, setIsLoadingTransferDetails] = useState(false);
 
             // 載入資料
             const loadData = () => {
@@ -1237,6 +1649,19 @@
                                     })
                                     .getInventoryData();
 
+                                // 載入轉移待列印數量
+                                google.script.run
+                                    .withSuccessHandler(count => {
+                                        if (typeof count === 'number') {
+                                            setTransferPendingCount(count);
+                                        }
+                                    })
+                                    .withFailureHandler(error => {
+                                        console.warn('載入轉移數量失敗：', error.message);
+                                        setTransferPendingCount(0);
+                                    })
+                                    .getTransferableItemsCount();
+
                                 setIsReady(true);
                                 hideFlyProgressBar('資料載入完成！', 300);
                             })
@@ -1257,8 +1682,8 @@
                 const startTime = Date.now();
 
                 try {
-                    // 並行載入三個 API
-                    const [pendingResponse, inventoryResponse, assetsResponse] = await Promise.allSettled([
+                    // 並行載入四個 API
+                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse] = await Promise.allSettled([
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
@@ -1276,6 +1701,12 @@
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
                                 .getUserStateData();
+                        }),
+                        new Promise((resolve, reject) => {
+                            google.script.run
+                                .withSuccessHandler(resolve)
+                                .withFailureHandler(reject)
+                                .getTransferableItemsCount();
                         })
                     ]);
 
@@ -1289,9 +1720,12 @@
                     if (assetsResponse.status === 'fulfilled' && assetsResponse.value?.assets) {
                         setAllAssets(assetsResponse.value.assets);
                     }
+                    if (transferCountResponse.status === 'fulfilled' && typeof transferCountResponse.value === 'number') {
+                        setTransferPendingCount(transferCountResponse.value);
+                    }
 
                     // 檢查失敗的請求
-                    const failures = [pendingResponse, inventoryResponse, assetsResponse]
+                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse]
                         .filter(r => r.status === 'rejected');
                     if (failures.length > 0) {
                         console.warn('部分數據載入失敗：', failures);
@@ -1394,14 +1828,26 @@
                     }).length;
                 })();
 
+                const scrapPendingCount = (() => {
+                    const scrappingAssets = allAssets.filter(a => a.status === '報廢中');
+                    if (isAdmin) {
+                        return scrappingAssets.length;
+                    } else {
+                        return scrappingAssets.filter(a =>
+                            a.leaderEmail?.toLowerCase() === currentUserEmail.toLowerCase() ||
+                            a.userEmail?.toLowerCase() === currentUserEmail.toLowerCase()
+                        ).length;
+                    }
+                })();
+
                 return {
                     pending: pendingApprovalsData.length,
                     lent: allAssets.filter(a => a.status === '出借中').length,
-                    scrapPending: allAssets.filter(a => a.status === '報廢中').length,
-                    transferPending: allAssets.filter(a => a.status === '待接收' || a.status === '轉移中').length,
+                    scrapPending: scrapPendingCount,
+                    transferPending: transferPendingCount,
                     inventory: inventoryCount
                 };
-            }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail]);
+            }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail, isAdmin, transferPendingCount]);
 
             // 處理卡片點擊
             const handleCardClick = (cardId) => {
@@ -1435,10 +1881,74 @@
                             .getLentOutAssets();
                         break;
                     case 'scrapPending':
+                        setIsLoadingScrapDetails(true);
                         setActiveModal('scrapPrint');
+
+                        // 並行載入財產和物品兩個類別
+                        Promise.allSettled([
+                            new Promise((resolve, reject) => {
+                                google.script.run
+                                    .withSuccessHandler(resolve)
+                                    .withFailureHandler(reject)
+                                    .getAllScrappableItems('財產');
+                            }),
+                            new Promise((resolve, reject) => {
+                                google.script.run
+                                    .withSuccessHandler(resolve)
+                                    .withFailureHandler(reject)
+                                    .getAllScrappableItems('物品');
+                            })
+                        ]).then(([propertyResult, itemResult]) => {
+                            const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
+                            const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
+
+                            setScrapPendingDetails({
+                                property: propertyAssets,
+                                items: itemAssets,
+                                total: (propertyAssets?.length || 0) + (itemAssets?.length || 0)
+                            });
+                            setIsLoadingScrapDetails(false);
+                        }).catch(error => {
+                            console.error('載入報廢詳情失敗：', error);
+                            alert('載入報廢詳情失敗：' + (error.message || error));
+                            setActiveModal(null);
+                            setIsLoadingScrapDetails(false);
+                        });
                         break;
                     case 'transferPending':
+                        setIsLoadingTransferDetails(true);
                         setActiveModal('transferPrint');
+
+                        // 並行載入財產和物品兩個類別
+                        Promise.allSettled([
+                            new Promise((resolve, reject) => {
+                                google.script.run
+                                    .withSuccessHandler(resolve)
+                                    .withFailureHandler(reject)
+                                    .getAllTransferableItems('財產');
+                            }),
+                            new Promise((resolve, reject) => {
+                                google.script.run
+                                    .withSuccessHandler(resolve)
+                                    .withFailureHandler(reject)
+                                    .getAllTransferableItems('物品');
+                            })
+                        ]).then(([propertyResult, itemResult]) => {
+                            const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
+                            const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
+
+                            setTransferPendingDetails({
+                                property: propertyAssets,
+                                items: itemAssets,
+                                total: (propertyAssets?.length || 0) + (itemAssets?.length || 0)
+                            });
+                            setIsLoadingTransferDetails(false);
+                        }).catch(error => {
+                            console.error('載入轉移詳情失敗：', error);
+                            alert('載入轉移詳情失敗：' + (error.message || error));
+                            setActiveModal(null);
+                            setIsLoadingTransferDetails(false);
+                        });
                         break;
                     case 'inventory':
                         const inventoryUrl = webAppUrl + '?page=inventory';
@@ -1599,17 +2109,35 @@
 
                     {activeModal === 'scrapPrint' && (
                         <ScrapPrintModal
-                            count={cardCounts.scrapPending}
+                            details={scrapPendingDetails}
+                            isLoading={isLoadingScrapDetails}
                             webAppUrl={webAppUrl}
-                            onClose={() => setActiveModal(null)}
+                            onClose={() => {
+                                setActiveModal(null);
+                                setScrapPendingDetails(null);
+                            }}
+                            onRefresh={() => {
+                                setActiveModal(null);
+                                setScrapPendingDetails(null);
+                                refreshCardData();
+                            }}
                         />
                     )}
 
                     {activeModal === 'transferPrint' && (
                         <TransferPrintModal
-                            count={cardCounts.transferPending}
+                            details={transferPendingDetails}
+                            isLoading={isLoadingTransferDetails}
                             webAppUrl={webAppUrl}
-                            onClose={() => setActiveModal(null)}
+                            onClose={() => {
+                                setActiveModal(null);
+                                setTransferPendingDetails(null);
+                            }}
+                            onRefresh={() => {
+                                setActiveModal(null);
+                                setTransferPendingDetails(null);
+                                refreshCardData();
+                            }}
                         />
                     )}
                 </div>
