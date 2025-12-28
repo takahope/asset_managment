@@ -129,6 +129,7 @@ const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
 
 // --- ✨ **新增：「出借紀錄」工作表中的欄位索引** ---
 const LL_LEND_ID_COLUMN_INDEX = 1;
+const LL_LENDER_EMAIL_COLUMN_INDEX = 4;  // ✨ D 欄：出借人 Email
 const LL_STATUS_COLUMN_INDEX = 9;
 const LL_RETURN_DATE_COLUMN_INDEX = 7;
 
@@ -2202,9 +2203,9 @@ function processBatchLending(formData) {
           location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('出借中');
           
           const lendId = `LEND-${now.getTime()}-${successCount}`;
-          // ✨ **核心修改：在 appendRow 中增加 lendingLocation**
+          // ✨ **核心修改：D 欄改為記錄出借人 Email（而非保管人名稱）**
           lendingLogSheet.appendRow([
-            lendId, now, asset.assetId, asset.leaderName,
+            lendId, now, asset.assetId, currentUserEmail, // ✨ 改為出借人 Email
             borrowerName, new Date(returnDate), "", // 實際歸還日期留空
             reason, "出借中", lendingLocation // 寫入新的 J 欄
           ]);
@@ -2256,15 +2257,21 @@ function getLentOutAssets() {
         const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, 10).getValues(); // ✨ 讀取到 J 欄
 
         const allAssets = getAllAssets();
-        const assetKeeperMap = new Map(allAssets.map(asset => [asset.assetId, asset.leaderEmail]));
         const assetIdToModelMap = new Map(allAssets.map(asset => [asset.assetId, asset.modelBrand]));
+        const assetIdToNameMap = new Map(allAssets.map(asset => [asset.assetId, asset.assetName]));  // ✨ 新增：財產名稱映射
 
         const lentAssets = lendingData
             .filter(row => {
-                const assetId = row[2];
-                const keeperEmail = assetKeeperMap.get(assetId);
+                const lenderEmail = row[LL_LENDER_EMAIL_COLUMN_INDEX - 1];  // ✨ 讀取 D 欄（出借人 Email）
                 const status = row[LL_STATUS_COLUMN_INDEX - 1];
-                return keeperEmail === currentUserEmail && status === '出借中';
+
+                // ✨ 容錯：跳過舊格式記錄（D 欄不是 Email）
+                if (!lenderEmail || !lenderEmail.includes('@')) {
+                    Logger.log(`⚠️ 跳過舊格式記錄：lendId=${row[0]}, D欄=${lenderEmail}`);
+                    return false;
+                }
+
+                return lenderEmail === currentUserEmail && status === '出借中';  // ✨ 比對出借人
             })
             .map(row => {
                 const assetId = row[2];
@@ -2272,6 +2279,7 @@ function getLentOutAssets() {
                     lendId: row[0],
                     applyTime: new Date(row[1]).toLocaleDateString('zh-TW'),
                     assetId: assetId,
+                    assetName: assetIdToNameMap.get(assetId) || '',  // ✨ 新增：財產名稱
                     modelBrand: assetIdToModelMap.get(assetId) || '',
                     borrower: row[4],
                     expectedReturnDate: new Date(row[5]).toLocaleDateString('zh-TW'),
@@ -2307,16 +2315,6 @@ function processBatchReturn(lendIds) {
         const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, lendingLogSheet.getLastColumn()).getValues();
         const lendingMap = new Map(lendingData.map((row, index) => [row[LL_LEND_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
 
-        // 🛡️ 預先建立資產擁有權映射
-        const allAssets = getAllAssets();
-        const assetOwnerMap = new Map(allAssets.map(asset => [
-            asset.assetId,
-            {
-                leaderEmail: (asset.leaderEmail || '').toLowerCase(),
-                userEmail: (asset.userEmail || '').toLowerCase()
-            }
-        ]));
-
         const now = new Date();
         let successCount = 0;
 
@@ -2324,14 +2322,13 @@ function processBatchReturn(lendIds) {
             const lendDetails = lendingMap.get(lendId);
             if (lendDetails && lendDetails.row[LL_STATUS_COLUMN_INDEX - 1] === '出借中') {
                 const assetId = lendDetails.row[2];
+                const lenderEmail = lendDetails.row[LL_LENDER_EMAIL_COLUMN_INDEX - 1];  // ✨ 讀取 D 欄（出借人 Email）
 
-                // 🛡️ 安全性修復：驗證使用者是否有權歸還此資產
+                // 🛡️ 安全性修復：驗證使用者是否為出借人
                 if (!isAdmin) {
-                    const ownership = assetOwnerMap.get(assetId);
-                    if (!ownership ||
-                        (ownership.leaderEmail !== currentUserEmailLower && ownership.userEmail !== currentUserEmailLower)) {
+                    if (!lenderEmail || lenderEmail.toLowerCase() !== currentUserEmailLower) {
                         unauthorizedLends.push(lendId);
-                        Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權歸還資產 ${assetId}`);
+                        Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權歸還此記錄（出借人：${lenderEmail}）`);
                         return; // 跳過此記錄
                     }
                 }
@@ -2354,7 +2351,7 @@ function processBatchReturn(lendIds) {
         // 🛡️ 安全性修復：如果有無權限的記錄，處理錯誤
         if (unauthorizedLends.length > 0) {
             if (successCount === 0) {
-                throw new Error('權限不足：您不是這些資產的保管人或使用人，無法執行歸還操作。');
+                throw new Error('權限不足：您不是這些資產的出借人，無法執行歸還操作。');
             }
         }
 
