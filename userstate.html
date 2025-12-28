@@ -732,54 +732,343 @@
         };
 
         // React Modals
-        const LentAssetsModal = ({ assets, onClose }) => {
-            const lentAssets = assets.filter(a => a.status === '出借中');
+        const LentAssetsModal = ({ lentAssetsDetails, isLoading, onClose, onReturnSuccess }) => {
+            const [selectedLendIds, setSelectedLendIds] = useState([]);
+            const [selectAll, setSelectAll] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [filters, setFilters] = useState({
+                location: '',
+                startDate: '',
+                endDate: '',
+                overdueOnly: '',
+                search: ''
+            });
+
+            // 當 lentAssetsDetails 改變時，重置勾選狀態
+            useEffect(() => {
+                setSelectedLendIds([]);
+                setSelectAll(false);
+            }, [lentAssetsDetails]);
+
+            // 篩選邏輯
+            const filteredAssets = useMemo(() => {
+                if (!lentAssetsDetails) return [];
+
+                return lentAssetsDetails.filter(asset => {
+                    // 地點篩選
+                    const matchLocation = !filters.location || asset.lendingLocation === filters.location;
+
+                    // 日期範圍篩選
+                    const returnDate = new Date(asset.expectedReturnDate);
+                    const matchDateRange =
+                        (!filters.startDate || returnDate >= new Date(filters.startDate)) &&
+                        (!filters.endDate || returnDate <= new Date(filters.endDate));
+
+                    // 逾期狀態篩選
+                    let matchOverdue = true;
+                    if (filters.overdueOnly === 'overdue' || filters.overdueOnly === 'notOverdue') {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const assetReturnDate = new Date(asset.expectedReturnDate);
+                        assetReturnDate.setHours(0, 0, 0, 0);
+                        const isOverdue = assetReturnDate < today;
+                        matchOverdue = filters.overdueOnly === 'overdue' ? isOverdue : !isOverdue;
+                    }
+
+                    // 關鍵字搜尋
+                    const matchSearch =
+                        !filters.search ||
+                        asset.assetId.toUpperCase().includes(filters.search.toUpperCase()) ||
+                        asset.borrower.toUpperCase().includes(filters.search.toUpperCase()) ||
+                        (asset.reason && asset.reason.toUpperCase().includes(filters.search.toUpperCase()));
+
+                    return matchLocation && matchDateRange && matchOverdue && matchSearch;
+                });
+            }, [lentAssetsDetails, filters]);
+
+            // 取得唯一地點列表（用於篩選下拉選單）
+            const uniqueLocations = useMemo(() => {
+                if (!lentAssetsDetails) return [];
+                return [...new Set(lentAssetsDetails.map(a => a.lendingLocation).filter(Boolean))].sort();
+            }, [lentAssetsDetails]);
+
+            // 處理全選
+            const handleSelectAll = useCallback((e) => {
+                const checked = e.target.checked;
+                setSelectAll(checked);
+                if (checked) {
+                    setSelectedLendIds(filteredAssets.map(asset => asset.lendId));
+                } else {
+                    setSelectedLendIds([]);
+                }
+            }, [filteredAssets]);
+
+            // 處理單個勾選
+            const handleCheckboxChange = useCallback((lendId) => {
+                setSelectedLendIds(prev => {
+                    if (prev.includes(lendId)) {
+                        const newSelected = prev.filter(id => id !== lendId);
+                        if (filteredAssets && newSelected.length < filteredAssets.length) {
+                            setSelectAll(false);
+                        }
+                        return newSelected;
+                    } else {
+                        const newSelected = [...prev, lendId];
+                        if (filteredAssets && newSelected.length === filteredAssets.length) {
+                            setSelectAll(true);
+                        }
+                        return newSelected;
+                    }
+                });
+            }, [filteredAssets]);
+
+            // 處理歸還提交
+            const handleSubmitReturn = useCallback(() => {
+                if (selectedLendIds.length === 0) {
+                    alert('請至少勾選一筆要歸還的項目。');
+                    return;
+                }
+
+                if (!confirm(`確定要歸還所選的 ${selectedLendIds.length} 筆資產嗎？\n\n⚠️ 請確認此資產已歸還至原存放地點。`)) {
+                    return;
+                }
+
+                setIsSubmitting(true);
+                showToastProgress('正在處理歸還作業...');
+
+                google.script.run
+                    .withSuccessHandler(message => {
+                        hideToastProgress('歸還完成！', 300);
+                        setTimeout(() => {
+                            alert(message);
+                            setIsSubmitting(false);
+                            onReturnSuccess();
+                        }, 400);
+                    })
+                    .withFailureHandler(error => {
+                        hideToastProgress('歸還失敗！', 300);
+                        setIsSubmitting(false);
+                        alert('歸還失敗：' + error.message);
+                    })
+                    .processBatchReturn(selectedLendIds);
+            }, [selectedLendIds, onReturnSuccess]);
 
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                        {/* 標題列 */}
                         <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
-                            <h3 className="text-lg font-bold text-slate-800">出借中資產清單</h3>
+                            <h3 className="text-lg font-bold text-slate-800">出借中資產 - 歸還作業</h3>
                             <button
                                 onClick={onClose}
                                 className="text-slate-400 hover:text-slate-600 transition-colors"
+                                disabled={isSubmitting}
                             >
                                 <i className="fas fa-times text-xl"></i>
                             </button>
                         </div>
-                        <div className="p-6 max-h-[70vh] overflow-y-auto">
-                            {lentAssets.length === 0 ? (
-                                <p className="text-center text-slate-500 py-8">目前沒有出借中的資產。</p>
+
+                        {/* 主要內容區域 */}
+                        <div className="p-6 max-h-[75vh] overflow-y-auto">
+                            {isLoading ? (
+                                // 載入中狀態
+                                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                    <i className="fas fa-spinner fa-spin text-4xl text-blue-500"></i>
+                                    <p className="text-slate-500 font-medium">載入出借資料中...</p>
+                                </div>
+                            ) : !lentAssetsDetails || lentAssetsDetails.length === 0 ? (
+                                // 無資料狀態
+                                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                    <i className="fas fa-check-circle text-5xl text-green-500"></i>
+                                    <p className="text-slate-500 text-lg font-medium">目前沒有出借中的資產。</p>
+                                    <p className="text-slate-400 text-sm">所有資產都已歸還完畢。</p>
+                                </div>
                             ) : (
-                                <table className="w-full text-sm">
-                                    <thead className="bg-slate-50 sticky top-0">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">財產編號</th>
-                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">財產名稱</th>
-                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">保管人</th>
-                                            <th className="px-4 py-3 text-left font-semibold text-slate-600">保管位置</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {lentAssets.map((asset, index) => (
-                                            <tr key={`lent-${asset.assetId}-${index}`} className="hover:bg-slate-50">
-                                                <td className="px-4 py-3 font-mono text-slate-600">{asset.assetId}</td>
-                                                <td className="px-4 py-3">{asset.assetName}</td>
-                                                <td className="px-4 py-3">{asset.leader}</td>
-                                                <td className="px-4 py-3">{asset.location}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <>
+                                    {/* 篩選控制區 */}
+                                    <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            {/* 地點篩選 */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-600 mb-1">出借後地點</label>
+                                                <select
+                                                    value={filters.location}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <option value="">-- 顯示全部 --</option>
+                                                    {uniqueLocations.map(loc => (
+                                                        <option key={loc} value={loc}>{loc}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            {/* 日期範圍篩選 */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-600 mb-1">預計歸還日（起）</label>
+                                                <input
+                                                    type="date"
+                                                    value={filters.startDate}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    disabled={isSubmitting}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-600 mb-1">預計歸還日（迄）</label>
+                                                <input
+                                                    type="date"
+                                                    value={filters.endDate}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    disabled={isSubmitting}
+                                                />
+                                            </div>
+
+                                            {/* 逾期狀態篩選 */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-600 mb-1">逾期狀態</label>
+                                                <select
+                                                    value={filters.overdueOnly}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, overdueOnly: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <option value="">全部</option>
+                                                    <option value="overdue">已逾期</option>
+                                                    <option value="notOverdue">未逾期</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* 關鍵字搜尋 */}
+                                        <div className="mt-4">
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">關鍵字搜尋（財產編號、借用人、出借事由）</label>
+                                            <input
+                                                type="text"
+                                                value={filters.search}
+                                                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                                                placeholder="輸入關鍵字搜尋..."
+                                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                disabled={isSubmitting}
+                                            />
+                                        </div>
+
+                                        {/* 篩選結果統計 */}
+                                        <div className="mt-3 text-sm text-slate-600">
+                                            顯示 <span className="font-bold text-blue-600">{filteredAssets.length}</span> / {lentAssetsDetails.length} 筆
+                                        </div>
+                                    </div>
+
+                                    {/* 資料表格 */}
+                                    {filteredAssets.length === 0 ? (
+                                        <div className="text-center py-8 text-slate-500">
+                                            <i className="fas fa-filter text-3xl mb-2"></i>
+                                            <p>目前篩選條件下沒有符合的資料</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm border-collapse">
+                                                <thead className="bg-slate-50 sticky top-0 shadow-sm">
+                                                    <tr>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '5%'}}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectAll}
+                                                                onChange={handleSelectAll}
+                                                                disabled={isSubmitting}
+                                                                className="w-4 h-4 cursor-pointer"
+                                                            />
+                                                        </th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>財產編號</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>財產名稱</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>型號/廠牌</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>借用人</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>預計歸還日</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>出借後地點</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '21%'}}>出借事由</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {filteredAssets.map((asset, index) => {
+                                                        // 判斷是否逾期
+                                                        const today = new Date();
+                                                        today.setHours(0, 0, 0, 0);
+                                                        const returnDate = new Date(asset.expectedReturnDate);
+                                                        returnDate.setHours(0, 0, 0, 0);
+                                                        const isOverdue = returnDate < today;
+
+                                                        return (
+                                                            <tr key={`lent-${asset.lendId}-${index}`} className={`hover:bg-slate-50 transition-colors ${isOverdue ? 'bg-red-50' : ''}`}>
+                                                                <td className="px-3 py-3">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedLendIds.includes(asset.lendId)}
+                                                                        onChange={() => handleCheckboxChange(asset.lendId)}
+                                                                        disabled={isSubmitting}
+                                                                        className="w-4 h-4 cursor-pointer"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-3 font-mono text-slate-600">{asset.assetId}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.assetName || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.modelBrand || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.borrower}</td>
+                                                                <td className={`px-3 py-3 ${isOverdue ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                                                                    {asset.expectedReturnDate}
+                                                                    {isOverdue && <i className="fas fa-exclamation-triangle ml-1"></i>}
+                                                                </td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.lendingLocation || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.reason}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
-                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end">
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
-                            >
-                                關閉
-                            </button>
+
+                        {/* 底部操作列 */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                            <div className="text-sm text-slate-600">
+                                {lentAssetsDetails && lentAssetsDetails.length > 0 && (
+                                    <span>
+                                        已選擇 <span className="font-bold text-blue-600">{selectedLendIds.length}</span> / {filteredAssets.length} 筆
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onClose}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                                    disabled={isSubmitting}
+                                >
+                                    關閉
+                                </button>
+                                {lentAssetsDetails && lentAssetsDetails.length > 0 && (
+                                    <button
+                                        onClick={handleSubmitReturn}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed font-medium shadow-sm"
+                                        disabled={selectedLendIds.length === 0 || isSubmitting}
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <i className="fas fa-spinner fa-spin"></i>
+                                                處理中...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-check"></i>
+                                                確認歸還所選項目
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -883,6 +1172,8 @@
             });
             const [activeModal, setActiveModal] = useState(null);
             const [isLoadingCards, setIsLoadingCards] = useState(false);
+            const [lentAssetsDetails, setLentAssetsDetails] = useState(null);
+            const [isLoadingLentDetails, setIsLoadingLentDetails] = useState(false);
 
             // 載入資料
             const loadData = () => {
@@ -1119,7 +1410,29 @@
                         window.openPendingApprovalModal();
                         break;
                     case 'lent':
+                        // 設定載入狀態並打開 modal
+                        setIsLoadingLentDetails(true);
                         setActiveModal('lent');
+
+                        // 調用後端獲取詳細出借資訊
+                        google.script.run
+                            .withSuccessHandler(response => {
+                                if (response.error) {
+                                    alert('載入出借資料失敗：' + response.error);
+                                    setActiveModal(null);
+                                    setIsLoadingLentDetails(false);
+                                    return;
+                                }
+                                setLentAssetsDetails(response.assets || []);
+                                setIsLoadingLentDetails(false);
+                            })
+                            .withFailureHandler(error => {
+                                console.error('載入出借詳情失敗：', error.message);
+                                alert('載入出借詳情失敗：' + error.message);
+                                setActiveModal(null);
+                                setIsLoadingLentDetails(false);
+                            })
+                            .getLentOutAssets();
                         break;
                     case 'scrapPending':
                         setActiveModal('scrapPrint');
@@ -1269,8 +1582,18 @@
 
                     {activeModal === 'lent' && (
                         <LentAssetsModal
-                            assets={allAssets}
-                            onClose={() => setActiveModal(null)}
+                            lentAssetsDetails={lentAssetsDetails}
+                            isLoading={isLoadingLentDetails}
+                            onClose={() => {
+                                setActiveModal(null);
+                                setLentAssetsDetails(null);
+                            }}
+                            onReturnSuccess={() => {
+                                setActiveModal(null);
+                                setLentAssetsDetails(null);
+                                // 刷新卡片數據和資產表格
+                                refreshCardData();
+                            }}
                         />
                     )}
 
