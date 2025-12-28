@@ -2181,12 +2181,15 @@ function processBatchLending(formData) {
     assetIds.forEach(assetId => {
       const asset = assetMap.get(assetId);
       if (asset) {
-        // 🛡️ 安全性修復：驗證使用者是否有權出借此資產（只有保管人可出借）
+        // 🛡️ 安全性修復：驗證使用者是否有權出借此資產（保管人或使用人皆可出借）
         if (!isAdmin) {
           const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
-          if (assetLeaderEmail !== currentUserEmailLower) {
+          const assetUserEmail = (asset.userEmail || '').toLowerCase();
+
+          // 允許保管人 OR 使用人
+          if (assetLeaderEmail !== currentUserEmailLower && assetUserEmail !== currentUserEmailLower) {
             unauthorizedAssets.push(assetId);
-            Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權出借資產 ${assetId}（非保管人）`);
+            Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權出借資產 ${assetId}（非保管人也非使用人）`);
             return; // 跳過此資產
           }
         }
