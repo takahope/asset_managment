@@ -660,7 +660,7 @@
         );
 
         // AssetTable 組件
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore }) => {
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal }) => {
             const statusColors = {
                 '在庫': 'bg-green-50 text-green-700 border-green-200',
                 '出借中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -732,27 +732,21 @@
                                                     {asset.status === '在庫' && (
                                                         <>
                                                             <button
-                                                                onClick={() => {
-                                                                    window.open(webAppUrl + '?page=apply', '_top');
-                                                                }}
+                                                                onClick={() => onOpenTransferModal(asset)}
                                                                 className="text-blue-600 hover:text-blue-800 transition-colors p-1"
                                                                 title="轉移"
                                                             >
                                                                 <i className="fa-solid fa-right-left text-lg"></i>
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    window.open(webAppUrl + '?page=lending', '_top');
-                                                                }}
+                                                                onClick={() => onOpenLendingModal(asset)}
                                                                 className="text-purple-600 hover:text-purple-800 transition-colors p-1"
                                                                 title="出借"
                                                             >
                                                                 <i className="fa-solid fa-hand-holding-hand text-lg"></i>
                                                             </button>
                                                             <button
-                                                                onClick={() => {
-                                                                    window.open(webAppUrl + '?page=scrap', '_top');
-                                                                }}
+                                                                onClick={() => onOpenScrapModal(asset)}
                                                                 className="text-red-600 hover:text-red-800 transition-colors p-1"
                                                                 title="報廢"
                                                             >
@@ -1623,6 +1617,617 @@
             );
         };
 
+        // ===== 快速操作 Modal 組件 =====
+
+        // 轉移 Modal
+        const QuickTransferModal = ({ asset, transferOptions, onClose, onSuccess }) => {
+            const [transferMode, setTransferMode] = useState('normal'); // 'normal', 'station', 'info', 'intake'
+            const [changeLocation, setChangeLocation] = useState(false);
+            const [changeKeeper, setChangeKeeper] = useState(false);
+            const [changeUser, setChangeUser] = useState(false);
+            const [newLocation, setNewLocation] = useState('');
+            const [newKeeperEmail, setNewKeeperEmail] = useState('');
+            const [newUserEmail, setNewUserEmail] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            if (!asset || !transferOptions) return null;
+
+            const handleSubmit = () => {
+                // 驗證表單
+                if (transferMode === 'normal') {
+                    if (!changeLocation && !changeKeeper && !changeUser) {
+                        alert('請至少選擇一項變更（地點、保管人或使用人）');
+                        return;
+                    }
+                    if (changeLocation && !newLocation) {
+                        alert('請選擇新地點');
+                        return;
+                    }
+                    if (changeKeeper && !newKeeperEmail) {
+                        alert('請選擇新保管人');
+                        return;
+                    }
+                    if (changeUser && !newUserEmail) {
+                        alert('請選擇新使用人');
+                        return;
+                    }
+                }
+
+                const confirmation = confirm(`確定要轉移財產「${asset.assetId}」嗎？`);
+                if (!confirmation) return;
+
+                setIsSubmitting(true);
+                showFlyProgressBar('正在提交轉移申請...');
+
+                const formData = {
+                    assetIds: [asset.assetId],
+                    newKeeperEmail: changeKeeper ? newKeeperEmail : null,
+                    newLocation: changeLocation ? newLocation : null,
+                    newUserName: null,
+                    newUserEmail: changeUser ? newUserEmail : null,
+                    isStationTransfer: transferMode === 'station',
+                    isInfoTransfer: transferMode === 'info',
+                    isIntakeTransfer: transferMode === 'intake'
+                };
+
+                // 特殊模式的額外參數
+                if (transferMode === 'station' && transferOptions.custodians) {
+                    const custodianEmail = Object.keys(transferOptions.custodians)[0];
+                    const stationLocation = transferOptions.stationLocations?.[0] || '';
+                    formData.custodianEmail = custodianEmail;
+                    formData.stationLocation = stationLocation;
+                } else if (transferMode === 'info' && transferOptions.infoCustodian) {
+                    formData.infoCustodianEmail = Object.keys(transferOptions.infoCustodian)[0];
+                    formData.infoUserEmail = Object.keys(transferOptions.infoUser || {})[0];
+                    formData.infoLocation = transferOptions.infoLocation;
+                    formData.infoComputerLocation = transferOptions.infoComputerLocation;
+                } else if (transferMode === 'intake' && transferOptions.intakeCustodian) {
+                    formData.intakeCustodianEmail = Object.keys(transferOptions.intakeCustodian)[0];
+                    formData.intakeLocation = transferOptions.intakeLocation;
+                }
+
+                google.script.run
+                    .withSuccessHandler(message => {
+                        hideFlyProgressBar('轉移申請已提交！', 0);
+                        alert(message);
+                        setIsSubmitting(false);
+                        onSuccess();
+                        onClose();
+                    })
+                    .withFailureHandler(error => {
+                        hideFlyProgressBar('提交失敗', 0);
+                        alert('錯誤：' + error.message);
+                        setIsSubmitting(false);
+                    })
+                    .processBatchTransferApplication(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-blue-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-blue-800">
+                                <i className="fa-solid fa-right-left mr-2"></i>
+                                轉移財產
+                            </h3>
+                            <button onClick={onClose} className="text-blue-600 hover:text-blue-800 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+                            {/* 資產資訊 */}
+                            <div className="mb-4 p-4 bg-slate-50 rounded-lg">
+                                <div className="text-sm text-slate-600 mb-1">財產編號</div>
+                                <div className="font-bold text-slate-800">{asset.assetId}</div>
+                                <div className="text-sm text-slate-600 mt-2 mb-1">財產名稱</div>
+                                <div className="text-slate-800">{asset.assetName}</div>
+                            </div>
+
+                            {/* 轉移模式選擇 */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-slate-700 mb-2">轉移模式</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center">
+                                        <input
+                                            type="radio"
+                                            name="transferMode"
+                                            value="normal"
+                                            checked={transferMode === 'normal'}
+                                            onChange={(e) => setTransferMode(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>一般轉移</span>
+                                    </label>
+                                    {transferOptions.custodians && Object.keys(transferOptions.custodians).length > 0 && (
+                                        <label className="flex items-center">
+                                            <input
+                                                type="radio"
+                                                name="transferMode"
+                                                value="station"
+                                                checked={transferMode === 'station'}
+                                                onChange={(e) => setTransferMode(e.target.value)}
+                                                className="mr-2"
+                                            />
+                                            <span>中心轉給駐站</span>
+                                        </label>
+                                    )}
+                                    {transferOptions.infoCustodian && (
+                                        <>
+                                            <label className="flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    name="transferMode"
+                                                    value="info"
+                                                    checked={transferMode === 'info'}
+                                                    onChange={(e) => setTransferMode(e.target.value)}
+                                                    className="mr-2"
+                                                />
+                                                <span>駐站回送中心資訊組</span>
+                                            </label>
+                                            <label className="flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    name="transferMode"
+                                                    value="intake"
+                                                    checked={transferMode === 'intake'}
+                                                    onChange={(e) => setTransferMode(e.target.value)}
+                                                    className="mr-2"
+                                                />
+                                                <span>駐站回送中心收案組</span>
+                                            </label>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 一般轉移選項 */}
+                            {transferMode === 'normal' && (
+                                <div className="space-y-4">
+                                    {/* 變更地點 */}
+                                    <div>
+                                        <label className="flex items-center mb-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={changeLocation}
+                                                onChange={(e) => setChangeLocation(e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            <span className="font-medium text-slate-700">變更地點</span>
+                                        </label>
+                                        {changeLocation && (
+                                            <select
+                                                value={newLocation}
+                                                onChange={(e) => setNewLocation(e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            >
+                                                <option value="">請選擇新地點...</option>
+                                                {transferOptions.locations?.map(loc => (
+                                                    <option key={loc} value={loc}>{loc}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+
+                                    {/* 變更保管人 */}
+                                    <div>
+                                        <label className="flex items-center mb-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={changeKeeper}
+                                                onChange={(e) => setChangeKeeper(e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            <span className="font-medium text-slate-700">變更保管人</span>
+                                        </label>
+                                        {changeKeeper && (
+                                            <select
+                                                value={newKeeperEmail}
+                                                onChange={(e) => setNewKeeperEmail(e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            >
+                                                <option value="">請選擇新保管人...</option>
+                                                {transferOptions.keepers && Object.entries(transferOptions.keepers).map(([email, name]) => (
+                                                    <option key={email} value={email}>{name}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+
+                                    {/* 變更使用人 */}
+                                    <div>
+                                        <label className="flex items-center mb-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={changeUser}
+                                                onChange={(e) => setChangeUser(e.target.checked)}
+                                                className="mr-2"
+                                            />
+                                            <span className="font-medium text-slate-700">變更使用人</span>
+                                        </label>
+                                        {changeUser && (
+                                            <select
+                                                value={newUserEmail}
+                                                onChange={(e) => setNewUserEmail(e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            >
+                                                <option value="">請選擇新使用人...</option>
+                                                {transferOptions.userList && Object.entries(transferOptions.userList).map(([email, name]) => (
+                                                    <option key={email} value={email}>{name}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 特殊模式說明 */}
+                            {transferMode !== 'normal' && (
+                                <div className="p-4 bg-blue-50 rounded-lg">
+                                    <p className="text-sm text-blue-800">
+                                        {transferMode === 'station' && '此模式將自動設定駐管保管人和駐站地點'}
+                                        {transferMode === 'info' && '此模式將自動設定資訊組保管人、使用人和地點'}
+                                        {transferMode === 'intake' && '此模式將自動設定收案組保管人和地點'}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        <span>提交中...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fa-solid fa-paper-plane"></i>
+                                        <span>提交申請</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 出借 Modal
+        const QuickLendingModal = ({ asset, lendingOptions, onClose, onSuccess }) => {
+            const [borrowerName, setBorrowerName] = useState('');
+            const [lendingLocation, setLendingLocation] = useState('');
+            const [returnDate, setReturnDate] = useState('');
+            const [reason, setReason] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            if (!asset || !lendingOptions) return null;
+
+            const handleSubmit = () => {
+                // 驗證表單
+                if (!borrowerName || !lendingLocation || !returnDate) {
+                    alert('請填寫所有必填欄位（借用人、地點、歸還日期）');
+                    return;
+                }
+
+                const confirmation = confirm(`確定要出借財產「${asset.assetId}」給 ${borrowerName} 嗎？`);
+                if (!confirmation) return;
+
+                setIsSubmitting(true);
+                showFlyProgressBar('正在提交出借申請...');
+
+                const formData = {
+                    assetIds: [asset.assetId],
+                    borrowerName,
+                    lendingLocation,
+                    returnDate,
+                    reason
+                };
+
+                google.script.run
+                    .withSuccessHandler(message => {
+                        hideFlyProgressBar('出借申請已提交！', 0);
+                        alert(message);
+                        setIsSubmitting(false);
+                        onSuccess();
+                        onClose();
+                    })
+                    .withFailureHandler(error => {
+                        hideFlyProgressBar('提交失敗', 0);
+                        alert('錯誤：' + error.message);
+                        setIsSubmitting(false);
+                    })
+                    .processBatchLending(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-purple-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-purple-800">
+                                <i className="fa-solid fa-hand-holding-hand mr-2"></i>
+                                出借財產
+                            </h3>
+                            <button onClick={onClose} className="text-purple-600 hover:text-purple-800 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+                            {/* 資產資訊 */}
+                            <div className="mb-4 p-4 bg-slate-50 rounded-lg">
+                                <div className="text-sm text-slate-600 mb-1">財產編號</div>
+                                <div className="font-bold text-slate-800">{asset.assetId}</div>
+                                <div className="text-sm text-slate-600 mt-2 mb-1">財產名稱</div>
+                                <div className="text-slate-800">{asset.assetName}</div>
+                                <div className="text-sm text-slate-600 mt-2 mb-1">目前地點</div>
+                                <div className="text-slate-800">{asset.location}</div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* 借用人 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        借用人姓名 <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={borrowerName}
+                                        onChange={(e) => setBorrowerName(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                    >
+                                        <option value="">請選擇借用人...</option>
+                                        {lendingOptions.borrowers?.map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* 借出後地點 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        借出後放置地點 <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={lendingLocation}
+                                        onChange={(e) => setLendingLocation(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                    >
+                                        <option value="">請選擇地點...</option>
+                                        {lendingOptions.locations?.map(loc => (
+                                            <option key={loc} value={loc}>{loc}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* 預計歸還日期 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        預計歸還日期 <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={returnDate}
+                                        onChange={(e) => setReturnDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                    />
+                                </div>
+
+                                {/* 出借事由 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        出借事由/備註
+                                    </label>
+                                    <textarea
+                                        value={reason}
+                                        onChange={(e) => setReason(e.target.value)}
+                                        rows="3"
+                                        placeholder="請輸入出借事由或備註..."
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                    ></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        <span>提交中...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fa-solid fa-paper-plane"></i>
+                                        <span>提交申請</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 報廢 Modal
+        const QuickScrapModal = ({ asset, onClose, onSuccess }) => {
+            const [reason, setReason] = useState('');
+            const [remarks, setRemarks] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            if (!asset) return null;
+
+            const handleSubmit = () => {
+                // 驗證表單
+                if (!reason) {
+                    alert('請選擇報廢原因');
+                    return;
+                }
+                if ((reason === 'C' || reason === '其他') && !remarks.trim()) {
+                    alert('選擇「其他」原因時，請務必填寫詳細說明');
+                    return;
+                }
+
+                const confirmation = confirm(`確定要申請報廢財產「${asset.assetId}」嗎？\n報廢原因：${reason === 'A' ? 'A.維修不具效益，且逾使用年限' : reason === 'B' ? 'B.損壞無法修復，且逾使用年限' : 'C.其他'}`);
+                if (!confirmation) return;
+
+                setIsSubmitting(true);
+                showFlyProgressBar('正在提交報廢申請...');
+
+                const formData = {
+                    assetIds: [asset.assetId],
+                    reason,
+                    remarks: remarks.trim()
+                };
+
+                google.script.run
+                    .withSuccessHandler(message => {
+                        hideFlyProgressBar('報廢申請已提交！', 0);
+                        alert(message);
+                        setIsSubmitting(false);
+                        onSuccess();
+                        onClose();
+                    })
+                    .withFailureHandler(error => {
+                        hideFlyProgressBar('提交失敗', 0);
+                        alert('錯誤：' + error.message);
+                        setIsSubmitting(false);
+                    })
+                    .processBatchScrapping(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-red-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-red-800">
+                                <i className="fa-regular fa-trash-can mr-2"></i>
+                                申請報廢財產
+                            </h3>
+                            <button onClick={onClose} className="text-red-600 hover:text-red-800 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+                            {/* 資產資訊 */}
+                            <div className="mb-4 p-4 bg-slate-50 rounded-lg">
+                                <div className="text-sm text-slate-600 mb-1">財產編號</div>
+                                <div className="font-bold text-slate-800">{asset.assetId}</div>
+                                <div className="text-sm text-slate-600 mt-2 mb-1">財產名稱</div>
+                                <div className="text-slate-800">{asset.assetName}</div>
+                                <div className="text-sm text-slate-600 mt-2 mb-1">目前狀態</div>
+                                <div className="text-slate-800">{asset.status}</div>
+                            </div>
+
+                            {/* 警告訊息 */}
+                            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <div className="flex items-start gap-2">
+                                    <i className="fas fa-exclamation-triangle text-red-600 mt-0.5"></i>
+                                    <div className="text-sm text-red-800">
+                                        <div className="font-medium mb-1">注意事項</div>
+                                        <div>此操作將會將財產狀態更新為「報廢中」，待管理員最終確認。請確認報廢原因無誤後再提交。</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* 報廢原因 */}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        報廢原因 <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={reason}
+                                        onChange={(e) => setReason(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                    >
+                                        <option value="">請選擇原因...</option>
+                                        <option value="A">A.維修不具效益，且逾使用年限</option>
+                                        <option value="B">B.損壞無法修復，且逾使用年限</option>
+                                        <option value="C">C.其他</option>
+                                    </select>
+                                </div>
+
+                                {/* 詳細說明 */}
+                                {(reason === 'C' || reason === '其他') && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                            詳細說明 <span className="text-red-500">*</span>
+                                        </label>
+                                        <textarea
+                                            value={remarks}
+                                            onChange={(e) => setRemarks(e.target.value)}
+                                            rows="4"
+                                            placeholder="請詳細說明報廢原因..."
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                        ></textarea>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        <span>提交中...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fa-solid fa-paper-plane"></i>
+                                        <span>提交報廢申請</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // 主 App 組件
         function App() {
             const [isReady, setIsReady] = useState(false);
@@ -1648,6 +2253,12 @@
             const [transferPendingCount, setTransferPendingCount] = useState(0);
             const [isLoadingScrapDetails, setIsLoadingScrapDetails] = useState(false);
             const [isLoadingTransferDetails, setIsLoadingTransferDetails] = useState(false);
+
+            // 快速操作 Modal 相關 state
+            const [quickActionModalType, setQuickActionModalType] = useState(null); // 'transfer', 'lending', 'scrap'
+            const [selectedAsset, setSelectedAsset] = useState(null);
+            const [transferOptions, setTransferOptions] = useState(null);
+            const [lendingOptions, setLendingOptions] = useState(null);
 
             // 載入資料
             const loadData = () => {
@@ -1724,6 +2335,30 @@
                                         setTransferPendingCount(0);
                                     })
                                     .getTransferableItemsCount();
+
+                                // 載入轉移選項資料（保管人、地點等）
+                                google.script.run
+                                    .withSuccessHandler(transferData => {
+                                        if (transferData && !transferData.error) {
+                                            setTransferOptions(transferData);
+                                        }
+                                    })
+                                    .withFailureHandler(error => {
+                                        console.warn('載入轉移選項失敗：', error.message);
+                                    })
+                                    .getTransferData();
+
+                                // 載入出借選項資料（借用人、地點）
+                                google.script.run
+                                    .withSuccessHandler(lendingData => {
+                                        if (lendingData && !lendingData.error) {
+                                            setLendingOptions(lendingData);
+                                        }
+                                    })
+                                    .withFailureHandler(error => {
+                                        console.warn('載入出借選項失敗：', error.message);
+                                    })
+                                    .getLendingData();
 
                                 setIsReady(true);
                                 hideFlyProgressBar('資料載入完成！', 300);
@@ -2042,6 +2677,40 @@
                 }));
             };
 
+            // 快速操作 Modal 開啟函數
+            const handleOpenTransferModal = (asset) => {
+                if (!transferOptions) {
+                    alert('轉移選項尚未載入，請稍後再試');
+                    return;
+                }
+                setSelectedAsset(asset);
+                setQuickActionModalType('transfer');
+            };
+
+            const handleOpenLendingModal = (asset) => {
+                if (!lendingOptions) {
+                    alert('出借選項尚未載入，請稍後再試');
+                    return;
+                }
+                setSelectedAsset(asset);
+                setQuickActionModalType('lending');
+            };
+
+            const handleOpenScrapModal = (asset) => {
+                setSelectedAsset(asset);
+                setQuickActionModalType('scrap');
+            };
+
+            const handleCloseQuickActionModal = () => {
+                setQuickActionModalType(null);
+                setSelectedAsset(null);
+            };
+
+            const handleQuickActionSuccess = () => {
+                // 重新載入資料
+                loadData();
+            };
+
             // 處理取消
             const handleCancel = (assetId, status) => {
                 const confirmation = confirm(
@@ -2175,6 +2844,9 @@
                         currentUserEmail={currentUserEmail}
                         onCancel={handleCancel}
                         onRestore={handleRestore}
+                        onOpenTransferModal={handleOpenTransferModal}
+                        onOpenLendingModal={handleOpenLendingModal}
+                        onOpenScrapModal={handleOpenScrapModal}
                     />
 
                     {activeModal === 'lent' && (
@@ -2225,6 +2897,33 @@
                                 setTransferPendingDetails(null);
                                 refreshCardData();
                             }}
+                        />
+                    )}
+
+                    {/* 快速操作 Modal */}
+                    {quickActionModalType === 'transfer' && (
+                        <QuickTransferModal
+                            asset={selectedAsset}
+                            transferOptions={transferOptions}
+                            onClose={handleCloseQuickActionModal}
+                            onSuccess={handleQuickActionSuccess}
+                        />
+                    )}
+
+                    {quickActionModalType === 'lending' && (
+                        <QuickLendingModal
+                            asset={selectedAsset}
+                            lendingOptions={lendingOptions}
+                            onClose={handleCloseQuickActionModal}
+                            onSuccess={handleQuickActionSuccess}
+                        />
+                    )}
+
+                    {quickActionModalType === 'scrap' && (
+                        <QuickScrapModal
+                            asset={selectedAsset}
+                            onClose={handleCloseQuickActionModal}
+                            onSuccess={handleQuickActionSuccess}
                         />
                     )}
                 </div>
