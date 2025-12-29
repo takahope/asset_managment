@@ -256,11 +256,15 @@
         BatchList_addItem(asset.id);
         BatchList_showToast(`已加入：${asset.assetName}`, 'success');
 
-        // 清空輸入框
+        // 清空輸入框（支援 React controlled input）
         searchBox.value = '';
-
-        // 觸發 input 事件以更新搜尋過濾（恢復顯示所有資產）
-        searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+        if (typeof window.clearSearchBox === 'function') {
+          // React 環境：調用全域函數更新 state
+          window.clearSearchBox();
+        } else {
+          // 非 React 環境：觸發 input 事件
+          searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+        }
 
         console.log('[Scanner] Enter 鍵掃描成功:', asset.id);
       }

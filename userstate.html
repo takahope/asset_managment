@@ -3491,6 +3491,16 @@
                 }));
             };
 
+            // ✨ 暴露清空搜尋框的全域函數（供 Scanner 模組使用）
+            useEffect(() => {
+                window.clearSearchBox = () => {
+                    setFilters(prev => ({ ...prev, search: '' }));
+                };
+                return () => {
+                    delete window.clearSearchBox;
+                };
+            }, []);
+
             // 快速操作 Modal 開啟函數
             const handleOpenTransferModal = (asset) => {
                 if (!transferOptions) {
