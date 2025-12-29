@@ -2078,7 +2078,16 @@
                         <div>
                             <h1 className="text-3xl font-bold text-slate-800">財產狀態查詢</h1>
                             <p className="text-slate-500 mt-1">
-                                歡迎回來，今天是 {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                歡迎回來，今天是 {(() => {
+                                    const now = new Date();
+                                    const date = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+                                    const hours = now.getHours();
+                                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                                    const seconds = now.getSeconds().toString().padStart(2, '0');
+                                    const period = hours >= 12 ? '下午' : '上午';
+                                    const displayHours = hours % 12 || 12;
+                                    return `${date} ${period} ${displayHours}:${minutes}:${seconds}`;
+                                })()}
                             </p>
                         </div>
 
