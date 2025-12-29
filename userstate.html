@@ -684,15 +684,15 @@
                         <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                                 <tr>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">財產編號</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 min-w-[200px]">財產名稱</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 min-w-[150px]">型號/廠牌</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">使用者</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">保管人</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 min-w-[120px]">保管位置</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">財產類別</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">狀態</th>
-                                    <th className="px-4 py-3 font-semibold text-slate-600 text-right whitespace-nowrap">操作</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產編號</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 min-w-[180px]">財產名稱</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 min-w-[120px]">型號/廠牌</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">使用者</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">保管人</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 min-w-[100px]">保管位置</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產類別</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">狀態</th>
+                                    <th className="px-2 py-3 font-semibold text-slate-600 text-right whitespace-nowrap min-w-[160px]">操作</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -703,45 +703,48 @@
 
                                     return (
                                         <tr key={`${asset.assetId}-${index}`} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap align-top">{asset.assetId}</td>
-                                            <td className="px-4 py-3 font-medium text-slate-800 align-top">
+                                            <td className="px-2 py-3 font-mono text-slate-600 whitespace-nowrap align-top">{asset.assetId}</td>
+                                            <td className="px-2 py-3 font-medium text-slate-800 align-top">
                                                 <div className="line-clamp-2" title={asset.assetName}>{asset.assetName}</div>
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600 align-top">
+                                            <td className="px-2 py-3 text-slate-600 align-top">
                                                 <div className="line-clamp-2" title={asset.modelBrand}>{asset.modelBrand || '-'}</div>
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600 whitespace-nowrap align-top">{asset.userName}</td>
-                                            <td className="px-4 py-3 text-slate-600 whitespace-nowrap align-top">{asset.leader}</td>
-                                            <td className="px-4 py-3 text-slate-600 align-top">
+                                            <td className="px-2 py-3 text-slate-600 whitespace-nowrap align-top">{asset.userName}</td>
+                                            <td className="px-2 py-3 text-slate-600 whitespace-nowrap align-top">{asset.leader}</td>
+                                            <td className="px-2 py-3 text-slate-600 align-top">
                                                 <div className="line-clamp-2" title={asset.location}>{asset.location}</div>
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600 align-top">
+                                            <td className="px-2 py-3 text-slate-600 align-top">
                                                 <span className="bg-slate-100 px-2 py-1 rounded text-xs whitespace-nowrap">
                                                     {asset.category}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 align-top">
+                                            <td className="px-2 py-3 align-top">
                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${statusColors[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
                                                     {asset.status}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-right align-top whitespace-nowrap">
-                                                {canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中') && (
-                                                    <button
-                                                        onClick={() => onCancel(asset.assetId, asset.status)}
-                                                        className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-                                                    >
-                                                        取消
-                                                    </button>
-                                                )}
-                                                {isAdmin && asset.status === '已報廢' && (
-                                                    <button
-                                                        onClick={() => onRestore(asset.assetId)}
-                                                        className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium ml-2"
-                                                    >
-                                                        回溯
-                                                    </button>
-                                                )}
+                                            <td className="px-2 py-3 text-right align-top whitespace-nowrap">
+                                                {/* 操作按鈕區域，預留空間 */}
+                                                <div className="flex justify-end gap-2">
+                                                    {canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中') && (
+                                                        <button
+                                                            onClick={() => onCancel(asset.assetId, asset.status)}
+                                                            className="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                                                        >
+                                                            取消
+                                                        </button>
+                                                    )}
+                                                    {isAdmin && asset.status === '已報廢' && (
+                                                        <button
+                                                            onClick={() => onRestore(asset.assetId)}
+                                                            className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium"
+                                                        >
+                                                            回溯
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     );
