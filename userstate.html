@@ -1628,6 +1628,9 @@
             const [newLocation, setNewLocation] = useState('');
             const [newKeeperEmail, setNewKeeperEmail] = useState('');
             const [newUserEmail, setNewUserEmail] = useState('');
+            // 駐站轉移專用 state
+            const [custodianEmail, setCustodianEmail] = useState('');
+            const [stationLocation, setStationLocation] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
 
             if (!asset || !transferOptions) return null;
@@ -1651,6 +1654,16 @@
                         alert('請選擇新使用人');
                         return;
                     }
+                } else if (transferMode === 'station') {
+                    // 駐站轉移模式驗證
+                    if (!custodianEmail) {
+                        alert('請選擇駐管！');
+                        return;
+                    }
+                    if (!stationLocation) {
+                        alert('請選擇駐站地點！');
+                        return;
+                    }
                 }
 
                 const confirmation = confirm(`確定要轉移財產「${asset.assetId}」嗎？`);
@@ -1671,9 +1684,7 @@
                 };
 
                 // 特殊模式的額外參數
-                if (transferMode === 'station' && transferOptions.custodians) {
-                    const custodianEmail = Object.keys(transferOptions.custodians)[0];
-                    const stationLocation = transferOptions.stationLocations?.[0] || '';
+                if (transferMode === 'station') {
                     formData.custodianEmail = custodianEmail;
                     formData.stationLocation = stationLocation;
                 } else if (transferMode === 'info' && transferOptions.infoCustodian) {
@@ -1863,11 +1874,56 @@
                                 </div>
                             )}
 
-                            {/* 特殊模式說明 */}
-                            {transferMode !== 'normal' && (
+                            {/* 駐站轉移模式的下拉選單 */}
+                            {transferMode === 'station' && (
+                                <div className="p-4 bg-blue-50 rounded-lg space-y-4">
+                                    <div className="flex items-center gap-2 text-sm text-blue-800 mb-3">
+                                        <i className="fas fa-info-circle"></i>
+                                        <strong>駐站模式說明：</strong>保管人和使用人將同時設為此駐管。
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* 駐管選擇 */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                轉移給駐管：<span className="text-red-600">*</span>
+                                            </label>
+                                            <select
+                                                value={custodianEmail}
+                                                onChange={(e) => setCustodianEmail(e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            >
+                                                <option value="">請選擇駐管...</option>
+                                                {transferOptions.custodians && Object.entries(transferOptions.custodians).map(([email, name]) => (
+                                                    <option key={email} value={email}>{name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* 駐站地點選擇 */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                                駐站地點：<span className="text-red-600">*</span>
+                                            </label>
+                                            <select
+                                                value={stationLocation}
+                                                onChange={(e) => setStationLocation(e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            >
+                                                <option value="">請選擇駐站地點...</option>
+                                                {transferOptions.stationLocations && transferOptions.stationLocations.map(loc => (
+                                                    <option key={loc} value={loc}>{loc}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 其他特殊模式說明 */}
+                            {(transferMode === 'info' || transferMode === 'intake') && (
                                 <div className="p-4 bg-blue-50 rounded-lg">
                                     <p className="text-sm text-blue-800">
-                                        {transferMode === 'station' && '此模式將自動設定駐管保管人和駐站地點'}
                                         {transferMode === 'info' && '此模式將自動設定資訊組保管人、使用人和地點'}
                                         {transferMode === 'intake' && '此模式將自動設定收案組保管人和地點'}
                                     </p>
