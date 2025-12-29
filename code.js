@@ -4410,28 +4410,26 @@ function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
 
     const normalizedUserEmail = String(userEmail || '').toLowerCase();
     const normalizedUserGroup = userGroup ? String(userGroup).trim() : '';
-    let assignedMap = null;
 
-    if (!isAdminMode) {
-      const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
-      if (inventoryDetailSheet && inventoryDetailSheet.getLastRow() > 1) {
-        const detailRows = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
-        assignedMap = new Map();
-        detailRows.forEach(row => {
-          const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
-          const assignedRaw = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
-          if (!inventoryId || !assignedRaw) return;
-          let assignedValue = String(assignedRaw).trim();
-          if (!assignedValue) return;
-          if (assignedValue.includes('@')) {
-            assignedValue = assignedValue.toLowerCase();
-          }
-          if (!assignedMap.has(inventoryId)) {
-            assignedMap.set(inventoryId, new Set());
-          }
-          assignedMap.get(inventoryId).add(assignedValue);
-        });
-      }
+    // 始終載入 assignedMap（無論是否為管理員），供前端判斷任務歸屬
+    let assignedMap = new Map();
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+    if (inventoryDetailSheet && inventoryDetailSheet.getLastRow() > 1) {
+      const detailRows = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
+      detailRows.forEach(row => {
+        const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
+        const assignedRaw = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
+        if (!inventoryId || !assignedRaw) return;
+        let assignedValue = String(assignedRaw).trim();
+        if (!assignedValue) return;
+        if (assignedValue.includes('@')) {
+          assignedValue = assignedValue.toLowerCase();
+        }
+        if (!assignedMap.has(inventoryId)) {
+          assignedMap.set(inventoryId, new Set());
+        }
+        assignedMap.get(inventoryId).add(assignedValue);
+      });
     }
 
     const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
@@ -4444,7 +4442,7 @@ function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
 
       // 管理員模式：顯示所有進行中的會話
       // 一般模式：只顯示自己的會話
-      const assignedSet = assignedMap ? assignedMap.get(inventoryId) : null;
+      const assignedSet = assignedMap.get(inventoryId);
       const isAssignedByEmail = assignedSet ? assignedSet.has(normalizedUserEmail) : false;
       const isAssignedByGroup = assignedSet && normalizedUserGroup ? assignedSet.has(normalizedUserGroup) : false;
       const shouldInclude = status === '進行中' &&
@@ -4459,6 +4457,9 @@ function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
         // 從映射表查詢真實姓名，找不到則使用原始的 inventoryPerson
         const inventoryPersonName = emailToNameMap.get(String(sessionEmail).toLowerCase()) || row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1];
 
+        // 取得該會話的所有指派人員/組別（供前端判斷任務歸屬）
+        const assignedUsers = assignedSet ? Array.from(assignedSet) : [];
+
         activeSessions.push({
           inventoryId: inventoryId,
           inventoryDate: inventoryDateStr,
@@ -4467,7 +4468,8 @@ function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
           filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
           verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
           totalCount: row[IL_TOTAL_COUNT_COLUMN_INDEX - 1],
-          status: status
+          status: status,
+          assignedUsers: assignedUsers // 新增：指派人員/組別陣列
         });
       }
     }

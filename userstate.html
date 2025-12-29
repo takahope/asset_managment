@@ -1819,12 +1819,21 @@
                     if (!inventorySessions || !inventorySessions.activeSessions) return 0;
 
                     return inventorySessions.activeSessions.filter(session => {
-                        const isMyTask = session.assignedUser && (
-                            session.assignedUser.toLowerCase() === currentUserEmail.toLowerCase() ||
-                            session.assignedUser === inventorySessions.currentUserGroup
-                        );
                         const isActive = session.status === '進行中';
-                        return isMyTask && isActive;
+                        if (!isActive) return false;
+
+                        // 檢查是否被指派給當前使用者（透過 email 或組別）
+                        const assignedUsers = session.assignedUsers || [];
+                        const isAssignedToMe = assignedUsers.some(user =>
+                            user.toLowerCase() === currentUserEmail.toLowerCase() ||
+                            user === inventorySessions.currentUserGroup
+                        );
+
+                        // 如果是會話創建者，也算是我的任務
+                        const isCreator = session.inventoryEmail &&
+                            session.inventoryEmail.toLowerCase() === currentUserEmail.toLowerCase();
+
+                        return isAssignedToMe || isCreator;
                     }).length;
                 })();
 
