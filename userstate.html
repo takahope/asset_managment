@@ -1593,6 +1593,7 @@
             const [allAssets, setAllAssets] = useState([]);
             const [isAdmin, setIsAdmin] = useState(false);
             const [currentUserEmail, setCurrentUserEmail] = useState('');
+            const [currentUserName, setCurrentUserName] = useState('');
             const [webAppUrl, setWebAppUrl] = useState('');
             const [pendingApprovalsData, setPendingApprovalsData] = useState([]);
             const [inventorySessions, setInventorySessions] = useState(null);
@@ -1633,6 +1634,7 @@
                                 setAllAssets(response.assets || []);
                                 setIsAdmin(response.isAdmin);
                                 setCurrentUserEmail(response.userEmail);
+                                setCurrentUserName(response.userName || '');
 
                                 let pendingLoaded = false;
                                 let inventoryLoaded = false;
@@ -2078,7 +2080,8 @@
                         <div>
                             <h1 className="text-3xl font-bold text-slate-800">財產狀態查詢</h1>
                             <p className="text-slate-500 mt-1">
-                                歡迎回來，今天是 {(() => {
+                                {currentUserName && <span className="font-medium text-slate-700">{currentUserName}</span>}
+                                {currentUserName && '，'}歡迎回來，今天是 {(() => {
                                     const now = new Date();
                                     const date = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
                                     const hours = now.getHours();
@@ -2086,7 +2089,7 @@
                                     const seconds = now.getSeconds().toString().padStart(2, '0');
                                     const period = hours >= 12 ? '下午' : '上午';
                                     const displayHours = hours % 12 || 12;
-                                    return `${date} ${period} ${displayHours}:${minutes}:${seconds}`;
+                                    return `${date} ${period} ${displayHours}:${minutes}`;
                                 })()}
                             </p>
                         </div>

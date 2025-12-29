@@ -605,6 +605,21 @@ function getUserStateData() {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
 
+  // 查詢使用者姓名
+  let currentUserName = currentUserEmail.split('@')[0]; // 預設使用 email 前綴
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+    for (let row of keeperData) {
+      const email = row[1];
+      if (email && String(email).toLowerCase() === currentUserEmail.toLowerCase()) {
+        currentUserName = row[0]; // 找到對應的姓名
+        break;
+      }
+    }
+  }
+
   let filteredData;
 
   if (isAdmin) {
@@ -628,6 +643,7 @@ function getUserStateData() {
   return {
     isAdmin: isAdmin,
     userEmail: currentUserEmail, // ✨ Add userEmail
+    userName: currentUserName, // ✨ 新增使用者姓名
     assets: results
   };
 }
