@@ -738,7 +738,7 @@
         };
 
         // AssetTable 組件
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal }) => {
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
             const statusColors = {
                 '在庫': 'bg-green-50 text-green-700 border-green-200',
                 '出借中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -747,6 +747,16 @@
                 '轉移中': 'bg-blue-50 text-blue-700 border-blue-200',
                 '待接收': 'bg-purple-50 text-purple-700 border-purple-200'
             };
+
+            // 計算可選資產（僅在庫）
+            const selectableAssets = useMemo(() => {
+                return assets ? assets.filter(a => a.status === '在庫') : [];
+            }, [assets]);
+
+            // 計算全選狀態
+            const isAllSelected = selectableAssets.length > 0 &&
+                selectableAssets.every(a => selectedAssetIds.includes(a.assetId));
+            const isPartialSelected = selectableAssets.some(a => selectedAssetIds.includes(a.assetId)) && !isAllSelected;
 
             if (!assets || assets.length === 0) {
                 return (
@@ -759,9 +769,20 @@
             return (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
+                        <table className="w-full text-left text-sm" id="asset-list">
                             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                                 <tr>
+                                    {/* 勾選欄位 - 全選 checkbox */}
+                                    <th className="px-2 py-3 font-semibold text-slate-600 text-center w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={isAllSelected}
+                                            ref={(el) => { if (el) el.indeterminate = isPartialSelected; }}
+                                            onChange={(e) => onSelectAll && onSelectAll(e.target.checked)}
+                                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            title={`全選所有「在庫」資產 (${selectableAssets.length} 筆)`}
+                                        />
+                                    </th>
                                     <th className="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產編號</th>
                                     <th className="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產名稱</th>
                                     <th className="px-2 py-3 font-semibold text-slate-600 w-[180px] max-w-[180px]">型號/廠牌</th>
@@ -778,9 +799,25 @@
                                     const canCancel = isAdmin ||
                                                     currentUserEmail === asset.leaderEmail ||
                                                     currentUserEmail === asset.userEmail;
+                                    const isSelectable = asset.status === '在庫';
+                                    const isSelected = selectedAssetIds.includes(asset.assetId);
 
                                     return (
-                                        <tr key={`${asset.assetId}-${index}`} className="hover:bg-slate-50 transition-colors">
+                                        <tr key={`${asset.assetId}-${index}`} className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}>
+                                            {/* 勾選欄位 */}
+                                            <td className="px-2 py-3 text-center align-top">
+                                                {isSelectable ? (
+                                                    <input
+                                                        type="checkbox"
+                                                        className="asset-checkbox w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        value={asset.assetId}
+                                                        checked={isSelected}
+                                                        onChange={() => onAssetSelect && onAssetSelect(asset.assetId)}
+                                                    />
+                                                ) : (
+                                                    <span className="text-slate-300" title="僅「在庫」資產可選取">-</span>
+                                                )}
+                                            </td>
                                             <td className="px-2 py-3 font-mono text-slate-600 whitespace-nowrap align-top">{asset.assetId}</td>
                                             <td className="px-2 py-3 font-medium text-slate-800 align-top w-[160px] max-w-[160px]">
                                                 <div className="line-clamp-2" title={asset.assetName}>{asset.assetName}</div>
@@ -2932,6 +2969,53 @@
             // 批次操作 Modal 相關 state
             const [batchModalType, setBatchModalType] = useState(null); // 'transfer', 'lending', 'scrap'
 
+            // 資產選取狀態（與 BatchList 同步）
+            const [selectedAssetIds, setSelectedAssetIds] = useState([]);
+
+            // 處理單個資產選取
+            const handleAssetSelect = useCallback((assetId) => {
+                setSelectedAssetIds(prev => {
+                    const isSelected = prev.includes(assetId);
+                    let newSelection;
+
+                    if (isSelected) {
+                        // 取消選取
+                        newSelection = prev.filter(id => id !== assetId);
+                        if (typeof window.BatchList_removeItem === 'function') {
+                            window.BatchList_removeItem(assetId);
+                        }
+                    } else {
+                        // 選取
+                        newSelection = [...prev, assetId];
+                        if (typeof window.BatchList_addItem === 'function') {
+                            window.BatchList_addItem(assetId);
+                        }
+                    }
+                    return newSelection;
+                });
+            }, []);
+
+            // 監聽 BatchList 變化並同步（處理 Scanner Enter 鍵掃描的情況）
+            useEffect(() => {
+                const syncFromBatchList = () => {
+                    if (typeof window.BatchList_getItems === 'function') {
+                        const batchItems = window.BatchList_getItems();
+                        setSelectedAssetIds(prev => {
+                            // 只添加新的項目，不移除舊的
+                            const newItems = batchItems.filter(id => !prev.includes(id));
+                            if (newItems.length > 0) {
+                                return [...prev, ...newItems];
+                            }
+                            return prev;
+                        });
+                    }
+                };
+
+                // 定期同步（處理外部添加的情況）
+                const interval = setInterval(syncFromBatchList, 500);
+                return () => clearInterval(interval);
+            }, []);
+
             // 載入資料
             const loadData = () => {
                 showFlyProgressBar('正在載入財產狀態資料...');
@@ -3150,6 +3234,35 @@
                 });
             }, [allAssets, filters]);
 
+            // 處理全選（必須在 filteredAssets 定義之後）
+            const handleSelectAll = useCallback((checked) => {
+                const selectableAssets = filteredAssets.filter(a => a.status === '在庫');
+                const selectableIds = selectableAssets.map(a => a.assetId);
+
+                if (checked) {
+                    // 全選
+                    setSelectedAssetIds(prev => {
+                        const newIds = selectableIds.filter(id => !prev.includes(id));
+                        newIds.forEach(id => {
+                            if (typeof window.BatchList_addItem === 'function') {
+                                window.BatchList_addItem(id);
+                            }
+                        });
+                        return [...new Set([...prev, ...selectableIds])];
+                    });
+                } else {
+                    // 取消全選
+                    setSelectedAssetIds(prev => {
+                        selectableIds.forEach(id => {
+                            if (typeof window.BatchList_removeItem === 'function') {
+                                window.BatchList_removeItem(id);
+                            }
+                        });
+                        return prev.filter(id => !selectableIds.includes(id));
+                    });
+                }
+            }, [filteredAssets]);
+
             // 計算重複產編
             const duplicateInfo = useMemo(() => {
                 const map = new Map();
@@ -3199,6 +3312,14 @@
                 // 重建 BatchList 索引
                 if (typeof window.BatchList_rebuildIndex === 'function') {
                     window.BatchList_rebuildIndex();
+                }
+
+                // ✨ 重新初始化 Scanner 搜尋框增強（React 動態渲染後需重新綁定）
+                if (typeof window.Scanner_enhanceSearchBox === 'function') {
+                    setTimeout(() => {
+                        window.Scanner_enhanceSearchBox();
+                        console.log('[App] 已重新初始化 Scanner 搜尋框增強');
+                    }, 100);
                 }
 
                 console.log('[App] 已更新 window.allAssets，共', window.allAssets.length, '筆「在庫」資產');
@@ -3462,6 +3583,8 @@
                 if (typeof BatchList_resetOnSubmit === 'function') {
                     BatchList_resetOnSubmit();
                 }
+                // 清空 React 選取狀態
+                setSelectedAssetIds([]);
                 // 重新載入資料
                 loadData();
             };
@@ -3612,6 +3735,9 @@
                         onOpenTransferModal={handleOpenTransferModal}
                         onOpenLendingModal={handleOpenLendingModal}
                         onOpenScrapModal={handleOpenScrapModal}
+                        selectedAssetIds={selectedAssetIds}
+                        onAssetSelect={handleAssetSelect}
+                        onSelectAll={handleSelectAll}
                     />
 
                     {activeModal === 'lent' && (
