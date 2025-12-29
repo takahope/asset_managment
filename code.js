@@ -4353,6 +4353,39 @@ function getInventoryData() {
     // 取得進行中盤點會話（管理員可以看到所有會話）
     const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin, currentUserGroup);
 
+    // ✨ 計算使用者待盤點資產數量
+    let myPendingInventoryCount = 0;
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+    if (inventoryDetailSheet && inventoryDetailSheet.getLastRow() > 1) {
+      // 取得所有進行中會話的 ID
+      const activeSessionIds = new Set(activeSessions.map(s => s.inventoryId));
+
+      // 讀取盤點明細
+      const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
+
+      detailData.forEach(row => {
+        const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
+        const inventoryResult = row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1];
+        const assignedUser = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
+
+        // 只計算進行中會話的明細
+        if (!activeSessionIds.has(inventoryId)) return;
+
+        // 只計算未盤點的資產（空值或「未盤點」）
+        if (inventoryResult && inventoryResult !== '未盤點') return;
+
+        // 判斷是否屬於當前使用者（Email 或組別）
+        if (assignedUser) {
+          const normalized = String(assignedUser).trim();
+          const isEmail = normalized.includes('@');
+          const isMyTask = isEmail
+            ? normalized.toLowerCase() === currentUserEmail
+            : normalized === currentUserGroup;
+          if (isMyTask) myPendingInventoryCount++;
+        }
+      });
+    }
+
     // 注意: 不返回完整的 assets 陣列,因為其中包含 Date 物件無法序列化
     // 前端只需要 locations, keepers, users 和 activeSessions
     return {
@@ -4364,7 +4397,8 @@ function getInventoryData() {
       emailToNameMap: emailToNameMap,
       currentUserGroup: currentUserGroup,
       currentUserEmail: currentUserEmail,
-      isAdmin: isAdmin // 新增：告知前端當前使用者是否為管理員
+      isAdmin: isAdmin,
+      myPendingInventoryCount: myPendingInventoryCount // ✨ 使用者待盤點資產數量
     };
   } catch (e) {
     Logger.log(`getInventoryData 失敗: ${e.message}`);

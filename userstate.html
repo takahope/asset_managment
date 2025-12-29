@@ -1815,27 +1815,8 @@
 
             // 計算卡片統計數量
             const cardCounts = useMemo(() => {
-                const inventoryCount = (() => {
-                    if (!inventorySessions || !inventorySessions.activeSessions) return 0;
-
-                    return inventorySessions.activeSessions.filter(session => {
-                        const isActive = session.status === '進行中';
-                        if (!isActive) return false;
-
-                        // 檢查是否被指派給當前使用者（透過 email 或組別）
-                        const assignedUsers = session.assignedUsers || [];
-                        const isAssignedToMe = assignedUsers.some(user =>
-                            user.toLowerCase() === currentUserEmail.toLowerCase() ||
-                            user === inventorySessions.currentUserGroup
-                        );
-
-                        // 如果是會話創建者，也算是我的任務
-                        const isCreator = session.inventoryEmail &&
-                            session.inventoryEmail.toLowerCase() === currentUserEmail.toLowerCase();
-
-                        return isAssignedToMe || isCreator;
-                    }).length;
-                })();
+                // ✨ 直接使用後端計算的待盤點資產數量
+                const inventoryCount = inventorySessions?.myPendingInventoryCount || 0;
 
                 const scrapPendingCount = (() => {
                     const scrappingAssets = allAssets.filter(a => a.status === '報廢中');
