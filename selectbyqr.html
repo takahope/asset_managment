@@ -277,12 +277,46 @@
   }
   window.Scanner_enhanceSearchBox = Scanner_enhanceSearchBox;
 
+  // ========== 確保模板已插入（支援 React 動態渲染環境）==========
+  function Scanner_ensureTemplate() {
+    const zone = document.getElementById('Scanner_zone');
+    if (!zone) {
+      console.error('[Scanner] 找不到 Scanner_zone 元素');
+      return false;
+    }
+
+    // 檢查 Scanner_reader 是否已存在
+    if (document.getElementById('Scanner_reader')) {
+      return true; // 模板已插入
+    }
+
+    // 嘗試插入模板
+    const template = document.getElementById('Scanner_template');
+    if (!template) {
+      console.error('[Scanner] 找不到 Scanner_template 元素');
+      return false;
+    }
+
+    zone.appendChild(template.content.cloneNode(true));
+    console.log('[Scanner] ✓ 掃描區模板已動態插入（React 環境）');
+    return true;
+  }
+  window.Scanner_ensureTemplate = Scanner_ensureTemplate;
+
   // ========== 掃描控制函數 ==========
   window.Scanner_toggle = function() {
     const zone = document.getElementById('Scanner_zone');
-    if (!zone) return;
+    if (!zone) {
+      console.error('[Scanner] Scanner_zone 不存在');
+      return;
+    }
 
     if (zone.style.display === 'none' || !zone.style.display) {
+      // 開啟掃描器前，確保模板已插入
+      if (!Scanner_ensureTemplate()) {
+        alert('掃描器初始化失敗，請重新整理頁面');
+        return;
+      }
       // 開啟掃描器
       zone.style.display = 'block';
       Scanner_start();
