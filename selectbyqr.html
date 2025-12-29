@@ -244,8 +244,10 @@
       // 嘗試作為條碼處理
       const formattedCode = Scanner_formatBarcode(inputValue);
 
-      // ✨ 修改查找順序：優先使用最新的 window.allAssets，避免使用舊索引
-      const asset = (typeof allAssets !== 'undefined' ?
+      // ✨ 修改查找順序：優先使用 window.allAssets，再檢查全域 allAssets
+      const asset = (typeof window.allAssets !== 'undefined' && window.allAssets ?
+                      window.allAssets.find(a => a.id === formattedCode || a.id === inputValue) : null) ||
+                    (typeof allAssets !== 'undefined' && allAssets ?
                       allAssets.find(a => a.id === formattedCode || a.id === inputValue) : null) ||
                     BatchList_findAsset(formattedCode) ||
                     BatchList_findAsset(inputValue);
