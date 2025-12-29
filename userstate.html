@@ -728,6 +728,40 @@
                                             <td className="px-2 py-3 text-left align-top whitespace-nowrap">
                                                 {/* 操作按鈕區域 */}
                                                 <div className="flex justify-start gap-2">
+                                                    {/* 在庫資產：顯示轉移、出借、報廢按鈕 */}
+                                                    {asset.status === '在庫' && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    window.open(webAppUrl + '?page=apply', '_top');
+                                                                }}
+                                                                className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                                                                title="轉移"
+                                                            >
+                                                                <i className="fa-solid fa-right-left text-lg"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    window.open(webAppUrl + '?page=lending', '_top');
+                                                                }}
+                                                                className="text-purple-600 hover:text-purple-800 transition-colors p-1"
+                                                                title="出借"
+                                                            >
+                                                                <i className="fa-solid fa-hand-holding-hand text-lg"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    window.open(webAppUrl + '?page=scrap', '_top');
+                                                                }}
+                                                                className="text-red-600 hover:text-red-800 transition-colors p-1"
+                                                                title="報廢"
+                                                            >
+                                                                <i className="fa-regular fa-trash-can text-lg"></i>
+                                                            </button>
+                                                        </>
+                                                    )}
+
+                                                    {/* 待接收/轉移中/報廢中：顯示取消按鈕 */}
                                                     {canCancel && (asset.status === '待接收' || asset.status === '轉移中' || asset.status === '報廢中') && (
                                                         <button
                                                             onClick={() => onCancel(asset.assetId, asset.status)}
@@ -736,6 +770,8 @@
                                                             取消
                                                         </button>
                                                     )}
+
+                                                    {/* 已報廢：管理員可回溯 */}
                                                     {isAdmin && asset.status === '已報廢' && (
                                                         <button
                                                             onClick={() => onRestore(asset.assetId)}
