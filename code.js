@@ -4082,6 +4082,82 @@ function cancelTransferOrScrap(assetId) {
 }
 
 /**
+ * [供 userstate.html 呼叫] 獲取當前使用者申請的「轉移中」或「待接收」資產
+ * 用於顯示使用者自己發起但尚未被對方接收的轉移申請
+ * @returns {Object} { assets: Array, count: number }
+ */
+function getTransferringAssets() {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const isAdmin = checkAdminPermissions();
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+
+    if (appLogSheet.getLastRow() <= 1) {
+      return { assets: [], count: 0 };
+    }
+
+    const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+    const allAssets = getAllAssets();
+    const assetMap = new Map(allAssets.map(a => [a.assetId, a]));
+
+    const results = [];
+
+    appLogData.forEach(row => {
+      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const applicantEmail = (row[AL_APPLICANT_EMAIL_COLUMN_INDEX - 1] || '').toString().toLowerCase();
+      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+
+      // 篩選條件：狀態為「轉移中」或「待接收」
+      if (status === '轉移中' || status === '待接收') {
+        // 權限檢查：只顯示自己申請的，或管理員可見全部
+        const isMyApplication = applicantEmail === currentUserEmail;
+
+        if (isAdmin || isMyApplication) {
+          const asset = assetMap.get(assetId);
+
+          // 格式化申請時間
+          let applicationTime = '';
+          const rawTime = row[AL_APP_TIME_COLUMN_INDEX - 1];
+          if (rawTime) {
+            try {
+              applicationTime = Utilities.formatDate(new Date(rawTime), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
+            } catch (e) {
+              applicationTime = rawTime.toString();
+            }
+          }
+
+          results.push({
+            assetId: assetId || '',
+            assetName: asset ? asset.assetName : '',
+            modelBrand: asset ? asset.modelBrand : '',
+            category: asset ? asset.assetCategory : '',
+            oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1] || '',
+            oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1] || '',
+            newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1] || '',
+            newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1] || '',
+            newUser: row[AL_NEW_USER_COLUMN_INDEX - 1] || '',
+            applicationTime: applicationTime,
+            status: status,
+            transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點'
+          });
+        }
+      }
+    });
+
+    return {
+      assets: results,
+      count: results.length
+    };
+
+  } catch (e) {
+    Logger.log(`getTransferringAssets 失敗: ${e.message} at ${e.stack}`);
+    return { assets: [], count: 0, error: e.message };
+  }
+}
+
+/**
  * [供 printScrap.html 呼叫] 獲取已列印的報廢文件歷史紀錄
  * @param {string} assetCategory - 財產類別
  * @returns {Array<Object>} 文件列表 { url, applicant, date, count }
