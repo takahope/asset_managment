@@ -1363,6 +1363,20 @@
             const [selectAll, setSelectAll] = useState(false);
             const [isGenerating, setIsGenerating] = useState(false);
 
+            // Tab 狀態
+            const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'history', 'byDate'
+
+            // 已生成文件 Tab 狀態
+            const [historyFiles, setHistoryFiles] = useState([]);
+            const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+            // 列印已報廢資產 Tab 狀態
+            const [startDate, setStartDate] = useState('');
+            const [endDate, setEndDate] = useState('');
+            const [previewAssets, setPreviewAssets] = useState([]);
+            const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+            const [isGeneratingByDate, setIsGeneratingByDate] = useState(false);
+
             // 當前類別的資產列表
             const currentAssets = useMemo(() => {
                 if (!details) return [];
@@ -1460,6 +1474,87 @@
                     .getAdminName();
             };
 
+            // ========== 已生成文件 Tab 函數 ==========
+            const loadHistoryFiles = useCallback(() => {
+                setIsLoadingHistory(true);
+                google.script.run
+                    .withSuccessHandler((files) => {
+                        setHistoryFiles(files || []);
+                        setIsLoadingHistory(false);
+                    })
+                    .withFailureHandler((error) => {
+                        console.error('載入歷史文件失敗:', error);
+                        setHistoryFiles([]);
+                        setIsLoadingHistory(false);
+                    })
+                    .getScrapDriveFiles();
+            }, []);
+
+            // Tab 切換時載入歷史文件
+            useEffect(() => {
+                if (activeTab === 'history' && historyFiles.length === 0) {
+                    loadHistoryFiles();
+                }
+            }, [activeTab, historyFiles.length, loadHistoryFiles]);
+
+            // ========== 列印已報廢資產 Tab 函數 ==========
+            const handlePreviewByDate = () => {
+                if (!startDate || !endDate) {
+                    alert('請選擇起始和結束日期');
+                    return;
+                }
+                if (new Date(startDate) > new Date(endDate)) {
+                    alert('起始日期不能晚於結束日期');
+                    return;
+                }
+
+                setIsLoadingPreview(true);
+                setPreviewAssets([]);
+
+                google.script.run
+                    .withSuccessHandler((assets) => {
+                        if (assets === null) {
+                            alert('載入失敗：資料格式錯誤');
+                            setPreviewAssets([]);
+                        } else if (!Array.isArray(assets)) {
+                            alert('載入失敗：預期為陣列');
+                            setPreviewAssets([]);
+                        } else if (assets.length === 0) {
+                            alert('該日期範圍內沒有已報廢的資產');
+                            setPreviewAssets([]);
+                        } else {
+                            setPreviewAssets(assets);
+                        }
+                        setIsLoadingPreview(false);
+                    })
+                    .withFailureHandler((error) => {
+                        alert('載入失敗：' + error.message);
+                        setIsLoadingPreview(false);
+                    })
+                    .getScrapAssetsByDateRange(startDate, endDate, selectedCategory);
+            };
+
+            const handleGenerateByDate = () => {
+                if (previewAssets.length === 0) {
+                    alert('沒有可列印的資產');
+                    return;
+                }
+
+                setIsGeneratingByDate(true);
+
+                google.script.run
+                    .withSuccessHandler((result) => {
+                        alert(`報廢申請單已成功生成（共 ${result.assetCount} 筆資產）`);
+                        window.open(result.fileUrl, '_blank');
+                        setIsGeneratingByDate(false);
+                    })
+                    .withFailureHandler((error) => {
+                        alert('生成失敗：' + error.message);
+                        setIsGeneratingByDate(false);
+                    })
+                    .createScrapDocByDateRange(startDate, endDate, selectedCategory);
+            };
+
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out] flex flex-col">
@@ -1471,127 +1566,380 @@
                             </button>
                         </div>
 
-                        {/* Category Selector */}
-                        <div className="px-6 py-4 border-b bg-orange-50/50">
-                            <label className="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
-                            <label className="inline-flex items-center mr-6">
-                                <input
-                                    type="radio"
-                                    name="scrapCategory"
-                                    value="財產"
-                                    checked={selectedCategory === '財產'}
-                                    onChange={(e) => setSelectedCategory(e.target.value)}
-                                    className="mr-2"
-                                />
-                                <span>財產</span>
-                            </label>
-                            <label className="inline-flex items-center">
-                                <input
-                                    type="radio"
-                                    name="scrapCategory"
-                                    value="物品"
-                                    checked={selectedCategory === '物品'}
-                                    onChange={(e) => setSelectedCategory(e.target.value)}
-                                    className="mr-2"
-                                />
-                                <span>物品</span>
-                            </label>
+                        {/* Tab 導航 */}
+                        <div className="px-6 border-b bg-slate-50">
+                            <div className="flex">
+                                <button
+                                    onClick={() => setActiveTab('pending')}
+                                    className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+                                        activeTab === 'pending'
+                                            ? 'border-orange-600 text-orange-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                                >
+                                    待報廢資產
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('history')}
+                                    className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+                                        activeTab === 'history'
+                                            ? 'border-orange-600 text-orange-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                                >
+                                    已生成文件
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('byDate')}
+                                    className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+                                        activeTab === 'byDate'
+                                            ? 'border-orange-600 text-orange-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                                >
+                                    列印已報廢資產
+                                </button>
+                            </div>
                         </div>
 
-                        {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-6">
-                            {isLoading ? (
-                                <div className="flex items-center justify-center py-16">
-                                    <div className="text-center">
-                                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
-                                        <p className="mt-4 text-slate-600">載入中...</p>
+                        {/* ========== Tab 1: 待報廢資產 ========== */}
+                        {activeTab === 'pending' && (
+                            <>
+                                {/* Category Selector */}
+                                <div className="px-6 py-4 border-b bg-orange-50/50">
+                                    <label className="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
+                                    <label className="inline-flex items-center mr-6">
+                                        <input
+                                            type="radio"
+                                            name="scrapCategory"
+                                            value="財產"
+                                            checked={selectedCategory === '財產'}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>財產</span>
+                                    </label>
+                                    <label className="inline-flex items-center">
+                                        <input
+                                            type="radio"
+                                            name="scrapCategory"
+                                            value="物品"
+                                            checked={selectedCategory === '物品'}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>物品</span>
+                                    </label>
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    {isLoading ? (
+                                        <div className="flex items-center justify-center py-16">
+                                            <div className="text-center">
+                                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+                                                <p className="mt-4 text-slate-600">載入中...</p>
+                                            </div>
+                                        </div>
+                                    ) : currentAssets.length === 0 ? (
+                                        <div className="text-center py-16 text-slate-500">
+                                            <i className="fas fa-inbox text-5xl mb-4 text-slate-300"></i>
+                                            <p>目前沒有任何狀態為「報廢中」的{selectedCategory}。</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-orange-50 sticky top-0">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectAll}
+                                                                onChange={handleSelectAll}
+                                                                className="rounded"
+                                                            />
+                                                        </th>
+                                                        <th className="px-3 py-2 text-left">財產編號</th>
+                                                        <th className="px-3 py-2 text-left">財產名稱</th>
+                                                        <th className="px-3 py-2 text-left">型號/廠牌</th>
+                                                        <th className="px-3 py-2 text-left">原保管人</th>
+                                                        <th className="px-3 py-2 text-left">原使用人</th>
+                                                        <th className="px-3 py-2 text-left">報廢日期</th>
+                                                        <th className="px-3 py-2 text-left">報廢原因</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {currentAssets.map(asset => (
+                                                        <tr key={asset.assetId} className="border-b hover:bg-orange-50/30">
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedIds.includes(asset.assetId)}
+                                                                    onChange={() => handleSelectOne(asset.assetId)}
+                                                                    className="rounded"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">{asset.assetId}</td>
+                                                            <td className="px-3 py-2">{asset.assetName}</td>
+                                                            <td className="px-3 py-2">{asset.modelBrand}</td>
+                                                            <td className="px-3 py-2">{asset.originalKeeper}</td>
+                                                            <td className="px-3 py-2">{asset.originalUser || ''}</td>
+                                                            <td className="px-3 py-2">{asset.scrapDate || ''}</td>
+                                                            <td className="px-3 py-2">{asset.scrapReason || ''}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {/* ========== Tab 2: 已生成文件 ========== */}
+                        {activeTab === 'history' && (
+                            <div className="flex-1 overflow-y-auto p-6">
+                                {isLoadingHistory ? (
+                                    <div className="flex items-center justify-center py-16">
+                                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+                                        <span className="ml-3 text-slate-600">載入中...</span>
+                                    </div>
+                                ) : historyFiles.length === 0 ? (
+                                    <div className="text-center py-16 text-slate-500">
+                                        <i className="fas fa-folder-open text-5xl mb-4 text-slate-300"></i>
+                                        <p>目前沒有已生成的報廢文件。</p>
+                                        <button
+                                            onClick={loadHistoryFiles}
+                                            className="mt-4 px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                        >
+                                            <i className="fas fa-sync-alt mr-2"></i>重新載入
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="font-medium text-slate-700">已生成的報廢文件</h4>
+                                            <button
+                                                onClick={loadHistoryFiles}
+                                                className="text-sm text-orange-600 hover:text-orange-800 transition-colors"
+                                            >
+                                                <i className="fas fa-sync-alt mr-1"></i>重新整理
+                                            </button>
+                                        </div>
+                                        <div className="overflow-x-auto border rounded-lg">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-slate-50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">檔案名稱</th>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">最後修改時間</th>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">大小</th>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {historyFiles.map((file, idx) => (
+                                                        <tr key={idx} className="border-t hover:bg-slate-50">
+                                                            <td className="px-4 py-3">{file.name}</td>
+                                                            <td className="px-4 py-3 text-slate-600">{file.lastUpdated}</td>
+                                                            <td className="px-4 py-3 text-slate-600">{file.size}</td>
+                                                            <td className="px-4 py-3">
+                                                                <a
+                                                                    href={file.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-blue-600 hover:text-blue-800 font-medium"
+                                                                >
+                                                                    <i className="fas fa-external-link-alt mr-1"></i>開啟
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ========== Tab 3: 列印已報廢資產 ========== */}
+                        {activeTab === 'byDate' && (
+                            <div className="flex-1 overflow-y-auto p-6">
+                                {/* 類別選擇 */}
+                                <div className="mb-4 p-4 bg-orange-50 rounded-lg">
+                                    <label className="font-medium text-slate-700 mr-4">財產類別：</label>
+                                    <label className="inline-flex items-center mr-6">
+                                        <input
+                                            type="radio"
+                                            name="scrapCategoryByDate"
+                                            value="財產"
+                                            checked={selectedCategory === '財產'}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>財產</span>
+                                    </label>
+                                    <label className="inline-flex items-center">
+                                        <input
+                                            type="radio"
+                                            name="scrapCategoryByDate"
+                                            value="物品"
+                                            checked={selectedCategory === '物品'}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>物品</span>
+                                    </label>
+                                </div>
+
+                                {/* 日期選擇器 */}
+                                <div className="mb-6 p-4 bg-slate-50 rounded-lg">
+                                    <h4 className="font-medium text-slate-700 mb-3">
+                                        <i className="fas fa-calendar-alt mr-2 text-slate-500"></i>
+                                        選擇報廢期間
+                                    </h4>
+                                    <div className="flex flex-wrap items-end gap-4">
+                                        <div>
+                                            <label className="block text-sm text-slate-600 mb-1">起始日期</label>
+                                            <input
+                                                type="date"
+                                                value={startDate}
+                                                onChange={(e) => setStartDate(e.target.value)}
+                                                className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-slate-600 mb-1">結束日期</label>
+                                            <input
+                                                type="date"
+                                                value={endDate}
+                                                onChange={(e) => setEndDate(e.target.value)}
+                                                className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handlePreviewByDate}
+                                            disabled={isLoadingPreview}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {isLoadingPreview ? (
+                                                <>
+                                                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                    <span>搜尋中...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-search"></i>
+                                                    <span>預覽</span>
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
-                            ) : currentAssets.length === 0 ? (
-                                <div className="text-center py-16 text-slate-500">
-                                    <i className="fas fa-inbox text-5xl mb-4 text-slate-300"></i>
-                                    <p>目前沒有任何狀態為「報廢中」的{selectedCategory}。</p>
-                                </div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-orange-50 sticky top-0">
-                                            <tr>
-                                                <th className="px-3 py-2 text-left">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectAll}
-                                                        onChange={handleSelectAll}
-                                                        className="rounded"
-                                                    />
-                                                </th>
-                                                <th className="px-3 py-2 text-left">財產編號</th>
-                                                <th className="px-3 py-2 text-left">財產名稱</th>
-                                                <th className="px-3 py-2 text-left">型號/廠牌</th>
-                                                <th className="px-3 py-2 text-left">原保管人</th>
-                                                <th className="px-3 py-2 text-left">原使用人</th>
-                                                <th className="px-3 py-2 text-left">報廢日期</th>
-                                                <th className="px-3 py-2 text-left">報廢原因</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {currentAssets.map(asset => (
-                                                <tr key={asset.assetId} className="border-b hover:bg-orange-50/30">
-                                                    <td className="px-3 py-2">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedIds.includes(asset.assetId)}
-                                                            onChange={() => handleSelectOne(asset.assetId)}
-                                                            className="rounded"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-2">{asset.assetId}</td>
-                                                    <td className="px-3 py-2">{asset.assetName}</td>
-                                                    <td className="px-3 py-2">{asset.modelBrand}</td>
-                                                    <td className="px-3 py-2">{asset.originalKeeper}</td>
-                                                    <td className="px-3 py-2">{asset.originalUser || ''}</td>
-                                                    <td className="px-3 py-2">{asset.scrapDate || ''}</td>
-                                                    <td className="px-3 py-2">{asset.scrapReason || ''}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
 
-                        {/* Footer */}
-                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
-                            <div className="text-sm text-slate-600">
-                                已選擇 <span className="font-bold text-orange-600">{selectedIds.length}</span> 筆資產
+                                {/* 預覽結果 */}
+                                {previewAssets.length > 0 && (
+                                    <>
+                                        <h4 className="font-medium text-green-700 mb-3 flex items-center gap-2">
+                                            <i className="fas fa-check-circle"></i>
+                                            預覽符合條件的資產（{previewAssets.length} 筆）
+                                        </h4>
+                                        <div className="overflow-x-auto border rounded-lg mb-4">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-green-50">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left">財產編號</th>
+                                                        <th className="px-3 py-2 text-left">財產名稱</th>
+                                                        <th className="px-3 py-2 text-left">型號/廠牌</th>
+                                                        <th className="px-3 py-2 text-left">保管人</th>
+                                                        <th className="px-3 py-2 text-left">報廢日期</th>
+                                                        <th className="px-3 py-2 text-left">報廢原因</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {previewAssets.map((asset, idx) => (
+                                                        <tr key={idx} className="border-t hover:bg-green-50/30">
+                                                            <td className="px-3 py-2">{asset.assetId}</td>
+                                                            <td className="px-3 py-2">{asset.assetName}</td>
+                                                            <td className="px-3 py-2">{asset.modelBrand}</td>
+                                                            <td className="px-3 py-2">{asset.leaderName}</td>
+                                                            <td className="px-3 py-2">{asset.scrapDate}</td>
+                                                            <td className="px-3 py-2">{asset.scrapReason}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="text-center">
+                                            <button
+                                                onClick={handleGenerateByDate}
+                                                disabled={isGeneratingByDate}
+                                                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2 mx-auto"
+                                            >
+                                                {isGeneratingByDate ? (
+                                                    <>
+                                                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                        <span>產生中...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-file-alt"></i>
+                                                        <span>生成報廢申請單</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                            <div className="flex gap-3">
+                        )}
+
+                        {/* Footer - 根據 Tab 顯示不同內容 */}
+                        {activeTab === 'pending' && (
+                            <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                                <div className="text-sm text-slate-600">
+                                    已選擇 <span className="font-bold text-orange-600">{selectedIds.length}</span> 筆資產
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={onClose}
+                                        className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                        disabled={isGenerating}
+                                    >
+                                        取消
+                                    </button>
+                                    <button
+                                        onClick={handleGenerateDoc}
+                                        disabled={isGenerating || selectedIds.length === 0}
+                                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isGenerating ? (
+                                            <>
+                                                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                <span>產生中...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-file-alt"></i>
+                                                <span>生成報廢申請單</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* history 和 byDate Tab 只顯示關閉按鈕 */}
+                        {(activeTab === 'history' || activeTab === 'byDate') && (
+                            <div className="px-6 py-4 border-t bg-slate-50 flex justify-end">
                                 <button
                                     onClick={onClose}
                                     className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                    disabled={isGenerating}
                                 >
-                                    取消
-                                </button>
-                                <button
-                                    onClick={handleGenerateDoc}
-                                    disabled={isGenerating || selectedIds.length === 0}
-                                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            <span>產生中...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="fas fa-file-alt"></i>
-                                            <span>生成報廢申請單</span>
-                                        </>
-                                    )}
+                                    關閉
                                 </button>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             );
