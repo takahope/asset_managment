@@ -604,6 +604,11 @@
             // ✨ 暴露清空搜尋框函數供 Scanner 模組使用
             useEffect(() => {
                 window.clearSearchBox = () => {
+                    // ✨ 關鍵：清除 debounce timer，防止延遲篩選覆蓋清空操作
+                    if (debounceTimerRef.current) {
+                        clearTimeout(debounceTimerRef.current);
+                        debounceTimerRef.current = null;
+                    }
                     setLocalSearch('');
                     onFilterChange('search', '');
                 };
