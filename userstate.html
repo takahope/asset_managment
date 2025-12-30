@@ -722,7 +722,7 @@
         );
 
         // BatchActionButtons 組件 - 批次操作按鈕卡片
-        const BatchActionButtons = ({ onBatchTransfer, onBatchLending, onBatchScrap }) => {
+        const BatchActionButtons = ({ onBatchTransfer, onBatchLending, onBatchScrap, hasPendingInventory, onBatchInventory }) => {
             const [batchCount, setBatchCount] = useState(0);
 
             useEffect(() => {
@@ -780,6 +780,16 @@
                             >
                                 <i className="fa-regular fa-trash-can"></i> 批次報廢
                             </button>
+                            {/* 批次盤點按鈕 - 如果有待盤點資產則顯示 */}
+                            {hasPendingInventory && (
+                                <button
+                                    onClick={onBatchInventory}
+                                    disabled={batchCount === 0}
+                                    className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-sm"
+                                >
+                                    <i className="fa-solid fa-clipboard-check"></i> 批次盤點
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -787,7 +797,7 @@
         };
 
         // AssetTable 組件
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, isAssetPendingInventory, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
             const statusColors = {
                 '在庫': 'bg-green-50 text-green-700 border-green-200',
                 '出借中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -979,6 +989,16 @@
                                                             >
                                                                 <i className="fa-regular fa-trash-can text-lg"></i>
                                                             </button>
+                                                            {/* 盤點按鈕 - 如果資產在待盤點清單中顯示 */}
+                                                            {isAssetPendingInventory && isAssetPendingInventory(asset.assetId) && (
+                                                                <button
+                                                                    onClick={() => onOpenInventoryModal(asset)}
+                                                                    className="text-teal-600 hover:text-teal-800 transition-colors p-1"
+                                                                    title="盤點確認"
+                                                                >
+                                                                    <i className="fa-solid fa-clipboard-check text-lg"></i>
+                                                                </button>
+                                                            )}
                                                         </>
                                                     )}
 
@@ -4023,6 +4043,147 @@
             );
         };
 
+        // ========== 盤點確認 Modal（單筆/批次共用）==========
+        const InventoryConfirmModal = ({ asset, assetIds, isBatch, sessionId, onClose, onSuccess }) => {
+            const [result, setResult] = useState('正常');
+            const [remarks, setRemarks] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            const handleSubmit = () => {
+                setIsSubmitting(true);
+                showFlyProgressBar('正在提交盤點結果...');
+
+                if (isBatch) {
+                    // 批次盤點
+                    const assetResults = assetIds.map(id => ({
+                        assetId: id,
+                        result: result,
+                        remarks: remarks
+                    }));
+
+                    google.script.run
+                        .withSuccessHandler((response) => {
+                            hideFlyProgressBar('盤點完成！', 300);
+                            alert(response.message);
+                            setIsSubmitting(false);
+                            onSuccess();
+                            onClose();
+                        })
+                        .withFailureHandler((error) => {
+                            hideFlyProgressBar('盤點失敗', 0);
+                            alert('盤點失敗：' + error.message);
+                            setIsSubmitting(false);
+                        })
+                        .markBatchInventory(sessionId, assetResults);
+                } else {
+                    // 單筆盤點
+                    google.script.run
+                        .withSuccessHandler((response) => {
+                            hideFlyProgressBar('盤點完成！', 300);
+                            if (response.success) {
+                                alert(response.message);
+                                onSuccess();
+                                onClose();
+                            } else {
+                                alert('盤點失敗：' + response.error);
+                            }
+                            setIsSubmitting(false);
+                        })
+                        .withFailureHandler((error) => {
+                            hideFlyProgressBar('盤點失敗', 0);
+                            alert('盤點失敗：' + error.message);
+                            setIsSubmitting(false);
+                        })
+                        .markAssetInventory(sessionId, asset.assetId, result, remarks);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-teal-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-teal-800">
+                                <i className="fa-solid fa-clipboard-check mr-2"></i>
+                                {isBatch ? `批次盤點確認 (${assetIds?.length || 0} 筆)` : '盤點確認'}
+                            </h3>
+                            <button onClick={onClose} className="text-teal-600 hover:text-teal-800 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-4">
+                            {!isBatch && asset && (
+                                <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                                    <p><span className="font-medium text-slate-600">財產編號：</span>{asset.assetId}</p>
+                                    <p><span className="font-medium text-slate-600">財產名稱：</span>{asset.assetName}</p>
+                                    <p><span className="font-medium text-slate-600">保管人：</span>{asset.leader || asset.keeperName}</p>
+                                    <p><span className="font-medium text-slate-600">地點：</span>{asset.location}</p>
+                                </div>
+                            )}
+
+                            {/* 盤點結果選項 */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">盤點結果</label>
+                                <div className="space-y-2">
+                                    {['正常', '遺失', '損壞'].map(opt => (
+                                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="inventoryResult"
+                                                value={opt}
+                                                checked={result === opt}
+                                                onChange={(e) => setResult(e.target.value)}
+                                                className="w-4 h-4 text-teal-600"
+                                            />
+                                            <span className={`${opt === '遺失' ? 'text-red-600' : opt === '損壞' ? 'text-orange-600' : 'text-green-600'}`}>
+                                                {opt}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 備註 */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">備註（選填）</label>
+                                <textarea
+                                    value={remarks}
+                                    onChange={(e) => setRemarks(e.target.value)}
+                                    rows="3"
+                                    placeholder="輸入備註..."
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <><i className="fas fa-spinner fa-spin"></i><span>提交中...</span></>
+                                ) : (
+                                    <><i className="fas fa-check"></i><span>確認盤點</span></>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // 主 App 組件
         function App() {
             const [isReady, setIsReady] = useState(false);
@@ -4069,6 +4230,16 @@
             // 資產選取狀態（與 BatchList 同步）
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
 
+            // 盤點相關狀態
+            const [inventoryAssets, setInventoryAssets] = useState([]); // 使用者待盤點的資產清單
+            const [currentInventorySessionId, setCurrentInventorySessionId] = useState(null);
+            const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+            const [showInventoryModal, setShowInventoryModal] = useState(false);
+            const [inventoryModalAsset, setInventoryModalAsset] = useState(null); // 單筆盤點
+            const [showBatchInventoryModal, setShowBatchInventoryModal] = useState(false);
+            const [selectedInventoryAssetIds, setSelectedInventoryAssetIds] = useState([]);
+            const [currentUserGroup, setCurrentUserGroup] = useState('');
+
             // 處理單個資產選取
             const handleAssetSelect = useCallback((assetId) => {
                 setSelectedAssetIds(prev => {
@@ -4112,6 +4283,44 @@
                 const interval = setInterval(syncFromBatchList, 500);
                 return () => clearInterval(interval);
             }, []);
+
+            // ========== 盤點功能輔助函數 ==========
+
+            // 判斷資產是否分派給當前使用者（支援 Email 和組別）
+            const isAssignmentMine = useCallback((assignedUser, userEmail, userGroup) => {
+                if (!assignedUser) return false;
+                const normalized = String(assignedUser).trim();
+                if (normalized.includes('@')) {
+                    return normalized.toLowerCase() === userEmail?.toLowerCase();
+                }
+                return userGroup && normalized === userGroup;
+            }, []);
+
+            // 載入盤點資產清單
+            const loadInventoryAssets = useCallback((sessionId, userEmail, userGroup) => {
+                setIsLoadingInventory(true);
+                google.script.run
+                    .withSuccessHandler((assets) => {
+                        // 過濾出分派給當前使用者且未盤點的資產
+                        const myPendingAssets = (assets || []).filter(asset => {
+                            if (asset.inventoryResult && asset.inventoryResult !== '未盤點') return false;
+                            return isAssignmentMine(asset.assignedUser, userEmail, userGroup);
+                        });
+                        setInventoryAssets(myPendingAssets);
+                        setIsLoadingInventory(false);
+                    })
+                    .withFailureHandler((error) => {
+                        console.error('載入盤點資產失敗:', error);
+                        setInventoryAssets([]);
+                        setIsLoadingInventory(false);
+                    })
+                    .getInventoryDetails(sessionId);
+            }, [isAssignmentMine]);
+
+            // 檢查資產是否在待盤點清單中
+            const isAssetPendingInventory = useCallback((assetId) => {
+                return inventoryAssets.some(a => a.assetId === assetId);
+            }, [inventoryAssets]);
 
             // 載入資料
             const loadData = () => {
@@ -4175,6 +4384,14 @@
                                     .withSuccessHandler(inventoryResponse => {
                                         if (inventoryResponse) {
                                             setInventorySessions(inventoryResponse);
+                                            setCurrentUserGroup(inventoryResponse.currentUserGroup || '');
+
+                                            // 如有進行中會話，載入詳情以獲取待盤點資產
+                                            if (inventoryResponse.activeSessions && inventoryResponse.activeSessions.length > 0) {
+                                                const sessionId = inventoryResponse.activeSessions[0].inventoryId;
+                                                setCurrentInventorySessionId(sessionId);
+                                                loadInventoryAssets(sessionId, inventoryResponse.currentUserEmail, inventoryResponse.currentUserGroup);
+                                            }
                                         }
                                         inventoryLoaded = true;
                                         finishCardLoading();
@@ -4686,6 +4903,48 @@
                 loadData();
             }, []);
 
+            // ========== 盤點操作處理函數 ==========
+            // 開啟單筆盤點 Modal
+            const handleOpenInventoryModal = (asset) => {
+                if (!currentInventorySessionId) {
+                    alert('目前沒有進行中的盤點會話');
+                    return;
+                }
+                setInventoryModalAsset(asset);
+                setShowInventoryModal(true);
+            };
+
+            // 開啟批次盤點 Modal
+            const handleBatchInventory = () => {
+                if (!currentInventorySessionId) {
+                    alert('目前沒有進行中的盤點會話');
+                    return;
+                }
+                if (typeof BatchList_getItems !== 'function') {
+                    alert('批次選取功能尚未載入');
+                    return;
+                }
+                const items = BatchList_getItems();
+                // 過濾出待盤點的資產
+                const pendingItems = items.filter(id => isAssetPendingInventory(id));
+                if (pendingItems.length === 0) {
+                    alert('選取的資產中沒有待盤點的項目');
+                    return;
+                }
+                setSelectedInventoryAssetIds(pendingItems);
+                setShowBatchInventoryModal(true);
+            };
+
+            // 盤點成功回調
+            const handleInventorySuccess = useCallback(() => {
+                // 重新載入盤點資產清單
+                if (currentInventorySessionId) {
+                    loadInventoryAssets(currentInventorySessionId, currentUserEmail, currentUserGroup);
+                }
+                // 刷新卡片數據
+                refreshCardData();
+            }, [currentInventorySessionId, currentUserEmail, currentUserGroup, loadInventoryAssets, refreshCardData]);
+
             // ========== 批次操作處理函數 ==========
             const handleBatchTransfer = () => {
                 if (!transferOptions) {
@@ -4894,6 +5153,8 @@
                         onBatchTransfer={handleBatchTransfer}
                         onBatchLending={handleBatchLending}
                         onBatchScrap={handleBatchScrap}
+                        hasPendingInventory={cardCounts.inventory > 0}
+                        onBatchInventory={handleBatchInventory}
                     />
 
                     {duplicateInfo.duplicateCount > 0 && (
@@ -4913,6 +5174,8 @@
                         onOpenLendingModal={handleOpenLendingModal}
                         onOpenScrapModal={handleOpenScrapModal}
                         onOpenEditModal={handleOpenEditModal}
+                        isAssetPendingInventory={isAssetPendingInventory}
+                        onOpenInventoryModal={handleOpenInventoryModal}
                         selectedAssetIds={selectedAssetIds}
                         onAssetSelect={handleAssetSelect}
                         onSelectAll={handleSelectAll}
@@ -5040,6 +5303,34 @@
                                 setEditingAsset(null);
                             }}
                             onSuccess={handleEditAssetSuccess}
+                        />
+                    )}
+
+                    {/* 單筆盤點 Modal */}
+                    {showInventoryModal && inventoryModalAsset && (
+                        <InventoryConfirmModal
+                            asset={inventoryModalAsset}
+                            isBatch={false}
+                            sessionId={currentInventorySessionId}
+                            onClose={() => {
+                                setShowInventoryModal(false);
+                                setInventoryModalAsset(null);
+                            }}
+                            onSuccess={handleInventorySuccess}
+                        />
+                    )}
+
+                    {/* 批次盤點 Modal */}
+                    {showBatchInventoryModal && selectedInventoryAssetIds.length > 0 && (
+                        <InventoryConfirmModal
+                            assetIds={selectedInventoryAssetIds}
+                            isBatch={true}
+                            sessionId={currentInventorySessionId}
+                            onClose={() => {
+                                setShowBatchInventoryModal(false);
+                                setSelectedInventoryAssetIds([]);
+                            }}
+                            onSuccess={handleInventorySuccess}
                         />
                     )}
                 </div>
