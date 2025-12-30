@@ -748,6 +748,27 @@
                 '待接收': 'bg-purple-50 text-purple-700 border-purple-200'
             };
 
+            // ✨ 分頁設定
+            const ROWS_PER_PAGE = 500;
+            const [currentPage, setCurrentPage] = useState(1);
+
+            // ✨ 當 assets 變化時（篩選條件改變），重置頁碼
+            useEffect(() => {
+                setCurrentPage(1);
+            }, [assets]);
+
+            // ✨ 計算分頁資料
+            const totalPages = useMemo(() => {
+                return Math.max(1, Math.ceil((assets?.length || 0) / ROWS_PER_PAGE));
+            }, [assets]);
+
+            const paginatedAssets = useMemo(() => {
+                if (!assets) return [];
+                const start = (currentPage - 1) * ROWS_PER_PAGE;
+                const end = start + ROWS_PER_PAGE;
+                return assets.slice(start, end);
+            }, [assets, currentPage]);
+
             // 計算可選資產（僅在庫）
             const selectableAssets = useMemo(() => {
                 return assets ? assets.filter(a => a.status === '在庫') : [];
@@ -768,6 +789,38 @@
 
             return (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    {/* ✨ 分頁控制器 - 位於表格上方 */}
+                    <div className="flex justify-between items-center px-4 py-2 bg-slate-50 border-b border-slate-200">
+                        <span className="text-sm text-slate-600">
+                            第 <span className="font-semibold text-blue-600">{currentPage}</span> / {totalPages} 頁（共 <span className="font-semibold text-blue-600">{assets.length}</span> 筆）
+                        </span>
+                        {totalPages > 1 && (
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage <= 1}
+                                    className={`px-3 py-1 text-sm rounded border ${
+                                        currentPage <= 1
+                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    上一頁
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage >= totalPages}
+                                    className={`px-3 py-1 text-sm rounded border ${
+                                        currentPage >= totalPages
+                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    下一頁
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm" id="asset-list">
                             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
@@ -795,7 +848,7 @@
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {assets.map((asset, index) => {
+                                {paginatedAssets.map((asset, index) => {
                                     const canCancel = isAdmin ||
                                                     currentUserEmail === asset.leaderEmail ||
                                                     currentUserEmail === asset.userEmail;
