@@ -2402,7 +2402,7 @@
         // ===== 批次操作 Modal 組件 =====
 
         // 批次轉移 Modal
-        const BatchTransferModal = ({ transferOptions, allAssets, onClose, onSuccess }) => {
+        const BatchTransferModal = ({ transferOptions, allAssets = [], onClose, onSuccess }) => {
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
             const [transferMode, setTransferMode] = useState('normal');
             const [changeLocation, setChangeLocation] = useState(false);
@@ -2665,7 +2665,7 @@
         };
 
         // 批次出借 Modal
-        const BatchLendingModal = ({ lendingOptions, allAssets, onClose, onSuccess }) => {
+        const BatchLendingModal = ({ lendingOptions, allAssets = [], onClose, onSuccess }) => {
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
             const [borrowerName, setBorrowerName] = useState('');
             const [lendingLocation, setLendingLocation] = useState('');
@@ -2799,7 +2799,7 @@
         };
 
         // 批次報廢 Modal
-        const BatchScrapModal = ({ allAssets, onClose, onSuccess }) => {
+        const BatchScrapModal = ({ allAssets = [], onClose, onSuccess }) => {
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
             const [reason, setReason] = useState('');
             const [remarks, setRemarks] = useState('');
@@ -3239,15 +3239,42 @@
                 const selectableAssets = filteredAssets.filter(a => a.status === '在庫');
                 const selectableIds = selectableAssets.map(a => a.assetId);
 
+                // ✨ 取得上限值（預設 500）
+                const MAX_BATCH_SIZE = typeof window.BatchList_getMaxSize === 'function'
+                    ? window.BatchList_getMaxSize()
+                    : 500;
+
                 if (checked) {
-                    // 全選
+                    // ✨ 數量預檢查：超過上限時彈出警告
+                    if (selectableIds.length > MAX_BATCH_SIZE) {
+                        const proceed = window.confirm(
+                            `您即將選取 ${selectableIds.length} 筆資產，超過建議上限 ${MAX_BATCH_SIZE} 筆。\n` +
+                            `大量選取可能造成頁面反應緩慢。\n\n` +
+                            `是否繼續？`
+                        );
+                        if (!proceed) return;
+                    }
+
+                    // ✨ 全選：使用批量 API 提升效能
                     setSelectedAssetIds(prev => {
                         const newIds = selectableIds.filter(id => !prev.includes(id));
-                        newIds.forEach(id => {
-                            if (typeof window.BatchList_addItem === 'function') {
-                                window.BatchList_addItem(id);
+                        if (typeof window.BatchList_addItems === 'function') {
+                            // 使用批量新增（一次性更新 UI）
+                            window.BatchList_addItems(newIds);
+                        } else if (typeof window.BatchList_addItemSilent === 'function') {
+                            // 降級：靜默新增後一次性更新
+                            newIds.forEach(id => window.BatchList_addItemSilent(id));
+                            if (typeof window.BatchList_updateUI === 'function') {
+                                window.BatchList_updateUI();
                             }
-                        });
+                        } else {
+                            // 最終降級：逐筆加入
+                            newIds.forEach(id => {
+                                if (typeof window.BatchList_addItem === 'function') {
+                                    window.BatchList_addItem(id);
+                                }
+                            });
+                        }
                         return [...new Set([...prev, ...selectableIds])];
                     });
                 } else {
@@ -3832,6 +3859,7 @@
                     {batchModalType === 'transfer' && (
                         <BatchTransferModal
                             transferOptions={transferOptions}
+                            allAssets={allAssets}
                             onClose={handleCloseBatchModal}
                             onSuccess={handleBatchActionSuccess}
                         />
@@ -3840,6 +3868,7 @@
                     {batchModalType === 'lending' && (
                         <BatchLendingModal
                             lendingOptions={lendingOptions}
+                            allAssets={allAssets}
                             onClose={handleCloseBatchModal}
                             onSuccess={handleBatchActionSuccess}
                         />
@@ -3847,6 +3876,7 @@
 
                     {batchModalType === 'scrap' && (
                         <BatchScrapModal
+                            allAssets={allAssets}
                             onClose={handleCloseBatchModal}
                             onSuccess={handleBatchActionSuccess}
                         />

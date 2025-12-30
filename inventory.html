@@ -1593,17 +1593,41 @@
 
         function selectAllAssets() {
             const targetAssets = filteredSessionAssets.length ? filteredSessionAssets : currentSessionDetails;
-            targetAssets.forEach(asset => {
-                const assetId = asset.assetId;
-                selectedAssets.add(assetId);
-                if (typeof BatchList_addItem === 'function') {
-                    BatchList_addItem(assetId);
-                }
-            });
+            const assetIds = targetAssets.map(asset => asset.assetId);
+
+            // ✨ 取得上限值（預設 500）
+            const MAX_BATCH_SIZE = typeof BatchList_getMaxSize === 'function'
+                ? BatchList_getMaxSize() : 500;
+
+            // ✨ 預檢查：超過上限時警告
+            if (assetIds.length > MAX_BATCH_SIZE) {
+                const proceed = window.confirm(
+                    `您即將選取 ${assetIds.length} 筆資產，超過建議上限 ${MAX_BATCH_SIZE} 筆。\n` +
+                    `大量選取可能造成頁面反應緩慢。\n\n是否繼續？`
+                );
+                if (!proceed) return;
+            }
+
+            // ✨ 使用批量 API（避免逐筆觸發 Toast）
+            if (typeof BatchList_addItems === 'function') {
+                BatchList_addItems(assetIds);
+            }
+
+            // 同步到本地 selectedAssets（以實際加入的為準）
+            selectedAssets.clear();
+            if (typeof BatchList_getItems === 'function') {
+                BatchList_getItems().forEach(id => selectedAssets.add(id));
+            } else {
+                // 降級：直接使用前 MAX_BATCH_SIZE 筆
+                assetIds.slice(0, MAX_BATCH_SIZE).forEach(id => selectedAssets.add(id));
+            }
+
+            // 更新 checkboxes（只勾選實際加入的）
             const checkboxes = document.querySelectorAll('.asset-checkbox');
             checkboxes.forEach(cb => {
-                cb.checked = true;
+                cb.checked = selectedAssets.has(cb.value);
             });
+
             updateBatchUI();
         }
 
