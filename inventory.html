@@ -1603,8 +1603,10 @@
             // ✨ 預檢查：超過上限時警告
             if (assetIds.length > MAX_BATCH_SIZE) {
                 const proceed = window.confirm(
-                    `您即將選取 ${assetIds.length} 筆資產，超過建議上限 ${MAX_BATCH_SIZE} 筆。\n` +
-                    `大量選取可能造成頁面反應緩慢。\n\n是否繼續？`
+                    `您即將選取 ${selectableIds.length} 筆資產，超過建議上限 ${MAX_BATCH_SIZE} 筆。\n` +
+                            `大量選取可能造成頁面反應緩慢。\n\n` +
+                            `點擊「取消」將不會選擇任何資產\n` +
+                            `點擊「確認」將自動選擇前${MAX_BATCH_SIZE} 筆資產\n`
                 );
                 if (!proceed) return;
             }

@@ -3136,7 +3136,17 @@
                                     return;
                                 }
 
-                                setAllAssets(response.assets || []);
+                                // ✨ 方案 B：預處理搜尋文字，避免每次搜尋都重新計算
+                                const processedAssets = (response.assets || []).map(asset => ({
+                                    ...asset,
+                                    searchText: [
+                                        asset.assetId,
+                                        asset.assetName,
+                                        asset.leader,
+                                        asset.location
+                                    ].filter(Boolean).join(' ').toLowerCase()
+                                }));
+                                setAllAssets(processedAssets);
                                 setIsAdmin(response.isAdmin);
                                 setCurrentUserEmail(response.userEmail);
                                 setCurrentUserName(response.userName || '');
@@ -3274,7 +3284,17 @@
                         setInventorySessions(inventoryResponse.value);
                     }
                     if (assetsResponse.status === 'fulfilled' && assetsResponse.value?.assets) {
-                        setAllAssets(assetsResponse.value.assets);
+                        // ✨ 方案 B：預處理搜尋文字
+                        const processedAssets = assetsResponse.value.assets.map(asset => ({
+                            ...asset,
+                            searchText: [
+                                asset.assetId,
+                                asset.assetName,
+                                asset.leader,
+                                asset.location
+                            ].filter(Boolean).join(' ').toLowerCase()
+                        }));
+                        setAllAssets(processedAssets);
                     }
                     if (transferCountResponse.status === 'fulfilled' && typeof transferCountResponse.value === 'number') {
                         setTransferPendingCount(transferCountResponse.value);
@@ -3324,14 +3344,16 @@
 
             // 計算篩選後的資產
             const filteredAssets = useMemo(() => {
+                // ✨ 方案 B：預處理搜尋關鍵字（只計算一次）
+                const searchLower = filters.search ? filters.search.toLowerCase() : '';
+
                 return allAssets.filter(asset => {
                     const statusMatch = !filters.status || asset.status === filters.status;
                     const categoryMatch = !filters.category || asset.category === filters.category;
                     const leaderMatch = !filters.leader || asset.leader === filters.leader;
-                    const searchMatch = !filters.search ||
-                        asset.assetId.toUpperCase().includes(filters.search.toUpperCase()) ||
-                        asset.assetName.toUpperCase().includes(filters.search.toUpperCase()) ||
-                        asset.leader.toUpperCase().includes(filters.search.toUpperCase());
+                    // ✨ 使用預處理的 searchText，避免每筆資產重複計算 toUpperCase()
+                    const searchMatch = !searchLower ||
+                        (asset.searchText && asset.searchText.includes(searchLower));
                     return statusMatch && categoryMatch && leaderMatch && searchMatch;
                 });
             }, [allAssets, filters]);
@@ -3352,7 +3374,8 @@
                         const proceed = window.confirm(
                             `您即將選取 ${selectableIds.length} 筆資產，超過建議上限 ${MAX_BATCH_SIZE} 筆。\n` +
                             `大量選取可能造成頁面反應緩慢。\n\n` +
-                            `是否繼續？`
+                            `點擊「取消」將不會選擇任何資產\n` +
+                            `點擊「確認」將自動選擇前${MAX_BATCH_SIZE} 筆資產\n`
                         );
                         if (!proceed) return;
                     }
