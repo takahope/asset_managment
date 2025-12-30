@@ -356,6 +356,7 @@
   'use strict';
 
   // ========== 全局變數 ==========
+  const BATCH_LIST_MAX_SIZE = 500;  // ✨ 批次選擇上限
   let BatchList_items = [];
   let BatchList_assetIndex = {};
   let BatchList_initialized = false;
@@ -444,6 +445,12 @@
 
   // ========== 清單管理函數 ==========
   window.BatchList_addItem = function(assetId) {
+    // ✨ 上限檢查
+    if (BatchList_items.length >= BATCH_LIST_MAX_SIZE) {
+      BatchList_showToast(`已達上限 ${BATCH_LIST_MAX_SIZE} 筆，無法新增更多`, 'warning');
+      return false;
+    }
+
     // 檢查是否已在清單中
     if (BatchList_items.includes(assetId)) {
       BatchList_showToast('此資產已在清單中', 'warning');
@@ -466,6 +473,67 @@
     BatchList_updateUI();
 
     return true;
+  };
+
+  // ✨ 批量新增（效能優化，一次性更新 UI）
+  window.BatchList_addItems = function(assetIds) {
+    const currentCount = BatchList_items.length;
+    const remainingSlots = BATCH_LIST_MAX_SIZE - currentCount;
+
+    if (remainingSlots <= 0) {
+      BatchList_showToast(`已達上限 ${BATCH_LIST_MAX_SIZE} 筆，無法新增更多`, 'warning');
+      return 0;
+    }
+
+    // 過濾已存在的 + 限制數量
+    const newIds = assetIds
+      .filter(id => !BatchList_items.includes(id))
+      .slice(0, remainingSlots);
+
+    if (newIds.length === 0) {
+      return 0;
+    }
+
+    // 檢查是否有被截斷
+    const filteredCount = assetIds.filter(id => !BatchList_items.includes(id)).length;
+    if (newIds.length < filteredCount) {
+      const skipped = filteredCount - newIds.length;
+      BatchList_showToast(`因上限限制，${skipped} 筆未加入`, 'warning');
+    }
+
+    // 批量加入
+    BatchList_items.push(...newIds);
+
+    // 同步 checkbox（當前頁面可見的）
+    newIds.forEach(id => {
+      const checkbox = document.querySelector(`.asset-checkbox[value="${id}"]`);
+      if (checkbox && !checkbox.checked) {
+        checkbox.checked = true;
+      }
+    });
+
+    // 一次性更新 UI
+    if (typeof updateSelectedCount === 'function') {
+      updateSelectedCount();
+    }
+    BatchList_updateUI();
+
+    console.log(`[BatchList] 批量新增 ${newIds.length} 筆資產`);
+    return newIds.length;
+  };
+
+  // ✨ 靜默新增（不觸發 UI 更新，供批量操作降級使用）
+  window.BatchList_addItemSilent = function(assetId) {
+    if (BatchList_items.length >= BATCH_LIST_MAX_SIZE) return false;
+    if (BatchList_items.includes(assetId)) return false;
+
+    BatchList_items.push(assetId);
+    return true;
+  };
+
+  // ✨ 取得上限值（供外部查詢）
+  window.BatchList_getMaxSize = function() {
+    return BATCH_LIST_MAX_SIZE;
   };
 
   window.BatchList_removeItem = function(assetId) {
@@ -565,10 +633,26 @@
 
   // ========== 同步機制函數 ==========
   window.BatchList_syncFromCheckboxes = function() {
-    BatchList_items = Array.from(document.querySelectorAll('.asset-checkbox:checked'))
+    const checkedIds = Array.from(document.querySelectorAll('.asset-checkbox:checked'))
       .map(cb => cb.value);
+
+    // ✨ 上限保護
+    if (checkedIds.length > BATCH_LIST_MAX_SIZE) {
+      BatchList_showToast(`已達上限 ${BATCH_LIST_MAX_SIZE} 筆，超出的 ${checkedIds.length - BATCH_LIST_MAX_SIZE} 筆未加入`, 'warning');
+      BatchList_items = checkedIds.slice(0, BATCH_LIST_MAX_SIZE);
+
+      // 取消超出上限的 checkboxes
+      const excessIds = checkedIds.slice(BATCH_LIST_MAX_SIZE);
+      excessIds.forEach(id => {
+        const checkbox = document.querySelector(`.asset-checkbox[value="${id}"]`);
+        if (checkbox) checkbox.checked = false;
+      });
+    } else {
+      BatchList_items = checkedIds;
+    }
+
     BatchList_updateUI();
-    console.log('[BatchList] 已從 checkboxes 同步清單');
+    console.log(`[BatchList] 已從 checkboxes 同步清單，共 ${BatchList_items.length} 筆`);
   };
 
   function BatchList_onCheckboxChange(event) {
