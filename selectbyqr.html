@@ -227,6 +227,8 @@
    * - 找到資產 → 掃描模式：加入清單 + 清空輸入框 + Toast 提示
    * - 找不到資產 → 搜尋模式：保持原搜尋功能（input 事件已觸發即時搜尋）
    */
+  let Scanner_searchBoxEnhanced = false;  // ✨ 防止重複綁定
+
   function Scanner_enhanceSearchBox() {
     const searchBox = document.getElementById('search-box');
     if (!searchBox) {
@@ -234,7 +236,17 @@
       return;
     }
 
-    // 監聽 Enter 鍵
+    // ✨ 防止重複綁定事件監聽器
+    if (Scanner_searchBoxEnhanced && searchBox._scannerEnhanced) {
+      console.log('[Scanner] 搜尋框已增強，跳過重複綁定');
+      return;
+    }
+
+    // ✨ 標記此搜尋框已被增強
+    searchBox._scannerEnhanced = true;
+    Scanner_searchBoxEnhanced = true;
+
+    // 監聯 Enter 鍵
     searchBox.addEventListener('keypress', function(e) {
       if (e.key !== 'Enter') return;
 
@@ -258,17 +270,17 @@
         BatchList_addItem(asset.id);
         BatchList_showToast(`已加入：${asset.assetName}`, 'success');
 
-        // 清空輸入框（支援 React controlled input）
-        searchBox.value = '';
+        // ✨ 清空輸入框（優先使用 React 方式）
         if (typeof window.clearSearchBox === 'function') {
-          // React 環境：調用全域函數更新 state
+          // React 環境：調用全域函數更新 state（這會正確清空 controlled input）
           window.clearSearchBox();
+          console.log('[Scanner] Enter 鍵掃描成功（React 清空）:', asset.id);
         } else {
-          // 非 React 環境：觸發 input 事件
+          // 非 React 環境：直接操作 DOM + 觸發 input 事件
+          searchBox.value = '';
           searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+          console.log('[Scanner] Enter 鍵掃描成功（DOM 清空）:', asset.id);
         }
-
-        console.log('[Scanner] Enter 鍵掃描成功:', asset.id);
       }
       // 找不到資產 → 保持搜尋狀態，不做任何處理
     });
