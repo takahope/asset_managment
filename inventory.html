@@ -1340,6 +1340,7 @@
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'asset-checkbox';
+                checkbox.value = asset.assetId;  // ✨ 加上 value 屬性，與 batch_processing_list.html 一致
                 checkbox.dataset.assetId = asset.assetId;
                 checkbox.addEventListener('change', () => toggleAssetSelection(asset.assetId));
                 header.appendChild(checkbox);
