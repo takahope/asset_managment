@@ -10,7 +10,7 @@
             padding: 20px;
         }
         .dashboard-container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
         .stat-card {
@@ -32,6 +32,18 @@
             border-left-color: #6c757d;
         }
         .stat-card.pending-upload {
+            border-left-color: #17a2b8;
+        }
+        .stat-card.total {
+            border-left-color: #007bff;
+        }
+        .stat-card.reported {
+            border-left-color: #28a745;
+        }
+        .stat-card.not-reported {
+            border-left-color: #dc3545;
+        }
+        .stat-card.rate {
             border-left-color: #17a2b8;
         }
         .stat-number {
@@ -83,6 +95,63 @@
         .table-sm th {
             background-color: #f8f9fa;
         }
+        /* Tab 樣式增強 */
+        .nav-tabs {
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 20px;
+        }
+        .nav-tabs .nav-link {
+            border: none;
+            border-bottom: 3px solid transparent;
+            padding: 12px 20px;
+            font-weight: 500;
+            color: #6c757d;
+            transition: all 0.2s ease;
+        }
+        .nav-tabs .nav-link:hover {
+            border-color: transparent;
+            background-color: #f8f9fa;
+        }
+        .nav-tabs .nav-link.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+            background-color: transparent;
+        }
+        .tab-content {
+            padding-top: 10px;
+        }
+        /* 電腦回報統計專用樣式 */
+        .alert-section {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .critical-section {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .progress {
+            height: 25px;
+        }
+        .progress-bar {
+            font-weight: bold;
+        }
+        .month-badge {
+            font-size: 1.1rem;
+            padding: 8px 15px;
+        }
+        /* Tab 徽章樣式 */
+        .tab-badge {
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
@@ -91,7 +160,7 @@
     <div class="dashboard-container">
         <div class="text-center mb-4">
             <h2>系統儀表板</h2>
-            <p class="text-muted">資產管理系統總覽</p>
+            <p class="text-muted">資產管理系統總覽與統計</p>
         </div>
 
         <div id="loading" class="loading-spinner">
@@ -102,103 +171,244 @@
         </div>
 
         <div id="dashboard-content" style="display: none;">
-            <!-- 統計卡片 -->
-            <div class="row">
-                <!-- 待接收資產 -->
-                <div class="col-md-3 col-sm-6">
-                    <div class="card stat-card pending">
-                        <div class="card-body text-center">
-                            <div class="stat-number text-warning" id="pending-user-count">0</div>
-                            <div class="stat-label">位使用者有待接收資產</div>
-                            <hr>
-                            <p class="mb-0">共 <span class="badge badge-warning badge-count" id="pending-asset-count">0</span> 筆資產</p>
+            <!-- Tab 導航 -->
+            <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="asset-tab" data-toggle="tab" href="#asset-overview" role="tab" aria-controls="asset-overview" aria-selected="true">
+                        📊 資產總覽
+                        <span class="badge badge-warning tab-badge" id="tab-pending-count" style="display: none;"></span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="computer-tab" data-toggle="tab" href="#computer-report" role="tab" aria-controls="computer-report" aria-selected="false">
+                        🖥️ 電腦回報統計
+                        <span class="badge badge-danger tab-badge" id="tab-not-reported-count" style="display: none;"></span>
+                    </a>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="dashboardTabContent">
+                <!-- ===== 資產總覽 Tab ===== -->
+                <div class="tab-pane fade show active" id="asset-overview" role="tabpanel" aria-labelledby="asset-tab">
+                    <!-- 統計卡片 -->
+                    <div class="row">
+                        <!-- 待接收資產 -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="card stat-card pending">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-warning" id="pending-user-count">0</div>
+                                    <div class="stat-label">位使用者有待接收資產</div>
+                                    <hr>
+                                    <p class="mb-0">共 <span class="badge badge-warning badge-count" id="pending-asset-count">0</span> 筆資產</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 報廢中資產 -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="card stat-card scrapping">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-danger" id="scrapping-user-count">0</div>
+                                    <div class="stat-label">位使用者已申請報廢</div>
+                                    <hr>
+                                    <p class="mb-0">共 <span class="badge badge-danger badge-count" id="scrapping-asset-count">0</span> 筆資產</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 待更新資產 -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="card stat-card pending-upload">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-info" id="pending-upload-count">0</div>
+                                    <div class="stat-label">項資產待管理員更新</div>
+                                    <hr>
+                                    <p class="mb-0 text-muted">已轉移但未上傳</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 達使用年限資產 -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="card stat-card expired">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-secondary" id="expired-asset-count">0</div>
+                                    <div class="stat-label">項資產達使用年限</div>
+                                    <hr>
+                                    <p class="mb-0 text-muted">需注意處理</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 詳細資訊 -->
+                    <div class="row mt-4">
+                        <!-- 待接收資產詳情 -->
+                        <div class="col-md-6">
+                            <div class="detail-section">
+                                <h5>待接收資產明細</h5>
+                                <hr>
+                                <div id="pending-details">
+                                    <p class="text-muted">無待接收資產</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 報廢中資產詳情 -->
+                        <div class="col-md-6">
+                            <div class="detail-section">
+                                <h5>報廢中資產明細</h5>
+                                <hr>
+                                <div id="scrapping-details">
+                                    <p class="text-muted">無報廢中資產</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 待更新資產詳情 -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="detail-section">
+                                <h5>待更新資產明細（管理員專用）</h5>
+                                <hr>
+                                <div id="pending-upload-details">
+                                    <p class="text-muted">無待更新資產</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 達使用年限資產詳情 -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="detail-section">
+                                <h5>達使用年限資產明細</h5>
+                                <hr>
+                                <div id="expired-details">
+                                    <p class="text-muted">無達使用年限資產</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 報廢中資產 -->
-                <div class="col-md-3 col-sm-6">
-                    <div class="card stat-card scrapping">
-                        <div class="card-body text-center">
-                            <div class="stat-number text-danger" id="scrapping-user-count">0</div>
-                            <div class="stat-label">位使用者已申請報廢</div>
-                            <hr>
-                            <p class="mb-0">共 <span class="badge badge-danger badge-count" id="scrapping-asset-count">0</span> 筆資產</p>
+                <!-- ===== 電腦回報統計 Tab ===== -->
+                <div class="tab-pane fade" id="computer-report" role="tabpanel" aria-labelledby="computer-tab">
+                    <!-- 當前月份標籤 -->
+                    <div class="text-center mb-3">
+                        <span class="badge badge-primary month-badge" id="current-month"></span>
+                    </div>
+
+                    <!-- 電腦回報統計卡片 -->
+                    <div class="row">
+                        <!-- 總電腦數 -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card stat-card total">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-primary" id="total-computers">0</div>
+                                    <div class="stat-label">應回報電腦總數</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 已回報數 -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card stat-card reported">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-success" id="reported-count">0</div>
+                                    <div class="stat-label">已回報電腦數</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 未回報數 -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card stat-card not-reported">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-danger" id="not-reported-count">0</div>
+                                    <div class="stat-label">未回報電腦數</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 回報率 -->
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="card stat-card rate">
+                                <div class="card-body text-center">
+                                    <div class="stat-number text-info" id="report-rate">0%</div>
+                                    <div class="stat-label">本月回報率</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 待更新資產 -->
-                <div class="col-md-3 col-sm-6">
-                    <div class="card stat-card pending-upload">
-                        <div class="card-body text-center">
-                            <div class="stat-number text-info" id="pending-upload-count">0</div>
-                            <div class="stat-label">項資產待管理員更新</div>
-                            <hr>
-                            <p class="mb-0 text-muted">已轉移但未上傳</p>
+                    <!-- 回報率進度條 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="progress">
+                                <div id="progress-bar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%">0%</div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 達使用年限資產 -->
-                <div class="col-md-3 col-sm-6">
-                    <div class="card stat-card expired">
-                        <div class="card-body text-center">
-                            <div class="stat-number text-secondary" id="expired-asset-count">0</div>
-                            <div class="stat-label">項資產達使用年限</div>
-                            <hr>
-                            <p class="mb-0 text-muted">需注意處理</p>
+                    <!-- 連續兩個月未回報警告 -->
+                    <div id="two-months-alert" style="display: none;">
+                        <div class="critical-section">
+                            <h5 class="text-danger">⚠️ 連續兩個月未回報警告</h5>
+                            <p class="mb-2">以下電腦已連續 <strong id="last-month-label"></strong> 及本月未回報：</p>
+                            <div id="two-months-list"></div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- 詳細資訊 -->
-            <div class="row mt-4">
-                <!-- 待接收資產詳情 -->
-                <div class="col-md-6">
-                    <div class="detail-section">
-                        <h5>待接收資產明細</h5>
-                        <hr>
-                        <div id="pending-details">
-                            <p class="text-muted">無待接收資產</p>
+                    <!-- 詳細資訊區塊 -->
+                    <div class="row">
+                        <!-- 本月未回報列表 -->
+                        <div class="col-lg-6">
+                            <div class="detail-section">
+                                <h5>本月未回報電腦明細</h5>
+                                <hr>
+                                <div id="current-month-not-reported">
+                                    <p class="text-success">✓ 所有電腦都已回報</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 按駐站地點統計 -->
+                        <div class="col-lg-6">
+                            <div class="detail-section">
+                                <h5>駐站地點回報統計</h5>
+                                <hr>
+                                <div id="location-stats">
+                                    <p class="text-muted">載入中...</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 報廢中資產詳情 -->
-                <div class="col-md-6">
-                    <div class="detail-section">
-                        <h5>報廢中資產明細</h5>
-                        <hr>
-                        <div id="scrapping-details">
-                            <p class="text-muted">無報廢中資產</p>
+                    <!-- 保管人統計 -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="detail-section">
+                                <h5>保管人未回報統計（僅顯示有未回報電腦的保管人）</h5>
+                                <hr>
+                                <div id="leader-stats">
+                                    <p class="text-muted">載入中...</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- 待更新資產詳情 -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="detail-section">
-                        <h5>待更新資產明細（管理員專用）</h5>
-                        <hr>
-                        <div id="pending-upload-details">
-                            <p class="text-muted">無待更新資產</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 達使用年限資產詳情 -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="detail-section">
-                        <h5>達使用年限資產明細</h5>
-                        <hr>
-                        <div id="expired-details">
-                            <p class="text-muted">無達使用年限資產</p>
+                    <!-- 使用人統計 -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="detail-section">
+                                <h5>使用人未回報統計（僅顯示有未回報電腦的使用人）</h5>
+                                <hr>
+                                <div id="user-stats">
+                                    <p class="text-muted">載入中...</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -208,20 +418,66 @@
         </div>
     </div>
 
+    <!-- Bootstrap JS (for tabs) -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
+        // 儲存整合後的資料
+        let dashboardData = null;
+
         // 頁面載入時獲取儀表板資料
         document.addEventListener('DOMContentLoaded', function() {
-            loadDashboardData();
+            loadIntegratedDashboardData();
         });
 
-        function loadDashboardData() {
+        function loadIntegratedDashboardData() {
             google.script.run
-                .withSuccessHandler(renderDashboard)
+                .withSuccessHandler(renderIntegratedDashboard)
                 .withFailureHandler(handleError)
-                .getDashboardData();
+                .getIntegratedDashboardData();
         }
 
-        function renderDashboard(data) {
+        function renderIntegratedDashboard(data) {
+            dashboardData = data;
+            
+            // 渲染資產總覽 Tab
+            renderAssetOverview(data.assetOverview);
+            
+            // 渲染電腦回報統計 Tab
+            renderComputerReportStats(data.computerReportStats);
+            
+            // 更新 Tab 徽章
+            updateTabBadges(data);
+            
+            // 更新時間
+            document.getElementById('last-updated').textContent = '最後更新：' + data.lastUpdated;
+
+            // 隱藏載入中，顯示內容
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('dashboard-content').style.display = 'block';
+        }
+
+        function updateTabBadges(data) {
+            // 待接收資產數量徽章
+            const pendingCount = data.assetOverview.pendingTransfer.totalAssets;
+            const tabPendingBadge = document.getElementById('tab-pending-count');
+            if (pendingCount > 0) {
+                tabPendingBadge.textContent = pendingCount;
+                tabPendingBadge.style.display = 'inline';
+            }
+            
+            // 未回報電腦數量徽章
+            const notReportedCount = data.computerReportStats.summary.notReportedCount;
+            const tabNotReportedBadge = document.getElementById('tab-not-reported-count');
+            if (notReportedCount > 0) {
+                tabNotReportedBadge.textContent = notReportedCount;
+                tabNotReportedBadge.style.display = 'inline';
+            }
+        }
+
+        // ===== 資產總覽渲染函式 =====
+        function renderAssetOverview(data) {
             // 更新統計數字
             document.getElementById('pending-user-count').textContent = data.pendingTransfer.userCount;
             document.getElementById('pending-asset-count').textContent = data.pendingTransfer.totalAssets;
@@ -241,13 +497,6 @@
 
             // 渲染達使用年限資產詳情
             renderExpiredDetails(data.expiredAssets.assets);
-
-            // 更新時間
-            document.getElementById('last-updated').textContent = '最後更新：' + data.lastUpdated;
-
-            // 隱藏載入中，顯示內容
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('dashboard-content').style.display = 'block';
         }
 
         function renderPendingDetails(users) {
@@ -394,6 +643,200 @@
                     </table>
                 </div>
             `;
+            container.innerHTML = html;
+        }
+
+        // ===== 電腦回報統計渲染函式 =====
+        function renderComputerReportStats(data) {
+            const summary = data.summary;
+
+            // 更新統計數字
+            document.getElementById('current-month').textContent = summary.currentMonth;
+            document.getElementById('total-computers').textContent = summary.totalComputers;
+            document.getElementById('reported-count').textContent = summary.reportedCount;
+            document.getElementById('not-reported-count').textContent = summary.notReportedCount;
+            document.getElementById('report-rate').textContent = summary.reportRate + '%';
+
+            // 更新進度條
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = summary.reportRate + '%';
+            progressBar.textContent = summary.reportRate + '%';
+
+            // 根據回報率設定進度條顏色
+            progressBar.className = 'progress-bar progress-bar-striped';
+            if (summary.reportRate >= 80) {
+                progressBar.classList.add('bg-success');
+            } else if (summary.reportRate >= 50) {
+                progressBar.classList.add('bg-warning');
+            } else {
+                progressBar.classList.add('bg-danger');
+            }
+
+            // 渲染連續兩個月未回報警告
+            if (data.twoMonthsNotReported.length > 0) {
+                document.getElementById('two-months-alert').style.display = 'block';
+                document.getElementById('last-month-label').textContent = summary.lastMonth;
+                renderTwoMonthsList(data.twoMonthsNotReported);
+            }
+
+            // 渲染本月未回報列表
+            renderCurrentMonthNotReported(data.currentMonthNotReported);
+
+            // 渲染地點統計
+            renderLocationStats(data.locationStats);
+
+            // 渲染保管人統計
+            renderLeaderStats(data.leaderStats);
+
+            // 渲染使用人統計
+            renderUserStats(data.userStats);
+        }
+
+        function renderTwoMonthsList(computers) {
+            const container = document.getElementById('two-months-list');
+            let html = '<div class="table-responsive"><table class="table table-sm table-bordered table-hover">';
+            html += '<thead class="thead-dark"><tr><th>電腦編號</th><th>電腦名稱</th><th>駐站地點</th><th>保管人</th></tr></thead><tbody>';
+
+            computers.forEach(computer => {
+                html += `
+                    <tr class="table-danger">
+                        <td><strong>${computer.assetId}</strong></td>
+                        <td>${computer.assetName}</td>
+                        <td>${computer.location || '-'}</td>
+                        <td>${computer.leaderName} (${computer.leaderEmail})</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function renderCurrentMonthNotReported(computers) {
+            const container = document.getElementById('current-month-not-reported');
+
+            if (computers.length === 0) {
+                container.innerHTML = '<p class="text-success">✓ 所有電腦都已回報</p>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+            html += '<thead><tr><th>電腦編號</th><th>電腦名稱</th><th>駐站地點</th><th>保管人</th><th>Email</th></tr></thead><tbody>';
+
+            computers.forEach(computer => {
+                html += `
+                    <tr>
+                        <td><strong>${computer.assetId}</strong></td>
+                        <td>${computer.assetName}</td>
+                        <td>${computer.location || '-'}</td>
+                        <td>${computer.leaderName}</td>
+                        <td><small>${computer.leaderEmail || '-'}</small></td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function renderLocationStats(locationStats) {
+            const container = document.getElementById('location-stats');
+
+            if (locationStats.length === 0) {
+                container.innerHTML = '<p class="text-muted">無資料</p>';
+                return;
+            }
+
+            let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+            html += '<thead><tr><th>駐站地點</th><th>總數</th><th>已回報</th><th>未回報</th><th>回報率</th></tr></thead><tbody>';
+
+            locationStats.forEach(stat => {
+                const rateClass = stat.reportRate >= 80 ? 'success' : (stat.reportRate >= 50 ? 'warning' : 'danger');
+                html += `
+                    <tr>
+                        <td><strong>${stat.location}</strong></td>
+                        <td>${stat.total}</td>
+                        <td class="text-success">${stat.reported}</td>
+                        <td class="text-danger">${stat.notReported}</td>
+                        <td><span class="badge badge-${rateClass}">${stat.reportRate}%</span></td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        function renderLeaderStats(leaderStats) {
+            const container = document.getElementById('leader-stats');
+
+            if (leaderStats.length === 0) {
+                container.innerHTML = '<p class="text-success">✓ 所有保管人的電腦都已回報</p>';
+                return;
+            }
+
+            let html = '';
+
+            leaderStats.forEach(stat => {
+                html += `
+                    <div class="alert-section mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>${stat.leaderName}</strong>
+                                <span class="badge badge-danger ml-2">${stat.notReported} 台未回報</span>
+                                <span class="badge badge-secondary ml-1">共 ${stat.total} 台</span>
+                            </div>
+                            <div>
+                                <small class="text-muted">${stat.email || ''}</small>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <strong>未回報電腦：</strong>
+                            ${stat.computers.map(c => `<span class="badge badge-warning mr-1">${c.assetId} (${c.location})</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function renderUserStats(userStats) {
+            const container = document.getElementById('user-stats');
+
+            if (userStats.length === 0) {
+                container.innerHTML = '<p class="text-success">✓ 所有使用人的電腦都已回報</p>';
+                return;
+            }
+
+            let html = '';
+
+            userStats.forEach(stat => {
+                html += `
+                    <div class="alert-section mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>${stat.userName}</strong>
+                                <span class="badge badge-danger ml-2">${stat.notReported} 台未回報</span>
+                                <span class="badge badge-secondary ml-1">共 ${stat.total} 台</span>
+                            </div>
+                            <div>
+                                <small class="text-muted">${stat.email || ''}</small>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <strong>未回報電腦：</strong>
+                            ${stat.computers.map(c => `
+                                <div class="badge badge-warning mr-1 mb-1" style="white-space: normal; text-align: left;">
+                                    ${c.assetId} (${c.location})<br>
+                                    <small>保管人: ${c.leaderName}</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
             container.innerHTML = html;
         }
 
