@@ -1115,7 +1115,7 @@ function processBatchTransferApplication(formData) {
           const needsApproval = isKeeperChange || isUserChange;
           
           if (needsApproval) {
-            location.sheet.getRange(location.rowIndex, indicesToUpdate.ASSET_STATUS).setValue("待接收");
+            location.sheet.getRange(location.rowIndex, indicesToUpdate.ASSET_STATUS).setValue("轉移中");
             location.sheet.getRange(location.rowIndex, indicesToUpdate.APPLICATION_TIME).setValue(now);
             location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_UPLOADED).setValue('');
             location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
