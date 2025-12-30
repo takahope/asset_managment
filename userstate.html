@@ -2460,7 +2460,7 @@
                                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             >
                                                 <option value="">請選擇新使用人...</option>
-                                                {transferOptions.userList && Object.entries(transferOptions.userList).map(([email, name]) => (
+                                                {transferOptions.users && Object.entries(transferOptions.users).map(([email, name]) => (
                                                     <option key={email} value={email}>{name}</option>
                                                 ))}
                                             </select>
@@ -3090,7 +3090,7 @@
                                         {changeUser && (
                                             <select value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                                 <option value="">請選擇新使用人...</option>
-                                                {transferOptions.userList && Object.entries(transferOptions.userList).map(([email, name]) => (<option key={email} value={email}>{name}</option>))}
+                                                {transferOptions.users && Object.entries(transferOptions.users).map(([email, name]) => (<option key={email} value={email}>{name}</option>))}
                                             </select>
                                         )}
                                     </div>
