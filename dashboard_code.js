@@ -1,6 +1,6 @@
 // =================================================================
 // --- 儀表板 (Dashboard) 後端邏輯 ---
-// --- 獨立的後端程式碼，用於顯示系統總覽資訊 ---
+// --- 整合資產總覽與電腦回報統計的後端程式碼 ---
 // =================================================================
 
 /**
@@ -184,5 +184,27 @@ function getDashboardData() {
   } catch (error) {
     Logger.log(`getDashboardData 錯誤: ${error}`);
     throw new Error(`無法載入儀表板資料: ${error.message}`);
+  }
+}
+
+/**
+ * 取得整合儀表板資料（包含資產總覽和電腦回報統計）
+ * 這是一個整合函式，同時取得兩種統計資料以減少後端呼叫次數
+ * @returns {object} 包含資產總覽和電腦回報統計的整合物件
+ */
+function getIntegratedDashboardData() {
+  try {
+    // 同時取得兩種統計資料
+    const assetOverview = getDashboardData();
+    const computerReportStats = getComputerReportStats();
+    
+    return {
+      assetOverview: assetOverview,
+      computerReportStats: computerReportStats,
+      lastUpdated: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
+    };
+  } catch (error) {
+    Logger.log(`getIntegratedDashboardData 錯誤: ${error}`);
+    throw new Error(`無法載入整合儀表板資料: ${error.message}`);
   }
 }
