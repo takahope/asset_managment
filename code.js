@@ -4309,8 +4309,84 @@ function addNewAsset(form) {
 
   // 6. 寫入資料
   sheet.appendRow(row);
-  
+
   return "成功新增 " + (form.assetType === 'property' ? "財產" : "物品") + "：" + form.assetId;
+}
+
+
+/**
+ * ✨ 更新單一資產的基本資訊（僅限管理員）
+ * 可更新欄位：名稱、型號/廠牌、類別、取得日期、使用年限、資訊資產標記
+ * @param {string} assetId - 資產編號
+ * @param {object} updates - 要更新的欄位物件
+ * @returns {string} 成功訊息
+ */
+function updateAssetBasicInfo(assetId, updates) {
+  // 1. 驗證管理員權限
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const adminEmails = getAdminEmails().map(e => e.toLowerCase());
+  if (!adminEmails.includes(currentUserEmail)) {
+    throw new Error('您沒有權限執行此操作，僅限管理員使用');
+  }
+
+  // 2. 定位資產
+  const location = findAssetLocation(assetId);
+  if (!location) {
+    throw new Error(`找不到資產「${assetId}」`);
+  }
+
+  // 3. 選擇正確的欄位索引
+  const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME
+    ? PROPERTY_COLUMN_INDICES
+    : ITEM_COLUMN_INDICES;
+
+  // 4. 更新欄位
+  const sheet = location.sheet;
+  const row = location.rowIndex;
+
+  // 名稱
+  if (updates.assetName !== undefined && updates.assetName !== null) {
+    sheet.getRange(row, indices.ASSET_NAME).setValue(updates.assetName);
+  }
+
+  // 型號/廠牌
+  if (updates.modelBrand !== undefined && updates.modelBrand !== null) {
+    sheet.getRange(row, indices.MODEL_BRAND).setValue(updates.modelBrand);
+  }
+
+  // 類別
+  if (updates.category !== undefined && updates.category !== null) {
+    sheet.getRange(row, indices.ASSET_CATEGORY).setValue(updates.category);
+  }
+
+  // 取得日期
+  if (updates.purchaseDate !== undefined && updates.purchaseDate !== null) {
+    const dateValue = updates.purchaseDate ? new Date(updates.purchaseDate) : '';
+    sheet.getRange(row, indices.PURCHASE_DATE).setValue(dateValue);
+  }
+
+  // 使用年限
+  if (updates.useLife !== undefined && updates.useLife !== null) {
+    sheet.getRange(row, indices.USE_LIFE).setValue(updates.useLife);
+  }
+
+  // 資訊資產標記
+  if (updates.isItAsset !== undefined && updates.isItAsset !== null) {
+    sheet.getRange(row, indices.IS_IT_ASSET).setValue(updates.isItAsset);
+  }
+
+  // 電腦主機/筆電標記
+  if (updates.isActuallyComputer !== undefined && updates.isActuallyComputer !== null) {
+    sheet.getRange(row, indices.IS_ACTUALLY_COMPUTER).setValue(updates.isActuallyComputer);
+  }
+
+  // ISO 驗證範圍標記
+  if (updates.isIsoScope !== undefined && updates.isIsoScope !== null) {
+    sheet.getRange(row, indices.IS_ISO_SCOPE).setValue(updates.isIsoScope);
+  }
+
+  Logger.log(`[updateAssetBasicInfo] 管理員 ${currentUserEmail} 更新了資產 ${assetId} 的基本資料`);
+  return `成功更新資產「${assetId}」的基本資料`;
 }
 
 
