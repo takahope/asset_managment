@@ -3607,23 +3607,16 @@
                 }
             };
 
-            // 處理篩選變更
-            const handleFilterChange = (filterName, value) => {
+            // 處理篩選變更（使用 useCallback 穩定引用）
+            const handleFilterChange = useCallback((filterName, value) => {
                 setFilters(prev => ({
                     ...prev,
                     [filterName]: value
                 }));
-            };
-
-            // ✨ 暴露清空搜尋框的全域函數（供 Scanner 模組使用）
-            useEffect(() => {
-                window.clearSearchBox = () => {
-                    setFilters(prev => ({ ...prev, search: '' }));
-                };
-                return () => {
-                    delete window.clearSearchBox;
-                };
             }, []);
+
+            // ✨ 注意：window.clearSearchBox 已移至 FilterSection 組件中定義
+            // 這樣可以同時清空 localSearch（輸入框顯示值）和 filters.search（篩選值）
 
             // 快速操作 Modal 開啟函數
             const handleOpenTransferModal = (asset) => {
