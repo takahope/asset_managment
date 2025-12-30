@@ -3036,6 +3036,346 @@
             );
         };
 
+        // ========== 新增資產 Modal ==========
+        const AddAssetModal = ({ onClose, onSuccess }) => {
+            // 載入與提交狀態
+            const [isLoading, setIsLoading] = useState(true);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [dropdownData, setDropdownData] = useState(null);
+
+            // 表單狀態
+            const [assetType, setAssetType] = useState('property');
+            const [assetId, setAssetId] = useState('');
+            const [assetName, setAssetName] = useState('');
+            const [modelBrand, setModelBrand] = useState('');
+            const [category, setCategory] = useState('');
+            const [purchaseDate, setPurchaseDate] = useState('');
+            const [useLife, setUseLife] = useState('');
+            const [isItAsset, setIsItAsset] = useState(false);
+            const [isActuallyComputer, setIsActuallyComputer] = useState(false);
+            const [isIsoScope, setIsIsoScope] = useState(false);
+            const [location, setLocation] = useState('');
+            const [keeperEmail, setKeeperEmail] = useState('');
+            const [userEmail, setUserEmail] = useState('');
+            const [remarks, setRemarks] = useState('');
+
+            // 載入下拉選單資料
+            useEffect(() => {
+                google.script.run
+                    .withSuccessHandler((data) => {
+                        setDropdownData(data);
+                        setIsLoading(false);
+                    })
+                    .withFailureHandler((error) => {
+                        alert('載入選單資料失敗：' + error.message);
+                        onClose();
+                    })
+                    .getDropdownData();
+            }, []);
+
+            // 資訊資產連動邏輯：取消主選項時清空子選項
+            useEffect(() => {
+                if (!isItAsset) {
+                    setIsActuallyComputer(false);
+                    setIsIsoScope(false);
+                }
+            }, [isItAsset]);
+
+            // 表單驗證與提交
+            const handleSubmit = () => {
+                // 前端必填驗證
+                if (!assetId.trim() || !assetName.trim() || !location || !keeperEmail) {
+                    alert('請填寫所有必填欄位（編號、名稱、地點、保管人）');
+                    return;
+                }
+
+                if (!confirm(`確定要新增${assetType === 'property' ? '財產' : '物品'}「${assetId}」嗎？`)) {
+                    return;
+                }
+
+                setIsSubmitting(true);
+                if (typeof showFlyProgressBar === 'function') {
+                    showFlyProgressBar('正在新增資產...');
+                }
+
+                const formData = {
+                    assetType,
+                    assetId: assetId.trim(),
+                    assetName: assetName.trim(),
+                    modelBrand: modelBrand.trim(),
+                    category: category.trim(),
+                    purchaseDate,
+                    useLife,
+                    isItAsset,
+                    isActuallyComputer,
+                    isIsoScope,
+                    location,
+                    keeperEmail,
+                    userEmail: userEmail || keeperEmail,
+                    remarks: remarks.trim()
+                };
+
+                google.script.run
+                    .withSuccessHandler((message) => {
+                        if (typeof hideFlyProgressBar === 'function') {
+                            hideFlyProgressBar('新增成功！', 300);
+                        }
+                        alert(message);
+                        setIsSubmitting(false);
+                        onSuccess();
+                        onClose();
+                    })
+                    .withFailureHandler((error) => {
+                        if (typeof hideFlyProgressBar === 'function') {
+                            hideFlyProgressBar('新增失敗', 0);
+                        }
+                        alert('錯誤：' + error.message);
+                        setIsSubmitting(false);
+                    })
+                    .addNewAsset(formData);
+            };
+
+            // 排序後的保管人列表
+            const sortedKeepers = useMemo(() => {
+                if (!dropdownData?.keepers) return [];
+                return Object.entries(dropdownData.keepers)
+                    .sort((a, b) => a[1].localeCompare(b[1], 'zh-Hant'));
+            }, [dropdownData]);
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b bg-emerald-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-emerald-800">
+                                <i className="fas fa-plus-circle mr-2"></i>
+                                新增財產 / 物品
+                            </h3>
+                            <button onClick={onClose} disabled={isSubmitting} className="text-emerald-600 hover:text-emerald-800 transition-colors disabled:opacity-50">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                    <i className="fas fa-spinner fa-spin text-4xl text-emerald-500"></i>
+                                    <p className="text-slate-500 font-medium">載入選單資料中...</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {/* 區塊 1: 資料類型 */}
+                                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                        <div className="font-medium text-slate-700 mb-3">
+                                            <i className="fas fa-folder-open mr-2 text-slate-500"></i>資料類型
+                                        </div>
+                                        <div className="flex gap-6">
+                                            <label className="flex items-center cursor-pointer">
+                                                <input type="radio" name="addAssetType" value="property"
+                                                    checked={assetType === 'property'}
+                                                    onChange={(e) => setAssetType(e.target.value)}
+                                                    className="mr-2"
+                                                />
+                                                <span>財產（列入財產總表）</span>
+                                            </label>
+                                            <label className="flex items-center cursor-pointer">
+                                                <input type="radio" name="addAssetType" value="item"
+                                                    checked={assetType === 'item'}
+                                                    onChange={(e) => setAssetType(e.target.value)}
+                                                    className="mr-2"
+                                                />
+                                                <span>物品（列入物品總表）</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* 區塊 2: 基本資料 */}
+                                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                        <div className="font-medium text-slate-700 mb-3">
+                                            <i className="fas fa-info-circle mr-2 text-slate-500"></i>基本資料
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* 編號 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">
+                                                    編號 <span className="text-red-500">*</span>
+                                                </label>
+                                                <input type="text" value={assetId} onChange={(e) => setAssetId(e.target.value)}
+                                                    placeholder="例如：A1120001"
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                                <p className="text-xs text-slate-500 mt-1">系統將檢查唯一性</p>
+                                            </div>
+
+                                            {/* 名稱 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">
+                                                    名稱 <span className="text-red-500">*</span>
+                                                </label>
+                                                <input type="text" value={assetName} onChange={(e) => setAssetName(e.target.value)}
+                                                    placeholder="例如：ASUS 筆記型電腦"
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+
+                                            {/* 型號/廠牌 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">型號/廠牌</label>
+                                                <input type="text" value={modelBrand} onChange={(e) => setModelBrand(e.target.value)}
+                                                    placeholder="例如：ASUS VivoBook 15"
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+
+                                            {/* 類別 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">類別</label>
+                                                <input type="text" value={category} onChange={(e) => setCategory(e.target.value)}
+                                                    list="add-asset-category-list"
+                                                    placeholder="選擇或輸入類別"
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                                <datalist id="add-asset-category-list">
+                                                    {dropdownData?.categories?.map(cat => (
+                                                        <option key={cat} value={cat} />
+                                                    ))}
+                                                </datalist>
+                                            </div>
+
+                                            {/* 取得日期 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">取得日期</label>
+                                                <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+
+                                            {/* 使用年限 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">使用年限（年）</label>
+                                                <input type="number" value={useLife} onChange={(e) => setUseLife(e.target.value)}
+                                                    min="0" placeholder="例如：3"
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* 資訊資產標記 */}
+                                        <div className="mt-4 p-3 bg-white rounded-lg border border-slate-200">
+                                            <label className="flex items-center cursor-pointer">
+                                                <input type="checkbox" checked={isItAsset} onChange={(e) => setIsItAsset(e.target.checked)}
+                                                    className="mr-2 w-4 h-4"
+                                                />
+                                                <span className="font-medium text-slate-700">此設備是否為資訊資產？</span>
+                                            </label>
+
+                                            {/* 子選項 */}
+                                            {isItAsset && (
+                                                <div className="ml-6 mt-3 space-y-2">
+                                                    <label className="flex items-center cursor-pointer">
+                                                        <input type="checkbox" checked={isActuallyComputer} onChange={(e) => setIsActuallyComputer(e.target.checked)}
+                                                            className="mr-2 w-4 h-4"
+                                                        />
+                                                        <span className="text-slate-600">此設備為電腦主機/筆電</span>
+                                                    </label>
+                                                    <label className="flex items-center cursor-pointer">
+                                                        <input type="checkbox" checked={isIsoScope} onChange={(e) => setIsIsoScope(e.target.checked)}
+                                                            className="mr-2 w-4 h-4"
+                                                        />
+                                                        <span className="text-slate-600">此設備是否在 ISO 驗證範圍內</span>
+                                                    </label>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 區塊 3: 保管與位置 */}
+                                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                        <div className="font-medium text-slate-700 mb-3">
+                                            <i className="fas fa-map-marker-alt mr-2 text-slate-500"></i>保管與位置
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {/* 保管地點 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">
+                                                    保管地點 <span className="text-red-500">*</span>
+                                                </label>
+                                                <select value={location} onChange={(e) => setLocation(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                >
+                                                    <option value="">請選擇地點...</option>
+                                                    {dropdownData?.locations?.map(loc => (
+                                                        <option key={loc} value={loc}>{loc}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            {/* 保管人 */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-600 mb-1">
+                                                    保管人 <span className="text-red-500">*</span>
+                                                </label>
+                                                <select value={keeperEmail} onChange={(e) => {
+                                                    setKeeperEmail(e.target.value);
+                                                    if (!userEmail) setUserEmail(e.target.value);
+                                                }}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                >
+                                                    <option value="">請選擇保管人...</option>
+                                                    {sortedKeepers.map(([email, name]) => (
+                                                        <option key={email} value={email}>{name} ({email})</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            {/* 使用人 - 僅財產模式顯示 */}
+                                            {assetType === 'property' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-600 mb-1">使用人（預設同保管人）</label>
+                                                    <select value={userEmail} onChange={(e) => setUserEmail(e.target.value)}
+                                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                    >
+                                                        <option value="">同保管人</option>
+                                                        {sortedKeepers.map(([email, name]) => (
+                                                            <option key={email} value={email}>{name} ({email})</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 區塊 4: 備註 */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-600 mb-1">備註</label>
+                                        <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)}
+                                            rows="3" placeholder="選填..."
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
+                            <button onClick={onClose} disabled={isSubmitting} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50">
+                                取消
+                            </button>
+                            <button onClick={handleSubmit} disabled={isSubmitting || isLoading} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                                {isSubmitting ? (
+                                    <><div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>新增中...</span></>
+                                ) : (
+                                    <><i className="fas fa-check"></i><span>確認新增</span></>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // 主 App 組件
         function App() {
             const [isReady, setIsReady] = useState(false);
@@ -3070,6 +3410,10 @@
 
             // 批次操作 Modal 相關 state
             const [batchModalType, setBatchModalType] = useState(null); // 'transfer', 'lending', 'scrap'
+
+            // 新增資產 Modal 相關 state
+            const [showAddAssetModal, setShowAddAssetModal] = useState(false);
+            const [addAssetDropdownData, setAddAssetDropdownData] = useState(null);
 
             // 資產選取狀態（與 BatchList 同步）
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
@@ -3744,6 +4088,12 @@
                 loadData();
             };
 
+            // 新增資產成功後的回調
+            const handleAddAssetSuccess = useCallback(() => {
+                // 重新載入資料
+                loadData();
+            }, []);
+
             // 處理取消
             const handleCancel = (assetId, status) => {
                 const confirmation = confirm(
@@ -3841,6 +4191,16 @@
                                     正在載入統計數據...
                                 </span>
                             )}
+
+                            {/* 新增資產按鈕 */}
+                            <button
+                                onClick={() => setShowAddAssetModal(true)}
+                                className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+                                title="新增財產/物品"
+                            >
+                                <i className="fas fa-plus"></i>
+                                <span className="hidden sm:inline">新增資產</span>
+                            </button>
 
                             {/* 重新整理按鈕 */}
                             <button
@@ -3997,6 +4357,14 @@
                             allAssets={allAssets}
                             onClose={handleCloseBatchModal}
                             onSuccess={handleBatchActionSuccess}
+                        />
+                    )}
+
+                    {/* 新增資產 Modal */}
+                    {showAddAssetModal && (
+                        <AddAssetModal
+                            onClose={() => setShowAddAssetModal(false)}
+                            onSuccess={handleAddAssetSuccess}
                         />
                     )}
                 </div>
