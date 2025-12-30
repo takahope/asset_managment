@@ -443,7 +443,7 @@
 
     <!-- React 應用 -->
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
         // Icons (參考 onepage_example.html)
         const IconBase = ({ children, size = 20, className = "" }) => (
@@ -568,6 +568,50 @@
 
         // FilterSection 組件
         const FilterSection = ({ filters, onFilterChange, isAdmin, allAssets }) => {
+            // ✨ Debounce 機制：本地搜尋狀態（即時更新輸入框）
+            const [localSearch, setLocalSearch] = useState(filters.search);
+            const debounceTimerRef = useRef(null);
+
+            // ✨ 當外部 filters.search 變化時同步到本地（例如 Scanner 清空搜尋框）
+            useEffect(() => {
+                setLocalSearch(filters.search);
+            }, [filters.search]);
+
+            // ✨ Debounce 搜尋處理函數
+            const handleSearchChange = useCallback((value) => {
+                setLocalSearch(value);  // 立即更新輸入框顯示
+
+                // 清除前一個 timer
+                if (debounceTimerRef.current) {
+                    clearTimeout(debounceTimerRef.current);
+                }
+
+                // 180ms 後才觸發實際篩選
+                debounceTimerRef.current = setTimeout(() => {
+                    onFilterChange('search', value);
+                }, 180);
+            }, [onFilterChange]);
+
+            // ✨ 清理 timer
+            useEffect(() => {
+                return () => {
+                    if (debounceTimerRef.current) {
+                        clearTimeout(debounceTimerRef.current);
+                    }
+                };
+            }, []);
+
+            // ✨ 暴露清空搜尋框函數供 Scanner 模組使用
+            useEffect(() => {
+                window.clearSearchBox = () => {
+                    setLocalSearch('');
+                    onFilterChange('search', '');
+                };
+                return () => {
+                    delete window.clearSearchBox;
+                };
+            }, [onFilterChange]);
+
             const statusOptions = useMemo(() =>
                 [...new Set(allAssets.map(a => a.status))].filter(Boolean).sort()
             , [allAssets]);
@@ -635,8 +679,8 @@
                                     <input
                                         id="search-box"
                                         type="text"
-                                        value={filters.search}
-                                        onChange={(e) => onFilterChange('search', e.target.value)}
+                                        value={localSearch}
+                                        onChange={(e) => handleSearchChange(e.target.value)}
                                         placeholder="搜尋產編、名稱、保管人... (可掃描條碼按 Enter)"
                                         className="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
