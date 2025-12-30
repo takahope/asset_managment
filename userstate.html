@@ -487,13 +487,21 @@
             // 載入狀態渲染
             if (isLoading) {
                 return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-                        {[1, 2, 3, 4, 5].map(i => <LoadingCard key={i} />)}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-6">
+                        {[1, 2, 3, 4, 5, 6].map(i => <LoadingCard key={i} />)}
                     </div>
                 );
             }
 
             const cards = [
+                {
+                    id: 'transferring',
+                    label: '轉移中',
+                    count: counts.transferring,
+                    color: 'bg-cyan-500',
+                    icon: '🔁',
+                    description: '我申請轉出、等待對方接收'
+                },
                 {
                     id: 'pending',
                     label: '待接收',
@@ -537,7 +545,7 @@
             ];
 
             return (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-6">
                     {cards.map(card => (
                         <button
                             key={card.id}
@@ -1028,6 +1036,335 @@
                                 })}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            );
+        };
+
+        // TransferringModal - 轉移中資產 Modal（用於取消轉移）
+        const TransferringModal = ({ assets, isLoading, onClose, onCancelSuccess }) => {
+            const [selectedAssetIds, setSelectedAssetIds] = useState([]);
+            const [selectAll, setSelectAll] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [filters, setFilters] = useState({
+                newKeeper: '',
+                search: ''
+            });
+
+            // 當 assets 改變時，重置勾選狀態
+            useEffect(() => {
+                setSelectedAssetIds([]);
+                setSelectAll(false);
+            }, [assets]);
+
+            // 篩選邏輯
+            const filteredAssets = useMemo(() => {
+                if (!assets) return [];
+
+                return assets.filter(asset => {
+                    // 新保管人篩選
+                    const matchNewKeeper = !filters.newKeeper || asset.newKeeper === filters.newKeeper;
+
+                    // 關鍵字搜尋
+                    const matchSearch =
+                        !filters.search ||
+                        asset.assetId.toUpperCase().includes(filters.search.toUpperCase()) ||
+                        (asset.assetName && asset.assetName.toUpperCase().includes(filters.search.toUpperCase())) ||
+                        (asset.newKeeper && asset.newKeeper.toUpperCase().includes(filters.search.toUpperCase())) ||
+                        (asset.newLocation && asset.newLocation.toUpperCase().includes(filters.search.toUpperCase()));
+
+                    return matchNewKeeper && matchSearch;
+                });
+            }, [assets, filters]);
+
+            // 取得唯一新保管人列表（用於篩選下拉選單）
+            const uniqueNewKeepers = useMemo(() => {
+                if (!assets) return [];
+                return [...new Set(assets.map(a => a.newKeeper).filter(Boolean))].sort();
+            }, [assets]);
+
+            // 處理全選
+            const handleSelectAll = useCallback((e) => {
+                const checked = e.target.checked;
+                setSelectAll(checked);
+                if (checked) {
+                    setSelectedAssetIds(filteredAssets.map(asset => asset.assetId));
+                } else {
+                    setSelectedAssetIds([]);
+                }
+            }, [filteredAssets]);
+
+            // 處理單個勾選
+            const handleCheckboxChange = useCallback((assetId) => {
+                setSelectedAssetIds(prev => {
+                    if (prev.includes(assetId)) {
+                        const newSelected = prev.filter(id => id !== assetId);
+                        if (filteredAssets && newSelected.length < filteredAssets.length) {
+                            setSelectAll(false);
+                        }
+                        return newSelected;
+                    } else {
+                        const newSelected = [...prev, assetId];
+                        if (filteredAssets && newSelected.length === filteredAssets.length) {
+                            setSelectAll(true);
+                        }
+                        return newSelected;
+                    }
+                });
+            }, [filteredAssets]);
+
+            // 處理取消轉移提交
+            const handleCancelTransfer = useCallback(() => {
+                if (selectedAssetIds.length === 0) {
+                    alert('請至少勾選一筆要取消的項目。');
+                    return;
+                }
+
+                if (!confirm(`確定要取消所選的 ${selectedAssetIds.length} 筆轉移申請嗎？\n\n⚠️ 取消後資產狀態將恢復為「在庫」。`)) {
+                    return;
+                }
+
+                setIsSubmitting(true);
+                showToastProgress('正在處理取消作業...');
+
+                let successCount = 0;
+                let failCount = 0;
+                let errorMessages = [];
+
+                // 依序處理每個取消請求
+                const processNext = (index) => {
+                    if (index >= selectedAssetIds.length) {
+                        hideToastProgress('取消完成！', 300);
+                        setIsSubmitting(false);
+
+                        let message = `取消完成！\n成功：${successCount} 筆`;
+                        if (failCount > 0) {
+                            message += `\n失敗：${failCount} 筆`;
+                            if (errorMessages.length > 0) {
+                                message += `\n\n失敗原因：\n${errorMessages.slice(0, 3).join('\n')}`;
+                                if (errorMessages.length > 3) {
+                                    message += `\n...及其他 ${errorMessages.length - 3} 項`;
+                                }
+                            }
+                        }
+                        alert(message);
+
+                        if (successCount > 0) {
+                            onCancelSuccess();
+                        }
+                        return;
+                    }
+
+                    google.script.run
+                        .withSuccessHandler(result => {
+                            if (result.success) {
+                                successCount++;
+                            } else {
+                                failCount++;
+                                errorMessages.push(`${selectedAssetIds[index]}: ${result.error || '未知錯誤'}`);
+                            }
+                            processNext(index + 1);
+                        })
+                        .withFailureHandler(error => {
+                            failCount++;
+                            errorMessages.push(`${selectedAssetIds[index]}: ${error.message || '未知錯誤'}`);
+                            processNext(index + 1);
+                        })
+                        .cancelTransferOrScrap(selectedAssetIds[index]);
+                };
+
+                processNext(0);
+            }, [selectedAssetIds, onCancelSuccess]);
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                        {/* 標題列 - 青色主題 */}
+                        <div className="px-6 py-4 border-b flex justify-between items-center bg-cyan-50">
+                            <h3 className="text-lg font-bold text-cyan-800">
+                                <i className="fas fa-exchange-alt mr-2"></i>
+                                轉移中資產 - 追蹤與取消
+                            </h3>
+                            <button
+                                onClick={onClose}
+                                className="text-cyan-600 hover:text-cyan-800 transition-colors"
+                                disabled={isSubmitting}
+                            >
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        {/* 主要內容區域 */}
+                        <div className="p-6 max-h-[75vh] overflow-y-auto">
+                            {isLoading ? (
+                                // 載入中狀態
+                                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                    <i className="fas fa-spinner fa-spin text-4xl text-cyan-500"></i>
+                                    <p className="text-slate-500 font-medium">載入轉移中資料...</p>
+                                </div>
+                            ) : !assets || assets.length === 0 ? (
+                                // 無資料狀態
+                                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                    <i className="fas fa-check-circle text-5xl text-green-500"></i>
+                                    <p className="text-slate-500 text-lg font-medium">目前沒有轉移中的資產。</p>
+                                    <p className="text-slate-400 text-sm">您申請的所有轉移都已完成或已被取消。</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* 說明區塊 */}
+                                    <div className="mb-4 p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+                                        <p className="text-sm text-cyan-800">
+                                            <i className="fas fa-info-circle mr-2"></i>
+                                            以下是您申請但尚未被對方接收的轉移資產。您可以選擇取消轉移，資產狀態將恢復為「在庫」。
+                                        </p>
+                                    </div>
+
+                                    {/* 篩選控制區 */}
+                                    <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* 新保管人篩選 */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-600 mb-1">新保管人</label>
+                                                <select
+                                                    value={filters.newKeeper}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, newKeeper: e.target.value }))}
+                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                                                    disabled={isSubmitting}
+                                                >
+                                                    <option value="">-- 顯示全部 --</option>
+                                                    {uniqueNewKeepers.map(keeper => (
+                                                        <option key={keeper} value={keeper}>{keeper}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            {/* 關鍵字搜尋 */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-600 mb-1">關鍵字搜尋</label>
+                                                <input
+                                                    type="text"
+                                                    value={filters.search}
+                                                    onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                                                    placeholder="財產編號、名稱、新保管人、新地點..."
+                                                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                                                    disabled={isSubmitting}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* 篩選結果統計 */}
+                                        <div className="mt-3 text-sm text-slate-600">
+                                            顯示 <span className="font-bold text-cyan-600">{filteredAssets.length}</span> / {assets.length} 筆
+                                        </div>
+                                    </div>
+
+                                    {/* 資料表格 */}
+                                    {filteredAssets.length === 0 ? (
+                                        <div className="text-center py-8 text-slate-500">
+                                            <i className="fas fa-filter text-3xl mb-2"></i>
+                                            <p>目前篩選條件下沒有符合的資料</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm border-collapse">
+                                                <thead className="bg-slate-50 sticky top-0 shadow-sm">
+                                                    <tr>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '5%'}}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectAll}
+                                                                onChange={handleSelectAll}
+                                                                disabled={isSubmitting}
+                                                                className="w-4 h-4 cursor-pointer accent-cyan-500"
+                                                            />
+                                                        </th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>財產編號</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>財產名稱</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>原保管人</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>新保管人</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>新地點</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '13%'}}>申請時間</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>狀態</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>類型</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {filteredAssets.map((asset, index) => {
+                                                        const isSelected = selectedAssetIds.includes(asset.assetId);
+
+                                                        return (
+                                                            <tr
+                                                                key={`${asset.assetId}-${index}`}
+                                                                className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-cyan-50' : ''}`}
+                                                            >
+                                                                <td className="px-3 py-3">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isSelected}
+                                                                        onChange={() => handleCheckboxChange(asset.assetId)}
+                                                                        disabled={isSubmitting}
+                                                                        className="w-4 h-4 cursor-pointer accent-cyan-500"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-3 font-mono text-slate-700">{asset.assetId}</td>
+                                                                <td className="px-3 py-3 text-slate-700">{asset.assetName || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.oldKeeper || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-700 font-medium">{asset.newKeeper || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.newLocation || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-500 text-xs">{asset.applicationTime || '-'}</td>
+                                                                <td className="px-3 py-3">
+                                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                                                        asset.status === '轉移中'
+                                                                            ? 'bg-cyan-100 text-cyan-800'
+                                                                            : 'bg-purple-100 text-purple-800'
+                                                                    }`}>
+                                                                        {asset.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-3 py-3 text-slate-500 text-xs">{asset.transferType || '-'}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
+                        {/* 頁腳 */}
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                            <div className="text-sm text-slate-600">
+                                已選擇 <span className="font-bold text-cyan-600">{selectedAssetIds.length}</span> 筆
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onClose}
+                                    disabled={isSubmitting}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    關閉
+                                </button>
+                                <button
+                                    onClick={handleCancelTransfer}
+                                    disabled={selectedAssetIds.length === 0 || isSubmitting}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <i className="fas fa-spinner fa-spin"></i>
+                                            處理中...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-times-circle"></i>
+                                            取消選取的轉移
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
@@ -4210,6 +4547,11 @@
             const [isLoadingScrapDetails, setIsLoadingScrapDetails] = useState(false);
             const [isLoadingTransferDetails, setIsLoadingTransferDetails] = useState(false);
 
+            // 轉移中（我申請的轉移）相關 state
+            const [transferringCount, setTransferringCount] = useState(0);
+            const [transferringAssets, setTransferringAssets] = useState([]);
+            const [isLoadingTransferring, setIsLoadingTransferring] = useState(false);
+
             // 快速操作 Modal 相關 state
             const [quickActionModalType, setQuickActionModalType] = useState(null); // 'transfer', 'lending', 'scrap'
             const [selectedAsset, setSelectedAsset] = useState(null);
@@ -4416,6 +4758,19 @@
                                     })
                                     .getTransferableItemsCount();
 
+                                // 載入我申請的轉移中資產數量
+                                google.script.run
+                                    .withSuccessHandler(response => {
+                                        if (response && typeof response.count === 'number') {
+                                            setTransferringCount(response.count);
+                                        }
+                                    })
+                                    .withFailureHandler(error => {
+                                        console.warn('載入轉移中數量失敗：', error.message);
+                                        setTransferringCount(0);
+                                    })
+                                    .getTransferringAssets();
+
                                 // 載入轉移選項資料（保管人、地點等）
                                 google.script.run
                                     .withSuccessHandler(transferData => {
@@ -4460,8 +4815,8 @@
                 const startTime = Date.now();
 
                 try {
-                    // 並行載入四個 API
-                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse] = await Promise.allSettled([
+                    // 並行載入五個 API
+                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse] = await Promise.allSettled([
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
@@ -4485,6 +4840,12 @@
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
                                 .getTransferableItemsCount();
+                        }),
+                        new Promise((resolve, reject) => {
+                            google.script.run
+                                .withSuccessHandler(resolve)
+                                .withFailureHandler(reject)
+                                .getTransferringAssets();
                         })
                     ]);
 
@@ -4511,9 +4872,12 @@
                     if (transferCountResponse.status === 'fulfilled' && typeof transferCountResponse.value === 'number') {
                         setTransferPendingCount(transferCountResponse.value);
                     }
+                    if (transferringResponse.status === 'fulfilled' && typeof transferringResponse.value?.count === 'number') {
+                        setTransferringCount(transferringResponse.value.count);
+                    }
 
                     // 檢查失敗的請求
-                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse]
+                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse]
                         .filter(r => r.status === 'rejected');
                     if (failures.length > 0) {
                         console.warn('部分數據載入失敗：', failures);
@@ -4707,17 +5071,43 @@
                 })();
 
                 return {
+                    transferring: transferringCount,  // 我申請的轉移中資產
                     pending: pendingApprovalsData.length,
                     lent: allAssets.filter(a => a.status === '出借中').length,
                     scrapPending: scrapPendingCount,
                     transferPending: transferPendingCount,
                     inventory: inventoryCount
                 };
-            }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail, isAdmin, transferPendingCount]);
+            }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail, isAdmin, transferPendingCount, transferringCount]);
 
             // 處理卡片點擊
             const handleCardClick = (cardId) => {
                 switch(cardId) {
+                    case 'transferring':
+                        // 設定載入狀態並打開 modal
+                        setIsLoadingTransferring(true);
+                        setActiveModal('transferring');
+
+                        // 調用後端獲取轉移中資產詳情
+                        google.script.run
+                            .withSuccessHandler(response => {
+                                if (response.error) {
+                                    alert('載入轉移中資料失敗：' + response.error);
+                                    setActiveModal(null);
+                                    setIsLoadingTransferring(false);
+                                    return;
+                                }
+                                setTransferringAssets(response.assets || []);
+                                setIsLoadingTransferring(false);
+                            })
+                            .withFailureHandler(error => {
+                                console.error('載入轉移中詳情失敗：', error.message);
+                                alert('載入轉移中詳情失敗：' + error.message);
+                                setActiveModal(null);
+                                setIsLoadingTransferring(false);
+                            })
+                            .getTransferringAssets();
+                        break;
                     case 'pending':
                         window.openPendingApprovalModal();
                         break;
@@ -5180,6 +5570,23 @@
                         onAssetSelect={handleAssetSelect}
                         onSelectAll={handleSelectAll}
                     />
+
+                    {activeModal === 'transferring' && (
+                        <TransferringModal
+                            assets={transferringAssets}
+                            isLoading={isLoadingTransferring}
+                            onClose={() => {
+                                setActiveModal(null);
+                                setTransferringAssets([]);
+                            }}
+                            onCancelSuccess={() => {
+                                setActiveModal(null);
+                                setTransferringAssets([]);
+                                // 刷新卡片數據和資產表格
+                                refreshCardData();
+                            }}
+                        />
+                    )}
 
                     {activeModal === 'lent' && (
                         <LentAssetsModal
