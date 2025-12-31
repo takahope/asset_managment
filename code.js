@@ -4586,6 +4586,127 @@ function getInventoryData() {
 }
 
 /**
+ * [供 userstate.html 呼叫] 取得待盤點資產與盤點會話對應清單
+ * 管理員：回傳所有進行中會話的未盤點資產
+ * 一般使用者：僅回傳指派給自己的未盤點資產（Email 或組別）
+ * @returns {Object} { pendingItems: Array, currentUserEmail, currentUserGroup, isAdmin }
+ */
+function getPendingInventoryAssignments() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const isAdmin = checkAdminPermissions();
+
+    // 建立 Email -> 姓名 / 組別 對照表
+    let currentUserGroup = '未分組';
+    const emailToNameMap = {};
+    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+      keeperData.forEach(row => {
+        const name = row[0];
+        const email = row[1];
+        const groupName = row[6];
+        if (email) {
+          const normalizedEmail = String(email).toLowerCase();
+          emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
+          if (normalizedEmail === currentUserEmail && groupName) {
+            currentUserGroup = String(groupName).trim();
+          }
+        }
+      });
+    }
+
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+    if (!inventoryLogSheet || inventoryLogSheet.getLastRow() <= 1) {
+      return { pendingItems: [], currentUserEmail: currentUserEmail, currentUserGroup: currentUserGroup, isAdmin: isAdmin };
+    }
+
+    // 讀取所有進行中的盤點會話
+    const logData = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    const activeSessions = {};
+    logData.forEach(row => {
+      const status = row[IL_STATUS_COLUMN_INDEX - 1];
+      if (status !== '進行中') return;
+      const inventoryId = row[IL_INVENTORY_ID_COLUMN_INDEX - 1];
+      if (!inventoryId) return;
+
+      const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
+      const rawDate = row[IL_INVENTORY_DATE_COLUMN_INDEX - 1];
+      const inventoryDateStr = rawDate instanceof Date
+        ? Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
+        : (rawDate ? String(rawDate) : '');
+      const inventoryPersonName = emailToNameMap[String(sessionEmail).toLowerCase()] ||
+        row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1] ||
+        (sessionEmail ? String(sessionEmail).split('@')[0] : '');
+
+      activeSessions[inventoryId] = {
+        inventoryId: inventoryId,
+        inventoryDate: inventoryDateStr,
+        inventoryPerson: inventoryPersonName,
+        inventoryEmail: sessionEmail || ''
+      };
+    });
+
+    if (Object.keys(activeSessions).length === 0) {
+      return { pendingItems: [], currentUserEmail: currentUserEmail, currentUserGroup: currentUserGroup, isAdmin: isAdmin };
+    }
+
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+    if (!inventoryDetailSheet || inventoryDetailSheet.getLastRow() <= 1) {
+      return { pendingItems: [], currentUserEmail: currentUserEmail, currentUserGroup: currentUserGroup, isAdmin: isAdmin };
+    }
+
+    const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
+    const pendingItems = [];
+
+    detailData.forEach(row => {
+      const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
+      if (!inventoryId || !activeSessions[inventoryId]) return;
+
+      const inventoryResult = row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1];
+      if (inventoryResult && inventoryResult !== '未盤點') return;
+
+      const assignedUser = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
+      if (!isAdmin) {
+        if (!assignedUser) return;
+        const normalized = String(assignedUser).trim();
+        const isEmail = normalized.includes('@');
+        const isMyTask = isEmail
+          ? normalized.toLowerCase() === currentUserEmail
+          : normalized === currentUserGroup;
+        if (!isMyTask) return;
+      }
+
+      const session = activeSessions[inventoryId];
+      pendingItems.push({
+        inventoryId: inventoryId,
+        inventoryDate: session.inventoryDate,
+        inventoryPerson: session.inventoryPerson,
+        inventoryEmail: session.inventoryEmail,
+        assetId: row[ID_ASSET_ID_COLUMN_INDEX - 1],
+        assetName: row[ID_ASSET_NAME_COLUMN_INDEX - 1],
+        keeperName: row[ID_KEEPER_NAME_COLUMN_INDEX - 1],
+        userName: row[ID_USER_NAME_COLUMN_INDEX - 1],
+        location: row[ID_LOCATION_COLUMN_INDEX - 1],
+        originalStatus: row[ID_ORIGINAL_STATUS_COLUMN_INDEX - 1],
+        assignedUser: assignedUser || ''
+      });
+    });
+
+    return {
+      pendingItems: pendingItems,
+      currentUserEmail: currentUserEmail,
+      currentUserGroup: currentUserGroup,
+      isAdmin: isAdmin
+    };
+  } catch (e) {
+    Logger.log(`getPendingInventoryAssignments 失敗: ${e.message}`);
+    return { pendingItems: [], error: e.message };
+  }
+}
+
+/**
  * 取得使用者的進行中盤點會話
  * @param {string} userEmail - 使用者電子郵件
  * @param {boolean} isAdminMode - 是否為管理員模式（可選，預設 false）

@@ -4427,14 +4427,34 @@
         };
 
         // ========== 盤點確認 Modal（單筆/批次共用）==========
-        const InventoryConfirmModal = ({ asset, assetIds, isBatch, sessionId, onClose, onSuccess }) => {
+        const InventoryConfirmModal = ({ asset, assetIds, isBatch, sessionId, availableSessions, defaultSessionId, isAdmin, onClose, onSuccess }) => {
             const [result, setResult] = useState('正常');
             const [remarks, setRemarks] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
+            const initialSessionId = isBatch ? sessionId : (defaultSessionId || sessionId || '');
+            const [selectedSessionId, setSelectedSessionId] = useState(initialSessionId);
+
+            useEffect(() => {
+                setSelectedSessionId(initialSessionId);
+            }, [initialSessionId]);
+
+            const shouldShowSessionSelect = !isBatch && isAdmin && availableSessions && availableSessions.length > 1;
+            const formatSessionLabel = (session) => {
+                const datePart = session.inventoryDate ? session.inventoryDate : '未提供日期';
+                const personPart = session.inventoryPerson || session.inventoryEmail || '未指定盤點人';
+                return `${datePart} / ${personPart}`;
+            };
 
             const handleSubmit = () => {
                 setIsSubmitting(true);
                 showFlyProgressBar('正在提交盤點結果...');
+
+                if (!selectedSessionId) {
+                    hideFlyProgressBar('盤點失敗', 0);
+                    alert('請選擇盤點會話');
+                    setIsSubmitting(false);
+                    return;
+                }
 
                 if (isBatch) {
                     // 批次盤點
@@ -4457,7 +4477,7 @@
                             alert('盤點失敗：' + error.message);
                             setIsSubmitting(false);
                         })
-                        .markBatchInventory(sessionId, assetResults);
+                        .markBatchInventory(selectedSessionId, assetResults);
                 } else {
                     // 單筆盤點
                     google.script.run
@@ -4477,7 +4497,7 @@
                             alert('盤點失敗：' + error.message);
                             setIsSubmitting(false);
                         })
-                        .markAssetInventory(sessionId, asset.assetId, result, remarks);
+                        .markAssetInventory(selectedSessionId, asset.assetId, result, remarks);
                 }
             };
 
@@ -4503,6 +4523,23 @@
                                     <p><span className="font-medium text-slate-600">財產名稱：</span>{asset.assetName}</p>
                                     <p><span className="font-medium text-slate-600">保管人：</span>{asset.leader || asset.keeperName}</p>
                                     <p><span className="font-medium text-slate-600">地點：</span>{asset.location}</p>
+                                </div>
+                            )}
+
+                            {shouldShowSessionSelect && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">盤點會話</label>
+                                    <select
+                                        value={selectedSessionId}
+                                        onChange={(e) => setSelectedSessionId(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                                    >
+                                        {availableSessions.map(session => (
+                                            <option key={session.inventoryId} value={session.inventoryId}>
+                                                {formatSessionLabel(session)}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             )}
 
@@ -4619,13 +4656,15 @@
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
 
             // 盤點相關狀態
-            const [inventoryAssets, setInventoryAssets] = useState([]); // 使用者待盤點的資產清單
+            const [inventoryPendingByAsset, setInventoryPendingByAsset] = useState({});
             const [currentInventorySessionId, setCurrentInventorySessionId] = useState(null);
-            const [isLoadingInventory, setIsLoadingInventory] = useState(false);
             const [showInventoryModal, setShowInventoryModal] = useState(false);
             const [inventoryModalAsset, setInventoryModalAsset] = useState(null); // 單筆盤點
+            const [inventoryModalSessions, setInventoryModalSessions] = useState([]);
+            const [inventoryModalSessionId, setInventoryModalSessionId] = useState('');
             const [showBatchInventoryModal, setShowBatchInventoryModal] = useState(false);
             const [selectedInventoryAssetIds, setSelectedInventoryAssetIds] = useState([]);
+            const [batchInventorySessionId, setBatchInventorySessionId] = useState('');
             const [currentUserGroup, setCurrentUserGroup] = useState('');
 
             // 處理單個資產選取
@@ -4674,41 +4713,70 @@
 
             // ========== 盤點功能輔助函數 ==========
 
-            // 判斷資產是否分派給當前使用者（支援 Email 和組別）
-            const isAssignmentMine = useCallback((assignedUser, userEmail, userGroup) => {
-                if (!assignedUser) return false;
-                const normalized = String(assignedUser).trim();
-                if (normalized.includes('@')) {
-                    return normalized.toLowerCase() === userEmail?.toLowerCase();
-                }
-                return userGroup && normalized === userGroup;
+            const buildInventoryPendingByAsset = useCallback((pendingItems) => {
+                const map = {};
+                (pendingItems || []).forEach(item => {
+                    const assetId = String(item.assetId || '').trim();
+                    if (!assetId) return;
+                    if (!map[assetId]) {
+                        map[assetId] = {
+                            assetId: assetId,
+                            assetName: item.assetName || '',
+                            keeperName: item.keeperName || '',
+                            userName: item.userName || '',
+                            location: item.location || '',
+                            sessions: []
+                        };
+                    }
+
+                    const sessions = map[assetId].sessions;
+                    const exists = sessions.some(s => s.inventoryId === item.inventoryId);
+                    if (!exists) {
+                        sessions.push({
+                            inventoryId: item.inventoryId,
+                            inventoryDate: item.inventoryDate || '',
+                            inventoryPerson: item.inventoryPerson || '',
+                            inventoryEmail: item.inventoryEmail || ''
+                        });
+                    }
+                });
+                return map;
             }, []);
 
-            // 載入盤點資產清單
-            const loadInventoryAssets = useCallback((sessionId, userEmail, userGroup) => {
-                setIsLoadingInventory(true);
+            const loadPendingInventoryAssignments = useCallback(() => {
                 google.script.run
-                    .withSuccessHandler((assets) => {
-                        // 過濾出分派給當前使用者且未盤點的資產
-                        const myPendingAssets = (assets || []).filter(asset => {
-                            if (asset.inventoryResult && asset.inventoryResult !== '未盤點') return false;
-                            return isAssignmentMine(asset.assignedUser, userEmail, userGroup);
-                        });
-                        setInventoryAssets(myPendingAssets);
-                        setIsLoadingInventory(false);
+                    .withSuccessHandler((response) => {
+                        if (!response) {
+                            setInventoryPendingByAsset({});
+                            return;
+                        }
+                        if (response.error) {
+                            console.warn('載入盤點待辦失敗：', response.error);
+                            setInventoryPendingByAsset({});
+                            return;
+                        }
+                        const map = buildInventoryPendingByAsset(response.pendingItems || []);
+                        setInventoryPendingByAsset(map);
                     })
                     .withFailureHandler((error) => {
-                        console.error('載入盤點資產失敗:', error);
-                        setInventoryAssets([]);
-                        setIsLoadingInventory(false);
+                        console.error('載入盤點待辦失敗:', error);
+                        setInventoryPendingByAsset({});
                     })
-                    .getInventoryDetails(sessionId);
-            }, [isAssignmentMine]);
+                    .getPendingInventoryAssignments();
+            }, [buildInventoryPendingByAsset]);
 
-            // 檢查資產是否在待盤點清單中
-            const isAssetPendingInventory = useCallback((assetId) => {
-                return inventoryAssets.some(a => a.assetId === assetId);
-            }, [inventoryAssets]);
+            const getAssetPendingSessions = useCallback((assetId) => {
+                const entry = inventoryPendingByAsset[assetId];
+                return entry ? entry.sessions || [] : [];
+            }, [inventoryPendingByAsset]);
+
+            // 檢查資產是否在待盤點清單中（可指定盤點會話）
+            const isAssetPendingInventory = useCallback((assetId, sessionId) => {
+                const sessions = getAssetPendingSessions(assetId);
+                if (sessions.length === 0) return false;
+                if (!sessionId) return true;
+                return sessions.some(session => session.inventoryId === sessionId);
+            }, [getAssetPendingSessions]);
 
             // 載入資料
             const loadData = () => {
@@ -4778,9 +4846,9 @@
                                             if (inventoryResponse.activeSessions && inventoryResponse.activeSessions.length > 0) {
                                                 const sessionId = inventoryResponse.activeSessions[0].inventoryId;
                                                 setCurrentInventorySessionId(sessionId);
-                                                loadInventoryAssets(sessionId, inventoryResponse.currentUserEmail, inventoryResponse.currentUserGroup);
                                             }
                                         }
+                                        loadPendingInventoryAssignments();
                                         inventoryLoaded = true;
                                         finishCardLoading();
                                     })
@@ -4862,7 +4930,7 @@
 
                 try {
                     // 並行載入五個 API
-                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse] = await Promise.allSettled([
+                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse] = await Promise.allSettled([
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
@@ -4892,6 +4960,12 @@
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
                                 .getTransferringAssets();
+                        }),
+                        new Promise((resolve, reject) => {
+                            google.script.run
+                                .withSuccessHandler(resolve)
+                                .withFailureHandler(reject)
+                                .getPendingInventoryAssignments();
                         })
                     ]);
 
@@ -4921,9 +4995,18 @@
                     if (transferringResponse.status === 'fulfilled' && typeof transferringResponse.value?.count === 'number') {
                         setTransferringCount(transferringResponse.value.count);
                     }
+                    if (pendingInventoryResponse.status === 'fulfilled') {
+                        const response = pendingInventoryResponse.value;
+                        if (response && !response.error) {
+                            const map = buildInventoryPendingByAsset(response.pendingItems || []);
+                            setInventoryPendingByAsset(map);
+                        } else {
+                            setInventoryPendingByAsset({});
+                        }
+                    }
 
                     // 檢查失敗的請求
-                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse]
+                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse]
                         .filter(r => r.status === 'rejected');
                     if (failures.length > 0) {
                         console.warn('部分數據載入失敗：', failures);
@@ -5344,20 +5427,22 @@
             // ========== 盤點操作處理函數 ==========
             // 開啟單筆盤點 Modal
             const handleOpenInventoryModal = (asset) => {
-                if (!currentInventorySessionId) {
-                    alert('目前沒有進行中的盤點會話');
+                const sessions = getAssetPendingSessions(asset.assetId);
+                if (!sessions || sessions.length === 0) {
+                    alert('此資產目前沒有待盤點的會話');
                     return;
                 }
+                const defaultSessionId = currentInventorySessionId && sessions.some(s => s.inventoryId === currentInventorySessionId)
+                    ? currentInventorySessionId
+                    : sessions[0].inventoryId;
+                setInventoryModalSessions(sessions);
+                setInventoryModalSessionId(defaultSessionId || '');
                 setInventoryModalAsset(asset);
                 setShowInventoryModal(true);
             };
 
             // 開啟批次盤點 Modal
             const handleBatchInventory = () => {
-                if (!currentInventorySessionId) {
-                    alert('目前沒有進行中的盤點會話');
-                    return;
-                }
                 if (typeof BatchList_getItems !== 'function') {
                     alert('批次選取功能尚未載入');
                     return;
@@ -5369,19 +5454,42 @@
                     alert('選取的資產中沒有待盤點的項目');
                     return;
                 }
+                // 找出所有選取資產的共同盤點會話
+                let commonSessionIds = null;
+                pendingItems.forEach((assetId) => {
+                    const sessionIds = getAssetPendingSessions(assetId).map(session => session.inventoryId);
+                    if (sessionIds.length === 0) return;
+                    const sessionSet = new Set(sessionIds);
+                    if (commonSessionIds === null) {
+                        commonSessionIds = sessionSet;
+                    } else {
+                        commonSessionIds = new Set([...commonSessionIds].filter(id => sessionSet.has(id)));
+                    }
+                });
+
+                const resolvedSessionId = commonSessionIds && commonSessionIds.size > 0
+                    ? (currentInventorySessionId && commonSessionIds.has(currentInventorySessionId)
+                        ? currentInventorySessionId
+                        : Array.from(commonSessionIds)[0])
+                    : '';
+
+                if (!resolvedSessionId) {
+                    alert('選取的資產分屬不同盤點會話，請分批處理或使用單筆盤點。');
+                    return;
+                }
+
+                setBatchInventorySessionId(resolvedSessionId);
                 setSelectedInventoryAssetIds(pendingItems);
                 setShowBatchInventoryModal(true);
             };
 
             // 盤點成功回調
             const handleInventorySuccess = useCallback(() => {
-                // 重新載入盤點資產清單
-                if (currentInventorySessionId) {
-                    loadInventoryAssets(currentInventorySessionId, currentUserEmail, currentUserGroup);
-                }
+                // 重新載入盤點待辦清單
+                loadPendingInventoryAssignments();
                 // 刷新卡片數據
                 refreshCardData();
-            }, [currentInventorySessionId, currentUserEmail, currentUserGroup, loadInventoryAssets, refreshCardData]);
+            }, [loadPendingInventoryAssignments, refreshCardData]);
 
             // ========== 批次操作處理函數 ==========
             const handleBatchTransfer = () => {
@@ -5767,9 +5875,14 @@
                             asset={inventoryModalAsset}
                             isBatch={false}
                             sessionId={currentInventorySessionId}
+                            availableSessions={inventoryModalSessions}
+                            defaultSessionId={inventoryModalSessionId}
+                            isAdmin={isAdmin}
                             onClose={() => {
                                 setShowInventoryModal(false);
                                 setInventoryModalAsset(null);
+                                setInventoryModalSessions([]);
+                                setInventoryModalSessionId('');
                             }}
                             onSuccess={handleInventorySuccess}
                         />
@@ -5780,10 +5893,12 @@
                         <InventoryConfirmModal
                             assetIds={selectedInventoryAssetIds}
                             isBatch={true}
-                            sessionId={currentInventorySessionId}
+                            sessionId={batchInventorySessionId || currentInventorySessionId}
+                            isAdmin={isAdmin}
                             onClose={() => {
                                 setShowBatchInventoryModal(false);
                                 setSelectedInventoryAssetIds([]);
+                                setBatchInventorySessionId('');
                             }}
                             onSuccess={handleInventorySuccess}
                         />
