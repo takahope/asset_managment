@@ -5729,7 +5729,7 @@
                     <FilterSection
                         filters={filters}
                         onFilterChange={handleFilterChange}
-                        isAdmin={isAdmin}
+                        isAdmin={isAdminView}
                         allAssets={allAssets}
                     />
 
@@ -5754,7 +5754,7 @@
 
                     <AssetTable
                         assets={filteredAssets}
-                        isAdmin={isAdmin}
+                        isAdmin={isAdminView}
                         currentUserEmail={currentUserEmail}
                         onCancel={handleCancel}
                         onRestore={handleRestore}
