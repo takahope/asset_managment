@@ -1449,6 +1449,7 @@ function getPendingApprovals() {
 
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
+    const isAdmin = checkAdminPermissions();
     const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
     
     const allAssets = getAllAssets();
@@ -1466,9 +1467,13 @@ function getPendingApprovals() {
 
     const pendingApprovals = values
       .filter(row => {
+        const status = row[AL_STATUS_COLUMN_INDEX - 1];
+        if (status !== "待接收") return false;
+
+        if (isAdmin) return true;
+
         const newLeaderEmail = row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
         const newUserEmail = row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1];
-        const status = row[AL_STATUS_COLUMN_INDEX - 1];
         const transferType = row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
           ? row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
           : '地點';
