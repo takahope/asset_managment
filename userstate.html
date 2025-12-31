@@ -1464,8 +1464,11 @@
                     const matchSearch =
                         !filters.search ||
                         asset.assetId.toUpperCase().includes(filters.search.toUpperCase()) ||
-                        asset.borrower.toUpperCase().includes(filters.search.toUpperCase()) ||
-                        (asset.reason && asset.reason.toUpperCase().includes(filters.search.toUpperCase()));
+                        (asset.borrower && asset.borrower.toUpperCase().includes(filters.search.toUpperCase())) ||
+                        (asset.reason && asset.reason.toUpperCase().includes(filters.search.toUpperCase())) ||
+                        (asset.keeperName && asset.keeperName.toUpperCase().includes(filters.search.toUpperCase())) ||
+                        (asset.userName && asset.userName.toUpperCase().includes(filters.search.toUpperCase())) ||
+                        (asset.lenderName && asset.lenderName.toUpperCase().includes(filters.search.toUpperCase()));
 
                     return matchLocation && matchDateRange && matchOverdue && matchSearch;
                 });
@@ -1630,7 +1633,7 @@
 
                                         {/* 關鍵字搜尋 */}
                                         <div className="mt-4">
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">關鍵字搜尋（財產編號、借用人、出借事由）</label>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">關鍵字搜尋（財產編號、保管人、使用人、出借人、借用人、出借事由）</label>
                                             <input
                                                 type="text"
                                                 value={filters.search}
@@ -1670,6 +1673,9 @@
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>財產編號</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>財產名稱</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>型號/廠牌</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>保管人</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>使用人</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>出借人</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>借用人</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>預計歸還日</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>出借後地點</th>
@@ -1699,7 +1705,10 @@
                                                                 <td className="px-3 py-3 font-mono text-slate-600">{asset.assetId}</td>
                                                                 <td className="px-3 py-3 text-slate-600">{asset.assetName || '-'}</td>
                                                                 <td className="px-3 py-3 text-slate-600">{asset.modelBrand || '-'}</td>
-                                                                <td className="px-3 py-3 text-slate-600">{asset.borrower}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.keeperName || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.userName || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.lenderName || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.borrower || '-'}</td>
                                                                 <td className={`px-3 py-3 ${isOverdue ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
                                                                     {asset.expectedReturnDate}
                                                                     {isOverdue && <i className="fas fa-exclamation-triangle ml-1"></i>}
@@ -5281,7 +5290,7 @@
                                 setActiveModal(null);
                                 setIsLoadingLentDetails(false);
                             })
-                            .getLentOutAssets();
+                            .getLentOutAssets(viewMode === 'user');
                         break;
                     case 'scrapPending':
                         setIsLoadingScrapDetails(true);

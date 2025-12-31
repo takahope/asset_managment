@@ -129,9 +129,15 @@ const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
 
 // --- ✨ **新增：「出借紀錄」工作表中的欄位索引** ---
 const LL_LEND_ID_COLUMN_INDEX = 1;
+const LL_LEND_TIME_COLUMN_INDEX = 2;
+const LL_ASSET_ID_COLUMN_INDEX = 3;
 const LL_LENDER_EMAIL_COLUMN_INDEX = 4;  // ✨ D 欄：出借人 Email
+const LL_BORROWER_NAME_COLUMN_INDEX = 5;
+const LL_EXPECTED_RETURN_DATE_COLUMN_INDEX = 6;
 const LL_STATUS_COLUMN_INDEX = 9;
 const LL_RETURN_DATE_COLUMN_INDEX = 7;
+const LL_REASON_COLUMN_INDEX = 8;
+const LL_LENDING_LOCATION_COLUMN_INDEX = 10;
 
 const PROPERTY_MASTER_SHEET_NAME = "財產總表"; // ✨ **拆分後：財產總表**
 const ITEM_MASTER_SHEET_NAME = "物品總表";   // ✨ **拆分後：物品總表**
@@ -2266,10 +2272,13 @@ function processBatchLending(formData) {
 /**
  * [供 return.html 呼叫] 獲取該保管人所有「出借中」的資產
  */
-function getLentOutAssets() {
+function getLentOutAssets(forceUserScope) {
     try {
-        const currentUserEmail = Session.getActiveUser().getEmail();
-        const lendingLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(LENDING_LOG_SHEET_NAME);
+        const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+        const isAdmin = checkAdminPermissions();
+        const useAdminScope = isAdmin && !forceUserScope;
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
         
         // ✨ 新增：檢查工作表是否為空或只有標題行
         if (!lendingLogSheet || lendingLogSheet.getLastRow() < 2) {
@@ -2279,9 +2288,28 @@ function getLentOutAssets() {
 
         const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, 10).getValues(); // ✨ 讀取到 J 欄
 
+        const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+        const emailToNameMap = new Map();
+        if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+            const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+            keeperData.forEach(row => {
+                const name = row[0];
+                const email = row[1];
+                if (email) {
+                    emailToNameMap.set(String(email).toLowerCase(), name || String(email).split('@')[0]);
+                }
+            });
+        }
+
         const allAssets = getAllAssets();
-        const assetIdToModelMap = new Map(allAssets.map(asset => [asset.assetId, asset.modelBrand]));
-        const assetIdToNameMap = new Map(allAssets.map(asset => [asset.assetId, asset.assetName]));  // ✨ 新增：財產名稱映射
+        const assetIdToInfoMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), {
+            assetName: asset.assetName,
+            modelBrand: asset.modelBrand || '',
+            leaderName: asset.leaderName || '',
+            leaderEmail: asset.leaderEmail || '',
+            userName: asset.userName || '無',
+            userEmail: asset.userEmail || ''
+        }]));  // ✨ 新增：資產資訊映射
 
         const lentAssets = lendingData
             .filter(row => {
@@ -2294,20 +2322,37 @@ function getLentOutAssets() {
                     return false;
                 }
 
-                return lenderEmail === currentUserEmail && status === '出借中';  // ✨ 比對出借人
+                if (status !== '出借中') return false;
+
+                if (useAdminScope) return true;
+
+                const normalizedLender = String(lenderEmail).toLowerCase();
+                const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+                const assetInfo = assetIdToInfoMap.get(assetId) || {};
+                const leaderEmail = (assetInfo.leaderEmail || '').toLowerCase();
+                const userEmail = (assetInfo.userEmail || '').toLowerCase();
+                return normalizedLender === currentUserEmail ||
+                       (leaderEmail && leaderEmail === currentUserEmail) ||
+                       (userEmail && userEmail === currentUserEmail);
             })
             .map(row => {
-                const assetId = row[2];
+                const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+                const assetInfo = assetIdToInfoMap.get(assetId) || {};
+                const lenderEmail = (row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toString().toLowerCase();
+                const lenderName = emailToNameMap.get(lenderEmail) || lenderEmail || '';
                 return {
-                    lendId: row[0],
-                    applyTime: new Date(row[1]).toLocaleDateString('zh-TW'),
+                    lendId: row[LL_LEND_ID_COLUMN_INDEX - 1],
+                    applyTime: new Date(row[LL_LEND_TIME_COLUMN_INDEX - 1]).toLocaleDateString('zh-TW'),
                     assetId: assetId,
-                    assetName: assetIdToNameMap.get(assetId) || '',  // ✨ 新增：財產名稱
-                    modelBrand: assetIdToModelMap.get(assetId) || '',
-                    borrower: row[4],
-                    expectedReturnDate: new Date(row[5]).toLocaleDateString('zh-TW'),
-                    reason: row[7],
-                    lendingLocation: row[9] || '' // ✨ 新增：讀取 J 欄 (索引為9) 的出借後地點
+                    assetName: assetInfo.assetName || '',
+                    modelBrand: assetInfo.modelBrand || '',
+                    keeperName: assetInfo.leaderName || '',
+                    userName: assetInfo.userName || '',
+                    lenderName: lenderName,
+                    borrower: row[LL_BORROWER_NAME_COLUMN_INDEX - 1],
+                    expectedReturnDate: new Date(row[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1]).toLocaleDateString('zh-TW'),
+                    reason: row[LL_REASON_COLUMN_INDEX - 1],
+                    lendingLocation: row[LL_LENDING_LOCATION_COLUMN_INDEX - 1] || '' // ✨ 讀取出借後地點
                 };
             });
 
