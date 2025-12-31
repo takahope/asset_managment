@@ -4140,9 +4140,11 @@ function getTransferringAssets() {
             category: asset ? asset.assetCategory : '',
             oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1] || '',
             oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1] || '',
+            oldUser: row[AL_OLD_USER_COLUMN_INDEX - 1] || '',
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1] || '',
             newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1] || '',
             newUser: row[AL_NEW_USER_COLUMN_INDEX - 1] || '',
+            userName: asset ? asset.userName || '無' : '無',
             applicationTime: applicationTime,
             status: status,
             transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點'
