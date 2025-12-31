@@ -1278,19 +1278,25 @@
                                                                 className="w-4 h-4 cursor-pointer accent-cyan-500"
                                                             />
                                                         </th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>財產編號</th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>財產名稱</th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>原保管人</th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>新保管人</th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>新地點</th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '13%'}}>申請時間</th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>狀態</th>
-                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>類型</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>財產編號</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>財產名稱</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>型號/廠牌</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '14%'}}>保管人變更</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '14%'}}>使用人變更</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '13%'}}>地點變更</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>轉移類型</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>申請時間</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
                                                     {filteredAssets.map((asset, index) => {
                                                         const isSelected = selectedAssetIds.includes(asset.assetId);
+                                                        const keeperHasChange = asset.newKeeper && asset.oldKeeper !== asset.newKeeper;
+                                                        const oldUser = asset.oldUser || asset.userName || '';
+                                                        const newUser = asset.newUser || '';
+                                                        const userHasChange = newUser && oldUser !== newUser;
+                                                        const locationHasChange = asset.newLocation && asset.oldLocation !== asset.newLocation;
+                                                        const transferType = asset.transferType || '地點';
 
                                                         return (
                                                             <tr
@@ -1308,20 +1314,60 @@
                                                                 </td>
                                                                 <td className="px-3 py-3 font-mono text-slate-700">{asset.assetId}</td>
                                                                 <td className="px-3 py-3 text-slate-700">{asset.assetName || '-'}</td>
-                                                                <td className="px-3 py-3 text-slate-600">{asset.oldKeeper || '-'}</td>
-                                                                <td className="px-3 py-3 text-slate-700 font-medium">{asset.newKeeper || '-'}</td>
-                                                                <td className="px-3 py-3 text-slate-600">{asset.newLocation || '-'}</td>
-                                                                <td className="px-3 py-3 text-slate-500 text-xs">{asset.applicationTime || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.modelBrand || ''}</td>
+                                                                <td className="px-3 py-3 text-slate-600">
+                                                                    {keeperHasChange ? (
+                                                                        <>
+                                                                            {asset.oldKeeper || ''}
+                                                                            <span className="text-cyan-600"> → </span>
+                                                                            {asset.newKeeper || ''}
+                                                                        </>
+                                                                    ) : (
+                                                                        asset.oldKeeper || ''
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-3 py-3 text-slate-600">
+                                                                    {userHasChange ? (
+                                                                        <>
+                                                                            {oldUser}
+                                                                            <span className="text-cyan-600"> → </span>
+                                                                            {newUser}
+                                                                        </>
+                                                                    ) : (
+                                                                        oldUser
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-3 py-3 text-slate-600">
+                                                                    {locationHasChange ? (
+                                                                        <>
+                                                                            {asset.oldLocation || ''}
+                                                                            <span className="text-cyan-600"> → </span>
+                                                                            {asset.newLocation || ''}
+                                                                        </>
+                                                                    ) : (
+                                                                        asset.oldLocation || ''
+                                                                    )}
+                                                                </td>
                                                                 <td className="px-3 py-3">
                                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                                                        asset.status === '轉移中'
-                                                                            ? 'bg-cyan-100 text-cyan-800'
-                                                                            : 'bg-purple-100 text-purple-800'
+                                                                        transferType.includes('保管人') && transferType.includes('使用人')
+                                                                            ? 'bg-red-100 text-red-800'
+                                                                            : transferType.includes('保管人')
+                                                                                ? 'bg-yellow-100 text-yellow-800'
+                                                                                : transferType.includes('使用人')
+                                                                                    ? 'bg-sky-100 text-sky-800'
+                                                                                    : 'bg-slate-100 text-slate-800'
                                                                     }`}>
-                                                                        {asset.status}
+                                                                        {transferType.includes('保管人') && transferType.includes('使用人')
+                                                                            ? '保管人+使用人'
+                                                                            : transferType.includes('保管人')
+                                                                                ? '保管人'
+                                                                                : transferType.includes('使用人')
+                                                                                    ? '使用人'
+                                                                                    : '地點'}
                                                                     </span>
                                                                 </td>
-                                                                <td className="px-3 py-3 text-slate-500 text-xs">{asset.transferType || '-'}</td>
+                                                                <td className="px-3 py-3 text-slate-500 text-xs">{asset.applicationTime || '-'}</td>
                                                             </tr>
                                                         );
                                                     })}
