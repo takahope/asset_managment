@@ -2308,7 +2308,8 @@ function getLentOutAssets(forceUserScope) {
             leaderName: asset.leaderName || '',
             leaderEmail: asset.leaderEmail || '',
             userName: asset.userName || '無',
-            userEmail: asset.userEmail || ''
+            userEmail: asset.userEmail || '',
+            location: asset.location || ''
         }]));  // ✨ 新增：資產資訊映射
 
         const lentAssets = lendingData
@@ -2348,6 +2349,7 @@ function getLentOutAssets(forceUserScope) {
                     modelBrand: assetInfo.modelBrand || '',
                     keeperName: assetInfo.leaderName || '',
                     userName: assetInfo.userName || '',
+                    originalLocation: assetInfo.location || '',
                     lenderName: lenderName,
                     borrower: row[LL_BORROWER_NAME_COLUMN_INDEX - 1],
                     expectedReturnDate: new Date(row[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1]).toLocaleDateString('zh-TW'),
