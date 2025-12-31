@@ -1678,6 +1678,7 @@
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>出借人</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '10%'}}>借用人</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>預計歸還日</th>
+                                                        <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '12%'}}>原放置地點</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '15%'}}>出借後地點</th>
                                                         <th className="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style={{width: '21%'}}>出借事由</th>
                                                     </tr>
@@ -1713,6 +1714,7 @@
                                                                     {asset.expectedReturnDate}
                                                                     {isOverdue && <i className="fas fa-exclamation-triangle ml-1"></i>}
                                                                 </td>
+                                                                <td className="px-3 py-3 text-slate-600">{asset.originalLocation || '-'}</td>
                                                                 <td className="px-3 py-3 text-slate-600">{asset.lendingLocation || '-'}</td>
                                                                 <td className="px-3 py-3 text-slate-600">{asset.reason}</td>
                                                             </tr>
