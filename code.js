@@ -601,9 +601,10 @@ function doGet(e) {
   html.addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   return html;
 }
-function getUserStateData() {
+function getUserStateData(forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
+  const useAdminScope = isAdmin && !forceUserScope;
 
   // 查詢使用者姓名
   let currentUserName = currentUserEmail.split('@')[0]; // 預設使用 email 前綴
@@ -622,7 +623,7 @@ function getUserStateData() {
 
   let filteredData;
 
-  if (isAdmin) {
+  if (useAdminScope) {
     filteredData = getAllAssets();
   } else {
     filteredData = getAssetsForCurrentUser();
@@ -1443,13 +1444,14 @@ function processBatchTransferApplication(formData) {
 /**
  * [供 review.html 呼叫] 獲取當前使用者所有待審核的申請 (附有詳細日誌的偵錯版)
  */
-function getPendingApprovals() {
+function getPendingApprovals(forceUserScope) {
   Logger.log("--- getPendingApprovals 函式開始執行 (v3) ---");
   const startTime = new Date();
 
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
     const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
     
     const allAssets = getAllAssets();
@@ -1470,7 +1472,7 @@ function getPendingApprovals() {
         const status = row[AL_STATUS_COLUMN_INDEX - 1];
         if (status !== "待接收") return false;
 
-        if (isAdmin) return true;
+        if (useAdminScope) return true;
 
         const newLeaderEmail = row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
         const newUserEmail = row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1];
@@ -3526,9 +3528,10 @@ function getTransferDataForPrint(assetCategory) {
  * @param {string} assetCategory - 財產類別：'財產' 或 '物品'
  * @returns {Array} 返回格式：[{ assetId, assetName, oldKeeper, newKeeper, oldLocation, newLocation, transferDate }, ...]
  */
-function getAllTransferableItems(assetCategory) {
+function getAllTransferableItems(assetCategory, forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
   const isAdmin = checkAdminPermissions();
+  const useAdminScope = isAdmin && !forceUserScope;
   // 移除強制阻擋
 
   try {
@@ -3577,7 +3580,7 @@ function getAllTransferableItems(assetCategory) {
         const transfer = assetToLatestTransfer.get(asset.assetId);
 
         // 🛡️ 權限過濾
-        if (!isAdmin) {
+        if (!useAdminScope) {
            // 一般使用者只能看到自己相關的（新保管人或新使用人）
            const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
                               (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
@@ -3613,10 +3616,10 @@ function getAllTransferableItems(assetCategory) {
  * [供 userstate.html 呼叫] 獲取待列印轉移申請單的數量
  * @returns {number} 待列印的轉移記錄總數（財產 + 物品）
  */
-function getTransferableItemsCount() {
+function getTransferableItemsCount(forceUserScope) {
   try {
-    const propertyItems = getAllTransferableItems('財產');
-    const itemItems = getAllTransferableItems('物品');
+    const propertyItems = getAllTransferableItems('財產', forceUserScope);
+    const itemItems = getAllTransferableItems('物品', forceUserScope);
     return propertyItems.length + itemItems.length;
   } catch (e) {
     Logger.log(`getTransferableItemsCount 失敗: ${e.message}`);
@@ -4091,10 +4094,11 @@ function cancelTransferOrScrap(assetId) {
  * 用於顯示使用者自己發起但尚未被對方接收的轉移申請
  * @returns {Object} { assets: Array, count: number }
  */
-function getTransferringAssets() {
+function getTransferringAssets(forceUserScope) {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
@@ -4119,7 +4123,7 @@ function getTransferringAssets() {
         // 權限檢查：只顯示自己申請的，或管理員可見全部
         const isMyApplication = applicantEmail === currentUserEmail;
 
-        if (isAdmin || isMyApplication) {
+        if (useAdminScope || isMyApplication) {
           const asset = assetMap.get(assetId);
 
           // 格式化申請時間
@@ -4481,7 +4485,7 @@ function updateAssetBasicInfo(assetId, updates) {
  * 取得盤點頁面所需的資料
  * @returns {object} 包含資產列表、地點選項、保管人選項和現有盤點會話
  */
-function getInventoryData() {
+function getInventoryData(forceUserScope) {
   try {
     // 確保盤點明細欄位已完成遷移
     createInventorySheets();
@@ -4491,6 +4495,7 @@ function getInventoryData() {
 
     // 檢查是否為管理員
     const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
 
     // 只取得狀態為「在庫」的資產
     const availableAssets = allAssets.filter(asset => asset.assetStatus === '在庫');
@@ -4526,7 +4531,7 @@ function getInventoryData() {
     const currentUserGroup = emailToGroupMap[currentUserEmail] || '未分組';
 
     // 取得進行中盤點會話（管理員可以看到所有會話）
-    const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin, currentUserGroup);
+    const activeSessions = getActiveInventorySessions(currentUserEmail, useAdminScope, currentUserGroup);
 
     // ✨ 計算待盤點資產數量
     let myPendingInventoryCount = 0;
@@ -4591,11 +4596,12 @@ function getInventoryData() {
  * 一般使用者：僅回傳指派給自己的未盤點資產（Email 或組別）
  * @returns {Object} { pendingItems: Array, currentUserEmail, currentUserGroup, isAdmin }
  */
-function getPendingInventoryAssignments() {
+function getPendingInventoryAssignments(forceUserScope) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
 
     // 建立 Email -> 姓名 / 組別 對照表
     let currentUserGroup = '未分組';
@@ -4668,7 +4674,7 @@ function getPendingInventoryAssignments() {
       if (inventoryResult && inventoryResult !== '未盤點') return;
 
       const assignedUser = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
-      if (!isAdmin) {
+      if (!useAdminScope) {
         if (!assignedUser) return;
         const normalized = String(assignedUser).trim();
         const isEmail = normalized.includes('@');

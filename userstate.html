@@ -4427,7 +4427,7 @@
         };
 
         // ========== 盤點確認 Modal（單筆/批次共用）==========
-        const InventoryConfirmModal = ({ asset, assetIds, isBatch, sessionId, availableSessions, defaultSessionId, isAdmin, onClose, onSuccess }) => {
+            const InventoryConfirmModal = ({ asset, assetIds, isBatch, sessionId, availableSessions, defaultSessionId, isAdmin, onClose, onSuccess }) => {
             const [result, setResult] = useState('正常');
             const [remarks, setRemarks] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
@@ -4609,6 +4609,7 @@
             const [isReady, setIsReady] = useState(false);
             const [allAssets, setAllAssets] = useState([]);
             const [isAdmin, setIsAdmin] = useState(false);
+            const [viewMode, setViewMode] = useState('admin');
             const [currentUserEmail, setCurrentUserEmail] = useState('');
             const [currentUserName, setCurrentUserName] = useState('');
             const [webAppUrl, setWebAppUrl] = useState('');
@@ -4666,6 +4667,8 @@
             const [selectedInventoryAssetIds, setSelectedInventoryAssetIds] = useState([]);
             const [batchInventorySessionId, setBatchInventorySessionId] = useState('');
             const [currentUserGroup, setCurrentUserGroup] = useState('');
+
+            const isAdminView = isAdmin && viewMode === 'admin';
 
             // 處理單個資產選取
             const handleAssetSelect = useCallback((assetId) => {
@@ -4743,7 +4746,7 @@
                 return map;
             }, []);
 
-            const loadPendingInventoryAssignments = useCallback(() => {
+            const loadPendingInventoryAssignments = useCallback((forceUserScope) => {
                 google.script.run
                     .withSuccessHandler((response) => {
                         if (!response) {
@@ -4762,7 +4765,7 @@
                         console.error('載入盤點待辦失敗:', error);
                         setInventoryPendingByAsset({});
                     })
-                    .getPendingInventoryAssignments();
+                    .getPendingInventoryAssignments(forceUserScope);
             }, [buildInventoryPendingByAsset]);
 
             const getAssetPendingSessions = useCallback((assetId) => {
@@ -4779,9 +4782,11 @@
             }, [getAssetPendingSessions]);
 
             // 載入資料
-            const loadData = () => {
+            const loadData = (overrideViewMode) => {
                 showFlyProgressBar('正在載入財產狀態資料...');
                 setIsLoadingCards(true); // 初始載入時也顯示卡片載入動畫
+                const effectiveViewMode = overrideViewMode || viewMode;
+                const forceUserScope = effectiveViewMode === 'user';
 
                 google.script.run
                     .withSuccessHandler(url => {
@@ -4808,6 +4813,9 @@
                                 }));
                                 setAllAssets(processedAssets);
                                 setIsAdmin(response.isAdmin);
+                                if (!response.isAdmin) {
+                                    setViewMode('user');
+                                }
                                 setCurrentUserEmail(response.userEmail);
                                 setCurrentUserName(response.userName || '');
 
@@ -4833,7 +4841,7 @@
                                         pendingLoaded = true;
                                         finishCardLoading();
                                     })
-                                    .getPendingApprovals();
+                                    .getPendingApprovals(forceUserScope);
 
                                 // 載入盤點資料
                                 google.script.run
@@ -4848,7 +4856,7 @@
                                                 setCurrentInventorySessionId(sessionId);
                                             }
                                         }
-                                        loadPendingInventoryAssignments();
+                                        loadPendingInventoryAssignments(forceUserScope);
                                         inventoryLoaded = true;
                                         finishCardLoading();
                                     })
@@ -4857,7 +4865,7 @@
                                         inventoryLoaded = true;
                                         finishCardLoading();
                                     })
-                                    .getInventoryData();
+                                    .getInventoryData(forceUserScope);
 
                                 // 載入轉移待列印數量
                                 google.script.run
@@ -4870,7 +4878,7 @@
                                         console.warn('載入轉移數量失敗：', error.message);
                                         setTransferPendingCount(0);
                                     })
-                                    .getTransferableItemsCount();
+                                    .getTransferableItemsCount(forceUserScope);
 
                                 // 載入我申請的轉移中資產數量
                                 google.script.run
@@ -4883,7 +4891,7 @@
                                         console.warn('載入轉移中數量失敗：', error.message);
                                         setTransferringCount(0);
                                     })
-                                    .getTransferringAssets();
+                                    .getTransferringAssets(forceUserScope);
 
                                 // 載入轉移選項資料（保管人、地點等）
                                 google.script.run
@@ -4917,7 +4925,7 @@
                                 hideFlyProgressBar('載入失敗', 0);
                                 alert('錯誤：' + error.message);
                             })
-                            .getUserStateData();
+                            .getUserStateData(forceUserScope);
                     })
                     .getAppUrl();
             };
@@ -4927,6 +4935,7 @@
                 const MIN_LOADING_DURATION = 500; // 最短顯示時間 500ms
                 setIsLoadingCards(true);
                 const startTime = Date.now();
+                const forceUserScope = viewMode === 'user';
 
                 try {
                     // 並行載入五個 API
@@ -4935,37 +4944,37 @@
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getPendingApprovals();
+                                .getPendingApprovals(forceUserScope);
                         }),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getInventoryData();
+                                .getInventoryData(forceUserScope);
                         }),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getUserStateData();
+                                .getUserStateData(forceUserScope);
                         }),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getTransferableItemsCount();
+                                .getTransferableItemsCount(forceUserScope);
                         }),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getTransferringAssets();
+                                .getTransferringAssets(forceUserScope);
                         }),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getPendingInventoryAssignments();
+                                .getPendingInventoryAssignments(forceUserScope);
                         })
                     ]);
 
@@ -5026,11 +5035,18 @@
                     console.error('重新整理失敗：', error);
                     alert('重新整理失敗：' + error.message);
                 }
-            }, []);
+            }, [buildInventoryPendingByAsset, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
                 refreshCardData();
+            };
+
+            const handleViewModeChange = (mode) => {
+                if (!isAdmin) return;
+                if (mode === viewMode) return;
+                setViewMode(mode);
+                loadData(mode);
             };
 
             useEffect(() => {
@@ -5185,13 +5201,13 @@
             // 計算卡片統計數量
             const cardCounts = useMemo(() => {
                 // ✨ 直接使用後端計算的待盤點資產數量（管理員顯示全域）
-                const inventoryCount = isAdmin
+                const inventoryCount = isAdminView
                     ? (inventorySessions?.totalPendingInventoryCount || inventorySessions?.myPendingInventoryCount || 0)
                     : (inventorySessions?.myPendingInventoryCount || 0);
 
                 const scrapPendingCount = (() => {
                     const scrappingAssets = allAssets.filter(a => a.status === '報廢中');
-                    if (isAdmin) {
+                    if (isAdminView) {
                         return scrappingAssets.length;
                     } else {
                         return scrappingAssets.filter(a =>
@@ -5209,7 +5225,7 @@
                     transferPending: transferPendingCount,
                     inventory: inventoryCount
                 };
-            }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail, isAdmin, transferPendingCount, transferringCount]);
+            }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail, isAdminView, transferPendingCount, transferringCount]);
 
             // 處理卡片點擊
             const handleCardClick = (cardId) => {
@@ -5426,20 +5442,20 @@
 
             // ========== 盤點操作處理函數 ==========
             // 開啟單筆盤點 Modal
-            const handleOpenInventoryModal = (asset) => {
-                const sessions = getAssetPendingSessions(asset.assetId);
-                if (!sessions || sessions.length === 0) {
-                    alert('此資產目前沒有待盤點的會話');
-                    return;
-                }
+                    const handleOpenInventoryModal = (asset) => {
+                        const sessions = getAssetPendingSessions(asset.assetId);
+                        if (!sessions || sessions.length === 0) {
+                            alert('此資產目前沒有待盤點的會話');
+                            return;
+                        }
                 const defaultSessionId = currentInventorySessionId && sessions.some(s => s.inventoryId === currentInventorySessionId)
                     ? currentInventorySessionId
                     : sessions[0].inventoryId;
                 setInventoryModalSessions(sessions);
                 setInventoryModalSessionId(defaultSessionId || '');
-                setInventoryModalAsset(asset);
-                setShowInventoryModal(true);
-            };
+                        setInventoryModalAsset(asset);
+                        setShowInventoryModal(true);
+                    };
 
             // 開啟批次盤點 Modal
             const handleBatchInventory = () => {
@@ -5486,10 +5502,10 @@
             // 盤點成功回調
             const handleInventorySuccess = useCallback(() => {
                 // 重新載入盤點待辦清單
-                loadPendingInventoryAssignments();
+                loadPendingInventoryAssignments(viewMode === 'user');
                 // 刷新卡片數據
                 refreshCardData();
-            }, [loadPendingInventoryAssignments, refreshCardData]);
+            }, [loadPendingInventoryAssignments, refreshCardData, viewMode]);
 
             // ========== 批次操作處理函數 ==========
             const handleBatchTransfer = () => {
@@ -5649,8 +5665,34 @@
                             </p>
                         </div>
 
-                        {/* 右側：重新整理按鈕 + 載入狀態指示 */}
+                        {/* 右側：視角切換 + 重新整理按鈕 + 載入狀態指示 */}
                         <div className="flex items-center gap-3">
+                            {isAdmin && (
+                                <div className="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
+                                    <button
+                                        onClick={() => handleViewModeChange('user')}
+                                        className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                                            viewMode === 'user'
+                                                ? 'bg-slate-800 text-white'
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                        title="一般使用者視角"
+                                    >
+                                        一般
+                                    </button>
+                                    <button
+                                        onClick={() => handleViewModeChange('admin')}
+                                        className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                                            viewMode === 'admin'
+                                                ? 'bg-slate-800 text-white'
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                        title="管理者視角"
+                                    >
+                                        管理者
+                                    </button>
+                                </div>
+                            )}
                             {/* 載入狀態文字 */}
                             {isLoadingCards && (
                                 <span className="text-sm text-slate-500 flex items-center gap-2">
@@ -5877,7 +5919,7 @@
                             sessionId={currentInventorySessionId}
                             availableSessions={inventoryModalSessions}
                             defaultSessionId={inventoryModalSessionId}
-                            isAdmin={isAdmin}
+                            isAdmin={isAdminView}
                             onClose={() => {
                                 setShowInventoryModal(false);
                                 setInventoryModalAsset(null);
@@ -5894,7 +5936,7 @@
                             assetIds={selectedInventoryAssetIds}
                             isBatch={true}
                             sessionId={batchInventorySessionId || currentInventorySessionId}
-                            isAdmin={isAdmin}
+                            isAdmin={isAdminView}
                             onClose={() => {
                                 setShowBatchInventoryModal(false);
                                 setSelectedInventoryAssetIds([]);
