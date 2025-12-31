@@ -575,19 +575,20 @@
         };
 
         // InventoryDashboardCard 組件 - 盤點進度監控儀表板
-        const InventoryDashboardCard = ({ isAdmin, onRefresh }) => {
+        const InventoryDashboardCard = ({ isAdminView, viewMode, onRefresh }) => {
             const [data, setData] = useState(null);
             const [isLoading, setIsLoading] = useState(true);
             const [selectedSessionId, setSelectedSessionId] = useState('');
             const [isExpanded, setIsExpanded] = useState(true);
             
-            // 載入資料
+            // 載入資料（當 viewMode 變化時重新載入）
             useEffect(() => {
                 loadDashboardData();
-            }, []);
+            }, [viewMode]);
             
             const loadDashboardData = () => {
                 setIsLoading(true);
+                const forceUserScope = viewMode === 'user';
                 google.script.run
                     .withSuccessHandler(result => {
                         setData(result);
@@ -600,7 +601,7 @@
                         console.error('載入盤點儀表板失敗:', error);
                         setIsLoading(false);
                     })
-                    .getLatestInventorySessionForDashboard();
+                    .getLatestInventorySessionForDashboard(forceUserScope);
             };
             
             // 如果沒有進行中的會話，不顯示卡片
@@ -641,7 +642,7 @@
             
             // 處理完成盤點
             const handleCompleteSession = () => {
-                if (!isAdmin) {
+                if (!isAdminView) {
                     alert('僅管理員可執行此操作');
                     return;
                 }
@@ -790,7 +791,7 @@
                                     )}
                                     
                                     {/* 管理員按鈕 */}
-                                    {isAdmin && (
+                                    {isAdminView && (
                                         <div className="mt-4 flex justify-end gap-2">
                                             <button
                                                 onClick={loadDashboardData}
@@ -6320,7 +6321,8 @@
 
                     {/* ✨ 新增：盤點進度監控儀表板 */}
                     <InventoryDashboardCard 
-                        isAdmin={isAdmin} 
+                        isAdminView={isAdminView}
+                        viewMode={viewMode}
                         onRefresh={() => {
                             refreshCardData();
                             loadPendingInventoryAssignments(viewMode === 'user');
