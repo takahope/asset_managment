@@ -4655,6 +4655,7 @@ function getPendingInventoryAssignments(forceUserScope) {
     // 建立 Email -> 姓名 / 組別 對照表
     let currentUserGroup = '未分組';
     const emailToNameMap = {};
+    const emailToGroupMap = {};
     const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
     if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
       const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
@@ -4665,6 +4666,9 @@ function getPendingInventoryAssignments(forceUserScope) {
         if (email) {
           const normalizedEmail = String(email).toLowerCase();
           emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
+          if (groupName) {
+            emailToGroupMap[normalizedEmail] = String(groupName).trim();
+          }
           if (normalizedEmail === currentUserEmail && groupName) {
             currentUserGroup = String(groupName).trim();
           }
@@ -4734,6 +4738,23 @@ function getPendingInventoryAssignments(forceUserScope) {
       }
 
       const session = activeSessions[inventoryId];
+      const assignedUserValue = assignedUser ? String(assignedUser).trim() : '';
+      const assignedIsEmail = assignedUserValue.includes('@');
+      const normalizedAssignedEmail = assignedIsEmail ? assignedUserValue.toLowerCase() : '';
+      const assignedUserLabel = assignedUserValue
+        ? (assignedIsEmail
+          ? (emailToNameMap[normalizedAssignedEmail] || assignedUserValue.split('@')[0])
+          : assignedUserValue)
+        : '';
+      const assignedGroup = assignedUserValue
+        ? (assignedIsEmail
+          ? (emailToGroupMap[normalizedAssignedEmail] || '未分組')
+          : assignedUserValue)
+        : '';
+      const assignedUserType = assignedUserValue
+        ? (assignedIsEmail ? 'user' : 'group')
+        : 'none';
+
       pendingItems.push({
         inventoryId: inventoryId,
         inventoryDate: session.inventoryDate,
@@ -4745,7 +4766,10 @@ function getPendingInventoryAssignments(forceUserScope) {
         userName: row[ID_USER_NAME_COLUMN_INDEX - 1],
         location: row[ID_LOCATION_COLUMN_INDEX - 1],
         originalStatus: row[ID_ORIGINAL_STATUS_COLUMN_INDEX - 1],
-        assignedUser: assignedUser || ''
+        assignedUser: assignedUserValue,
+        assignedUserLabel: assignedUserLabel,
+        assignedGroup: assignedGroup,
+        assignedUserType: assignedUserType
       });
     });
 
