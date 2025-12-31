@@ -4902,7 +4902,7 @@
                                     .withFailureHandler(error => {
                                         console.warn('載入轉移中數量失敗：', error.message);
                                         setTransferringCount(0);
-                                        setTransferringAssets([]);
+                                        setTransferringAssets(null);
                                     })
                                     .getTransferringAssets(forceUserScope);
 
@@ -4936,12 +4936,12 @@
                                         if (response && !response.error) {
                                             setLentAssetsDetails(response.assets || []);
                                         } else {
-                                            setLentAssetsDetails([]);
+                                            setLentAssetsDetails(null);
                                         }
                                     })
                                     .withFailureHandler(error => {
                                         console.warn('預先載入出借清單失敗：', error.message);
-                                        setLentAssetsDetails([]);
+                                        setLentAssetsDetails(null);
                                     })
                                     .getLentOutAssets(forceUserScope);
 
@@ -5053,7 +5053,7 @@
                         if (response && !response.error) {
                             setLentAssetsDetails(response.assets || []);
                         } else {
-                            setLentAssetsDetails([]);
+                            setLentAssetsDetails(null);
                         }
                     }
 
