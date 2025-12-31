@@ -575,75 +575,96 @@
         };
 
         // InventoryDashboardCard 組件 - 盤點進度監控儀表板
-        const InventoryDashboardCard = ({ isAdminView, viewMode, onRefresh }) => {
-            const [data, setData] = useState(null);
-            const [isLoading, setIsLoading] = useState(true);
+        const InventoryDashboardCard = ({ isAdminView, onRefresh, inventorySessions }) => {
             const [selectedSessionId, setSelectedSessionId] = useState('');
+            const [groupStats, setGroupStats] = useState([]);
+            const [isLoadingStats, setIsLoadingStats] = useState(false);
+            const [statsError, setStatsError] = useState('');
             const [isExpanded, setIsExpanded] = useState(true);
-            
-            // 載入資料（當 viewMode 變化時重新載入）
+
+            const sessions = inventorySessions?.activeSessions || [];
+            const isLoadingSessions = !inventorySessions;
+            const isLoadingDashboard = isLoadingSessions || (sessions.length > 0 && !selectedSessionId);
+
+            const getSessionSortKey = useCallback((session) => {
+                const idValue = String(session?.inventoryId || '');
+                const idNumber = Number(idValue.replace(/^INV/i, ''));
+                if (!Number.isNaN(idNumber) && idNumber > 0) {
+                    return idNumber;
+                }
+                const parsed = Date.parse(session?.inventoryDate || '');
+                return Number.isNaN(parsed) ? 0 : parsed;
+            }, []);
+
+            const pickLatestSessionId = useCallback((sessionList) => {
+                if (!sessionList || sessionList.length === 0) return '';
+                const sorted = sessionList.slice().sort((a, b) => getSessionSortKey(b) - getSessionSortKey(a));
+                return sorted[0]?.inventoryId || '';
+            }, [getSessionSortKey]);
+
             useEffect(() => {
-                loadDashboardData();
-            }, [viewMode]);
-            
-            const loadDashboardData = () => {
-                setIsLoading(true);
-                const forceUserScope = viewMode === 'user';
+                if (sessions.length === 0) {
+                    setSelectedSessionId('');
+                    setGroupStats([]);
+                    return;
+                }
+                const exists = sessions.some(s => s.inventoryId === selectedSessionId);
+                if (!exists) {
+                    setSelectedSessionId(pickLatestSessionId(sessions));
+                }
+            }, [sessions, selectedSessionId, pickLatestSessionId]);
+
+            const fetchGroupStats = useCallback((sessionId) => {
+                if (!sessionId) {
+                    setGroupStats([]);
+                    setStatsError('');
+                    setIsLoadingStats(false);
+                    return;
+                }
+                setIsLoadingStats(true);
+                setStatsError('');
                 google.script.run
                     .withSuccessHandler(result => {
-                        setData(result);
-                        if (result.latestSession) {
-                            setSelectedSessionId(result.latestSession.inventoryId);
-                        }
-                        setIsLoading(false);
+                        setGroupStats(result || []);
+                        setIsLoadingStats(false);
                     })
                     .withFailureHandler(error => {
-                        console.error('載入盤點儀表板失敗:', error);
-                        setIsLoading(false);
+                        console.error('載入盤點分組統計失敗:', error);
+                        setGroupStats([]);
+                        setStatsError(error.message || '載入失敗');
+                        setIsLoadingStats(false);
                     })
-                    .getLatestInventorySessionForDashboard(forceUserScope);
-            };
-            
+                    .getInventoryStatsByKeeper(sessionId);
+            }, []);
+
+            useEffect(() => {
+                fetchGroupStats(selectedSessionId);
+            }, [selectedSessionId, fetchGroupStats]);
+
             // 如果沒有進行中的會話，不顯示卡片
-            if (!isLoading && (!data || data.allSessions.length === 0)) {
+            if (!isLoadingSessions && sessions.length === 0) {
                 return null;
             }
-            
-            // 計算選中會話的統計數據
-            const selectedSession = data?.allSessions.find(s => s.inventoryId === selectedSessionId);
-            const sessionItems = data?.pendingItems.filter(item => item.inventoryId === selectedSessionId) || [];
-            
-            const totalCount = sessionItems.length;
-            const verifiedCount = sessionItems.filter(item => item.inventoryResult && item.inventoryResult !== '未盤點').length;
+
+            const selectedSession = sessions.find(s => s.inventoryId === selectedSessionId);
+            const totalCount = Number(selectedSession?.totalCount || 0);
+            const verifiedCount = Number(selectedSession?.verifiedCount || 0);
             const progressPercent = totalCount > 0 ? Math.round((verifiedCount / totalCount) * 100) : 0;
-            
-            // 按 assignedUser 分組統計
-            const groupStats = useMemo(() => {
-                const statsMap = new Map();
-                sessionItems.forEach(item => {
-                    const key = item.assignedUser || '未指派';
-                    if (!statsMap.has(key)) {
-                        statsMap.set(key, { total: 0, verified: 0, label: key });
-                    }
-                    const stat = statsMap.get(key);
-                    stat.total++;
-                    if (item.inventoryResult && item.inventoryResult !== '未盤點') {
-                        stat.verified++;
-                    }
-                });
-                
-                // 轉為陣列並排序（完成率低的在前）
-                return Array.from(statsMap.values()).sort((a, b) => {
-                    const pa = a.total > 0 ? a.verified / a.total : 0;
-                    const pb = b.total > 0 ? b.verified / b.total : 0;
-                    return pa - pb;
-                });
-            }, [sessionItems]);
             
             // 處理完成盤點
             const handleCompleteSession = () => {
                 if (!isAdminView) {
                     alert('僅管理員可執行此操作');
+                    return;
+                }
+
+                if (!selectedSessionId) {
+                    alert('尚未選擇盤點會話');
+                    return;
+                }
+
+                if (totalCount === 0) {
+                    alert('此盤點會話沒有可處理的資產');
                     return;
                 }
                 
@@ -660,7 +681,6 @@
                     .withSuccessHandler(result => {
                         if (result.success) {
                             alert(`盤點會話已完成！\n\n統計：\n正常：${result.stats.normal}\n遺失：${result.stats.missing}\n損壞：${result.stats.damaged}`);
-                            loadDashboardData();
                             onRefresh && onRefresh();
                         } else {
                             alert(result.message || '操作失敗');
@@ -694,7 +714,7 @@
                     {/* 卡片內容 */}
                     {isExpanded && (
                         <div className="p-4">
-                            {isLoading ? (
+                            {isLoadingDashboard ? (
                                 <div className="text-center py-8">
                                     <i className="fa-solid fa-spinner fa-spin text-2xl text-teal-500"></i>
                                     <p className="text-sm text-slate-500 mt-2">載入中...</p>
@@ -702,7 +722,7 @@
                             ) : (
                                 <>
                                     {/* 會話選擇下拉選單 */}
-                                    {data.allSessions.length > 1 && (
+                                    {sessions.length > 1 && (
                                         <div className="mb-4">
                                             <label className="block text-sm font-medium text-slate-700 mb-2">選擇盤點會話</label>
                                             <select 
@@ -710,7 +730,7 @@
                                                 onChange={(e) => setSelectedSessionId(e.target.value)}
                                                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                                             >
-                                                {data.allSessions.map(session => (
+                                                {sessions.map(session => (
                                                     <option key={session.inventoryId} value={session.inventoryId}>
                                                         {session.inventoryDate} - {session.inventoryPerson}
                                                     </option>
@@ -742,7 +762,11 @@
                                     </div>
                                     
                                     {/* 分組統計表 */}
-                                    {groupStats.length > 0 && (
+                                    {isLoadingStats ? (
+                                        <div className="text-center text-sm text-slate-500 py-4">載入分組統計中...</div>
+                                    ) : statsError ? (
+                                        <div className="text-center text-sm text-rose-600 py-4">分組統計載入失敗：{statsError}</div>
+                                    ) : groupStats.length > 0 ? (
                                         <div className="overflow-hidden rounded-lg border border-slate-200 mb-4">
                                             <table className="w-full text-sm">
                                                 <thead className="bg-slate-50">
@@ -754,18 +778,24 @@
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
                                                     {groupStats.map((stat, idx) => {
-                                                        const percent = stat.total > 0 ? Math.round((stat.verified / stat.total) * 100) : 0;
+                                                        const assignedCount = Number(stat.assignedCount || 0);
+                                                        const verifiedCountValue = Number(stat.verifiedCount || 0);
+                                                        const percent = assignedCount > 0
+                                                            ? Math.round((verifiedCountValue / assignedCount) * 100)
+                                                            : 0;
                                                         let colorClass = 'bg-red-500';
                                                         if (percent >= 50) colorClass = 'bg-yellow-500';
                                                         if (percent >= 100) colorClass = 'bg-green-500';
+                                                        const label = stat.name || stat.email || '未指派';
+                                                        const isUnassigned = label === '未指派';
                                                         
                                                         return (
                                                             <tr key={idx} className="hover:bg-slate-50">
                                                                 <td className="px-3 py-2">
-                                                                    {stat.label === '未指派' ? (
+                                                                    {isUnassigned ? (
                                                                         <span className="text-red-600 font-medium">⚠️ 未指派</span>
                                                                     ) : (
-                                                                        stat.label
+                                                                        label
                                                                     )}
                                                                 </td>
                                                                 <td className="px-3 py-2">
@@ -780,7 +810,7 @@
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-3 py-2 text-right text-slate-600">
-                                                                    {stat.verified} / {stat.total}
+                                                                    {verifiedCountValue} / {assignedCount}
                                                                 </td>
                                                             </tr>
                                                         );
@@ -788,13 +818,18 @@
                                                 </tbody>
                                             </table>
                                         </div>
+                                    ) : (
+                                        <div className="text-center text-sm text-slate-500 py-4">尚無分組統計資料</div>
                                     )}
                                     
                                     {/* 管理員按鈕 */}
                                     {isAdminView && (
                                         <div className="mt-4 flex justify-end gap-2">
                                             <button
-                                                onClick={loadDashboardData}
+                                                onClick={() => {
+                                                    fetchGroupStats(selectedSessionId);
+                                                    onRefresh && onRefresh();
+                                                }}
                                                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
                                             >
                                                 <i className="fa-solid fa-rotate mr-2"></i>
@@ -802,7 +837,7 @@
                                             </button>
                                             <button
                                                 onClick={handleCompleteSession}
-                                                disabled={verifiedCount < totalCount}
+                                                disabled={!selectedSessionId || totalCount === 0 || verifiedCount < totalCount}
                                                 className="px-4 py-2 text-sm bg-teal-500 text-white rounded-lg hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                             >
                                                 <i className="fa-solid fa-check mr-2"></i>
@@ -6322,7 +6357,7 @@
                     {/* ✨ 新增：盤點進度監控儀表板 */}
                     <InventoryDashboardCard 
                         isAdminView={isAdminView}
-                        viewMode={viewMode}
+                        inventorySessions={inventorySessions}
                         onRefresh={() => {
                             refreshCardData();
                             loadPendingInventoryAssignments(viewMode === 'user');
