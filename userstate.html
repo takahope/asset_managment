@@ -5264,7 +5264,7 @@
                                 setActiveModal(null);
                                 setIsLoadingTransferring(false);
                             })
-                            .getTransferringAssets();
+                            .getTransferringAssets(viewMode === 'user');
                         break;
                     case 'pending':
                         window.openPendingApprovalModal();
@@ -5304,13 +5304,13 @@
                                 google.script.run
                                     .withSuccessHandler(resolve)
                                     .withFailureHandler(reject)
-                                    .getAllScrappableItems('財產');
+                                    .getAllScrappableItems('財產', viewMode === 'user');
                             }),
                             new Promise((resolve, reject) => {
                                 google.script.run
                                     .withSuccessHandler(resolve)
                                     .withFailureHandler(reject)
-                                    .getAllScrappableItems('物品');
+                                    .getAllScrappableItems('物品', viewMode === 'user');
                             })
                         ]).then(([propertyResult, itemResult]) => {
                             const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
@@ -5351,13 +5351,13 @@
                                 google.script.run
                                     .withSuccessHandler(resolve)
                                     .withFailureHandler(reject)
-                                    .getAllTransferableItems('財產');
+                                    .getAllTransferableItems('財產', viewMode === 'user');
                             }),
                             new Promise((resolve, reject) => {
                                 google.script.run
                                     .withSuccessHandler(resolve)
                                     .withFailureHandler(reject)
-                                    .getAllTransferableItems('物品');
+                                    .getAllTransferableItems('物品', viewMode === 'user');
                             })
                         ]).then(([propertyResult, itemResult]) => {
                             const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
