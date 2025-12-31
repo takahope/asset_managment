@@ -4786,6 +4786,71 @@ function getPendingInventoryAssignments(forceUserScope) {
 }
 
 /**
+ * 取得最近的未完成盤點會話（供 userstate 儀表板使用）
+ * @returns {Object} { latestSession, allSessions, pendingItems, currentUserEmail, currentUserGroup, isAdmin }
+ */
+function getLatestInventorySessionForDashboard() {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const isAdmin = checkAdminPermissions();
+    
+    // 取得當前使用者所屬組別
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    let currentUserGroup = '';
+    
+    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+      for (const row of keeperData) {
+        const email = row[1];
+        const groupName = row[6];
+        if (email && String(email).toLowerCase() === currentUserEmail && groupName) {
+          currentUserGroup = String(groupName).trim();
+          break;
+        }
+      }
+    }
+    
+    // 取得所有進行中的會話
+    const sessions = getActiveInventorySessions(currentUserEmail, isAdmin, currentUserGroup);
+    
+    // 取得待處理任務（含詳細資訊）
+    const pendingData = getPendingInventoryAssignments(false);
+    
+    // 找出時間最近的會話（按 inventoryDate 排序）
+    let latestSession = null;
+    if (sessions.length > 0) {
+      const sortedSessions = sessions.slice().sort((a, b) => {
+        const dateA = new Date(a.inventoryDate);
+        const dateB = new Date(b.inventoryDate);
+        return dateB - dateA; // 降序排列（最新的在前）
+      });
+      latestSession = sortedSessions[0];
+    }
+    
+    return {
+      latestSession: latestSession,
+      allSessions: sessions,
+      pendingItems: pendingData.pendingItems || [],
+      currentUserEmail: currentUserEmail,
+      currentUserGroup: currentUserGroup,
+      isAdmin: isAdmin
+    };
+  } catch (e) {
+    Logger.log(`getLatestInventorySessionForDashboard 失敗: ${e.message}`);
+    return {
+      latestSession: null,
+      allSessions: [],
+      pendingItems: [],
+      currentUserEmail: Session.getActiveUser().getEmail().toLowerCase(),
+      currentUserGroup: '',
+      isAdmin: false,
+      error: e.message
+    };
+  }
+}
+
+/**
  * 取得使用者的進行中盤點會話
  * @param {string} userEmail - 使用者電子郵件
  * @param {boolean} isAdminMode - 是否為管理員模式（可選，預設 false）
