@@ -4787,12 +4787,14 @@ function getPendingInventoryAssignments(forceUserScope) {
 
 /**
  * 取得最近的未完成盤點會話（供 userstate 儀表板使用）
+ * @param {boolean} forceUserScope - 是否強制使用使用者範圍（管理員切換為一般視圖時為 true）
  * @returns {Object} { latestSession, allSessions, pendingItems, currentUserEmail, currentUserGroup, isAdmin }
  */
-function getLatestInventorySessionForDashboard() {
+function getLatestInventorySessionForDashboard(forceUserScope) {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
     
     // 取得當前使用者所屬組別
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -4811,11 +4813,11 @@ function getLatestInventorySessionForDashboard() {
       }
     }
     
-    // 取得所有進行中的會話
-    const sessions = getActiveInventorySessions(currentUserEmail, isAdmin, currentUserGroup);
+    // 取得所有進行中的會話（根據視圖模式決定是否使用管理員權限）
+    const sessions = getActiveInventorySessions(currentUserEmail, useAdminScope, currentUserGroup);
     
-    // 取得待處理任務（含詳細資訊）
-    const pendingData = getPendingInventoryAssignments(false);
+    // 取得待處理任務（含詳細資訊，forceUserScope 控制範圍）
+    const pendingData = getPendingInventoryAssignments(forceUserScope);
     
     // 找出時間最近的會話（按 inventoryDate 排序）
     let latestSession = null;
