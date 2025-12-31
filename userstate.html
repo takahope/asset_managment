@@ -4644,7 +4644,7 @@
 
             // 轉移中（我申請的轉移）相關 state
             const [transferringCount, setTransferringCount] = useState(0);
-            const [transferringAssets, setTransferringAssets] = useState([]);
+            const [transferringAssets, setTransferringAssets] = useState(null);
             const [isLoadingTransferring, setIsLoadingTransferring] = useState(false);
 
             // 快速操作 Modal 相關 state
@@ -4896,11 +4896,13 @@
                                     .withSuccessHandler(response => {
                                         if (response && typeof response.count === 'number') {
                                             setTransferringCount(response.count);
+                                            setTransferringAssets(response.assets || []);
                                         }
                                     })
                                     .withFailureHandler(error => {
                                         console.warn('載入轉移中數量失敗：', error.message);
                                         setTransferringCount(0);
+                                        setTransferringAssets([]);
                                     })
                                     .getTransferringAssets(forceUserScope);
 
@@ -4928,6 +4930,21 @@
                                     })
                                     .getLendingData();
 
+                                // 預先載入出借中清單
+                                google.script.run
+                                    .withSuccessHandler(response => {
+                                        if (response && !response.error) {
+                                            setLentAssetsDetails(response.assets || []);
+                                        } else {
+                                            setLentAssetsDetails([]);
+                                        }
+                                    })
+                                    .withFailureHandler(error => {
+                                        console.warn('預先載入出借清單失敗：', error.message);
+                                        setLentAssetsDetails([]);
+                                    })
+                                    .getLentOutAssets(forceUserScope);
+
                                 setIsReady(true);
                                 hideFlyProgressBar('資料載入完成！', 300);
                             })
@@ -4950,7 +4967,7 @@
 
                 try {
                     // 並行載入五個 API
-                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse] = await Promise.allSettled([
+                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse, lentResponse] = await Promise.allSettled([
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
@@ -4986,6 +5003,12 @@
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
                                 .getPendingInventoryAssignments(forceUserScope);
+                        }),
+                        new Promise((resolve, reject) => {
+                            google.script.run
+                                .withSuccessHandler(resolve)
+                                .withFailureHandler(reject)
+                                .getLentOutAssets(forceUserScope);
                         })
                     ]);
 
@@ -5014,6 +5037,7 @@
                     }
                     if (transferringResponse.status === 'fulfilled' && typeof transferringResponse.value?.count === 'number') {
                         setTransferringCount(transferringResponse.value.count);
+                        setTransferringAssets(transferringResponse.value.assets || []);
                     }
                     if (pendingInventoryResponse.status === 'fulfilled') {
                         const response = pendingInventoryResponse.value;
@@ -5024,9 +5048,17 @@
                             setInventoryPendingByAsset({});
                         }
                     }
+                    if (lentResponse.status === 'fulfilled') {
+                        const response = lentResponse.value;
+                        if (response && !response.error) {
+                            setLentAssetsDetails(response.assets || []);
+                        } else {
+                            setLentAssetsDetails([]);
+                        }
+                    }
 
                     // 檢查失敗的請求
-                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse]
+                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse, lentResponse]
                         .filter(r => r.status === 'rejected');
                     if (failures.length > 0) {
                         console.warn('部分數據載入失敗：', failures);
@@ -5057,6 +5089,8 @@
                 if (!isAdmin) return;
                 if (mode === viewMode) return;
                 setViewMode(mode);
+                setTransferringAssets(null);
+                setLentAssetsDetails(null);
                 loadData(mode);
             };
 
@@ -5243,9 +5277,14 @@
                 switch(cardId) {
                     case 'transferring':
                         // 設定載入狀態並打開 modal
-                        setIsLoadingTransferring(true);
                         setActiveModal('transferring');
 
+                        if (transferringAssets !== null) {
+                            setIsLoadingTransferring(false);
+                            return;
+                        }
+
+                        setIsLoadingTransferring(true);
                         // 調用後端獲取轉移中資產詳情
                         google.script.run
                             .withSuccessHandler(response => {
@@ -5271,9 +5310,14 @@
                         break;
                     case 'lent':
                         // 設定載入狀態並打開 modal
-                        setIsLoadingLentDetails(true);
                         setActiveModal('lent');
 
+                        if (lentAssetsDetails !== null) {
+                            setIsLoadingLentDetails(false);
+                            return;
+                        }
+
+                        setIsLoadingLentDetails(true);
                         // 調用後端獲取詳細出借資訊
                         google.script.run
                             .withSuccessHandler(response => {
@@ -5786,11 +5830,9 @@
                             isLoading={isLoadingTransferring}
                             onClose={() => {
                                 setActiveModal(null);
-                                setTransferringAssets([]);
                             }}
                             onCancelSuccess={() => {
                                 setActiveModal(null);
-                                setTransferringAssets([]);
                                 // 刷新卡片數據和資產表格
                                 refreshCardData();
                             }}
@@ -5803,11 +5845,9 @@
                             isLoading={isLoadingLentDetails}
                             onClose={() => {
                                 setActiveModal(null);
-                                setLentAssetsDetails(null);
                             }}
                             onReturnSuccess={() => {
                                 setActiveModal(null);
-                                setLentAssetsDetails(null);
                                 // 刷新卡片數據和資產表格
                                 refreshCardData();
                             }}
