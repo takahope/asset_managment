@@ -3039,10 +3039,11 @@ function checkAdminPermissions() {
  * @param {string} assetCategory - 財產類別 (財產/非消耗品)
  * @returns {Array<Object>} 包含詳細資訊的陣列
  */
-function getAllScrappableItems(assetCategory) {
+function getAllScrappableItems(assetCategory, forceUserScope) {
   // 1. 取得當前使用者身分與權限
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
+  const useAdminScope = isAdmin && !forceUserScope;
 
   const allAssets = getAllAssets();
   
@@ -3054,7 +3055,7 @@ function getAllScrappableItems(assetCategory) {
     }
     
     // 權限條件：管理員看全部，一般人看自己 (保管人或使用人)
-    if (isAdmin) return true;
+    if (useAdminScope) return true;
     return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
   });
 
@@ -3090,10 +3091,11 @@ function getAdminName() {
   return mapping.get(currentUserEmail) || currentUserEmail; // 如果找不到，就回傳 Email
 }
 
-function getScrappingDataForAdmin(assetCategory) {
+function getScrappingDataForAdmin(assetCategory, forceUserScope) {
   // 此函式名稱雖保留 "ForAdmin"，但現在已支援一般使用者
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
+  const useAdminScope = isAdmin && !forceUserScope;
 
   try {
     const allAssets = getAllAssets();
@@ -3103,7 +3105,7 @@ function getScrappingDataForAdmin(assetCategory) {
     allAssets.forEach(asset => {
       if (asset.assetStatus === '報廢中' && asset.leaderName && asset.assetCategory === assetCategory) {
         // 權限過濾：非管理員只能看到自己的資料
-        if (!isAdmin) {
+        if (!useAdminScope) {
           if (asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
             return; 
           }
@@ -3132,9 +3134,9 @@ function getScrappingDataForAdmin(assetCategory) {
  * [供 printScrap.html 呼叫] 取得所有狀態為「報廢中」的財產，並按保管人分組
  * @returns {Array<Object>} 回傳一個陣列，包含 { applicant: '保管人名稱', count: 報廢數量 }
  */
-function getScrappingApplicants(assetCategory) {
+function getScrappingApplicants(assetCategory, forceUserScope) {
   // 直接轉呼叫通用的邏輯
-  return getScrappingDataForAdmin(assetCategory);
+  return getScrappingDataForAdmin(assetCategory, forceUserScope);
 }
 
 /**
