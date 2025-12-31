@@ -1424,7 +1424,6 @@
           onClose
         }) => {
           const [activeSessionId, setActiveSessionId] = useState('');
-          const [groupMode, setGroupMode] = useState('group');
 
           const sessions = useMemo(() => {
             const map = new Map();
@@ -1458,15 +1457,37 @@
             }
           }, [sessions, activeSessionId]);
 
-          useEffect(() => {
-            if (!isAdmin) return;
-            if (groupMode !== 'group' && groupMode !== 'user') {
-              setGroupMode('group');
-            }
-          }, [isAdmin, groupMode]);
-
           const activeSession = sessions.find(session => session.inventoryId === activeSessionId) || sessions[0];
           const totalCount = (pendingItems || []).length;
+          const normalizeAssigned = (item) => {
+            const raw = String(item.assignedUser || '').trim();
+            let type = item.assignedUserType;
+            if (!type || type === 'none') {
+              if (raw) {
+                type = raw.includes('@') ? 'user' : 'group';
+              } else {
+                type = 'none';
+              }
+            }
+            const userLabel = item.assignedUserLabel || (type === 'user' && raw ? raw.split('@')[0] : '');
+            const groupLabel = item.assignedGroup || (type === 'group' ? (item.assignedUserLabel || raw) : '');
+            return { type, userLabel, groupLabel, raw };
+          };
+          const sessionAssignmentMode = useMemo(() => {
+            if (!activeSession) return 'group';
+            const items = activeSession.items || [];
+            let hasUser = false;
+            let hasGroup = false;
+            items.forEach(item => {
+              const info = normalizeAssigned(item);
+              if (info.type === 'user') hasUser = true;
+              if (info.type === 'group') hasGroup = true;
+            });
+            if (hasUser && !hasGroup) return 'user';
+            if (hasGroup && !hasUser) return 'group';
+            if (hasUser && hasGroup) return 'mixed';
+            return 'group';
+          }, [activeSession]);
 
           const formatSessionLabel = (session) => {
             const datePart = session.inventoryDate || '未提供日期';
@@ -1475,11 +1496,14 @@
           };
 
           const resolveAssignedDisplay = (item) => {
-            if (item.assignedUserType === 'group') {
-              const groupName = item.assignedGroup || item.assignedUserLabel || '未分組';
-              return `群組：${groupName}`;
+            const info = normalizeAssigned(item);
+            if (info.type === 'group') {
+              return info.groupLabel || '未指派';
             }
-            return item.assignedUserLabel || item.assignedUser || '未指派';
+            if (info.type === 'user') {
+              return info.userLabel || info.raw || '未指派';
+            }
+            return '未指派';
           };
 
           const groupedItems = useMemo(() => {
@@ -1494,16 +1518,26 @@
             }
             const groupMap = new Map();
             items.forEach(item => {
+              const info = normalizeAssigned(item);
               let label = '';
-              if (groupMode === 'group') {
-                const groupName = item.assignedGroup || (item.assignedUserType === 'group' ? item.assignedUserLabel : '') || '未指派';
-                label = groupName || '未指派';
-              } else {
-                if (item.assignedUserType === 'group') {
-                  const groupName = item.assignedGroup || item.assignedUserLabel || '未分組';
+              if (sessionAssignmentMode === 'user') {
+                if (info.type === 'group') {
+                  const groupName = info.groupLabel || '未指派';
                   label = `群組：${groupName}`;
                 } else {
-                  label = item.assignedUserLabel || item.assignedUser || '未指派';
+                  label = info.userLabel || info.raw || '未指派';
+                }
+              } else if (sessionAssignmentMode === 'group') {
+                const groupName = info.groupLabel || '未指派';
+                label = groupName || '未指派';
+              } else {
+                if (info.type === 'group') {
+                  const groupName = info.groupLabel || '未指派';
+                  label = `群組：${groupName}`;
+                } else if (info.type === 'user') {
+                  label = info.userLabel || info.raw || '未指派';
+                } else {
+                  label = '未指派';
                 }
               }
               if (!groupMap.has(label)) {
@@ -1519,7 +1553,7 @@
                 items: items.slice().sort((a, b) => String(a.assetId || '').localeCompare(String(b.assetId || ''), 'zh-Hant'))
               }))
               .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant'));
-          }, [activeSession, isAdmin, groupMode]);
+          }, [activeSession, isAdmin, sessionAssignmentMode]);
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -1561,33 +1595,6 @@
                         <div className="text-sm text-slate-600">
                           共 <span className="font-semibold text-red-600">{totalCount}</span> 筆待盤點資產，<span className="font-semibold text-red-600">{sessions.length}</span> 個會話
                         </div>
-                        {isAdmin && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="text-slate-500">分類方式</span>
-                            <div className="flex bg-slate-100 rounded-lg p-1">
-                              <button
-                                onClick={() => setGroupMode('group')}
-                                className={`px-3 py-1 rounded-md transition-colors ${
-                                  groupMode === 'group'
-                                    ? 'bg-white text-slate-800 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                              >
-                                依組別
-                              </button>
-                              <button
-                                onClick={() => setGroupMode('user')}
-                                className={`px-3 py-1 rounded-md transition-colors ${
-                                  groupMode === 'user'
-                                    ? 'bg-white text-slate-800 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700'
-                                }`}
-                              >
-                                依使用者
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       <div className="border-b border-slate-200 mb-4 flex flex-wrap gap-2">
