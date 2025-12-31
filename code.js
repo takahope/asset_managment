@@ -4528,8 +4528,9 @@ function getInventoryData() {
     // 取得進行中盤點會話（管理員可以看到所有會話）
     const activeSessions = getActiveInventorySessions(currentUserEmail, isAdmin, currentUserGroup);
 
-    // ✨ 計算使用者待盤點資產數量
+    // ✨ 計算待盤點資產數量
     let myPendingInventoryCount = 0;
+    let totalPendingInventoryCount = 0;
     const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
     if (inventoryDetailSheet && inventoryDetailSheet.getLastRow() > 1) {
       // 取得所有進行中會話的 ID
@@ -4548,6 +4549,8 @@ function getInventoryData() {
 
         // 只計算未盤點的資產（空值或「未盤點」）
         if (inventoryResult && inventoryResult !== '未盤點') return;
+
+        totalPendingInventoryCount++;
 
         // 判斷是否屬於當前使用者（Email 或組別）
         if (assignedUser) {
@@ -4573,7 +4576,8 @@ function getInventoryData() {
       currentUserGroup: currentUserGroup,
       currentUserEmail: currentUserEmail,
       isAdmin: isAdmin,
-      myPendingInventoryCount: myPendingInventoryCount // ✨ 使用者待盤點資產數量
+      myPendingInventoryCount: myPendingInventoryCount, // ✨ 使用者待盤點資產數量
+      totalPendingInventoryCount: totalPendingInventoryCount // ✨ 管理員全域待盤點資產數量
     };
   } catch (e) {
     Logger.log(`getInventoryData 失敗: ${e.message}`);

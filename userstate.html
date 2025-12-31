@@ -5101,8 +5101,10 @@
 
             // 計算卡片統計數量
             const cardCounts = useMemo(() => {
-                // ✨ 直接使用後端計算的待盤點資產數量
-                const inventoryCount = inventorySessions?.myPendingInventoryCount || 0;
+                // ✨ 直接使用後端計算的待盤點資產數量（管理員顯示全域）
+                const inventoryCount = isAdmin
+                    ? (inventorySessions?.totalPendingInventoryCount || inventorySessions?.myPendingInventoryCount || 0)
+                    : (inventorySessions?.myPendingInventoryCount || 0);
 
                 const scrapPendingCount = (() => {
                     const scrappingAssets = allAssets.filter(a => a.status === '報廢中');
