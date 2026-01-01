@@ -1084,7 +1084,7 @@
         };
 
         // AssetTable 組件
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, isAssetPendingInventory, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, isAssetPendingInventory, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
             const statusColors = {
                 '在庫': 'bg-green-50 text-green-700 border-green-200',
                 '出借中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -1195,14 +1195,22 @@
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {paginatedAssets.map((asset, index) => {
-                                    const canCancel = isAdmin ||
-                                                    currentUserEmail === asset.leaderEmail ||
-                                                    currentUserEmail === asset.userEmail;
+                                    const isTask = typeof isInventoryTaskOnly === 'function'
+                                        ? isInventoryTaskOnly(asset)
+                                        : false;
+                                    const normalizedCurrentEmail = String(currentUserEmail || '').toLowerCase();
+                                    const isOwner = normalizedCurrentEmail &&
+                                        (normalizedCurrentEmail === String(asset.leaderEmail || '').toLowerCase() ||
+                                            normalizedCurrentEmail === String(asset.userEmail || '').toLowerCase());
+                                    const canCancel = !isTask && (isAdmin || isOwner);
                                     const isSelectable = asset.status === '在庫';
                                     const isSelected = selectedAssetIds.includes(asset.assetId);
+                                    const rowHoverClass = isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50';
+                                    const rowBaseClass = isTask ? 'bg-teal-50' : '';
+                                    const rowSelectedClass = isSelected ? 'ring-1 ring-blue-200 ring-inset' : '';
 
                                     return (
-                                        <tr key={`${asset.assetId}-${index}`} className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}>
+                                        <tr key={`${asset.assetId}-${index}`} className={`${rowHoverClass} transition-colors ${rowBaseClass} ${rowSelectedClass} ${!isTask && isSelected ? 'bg-blue-50' : ''}`}>
                                             {/* 勾選欄位 */}
                                             <td className="px-2 py-3 text-center align-top">
                                                 {isSelectable ? (
@@ -1212,6 +1220,7 @@
                                                         value={asset.assetId}
                                                         checked={isSelected}
                                                         onChange={() => onAssetSelect && onAssetSelect(asset.assetId)}
+                                                        data-is-task={isTask ? 'true' : 'false'}
                                                     />
                                                 ) : (
                                                     <span className="text-slate-300" title="僅「在庫」資產可選取">-</span>
@@ -1219,7 +1228,14 @@
                                             </td>
                                             <td className="px-2 py-3 font-mono text-slate-600 whitespace-nowrap align-top">{asset.assetId}</td>
                                             <td className="px-2 py-3 font-medium text-slate-800 align-top w-[160px] max-w-[160px]">
-                                                <div className="line-clamp-2" title={asset.assetName}>{asset.assetName}</div>
+                                                <div className="flex items-start gap-2">
+                                                    <div className="line-clamp-2 min-w-0 flex-1" title={asset.assetName}>{asset.assetName}</div>
+                                                    {isTask && (
+                                                        <span className="inline-flex items-center rounded-full bg-teal-100 text-teal-700 text-xs font-semibold px-2 py-0.5 whitespace-nowrap">
+                                                            盤點任務
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-2 py-3 text-slate-600 align-top w-[180px] max-w-[180px]">
                                                 <div className="line-clamp-2 text-xs break-all" title={asset.modelBrand}>{asset.modelBrand || '-'}</div>
@@ -1253,7 +1269,7 @@
                                                         </button>
                                                     )}
                                                     {/* 在庫資產：顯示轉移、出借、報廢按鈕 */}
-                                                    {asset.status === '在庫' && (
+                                                    {!isTask && asset.status === '在庫' && (
                                                         <>
                                                             <button
                                                                 onClick={() => onOpenTransferModal(asset)}
@@ -1286,6 +1302,22 @@
                                                                     <i className="fa-solid fa-clipboard-check text-lg"></i>
                                                                 </button>
                                                             )}
+                                                        </>
+                                                    )}
+                                                    {isTask && (
+                                                        <>
+                                                            {isAssetPendingInventory && isAssetPendingInventory(asset.assetId) && (
+                                                                <button
+                                                                    onClick={() => onOpenInventoryModal(asset)}
+                                                                    className="text-teal-600 hover:text-teal-800 transition-colors p-1"
+                                                                    title="盤點確認"
+                                                                >
+                                                                    <i className="fa-solid fa-clipboard-check text-lg"></i>
+                                                                </button>
+                                                            )}
+                                                            <span className="text-slate-400 p-1" title="僅限盤點">
+                                                                <i className="fa-solid fa-lock text-lg"></i>
+                                                            </span>
                                                         </>
                                                     )}
 
@@ -3816,7 +3848,7 @@
         // ===== 批次操作 Modal 組件 =====
 
         // 批次轉移 Modal
-        const BatchTransferModal = ({ transferOptions, allAssets = [], onClose, onSuccess }) => {
+        const BatchTransferModal = ({ transferOptions, allAssets = [], selectedAssetIds: initialSelectedAssetIds = null, onClose, onSuccess }) => {
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
             const [transferMode, setTransferMode] = useState('normal');
             const [changeLocation, setChangeLocation] = useState(false);
@@ -3831,10 +3863,14 @@
 
             // 從 BatchList 獲取已選資產
             useEffect(() => {
+                if (Array.isArray(initialSelectedAssetIds)) {
+                    setSelectedAssetIds(initialSelectedAssetIds);
+                    return;
+                }
                 if (typeof window.BatchList_getItems === 'function') {
                     setSelectedAssetIds(window.BatchList_getItems());
                 }
-            }, []);
+            }, [initialSelectedAssetIds]);
 
             // 獲取已選資產的詳細資訊
             const selectedAssetsDetails = useMemo(() => {
@@ -4079,7 +4115,7 @@
         };
 
         // 批次出借 Modal
-        const BatchLendingModal = ({ lendingOptions, allAssets = [], onClose, onSuccess }) => {
+        const BatchLendingModal = ({ lendingOptions, allAssets = [], selectedAssetIds: initialSelectedAssetIds = null, onClose, onSuccess }) => {
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
             const [borrowerName, setBorrowerName] = useState('');
             const [lendingLocation, setLendingLocation] = useState('');
@@ -4088,10 +4124,14 @@
             const [isSubmitting, setIsSubmitting] = useState(false);
 
             useEffect(() => {
+                if (Array.isArray(initialSelectedAssetIds)) {
+                    setSelectedAssetIds(initialSelectedAssetIds);
+                    return;
+                }
                 if (typeof window.BatchList_getItems === 'function') {
                     setSelectedAssetIds(window.BatchList_getItems());
                 }
-            }, []);
+            }, [initialSelectedAssetIds]);
 
             const selectedAssetsDetails = useMemo(() => {
                 return selectedAssetIds.map(id => allAssets.find(a => a.assetId === id)).filter(Boolean);
@@ -4213,17 +4253,21 @@
         };
 
         // 批次報廢 Modal
-        const BatchScrapModal = ({ allAssets = [], onClose, onSuccess }) => {
+        const BatchScrapModal = ({ allAssets = [], selectedAssetIds: initialSelectedAssetIds = null, onClose, onSuccess }) => {
             const [selectedAssetIds, setSelectedAssetIds] = useState([]);
             const [reason, setReason] = useState('');
             const [remarks, setRemarks] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
 
             useEffect(() => {
+                if (Array.isArray(initialSelectedAssetIds)) {
+                    setSelectedAssetIds(initialSelectedAssetIds);
+                    return;
+                }
                 if (typeof window.BatchList_getItems === 'function') {
                     setSelectedAssetIds(window.BatchList_getItems());
                 }
-            }, []);
+            }, [initialSelectedAssetIds]);
 
             const selectedAssetsDetails = useMemo(() => {
                 return selectedAssetIds.map(id => allAssets.find(a => a.assetId === id)).filter(Boolean);
@@ -5160,7 +5204,7 @@
             const [isReady, setIsReady] = useState(false);
             const [allAssets, setAllAssets] = useState([]);
             const [isAdmin, setIsAdmin] = useState(false);
-            const [viewMode, setViewMode] = useState('admin');
+            const [viewMode, setViewMode] = useState('user');
             const [currentUserEmail, setCurrentUserEmail] = useState('');
             const [currentUserName, setCurrentUserName] = useState('');
             const [webAppUrl, setWebAppUrl] = useState('');
@@ -5195,6 +5239,7 @@
 
             // 批次操作 Modal 相關 state
             const [batchModalType, setBatchModalType] = useState(null); // 'transfer', 'lending', 'scrap'
+            const [batchActionAssetIds, setBatchActionAssetIds] = useState([]);
 
             // 新增資產 Modal 相關 state
             const [showAddAssetModal, setShowAddAssetModal] = useState(false);
@@ -5223,6 +5268,58 @@
             const [currentUserGroup, setCurrentUserGroup] = useState('');
 
             const isAdminView = isAdmin && viewMode === 'admin';
+            const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+            const isInventoryTaskOnly = useCallback((asset) => {
+                if (!asset) return false;
+                if (isAdminView) return false;
+                const currentEmail = normalizeEmail(currentUserEmail);
+                if (!currentEmail) return false;
+                const leaderEmail = normalizeEmail(asset.leaderEmail);
+                const userEmail = normalizeEmail(asset.userEmail);
+                return leaderEmail !== currentEmail && userEmail !== currentEmail;
+            }, [isAdminView, currentUserEmail]);
+            const assetIndex = useMemo(() => {
+                const map = new Map();
+                (allAssets || []).forEach(asset => {
+                    map.set(asset.assetId, asset);
+                });
+                return map;
+            }, [allAssets]);
+            const resolveAssetIsTask = useCallback((assetId) => {
+                const checkbox = document.querySelector(`.asset-checkbox[value="${assetId}"]`);
+                if (checkbox && checkbox.dataset && checkbox.dataset.isTask) {
+                    return checkbox.dataset.isTask === 'true';
+                }
+                const asset = assetIndex.get(assetId);
+                return asset ? isInventoryTaskOnly(asset) : false;
+            }, [assetIndex, isInventoryTaskOnly]);
+            const getSelectedAssetsForAction = useCallback((actionType) => {
+                if (typeof BatchList_getItems !== 'function') {
+                    return [];
+                }
+                const selectedIds = BatchList_getItems();
+                if (actionType === 'INVENTORY') {
+                    return selectedIds;
+                }
+                let blockedCount = 0;
+                const allowed = selectedIds.filter(assetId => {
+                    const isTask = resolveAssetIsTask(assetId);
+                    if (isTask) {
+                        blockedCount += 1;
+                        return false;
+                    }
+                    return true;
+                });
+                if (blockedCount > 0) {
+                    const message = `已自動排除 ${blockedCount} 筆同組成員資產，僅保留可操作的項目。`;
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast(message, 'warning');
+                    } else {
+                        alert(message);
+                    }
+                }
+                return allowed;
+            }, [resolveAssetIsTask]);
 
             // 處理單個資產選取
             const handleAssetSelect = useCallback((assetId) => {
@@ -6091,7 +6188,11 @@
                     alert('批次選取功能尚未載入');
                     return;
                 }
-                const items = BatchList_getItems();
+                const items = getSelectedAssetsForAction('INVENTORY');
+                if (items.length === 0) {
+                    alert('請先選取要處理的資產');
+                    return;
+                }
                 // 過濾出待盤點的資產
                 const pendingItems = items.filter(id => isAssetPendingInventory(id));
                 if (pendingItems.length === 0) {
@@ -6145,11 +6246,17 @@
                     alert('批次選取功能尚未載入');
                     return;
                 }
-                const items = BatchList_getItems();
-                if (items.length === 0) {
+                const rawItems = BatchList_getItems();
+                if (rawItems.length === 0) {
                     alert('請先選取要處理的資產');
                     return;
                 }
+                const items = getSelectedAssetsForAction('TRANSFER');
+                if (items.length === 0) {
+                    alert('選取的資產皆為同組成員資產，無法批次轉移。');
+                    return;
+                }
+                setBatchActionAssetIds(items);
                 setBatchModalType('transfer');
             };
 
@@ -6162,11 +6269,17 @@
                     alert('批次選取功能尚未載入');
                     return;
                 }
-                const items = BatchList_getItems();
-                if (items.length === 0) {
+                const rawItems = BatchList_getItems();
+                if (rawItems.length === 0) {
                     alert('請先選取要處理的資產');
                     return;
                 }
+                const items = getSelectedAssetsForAction('LENDING');
+                if (items.length === 0) {
+                    alert('選取的資產皆為同組成員資產，無法批次出借。');
+                    return;
+                }
+                setBatchActionAssetIds(items);
                 setBatchModalType('lending');
             };
 
@@ -6175,20 +6288,28 @@
                     alert('批次選取功能尚未載入');
                     return;
                 }
-                const items = BatchList_getItems();
-                if (items.length === 0) {
+                const rawItems = BatchList_getItems();
+                if (rawItems.length === 0) {
                     alert('請先選取要處理的資產');
                     return;
                 }
+                const items = getSelectedAssetsForAction('SCRAP');
+                if (items.length === 0) {
+                    alert('選取的資產皆為同組成員資產，無法批次報廢。');
+                    return;
+                }
+                setBatchActionAssetIds(items);
                 setBatchModalType('scrap');
             };
 
             const handleCloseBatchModal = () => {
                 setBatchModalType(null);
+                setBatchActionAssetIds([]);
             };
 
             const handleBatchActionSuccess = () => {
                 setBatchModalType(null);
+                setBatchActionAssetIds([]);
                 // 清空批次清單
                 if (typeof BatchList_resetOnSubmit === 'function') {
                     BatchList_resetOnSubmit();
@@ -6296,29 +6417,38 @@
                         {/* 右側：視角切換 + 重新整理按鈕 + 載入狀態指示 */}
                         <div className="flex items-center gap-3">
                             {isAdmin && (
-                                <div className="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
-                                    <button
-                                        onClick={() => handleViewModeChange('user')}
-                                        className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                                            viewMode === 'user'
-                                                ? 'bg-slate-800 text-white'
-                                                : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                        title="一般使用者視角"
-                                    >
-                                        一般
-                                    </button>
-                                    <button
-                                        onClick={() => handleViewModeChange('admin')}
-                                        className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                                            viewMode === 'admin'
-                                                ? 'bg-slate-800 text-white'
-                                                : 'text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                        title="管理者視角"
-                                    >
-                                        管理者
-                                    </button>
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                                        isAdminView
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                            : 'bg-teal-50 text-teal-700 border-teal-200'
+                                    }`}>
+                                        {isAdminView ? '管理員檢視：全域模式' : '一般檢視：群組模式'}
+                                    </span>
+                                    <div className="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
+                                        <button
+                                            onClick={() => handleViewModeChange('user')}
+                                            className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                                                viewMode === 'user'
+                                                    ? 'bg-slate-800 text-white'
+                                                    : 'text-slate-600 hover:bg-slate-100'
+                                            }`}
+                                            title="一般使用者視角"
+                                        >
+                                            一般
+                                        </button>
+                                        <button
+                                            onClick={() => handleViewModeChange('admin')}
+                                            className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                                                viewMode === 'admin'
+                                                    ? 'bg-slate-800 text-white'
+                                                    : 'text-slate-600 hover:bg-slate-100'
+                                            }`}
+                                            title="管理者視角"
+                                        >
+                                            管理者
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             {/* 載入狀態文字 */}
@@ -6394,6 +6524,7 @@
                         assets={filteredAssets}
                         isAdmin={isAdminView}
                         currentUserEmail={currentUserEmail}
+                        isInventoryTaskOnly={isInventoryTaskOnly}
                         onCancel={handleCancel}
                         onRestore={handleRestore}
                         onOpenTransferModal={handleOpenTransferModal}
@@ -6517,6 +6648,7 @@
                         <BatchTransferModal
                             transferOptions={transferOptions}
                             allAssets={allAssets}
+                            selectedAssetIds={batchActionAssetIds}
                             onClose={handleCloseBatchModal}
                             onSuccess={handleBatchActionSuccess}
                         />
@@ -6526,6 +6658,7 @@
                         <BatchLendingModal
                             lendingOptions={lendingOptions}
                             allAssets={allAssets}
+                            selectedAssetIds={batchActionAssetIds}
                             onClose={handleCloseBatchModal}
                             onSuccess={handleBatchActionSuccess}
                         />
@@ -6534,6 +6667,7 @@
                     {batchModalType === 'scrap' && (
                         <BatchScrapModal
                             allAssets={allAssets}
+                            selectedAssetIds={batchActionAssetIds}
                             onClose={handleCloseBatchModal}
                             onSuccess={handleBatchActionSuccess}
                         />
