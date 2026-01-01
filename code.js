@@ -235,6 +235,49 @@ function getAssetsForCurrentUser() {
 }
 
 /**
+ * 取得指定使用者的同組成員 Email 清單（包含自己）
+ * @param {string} targetEmail 使用者 Email
+ * @returns {string[]} 同組成員 Email 陣列（小寫化）
+ */
+function getGroupMemberEmails(targetEmail) {
+  const normalizedTarget = String(targetEmail || '').toLowerCase().trim();
+  if (!normalizedTarget) return [];
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  if (!keeperEmailSheet || keeperEmailSheet.getLastRow() <= 1) {
+    return [normalizedTarget];
+  }
+
+  const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+  const emailToGroupMap = {};
+  const groupToMembersMap = {};
+
+  keeperData.forEach(row => {
+    const email = row[1];
+    if (!email) return;
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const groupName = row[6] ? String(row[6]).trim() : '';
+    if (!groupName) return;
+    emailToGroupMap[normalizedEmail] = groupName;
+    if (!groupToMembersMap[groupName]) {
+      groupToMembersMap[groupName] = [];
+    }
+    groupToMembersMap[groupName].push(normalizedEmail);
+  });
+
+  const groupName = emailToGroupMap[normalizedTarget];
+  if (!groupName) {
+    return [normalizedTarget];
+  }
+
+  const members = groupToMembersMap[groupName] || [];
+  const uniqueMembers = new Set(members);
+  uniqueMembers.add(normalizedTarget);
+  return Array.from(uniqueMembers);
+}
+
+/**
  * 查找指定 assetId 所在的實際工作表及列號。
  * @param {string} assetId - 要查找的資產ID。
  * @returns {object|null} - 如果找到，回傳 { sheet: Sheet, rowIndex: number, sheetName: string }，否則回傳 null。
@@ -609,6 +652,7 @@ function doGet(e) {
 }
 function getUserStateData(forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail();
+  const normalizedCurrentEmail = String(currentUserEmail).toLowerCase();
   const isAdmin = checkAdminPermissions();
   const useAdminScope = isAdmin && !forceUserScope;
 
@@ -620,7 +664,7 @@ function getUserStateData(forceUserScope) {
     const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
     for (let row of keeperData) {
       const email = row[1];
-      if (email && String(email).toLowerCase() === currentUserEmail.toLowerCase()) {
+      if (email && String(email).toLowerCase() === normalizedCurrentEmail) {
         currentUserName = row[0]; // 找到對應的姓名
         break;
       }
@@ -632,7 +676,14 @@ function getUserStateData(forceUserScope) {
   if (useAdminScope) {
     filteredData = getAllAssets();
   } else {
-    filteredData = getAssetsForCurrentUser();
+    const groupEmails = getGroupMemberEmails(currentUserEmail);
+    const groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
+    const allAssets = getAllAssets();
+    filteredData = allAssets.filter(asset => {
+      const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
+      const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
+      return groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
+    });
   }
 
   const results = filteredData.map(asset => ({
@@ -641,6 +692,7 @@ function getUserStateData(forceUserScope) {
     modelBrand: asset.modelBrand || '',
     leader: asset.leaderName,
     leaderEmail: asset.leaderEmail, // ✨ Add leaderEmail
+    userEmail: asset.userEmail || '',
     location: asset.location,
     status: asset.assetStatus,
     category: asset.assetCategory,
