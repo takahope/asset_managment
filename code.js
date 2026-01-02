@@ -3086,6 +3086,10 @@ function checkAdminPermissions() {
   return adminEmails.includes(currentUserEmail);
 }
 
+function checkAdminStatus() {
+  return checkAdminPermissions();
+}
+
 /**
  * 取得所有待報廢的詳細項目 (詳細模式用)
  * @param {string} assetCategory - 財產類別 (財產/非消耗品)
@@ -5551,6 +5555,10 @@ function completeInventorySession(inventoryId) {
  */
 function getInventoryHistory(allRecords) {
   try {
+    const isAdmin = checkAdminStatus();
+    if (allRecords && !isAdmin) {
+      throw new Error('Access Denied');
+    }
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
@@ -5558,6 +5566,18 @@ function getInventoryHistory(allRecords) {
     if (!inventoryLogSheet || inventoryLogSheet.getLastRow() <= 1) {
       return [];
     }
+
+    const formatTimestamp = (rawValue) => {
+      if (!rawValue) return '';
+      if (rawValue instanceof Date) {
+        return Utilities.formatDate(rawValue, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+      }
+      const parsed = new Date(rawValue);
+      if (!Number.isNaN(parsed.getTime())) {
+        return Utilities.formatDate(parsed, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+      }
+      return String(rawValue);
+    };
 
     // 建立 Email 到姓名的映射（從「保管人/信箱」表）
     const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
@@ -5574,20 +5594,20 @@ function getInventoryHistory(allRecords) {
     }
 
     const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
-    const history = [];
-
-    for (let row of data) {
+    const history = data.map(row => {
       const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
+      const normalizedSessionEmail = sessionEmail ? String(sessionEmail).toLowerCase() : '';
 
       // 如果不是管理員模式，只顯示自己的記錄
-      if (!allRecords && sessionEmail.toLowerCase() !== currentUserEmail) {
-        continue;
+      if (!allRecords && normalizedSessionEmail !== currentUserEmail) {
+        return null;
       }
 
       const rawInventoryDate = row[IL_INVENTORY_DATE_COLUMN_INDEX - 1];
       const inventoryDateStr = rawInventoryDate instanceof Date
         ? Utilities.formatDate(rawInventoryDate, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
-        : String(rawInventoryDate);
+        : (rawInventoryDate ? String(rawInventoryDate) : '');
+      const timestampDisplay = formatTimestamp(rawInventoryDate);
 
       const rawCompletionTime = row[IL_COMPLETION_TIME_COLUMN_INDEX - 1];
       const completionTimeStr = rawCompletionTime instanceof Date
@@ -5595,20 +5615,36 @@ function getInventoryHistory(allRecords) {
         : (rawCompletionTime ? String(rawCompletionTime) : '');
 
       // 從映射表查詢真實姓名，找不到則使用原始的 inventoryPerson
-      const inventoryPersonName = emailToNameMap.get(String(sessionEmail).toLowerCase()) || row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1];
+      const inventoryPersonName = emailToNameMap.get(normalizedSessionEmail) || row[IL_INVENTORY_PERSON_COLUMN_INDEX - 1];
+      const statusLabel = row[IL_STATUS_COLUMN_INDEX - 1];
+      const statusCode = statusLabel === '已完成'
+        ? 'COMPLETED'
+        : statusLabel === '進行中'
+          ? 'OPEN'
+          : 'UNKNOWN';
+      const verifiedCount = Number(row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1] || 0);
+      const totalCount = Number(row[IL_TOTAL_COUNT_COLUMN_INDEX - 1] || 0);
+      const sessionId = row[IL_INVENTORY_ID_COLUMN_INDEX - 1];
+      const summary = row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1] || '';
 
-      history.push({
-        inventoryId: row[IL_INVENTORY_ID_COLUMN_INDEX - 1],
+      return {
+        inventoryId: sessionId,
         inventoryDate: inventoryDateStr,
         inventoryPerson: inventoryPersonName, // 使用從映射表查詢的真實姓名
         inventoryEmail: sessionEmail,
-        filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
-        verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
-        totalCount: row[IL_TOTAL_COUNT_COLUMN_INDEX - 1],
-        status: row[IL_STATUS_COLUMN_INDEX - 1],
-        completionTime: completionTimeStr
-      });
-    }
+        filter: summary,
+        verifiedCount: verifiedCount,
+        totalCount: totalCount,
+        status: statusLabel,
+        completionTime: completionTimeStr,
+        sessionId: sessionId,
+        timestamp: timestampDisplay,
+        auditor: sessionEmail || inventoryPersonName || '',
+        statusCode: statusCode,
+        progressDisplay: `${verifiedCount} / ${totalCount}`,
+        summary: summary
+      };
+    }).filter(item => item);
 
     // 按日期倒序排列
     history.sort((a, b) => new Date(b.inventoryDate) - new Date(a.inventoryDate));
@@ -5617,6 +5653,67 @@ function getInventoryHistory(allRecords) {
 
   } catch (e) {
     Logger.log(`getInventoryHistory 失敗: ${e.message}`);
-    return [];
+    throw e;
+  }
+}
+
+/**
+ * 檢查是否有進行中的盤點會話
+ * @returns {Object} { hasActive: boolean, sessionId: string | null }
+ */
+function checkActiveSession() {
+  const isAdmin = checkAdminStatus();
+  if (!isAdmin) {
+    throw new Error('Access Denied');
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+
+    if (!inventoryLogSheet || inventoryLogSheet.getLastRow() <= 1) {
+      return { hasActive: false, sessionId: null };
+    }
+
+    const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    let activeSessionId = null;
+    let activeSessionDate = null;
+
+    data.forEach(row => {
+      const status = row[IL_STATUS_COLUMN_INDEX - 1];
+      if (status !== '進行中') return;
+      const inventoryId = row[IL_INVENTORY_ID_COLUMN_INDEX - 1];
+      if (!inventoryId) return;
+
+      const rawDate = row[IL_INVENTORY_DATE_COLUMN_INDEX - 1];
+      let dateValue = null;
+      if (rawDate instanceof Date) {
+        dateValue = rawDate;
+      } else if (rawDate) {
+        const parsed = new Date(rawDate);
+        if (!Number.isNaN(parsed.getTime())) {
+          dateValue = parsed;
+        }
+      }
+
+      if (!activeSessionId) {
+        activeSessionId = inventoryId;
+        activeSessionDate = dateValue;
+        return;
+      }
+
+      if (dateValue && (!activeSessionDate || dateValue > activeSessionDate)) {
+        activeSessionId = inventoryId;
+        activeSessionDate = dateValue;
+      }
+    });
+
+    return {
+      hasActive: Boolean(activeSessionId),
+      sessionId: activeSessionId || null
+    };
+  } catch (e) {
+    Logger.log(`checkActiveSession 失敗: ${e.message}`);
+    throw e;
   }
 }
