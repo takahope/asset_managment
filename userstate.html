@@ -1144,9 +1144,7 @@
             const [historyItems, setHistoryItems] = useState([]);
             const [isHistoryLoading, setIsHistoryLoading] = useState(true);
             const [historyError, setHistoryError] = useState('');
-            const [sessionInfo, setSessionInfo] = useState({ hasActive: false, sessionId: null });
             const [isSessionLoading, setIsSessionLoading] = useState(true);
-            const [sessionError, setSessionError] = useState('');
             const [filterType, setFilterType] = useState('all');
             const [filterValue, setFilterValue] = useState('');
             const [filterOptions, setFilterOptions] = useState({ locations: [], keepers: [], users: [] });
@@ -1169,7 +1167,6 @@
                 setIsHistoryLoading(true);
                 setIsSessionLoading(true);
                 setHistoryError('');
-                setSessionError('');
                 setOptionsError('');
                 setStartError('');
                 setStartMessage('');
@@ -1179,11 +1176,10 @@
                 }
 
                 const historyPromise = runScript('getInventoryHistory', true);
-                const sessionPromise = runScript('checkActiveSession');
                 const optionsPromise = runScript('getInventoryData');
 
-                Promise.allSettled([historyPromise, sessionPromise, optionsPromise]).then(results => {
-                    const [historyResult, sessionResult, optionsResult] = results;
+                Promise.allSettled([historyPromise, optionsPromise]).then(results => {
+                    const [historyResult, optionsResult] = results;
 
                     if (historyResult.status === 'fulfilled') {
                         const history = historyResult.value;
@@ -1199,19 +1195,7 @@
                         setHistoryItems([]);
                     }
 
-                    let sessionErrorMessage = '';
                     let optionsErrorMessage = '';
-                    if (sessionResult.status === 'fulfilled' && sessionResult.value) {
-                        setSessionInfo({
-                            hasActive: Boolean(sessionResult.value.hasActive),
-                            sessionId: sessionResult.value.sessionId || null
-                        });
-                    } else {
-                        const message = sessionResult.reason?.message || String(sessionResult.reason || '載入失敗');
-                        sessionErrorMessage = `載入盤點狀態失敗：${message}`;
-                        setSessionInfo({ hasActive: false, sessionId: null });
-                    }
-
                     if (optionsResult.status === 'fulfilled' && optionsResult.value) {
                         setFilterOptions({
                             locations: optionsResult.value.locations || [],
@@ -1224,7 +1208,6 @@
                         setFilterOptions({ locations: [], keepers: [], users: [] });
                     }
 
-                    setSessionError(sessionErrorMessage);
                     setOptionsError(optionsErrorMessage);
                     setIsHistoryLoading(false);
                     setIsSessionLoading(false);
@@ -1248,11 +1231,6 @@
             const handleStartSession = () => {
                 setStartError('');
                 setStartMessage('');
-
-                if (sessionInfo.hasActive) {
-                    setStartError('目前已有進行中的盤點會話，請先完成或繼續該會話。');
-                    return;
-                }
 
                 let selectedValue = '';
                 if (filterType === 'location') {
@@ -1299,8 +1277,7 @@
                     .startInventorySession(options);
             };
 
-            const hasActiveSession = !isSessionLoading && sessionInfo.hasActive;
-            const startDisabled = isStarting || isSessionLoading || hasActiveSession;
+            const startDisabled = isStarting || isSessionLoading;
 
             const handleDeleteSession = (sessionId) => {
                 if (!sessionId) return;
@@ -1445,18 +1422,11 @@
                                         開始新的盤點
                                     </div>
                                     <div className="inventory-card-body inventory-card-body--primary">
-                                        {hasActiveSession && (
-                                            <div className="inventory-start-alert">
-                                                目前已有進行中的盤點會話，請先完成或繼續該會話。
-                                            </div>
-                                        )}
                                         {isSessionLoading ? (
                                             <div className="inventory-empty-state">
                                                 <i className="fa-solid fa-spinner fa-spin mr-2 text-slate-400"></i>
                                                 載入盤點狀態中...
                                             </div>
-                                        ) : sessionError ? (
-                                            <div className="inventory-empty-state text-rose-600">{sessionError}</div>
                                         ) : (
                                             <>
                                         <div className="text-sm font-semibold text-slate-700 mb-3">選擇盤點範圍：</div>
