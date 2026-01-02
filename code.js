@@ -5717,3 +5717,74 @@ function checkActiveSession() {
     throw e;
   }
 }
+
+/**
+ * 刪除盤點會話與明細
+ * @param {string} sessionId - 盤點會話 ID
+ * @returns {Object} 刪除結果
+ */
+function deleteInventorySession(sessionId) {
+  const isAdmin = checkAdminStatus();
+  if (!isAdmin) {
+    throw new Error('Access Denied');
+  }
+
+  const targetId = String(sessionId || '').trim();
+  if (!targetId) {
+    throw new Error('缺少盤點會話 ID');
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    let deletedLogRows = 0;
+    if (inventoryLogSheet && inventoryLogSheet.getLastRow() > 1) {
+      const logData = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+      const logRowsToDelete = [];
+
+      logData.forEach((row, index) => {
+        if (row[IL_INVENTORY_ID_COLUMN_INDEX - 1] === targetId) {
+          logRowsToDelete.push(index + 2);
+        }
+      });
+
+      for (let i = logRowsToDelete.length - 1; i >= 0; i--) {
+        inventoryLogSheet.deleteRow(logRowsToDelete[i]);
+        deletedLogRows += 1;
+      }
+    }
+
+    let deletedDetailRows = 0;
+    if (inventoryDetailSheet && inventoryDetailSheet.getLastRow() > 1) {
+      const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+      const detailRowsToDelete = [];
+
+      detailData.forEach((row, index) => {
+        if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === targetId) {
+          detailRowsToDelete.push(index + 2);
+        }
+      });
+
+      for (let i = detailRowsToDelete.length - 1; i >= 0; i--) {
+        inventoryDetailSheet.deleteRow(detailRowsToDelete[i]);
+        deletedDetailRows += 1;
+      }
+    }
+
+    if (deletedLogRows === 0 && deletedDetailRows === 0) {
+      throw new Error('找不到盤點會話');
+    }
+
+    return {
+      success: true,
+      message: `已刪除盤點會話 ${targetId}`,
+      deletedLogRows: deletedLogRows,
+      deletedDetailRows: deletedDetailRows
+    };
+  } catch (e) {
+    Logger.log(`deleteInventorySession 失敗: ${e.message}`);
+    throw e;
+  }
+}

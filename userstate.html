@@ -39,12 +39,13 @@
         .inventory-modal-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(15, 23, 42, 0.55);
+            background: rgba(15, 23, 42, 0.6);
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 24px;
             z-index: 60;
+            backdrop-filter: blur(2px);
         }
 
         .inventory-modal {
@@ -70,67 +71,253 @@
         .inventory-modal-body {
             padding: 20px;
             display: grid;
-            gap: 20px;
+            gap: 24px;
             overflow-y: auto;
+            grid-template-columns: minmax(0, 1fr);
+            flex: 1;
+            min-height: 0;
         }
 
-        .inventory-section {
-            background: #f8fafc;
+        @media (min-width: 1024px) {
+            .inventory-modal-body {
+                grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+            }
+        }
+
+        .inventory-column {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .inventory-card {
             border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 16px;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
         }
 
-        .inventory-section-title {
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 12px;
+        .inventory-card-header {
+            padding: 10px 16px;
+            font-weight: 700;
+            color: #ffffff;
             display: flex;
             align-items: center;
             gap: 8px;
+            font-size: 15px;
+        }
+
+        .inventory-card-header--primary {
+            background: #3b82f6;
+        }
+
+        .inventory-card-header--neutral {
+            background: #6b7280;
+        }
+
+        .inventory-card-body {
+            padding: 16px;
+        }
+
+        .inventory-card-body--primary {
+            background: #ffffff;
+        }
+
+        .inventory-card-body--neutral {
+            background: #f3f4f6;
+        }
+
+        .inventory-empty-state {
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+            padding: 12px 0;
+        }
+
+        .inventory-start-alert {
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            color: #92400e;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .inventory-option-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .inventory-option-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #475569;
+        }
+
+        .inventory-primary-button {
+            background: #3b82f6;
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 8px 18px;
+            font-weight: 600;
+        }
+
+        .inventory-primary-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .inventory-modal-footer {
+            padding: 12px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .inventory-secondary-button {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #475569;
+            border-radius: 8px;
+            padding: 6px 16px;
+            font-size: 14px;
+        }
+
+        .inventory-secondary-button:hover {
+            background: #f1f5f9;
         }
 
         .inventory-history-list {
-            display: grid;
+            display: flex;
+            flex-direction: column;
             gap: 12px;
-            max-height: 42vh;
+            max-height: 520px;
             overflow-y: auto;
+            padding-right: 4px;
         }
 
         .inventory-history-item {
             background: #ffffff;
             border: 1px solid #e2e8f0;
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 12px 14px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+        }
+
+        .inventory-history-item.is-completed {
+            opacity: 0.7;
+        }
+
+        .inventory-history-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .inventory-history-title {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .inventory-history-session {
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .inventory-history-count {
+            text-align: right;
+        }
+
+        .inventory-history-right {
+            display: flex;
+            align-items: flex-start;
             gap: 12px;
         }
 
-        .inventory-history-meta {
-            color: #475569;
-            font-size: 13px;
+        .inventory-history-count-number {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
         }
 
-        .inventory-status-badge {
+        .inventory-history-count-label {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .inventory-history-delete {
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #64748b;
+            border-radius: 8px;
+            padding: 6px 8px;
+            font-size: 14px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .inventory-history-delete:hover {
+            background: #f8fafc;
+            color: #dc2626;
+            border-color: #fecaca;
+        }
+
+        .inventory-history-delete:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .inventory-history-meta {
+            font-size: 13px;
+            color: #6b7280;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .inventory-history-footer {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #0f766e;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 8px;
+        }
+
+        .inventory-badge {
             padding: 2px 8px;
             border-radius: 999px;
             font-size: 12px;
             font-weight: 600;
+            display: inline-flex;
+            align-items: center;
         }
 
-        .inventory-status-open {
-            background: #e0f2fe;
-            color: #0c4a6e;
+        .inventory-badge--open {
+            background: #f6c344;
+            color: #4b3d00;
         }
 
-        .inventory-status-completed {
-            background: #dcfce7;
-            color: #166534;
+        .inventory-badge--completed {
+            background: #e5e7eb;
+            color: #4b5563;
         }
 
-        .inventory-status-unknown {
+        .inventory-badge--unknown {
             background: #e2e8f0;
             color: #475569;
         }
@@ -953,7 +1140,7 @@
             );
         };
 
-        const InventoryManagementModal = ({ onClose, webAppUrl }) => {
+        const InventoryManagementModal = ({ onClose }) => {
             const [historyItems, setHistoryItems] = useState([]);
             const [isHistoryLoading, setIsHistoryLoading] = useState(true);
             const [historyError, setHistoryError] = useState('');
@@ -967,6 +1154,9 @@
             const [isStarting, setIsStarting] = useState(false);
             const [startError, setStartError] = useState('');
             const [startMessage, setStartMessage] = useState('');
+            const [deleteMessage, setDeleteMessage] = useState('');
+            const [deleteError, setDeleteError] = useState('');
+            const [deletingSessionId, setDeletingSessionId] = useState('');
 
             const runScript = useCallback((fnName, ...args) => new Promise((resolve, reject) => {
                 google.script.run
@@ -974,7 +1164,8 @@
                     .withFailureHandler(reject)[fnName](...args);
             }), []);
 
-            const loadModalData = useCallback(() => {
+            const loadModalData = useCallback((options = {}) => {
+                const { keepDeleteMessage = false } = options;
                 setIsHistoryLoading(true);
                 setIsSessionLoading(true);
                 setHistoryError('');
@@ -982,6 +1173,10 @@
                 setOptionsError('');
                 setStartError('');
                 setStartMessage('');
+                if (!keepDeleteMessage) {
+                    setDeleteMessage('');
+                    setDeleteError('');
+                }
 
                 const historyPromise = runScript('getInventoryHistory', true);
                 const sessionPromise = runScript('checkActiveSession');
@@ -1050,16 +1245,6 @@
                 }
             };
 
-            const handleContinueSession = () => {
-                const baseUrl = (window._portalWebAppUrl || webAppUrl || '').trim();
-                const targetUrl = baseUrl ? `${baseUrl}?page=inventory` : '?page=inventory';
-                if (typeof window.navigateWithLoader === 'function') {
-                    window.navigateWithLoader(targetUrl);
-                } else {
-                    window.location.href = targetUrl;
-                }
-            };
-
             const handleStartSession = () => {
                 setStartError('');
                 setStartMessage('');
@@ -1114,10 +1299,39 @@
                     .startInventorySession(options);
             };
 
+            const hasActiveSession = !isSessionLoading && sessionInfo.hasActive;
+            const startDisabled = isStarting || isSessionLoading || hasActiveSession;
+
+            const handleDeleteSession = (sessionId) => {
+                if (!sessionId) return;
+                const shouldDelete = confirm(`確定要刪除盤點會話「${sessionId}」嗎？\n\n此操作會刪除盤點紀錄與明細，無法復原。`);
+                if (!shouldDelete) return;
+
+                setDeleteMessage('');
+                setDeleteError('');
+                setDeletingSessionId(sessionId);
+
+                google.script.run
+                    .withSuccessHandler(result => {
+                        setDeletingSessionId('');
+                        if (result && result.success) {
+                            setDeleteMessage(result.message || '盤點會話已刪除。');
+                            loadModalData({ keepDeleteMessage: true });
+                        } else {
+                            setDeleteError(result?.error || '刪除失敗');
+                        }
+                    })
+                    .withFailureHandler(error => {
+                        setDeletingSessionId('');
+                        setDeleteError(error.message || '刪除失敗');
+                    })
+                    .deleteInventorySession(sessionId);
+            };
+
             const renderHistoryContent = () => {
                 if (isHistoryLoading) {
                     return (
-                        <div className="text-center text-sm text-slate-500 py-6">
+                        <div className="inventory-empty-state">
                             <i className="fa-solid fa-spinner fa-spin mr-2 text-slate-400"></i>
                             載入歷史記錄中...
                         </div>
@@ -1126,13 +1340,13 @@
 
                 if (historyError) {
                     return (
-                        <div className="text-center text-sm text-rose-600 py-6">{historyError}</div>
+                        <div className="inventory-empty-state text-rose-600">{historyError}</div>
                     );
                 }
 
                 if (!historyItems || historyItems.length === 0) {
                     return (
-                        <div className="text-center text-sm text-slate-500 py-6">尚無歷史記錄</div>
+                        <div className="inventory-empty-state">尚無歷史記錄</div>
                     );
                 }
 
@@ -1142,34 +1356,58 @@
                     const isCompleted = statusValue === '已完成' || statusCode === 'COMPLETED';
                     const isOpen = statusValue === '進行中' || statusCode === 'OPEN';
                     const badgeClass = isCompleted
-                        ? 'inventory-status-completed'
+                        ? 'inventory-badge inventory-badge--completed'
                         : isOpen
-                            ? 'inventory-status-open'
-                            : 'inventory-status-unknown';
+                            ? 'inventory-badge inventory-badge--open'
+                            : 'inventory-badge inventory-badge--unknown';
                     const badgeLabel = statusValue || (isCompleted ? '已完成' : isOpen ? '進行中' : '未定義');
                     const progressDisplay = record.progressDisplay ||
                         `${Number(record.verifiedCount || 0)} / ${Number(record.totalCount || 0)}`;
-                    const timestamp = record.timestamp || record.inventoryDate || '';
-                    const auditor = record.auditor || record.inventoryPerson || record.inventoryEmail || '';
-                    const summary = record.summary || record.filter || '';
+                    const timestamp = record.timestamp || record.inventoryDate || '未提供';
+                    const summary = record.summary || record.filter || '未指定';
                     const sessionId = record.sessionId || record.inventoryId || `session-${index}`;
+                    const personName = record.inventoryPerson || '';
+                    const personEmail = record.inventoryEmail || '';
+                    const personLabel = personEmail
+                        ? `${personName || personEmail.split('@')[0]} (${personEmail})`
+                        : (personName || '未指定');
+                    const itemClass = `inventory-history-item${isCompleted ? ' is-completed' : ''}`;
+                    const isDeleting = deletingSessionId === sessionId;
 
                     return (
-                        <div key={sessionId} className="inventory-history-item">
-                            <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="font-semibold text-slate-800">{sessionId}</span>
-                                    <span className={`inventory-status-badge ${badgeClass}`}>{badgeLabel}</span>
+                        <div key={sessionId} className={itemClass}>
+                            <div className="inventory-history-head">
+                                <div className="inventory-history-title">
+                                    <span className="inventory-history-session">{sessionId}</span>
+                                    <span className={badgeClass}>{badgeLabel}</span>
                                 </div>
-                                <div className="inventory-history-meta">
-                                    {timestamp && <span>{timestamp}</span>}
-                                    {auditor && <span> · {auditor}</span>}
-                                    {summary && <span> · {summary}</span>}
+                                <div className="inventory-history-right">
+                                    <div className="inventory-history-count">
+                                        <div className="inventory-history-count-number">{progressDisplay}</div>
+                                        <div className="inventory-history-count-label">已盤點/總計</div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="inventory-history-delete"
+                                        onClick={() => handleDeleteSession(sessionId)}
+                                        disabled={isDeleting}
+                                        title="刪除盤點會話"
+                                    >
+                                        {isDeleting ? (
+                                            <i className="fa-solid fa-spinner fa-spin"></i>
+                                        ) : (
+                                            <i className="fa-regular fa-trash-can"></i>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <div className="text-lg font-semibold text-slate-700">{progressDisplay}</div>
-                                <div className="text-xs text-slate-400">已盤/總數</div>
+                            <div className="inventory-history-meta">
+                                <span>範圍: {summary}</span>
+                                <span>開始時間: {timestamp}</span>
+                            </div>
+                            <div className="inventory-history-footer">
+                                <i className="fa-regular fa-user"></i>
+                                盤點人：{personLabel}
                             </div>
                         </div>
                     );
@@ -1186,7 +1424,10 @@
                 >
                     <div className="inventory-modal" onClick={(event) => event.stopPropagation()}>
                         <div className="inventory-modal-header">
-                            <h3 className="text-lg font-semibold text-slate-800">盤點管理中心</h3>
+                            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                                <i className="fa-solid fa-clipboard-list text-blue-500"></i>
+                                盤點管理 (Inventory Management)
+                            </h3>
                             <button
                                 type="button"
                                 className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -1197,187 +1438,160 @@
                             </button>
                         </div>
                         <div className="inventory-modal-body">
-                            <div className="inventory-section" id="inventory-action-area">
-                                <div className="inventory-section-title">
-                                    <i className="fa-solid fa-clipboard-check text-teal-500"></i>
-                                    盤點操作區
-                                </div>
-                                {isSessionLoading ? (
-                                    <div className="text-center text-sm text-slate-500 py-6">
-                                        <i className="fa-solid fa-spinner fa-spin mr-2 text-slate-400"></i>
-                                        載入盤點狀態中...
+                            <div className="inventory-column">
+                                <section className="inventory-card" id="inventory-action-area">
+                                    <div className="inventory-card-header inventory-card-header--primary">
+                                        <i className="fa-solid fa-circle-plus"></i>
+                                        開始新的盤點
                                     </div>
-                                ) : sessionError ? (
-                                    <div className="text-center text-sm text-rose-600 py-6">{sessionError}</div>
-                                ) : sessionInfo.hasActive ? (
-                                    <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-3">
-                                        <div className="text-sm text-slate-600">
-                                            目前有進行中的盤點會話，請繼續處理後再啟動新的盤點。
-                                        </div>
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <div className="text-sm font-medium text-slate-800">
-                                                    會話代碼：{sessionInfo.sessionId || '未提供'}
-                                                </div>
-                                                <div className="text-xs text-slate-500 mt-1">點擊按鈕前往盤點頁面</div>
+                                    <div className="inventory-card-body inventory-card-body--primary">
+                                        {hasActiveSession && (
+                                            <div className="inventory-start-alert">
+                                                目前已有進行中的盤點會話，請先完成或繼續該會話。
                                             </div>
-                                            <button
-                                                id="btn-start-continue"
-                                                type="button"
-                                                onClick={handleContinueSession}
-                                                className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-2"
-                                            >
-                                                <i className="fa-solid fa-arrow-right"></i>
-                                                繼續目前盤點
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <div className="text-sm font-medium text-slate-700">盤點範圍</div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-600">
-                                                <label className="flex items-center gap-2">
-                                                    <input
-                                                        type="radio"
-                                                        name="inventory-filter-type"
-                                                        value="all"
-                                                        checked={filterType === 'all'}
-                                                        onChange={(event) => setFilterType(event.target.value)}
-                                                    />
-                                                    盤點所有資產（在庫）
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                    <input
-                                                        type="radio"
-                                                        name="inventory-filter-type"
-                                                        value="location"
-                                                        checked={filterType === 'location'}
-                                                        onChange={(event) => setFilterType(event.target.value)}
-                                                    />
-                                                    依地點篩選
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                    <input
-                                                        type="radio"
-                                                        name="inventory-filter-type"
-                                                        value="keeper"
-                                                        checked={filterType === 'keeper'}
-                                                        onChange={(event) => setFilterType(event.target.value)}
-                                                    />
-                                                    依保管人篩選
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                    <input
-                                                        type="radio"
-                                                        name="inventory-filter-type"
-                                                        value="user"
-                                                        checked={filterType === 'user'}
-                                                        onChange={(event) => setFilterType(event.target.value)}
-                                                    />
-                                                    依使用人篩選
-                                                </label>
+                                        )}
+                                        {isSessionLoading ? (
+                                            <div className="inventory-empty-state">
+                                                <i className="fa-solid fa-spinner fa-spin mr-2 text-slate-400"></i>
+                                                載入盤點狀態中...
                                             </div>
-                                        </div>
-
-                                        {filterType === 'location' && (
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">選擇地點</label>
+                                        ) : sessionError ? (
+                                            <div className="inventory-empty-state text-rose-600">{sessionError}</div>
+                                        ) : (
+                                            <>
+                                        <div className="text-sm font-semibold text-slate-700 mb-3">選擇盤點範圍：</div>
+                                        <div className="inventory-option-group">
+                                            <label className="inventory-option-label">
+                                                <input
+                                                    type="radio"
+                                                    name="inventory-filter-type"
+                                                    value="all"
+                                                    checked={filterType === 'all'}
+                                                    onChange={(event) => setFilterType(event.target.value)}
+                                                />
+                                                盤點所有資產（在庫狀態）
+                                            </label>
+                                            <label className="inventory-option-label">
+                                                <input
+                                                    type="radio"
+                                                    name="inventory-filter-type"
+                                                    value="location"
+                                                    checked={filterType === 'location'}
+                                                    onChange={(event) => setFilterType(event.target.value)}
+                                                />
+                                                依地點篩選
+                                            </label>
+                                            {filterType === 'location' && (
                                                 <select
                                                     value={filterValue}
                                                     onChange={(event) => setFilterValue(event.target.value)}
-                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                                 >
                                                     <option value="">請選擇地點</option>
                                                     {filterOptions.locations.map(loc => (
                                                         <option key={loc} value={loc}>{loc}</option>
                                                     ))}
                                                 </select>
-                                            </div>
-                                        )}
-
-                                        {filterType === 'keeper' && (
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">選擇保管人</label>
+                                            )}
+                                            <label className="inventory-option-label">
+                                                <input
+                                                    type="radio"
+                                                    name="inventory-filter-type"
+                                                    value="keeper"
+                                                    checked={filterType === 'keeper'}
+                                                    onChange={(event) => setFilterType(event.target.value)}
+                                                />
+                                                依保管人篩選
+                                            </label>
+                                            {filterType === 'keeper' && (
                                                 <select
                                                     value={filterValue}
                                                     onChange={(event) => setFilterValue(event.target.value)}
-                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                                 >
                                                     <option value="">請選擇保管人</option>
                                                     {filterOptions.keepers.map(keeper => (
                                                         <option key={keeper} value={keeper}>{keeper}</option>
                                                     ))}
                                                 </select>
-                                            </div>
-                                        )}
-
-                                        {filterType === 'user' && (
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-2">選擇使用人</label>
+                                            )}
+                                            <label className="inventory-option-label">
+                                                <input
+                                                    type="radio"
+                                                    name="inventory-filter-type"
+                                                    value="user"
+                                                    checked={filterType === 'user'}
+                                                    onChange={(event) => setFilterType(event.target.value)}
+                                                />
+                                                依使用人篩選
+                                            </label>
+                                            {filterType === 'user' && (
                                                 <select
                                                     value={filterValue}
                                                     onChange={(event) => setFilterValue(event.target.value)}
-                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                                 >
                                                     <option value="">請選擇使用人</option>
                                                     {filterOptions.users.map(user => (
                                                         <option key={user} value={user}>{user}</option>
                                                     ))}
                                                 </select>
-                                            </div>
-                                        )}
-
-                                        <div className="flex flex-wrap items-center gap-3">
+                                            )}
+                                        </div>
+                                        <div className="mt-5">
                                             <button
                                                 id="btn-start-continue"
                                                 type="button"
                                                 onClick={handleStartSession}
-                                                disabled={isStarting}
-                                                className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                disabled={startDisabled}
+                                                className="inventory-primary-button"
                                             >
-                                                {isStarting ? (
-                                                    <>
-                                                        <i className="fa-solid fa-spinner fa-spin"></i>
-                                                        啟動中...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <i className="fa-solid fa-play"></i>
-                                                        開始新盤點
-                                                    </>
-                                                )}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={loadModalData}
-                                                className="px-3 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                                            >
-                                                重新載入
+                                                {isStarting ? '啟動中...' : '開始盤點'}
                                             </button>
                                         </div>
                                         {startMessage && (
-                                            <div className="text-sm text-emerald-600">{startMessage}</div>
+                                            <div className="text-sm text-emerald-600 mt-3">{startMessage}</div>
                                         )}
                                         {optionsError && (
-                                            <div className="text-sm text-rose-600">{optionsError}</div>
+                                            <div className="text-sm text-rose-600 mt-2">{optionsError}</div>
                                         )}
                                         {startError && (
-                                            <div className="text-sm text-rose-600">{startError}</div>
+                                            <div className="text-sm text-rose-600 mt-2">{startError}</div>
+                                        )}
+                                            </>
                                         )}
                                     </div>
-                                )}
+                                </section>
                             </div>
 
-                            <div className="inventory-section" id="history-list-container">
-                                <div className="inventory-section-title">
-                                    <i className="fa-solid fa-clock-rotate-left text-slate-500"></i>
-                                    歷史記錄
-                                </div>
-                                <div id="history-list" className="inventory-history-list">
-                                    {renderHistoryContent()}
-                                </div>
+                            <div className="inventory-column">
+                                <section className="inventory-card" id="history-list-container">
+                                    <div className="inventory-card-header inventory-card-header--neutral">
+                                        <i className="fa-solid fa-clock-rotate-left"></i>
+                                        盤點歷史記錄
+                                    </div>
+                                    <div className="inventory-card-body inventory-card-body--neutral">
+                                        {deleteMessage && (
+                                            <div className="inventory-empty-state text-emerald-600">{deleteMessage}</div>
+                                        )}
+                                        {deleteError && (
+                                            <div className="inventory-empty-state text-rose-600">{deleteError}</div>
+                                        )}
+                                        <div id="history-list" className="inventory-history-list">
+                                            {renderHistoryContent()}
+                                        </div>
+                                    </div>
+                                </section>
                             </div>
+                        </div>
+                        <div className="inventory-modal-footer">
+                            <button
+                                type="button"
+                                className="inventory-secondary-button"
+                                onClick={onClose}
+                            >
+                                關閉
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -7242,7 +7456,6 @@
                     {/* 盤點管理 Modal */}
                     {showInventoryMgmtModal && (
                         <InventoryManagementModal
-                            webAppUrl={webAppUrl}
                             onClose={() => setShowInventoryMgmtModal(false)}
                         />
                     )}
