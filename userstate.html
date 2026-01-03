@@ -5919,7 +5919,6 @@
             const [isReady, setIsReady] = useState(false);
             const [allAssets, setAllAssets] = useState([]);
             const [isAdmin, setIsAdmin] = useState(false);
-            const [canManageInventory, setCanManageInventory] = useState(false);
             const [viewMode, setViewMode] = useState('user');
             const [currentUserEmail, setCurrentUserEmail] = useState('');
             const [currentUserName, setCurrentUserName] = useState('');
@@ -6475,15 +6474,10 @@
             };
 
             useEffect(() => {
-                google.script.run
-                    .withSuccessHandler((isAdminValue) => {
-                        setCanManageInventory(Boolean(isAdminValue));
-                    })
-                    .withFailureHandler(() => {
-                        setCanManageInventory(false);
-                    })
-                    .checkAdminStatus();
-            }, []);
+                if (!isAdminView && showInventoryMgmtModal) {
+                    setShowInventoryMgmtModal(false);
+                }
+            }, [isAdminView, showInventoryMgmtModal]);
 
             useEffect(() => {
                 loadData();
@@ -7190,16 +7184,17 @@
                             )}
 
                             {/* 盤點管理按鈕 */}
-                            <button
-                                id="btn-inventory-mgmt"
-                                onClick={() => setShowInventoryMgmtModal(true)}
-                                style={{ display: canManageInventory ? 'inline-flex' : 'none' }}
-                                className="px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2"
-                                title="盤點管理"
-                            >
-                                <i className="fa-solid fa-clipboard-list text-slate-500"></i>
-                                <span className="hidden sm:inline">盤點管理</span>
-                            </button>
+                            {isAdminView && (
+                                <button
+                                    id="btn-inventory-mgmt"
+                                    onClick={() => setShowInventoryMgmtModal(true)}
+                                    className="px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2"
+                                    title="盤點管理"
+                                >
+                                    <i className="fa-solid fa-clipboard-list text-slate-500"></i>
+                                    <span className="hidden sm:inline">盤點管理</span>
+                                </button>
+                            )}
 
                             {/* 新增資產按鈕 */}
                             <button
