@@ -4634,6 +4634,7 @@ function getInventoryData(forceUserScope) {
       });
     }
     const currentUserGroup = emailToGroupMap[currentUserEmail] || '未分組';
+    const groups = Array.from(new Set(Object.values(emailToGroupMap).filter(Boolean))).sort();
 
     // 取得進行中盤點會話（管理員可以看到所有會話）
     const activeSessions = getActiveInventorySessions(currentUserEmail, useAdminScope, currentUserGroup);
@@ -4681,6 +4682,7 @@ function getInventoryData(forceUserScope) {
       locations: locations,
       keepers: keepers,
       users: users,
+      groups: groups,
       activeSessions: activeSessions,
       emailToNameMap: emailToNameMap,
       currentUserGroup: currentUserGroup,
@@ -5059,7 +5061,47 @@ function startInventorySession(options) {
       filterDescription = `保管人: ${options.filterValue}`;
     } else if (options.filterType === 'user') {
       filterDescription = `使用人: ${options.filterValue}`;
+    } else if (options.filterType === 'group') {
+      const rawGroupValues = Array.isArray(options.filterValue) ? options.filterValue : [options.filterValue];
+      const groupLabels = rawGroupValues.map(value => String(value || '').trim()).filter(Boolean);
+      filterDescription = groupLabels.length > 0 ? `組別: ${groupLabels.join('、')}` : '組別: (未選擇)';
     }
+
+    const groupFilterValues = options.filterType === 'group'
+      ? (Array.isArray(options.filterValue) ? options.filterValue : [options.filterValue])
+        .map(value => String(value || '').trim())
+        .filter(Boolean)
+      : [];
+    const groupFilterSet = new Set(groupFilterValues);
+
+    // 建立 Email -> 組別 對照表（組別篩選/分派時使用）
+    const emailToGroupMap = {};
+    if (options.assignmentMode === 'group' || groupFilterSet.size > 0) {
+      const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+      if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+        const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+        keeperData.forEach(row => {
+          const email = row[1];
+          const groupName = row[6];
+          if (email) {
+            emailToGroupMap[String(email).toLowerCase()] = groupName ? String(groupName).trim() : '';
+          }
+        });
+      }
+    }
+
+    const resolveAssetGroup = (asset) => {
+      const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
+      if (defaultGroup) return defaultGroup;
+      let assignedEmail = '';
+      if (asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME) {
+        assignedEmail = asset.userEmail || asset.leaderEmail || '';
+      } else {
+        assignedEmail = asset.leaderEmail || '';
+      }
+      const normalizedEmail = assignedEmail ? String(assignedEmail).toLowerCase() : '';
+      return normalizedEmail ? (emailToGroupMap[normalizedEmail] || '') : '';
+    };
 
     // 取得要盤點的資產
     const allAssets = getAllAssets();
@@ -5070,6 +5112,10 @@ function startInventorySession(options) {
       if (options.filterType === 'location') return asset.location === options.filterValue;
       if (options.filterType === 'keeper') return asset.leaderName === options.filterValue;
       if (options.filterType === 'user') return asset.userName === options.filterValue;
+      if (options.filterType === 'group') {
+        const assetGroup = resolveAssetGroup(asset);
+        return assetGroup && groupFilterSet.has(assetGroup);
+      }
       if (options.filterType === 'selected') return options.assetIds.includes(asset.assetId);
 
       return false;
@@ -5091,22 +5137,6 @@ function startInventorySession(options) {
       '進行中',
       '' // 完成時間
     ]);
-
-    // 建立 Email -> 組別 對照表（僅組別分派時使用）
-    const emailToGroupMap = {};
-    if (options.assignmentMode === 'group') {
-      const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-      if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-        const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-        keeperData.forEach(row => {
-          const email = row[1];
-          const groupName = row[6];
-          if (email) {
-            emailToGroupMap[String(email).toLowerCase()] = groupName ? String(groupName).trim() : '';
-          }
-        });
-      }
-    }
 
     const assignmentMode = options.assignmentMode === 'group' ? 'group' : 'person';
 

@@ -194,6 +194,10 @@
                         <input class="form-check-input" type="radio" name="filterType" id="filter-user" value="user">
                         <label class="form-check-label" for="filter-user">依使用人篩選</label>
                     </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="filterType" id="filter-group" value="group">
+                        <label class="form-check-label" for="filter-group">依組別篩選</label>
+                    </div>
                 </div>
 
                 <div class="form-group" id="location-select-group" style="display:none;">
@@ -209,6 +213,12 @@
                 <div class="form-group" id="user-select-group" style="display:none;">
                     <label for="user-select">選擇使用人：</label>
                     <select id="user-select" class="form-control"></select>
+                </div>
+
+                <div class="form-group" id="group-select-group" style="display:none;">
+                    <label for="group-select">選擇組別：</label>
+                    <select id="group-select" class="form-control" multiple size="6"></select>
+                    <small class="form-text text-muted">可使用 Ctrl / Command 進行複選</small>
                 </div>
 
                 <button class="btn btn-primary" id="start-session-btn" onclick="startNewSession()">
@@ -579,6 +589,8 @@
                         this.value === 'keeper' ? 'block' : 'none';
                     document.getElementById('user-select-group').style.display =
                         this.value === 'user' ? 'block' : 'none';
+                    document.getElementById('group-select-group').style.display =
+                        this.value === 'group' ? 'block' : 'none';
                 });
             });
 
@@ -652,6 +664,13 @@
             userSelect.innerHTML = '<option value="">請選擇使用人</option>';
             data.users.forEach(user => {
                 userSelect.innerHTML += `<option value="${user}">${user}</option>`;
+            });
+
+            // Populate group select (multi-select)
+            const groupSelect = document.getElementById('group-select');
+            groupSelect.innerHTML = '';
+            (data.groups || []).forEach(group => {
+                groupSelect.innerHTML += `<option value="${group}">${group}</option>`;
             });
         }
 
@@ -766,6 +785,16 @@
                     alert('請選擇使用人');
                     return;
                 }
+            } else if (filterType === 'group') {
+                const groupSelect = document.getElementById('group-select');
+                const selectedGroups = Array.from(groupSelect.selectedOptions)
+                    .map(option => option.value)
+                    .filter(Boolean);
+                if (selectedGroups.length === 0) {
+                    alert('請選擇組別');
+                    return;
+                }
+                filterValue = selectedGroups;
             }
 
             const options = {
