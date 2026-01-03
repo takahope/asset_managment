@@ -418,6 +418,9 @@
   }
 
   function BatchList_hookPagination() {
+    if (window.BatchList_skipPaginationHook) {
+      return;
+    }
     if (typeof window.renderTableForPage !== 'function') {
       console.warn('[BatchList] renderTableForPage 函數不存在，稍後重試');
       setTimeout(BatchList_hookPagination, 1000);
