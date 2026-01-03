@@ -5305,13 +5305,6 @@ function getInventoryStatsByAssignee(inventoryId) {
 }
 
 /**
- * @deprecated 改用 getInventoryStatsByAssignee，保留相容性
- */
-function getInventoryStatsByKeeper(inventoryId) {
-  return getInventoryStatsByAssignee(inventoryId);
-}
-
-/**
  * 標記資產盤點結果
  * @param {string} inventoryId - 盤點ID
  * @param {string} assetId - 資產ID
