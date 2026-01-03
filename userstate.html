@@ -6551,6 +6551,7 @@
             const [selectedInventoryAssetIds, setSelectedInventoryAssetIds] = useState([]);
             const [batchInventorySessionId, setBatchInventorySessionId] = useState('');
             const [currentUserGroup, setCurrentUserGroup] = useState('');
+            const viewModeInitializedRef = useRef(false);
 
             const isAdminView = isAdmin && viewMode === 'admin';
             const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -6767,8 +6768,9 @@
                                 }));
                                 setAllAssets(processedAssets);
                                 setIsAdmin(response.isAdmin);
-                                if (!response.isAdmin) {
-                                    setViewMode('user');
+                                if (!viewModeInitializedRef.current) {
+                                    setViewMode(response.isAdmin ? 'admin' : 'user');
+                                    viewModeInitializedRef.current = true;
                                 }
                                 setCurrentUserEmail(response.userEmail);
                                 setCurrentUserName(response.userName || '');
