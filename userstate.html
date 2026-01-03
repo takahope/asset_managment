@@ -472,6 +472,41 @@
         </div>
     </div>
 
+    <div class="modal fade" id="assignmentAssetsModal" tabindex="-1" role="dialog" aria-labelledby="assignmentAssetsTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assignmentAssetsTitle">分派清單</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="assignment-assets-meta" class="text-muted mb-2"></div>
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="thead-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th>財產編號</th>
+                                    <th>財產名稱</th>
+                                    <th>使用人</th>
+                                    <th>保管人</th>
+                                    <th>地點</th>
+                                    <th>盤點結果</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignment-assets-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="assignment-assets-pagination" class="d-flex justify-content-between align-items-center mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 全域函數橋接 jQuery Modal -->
     <script>
         // 全域變數供 React 與 jQuery 共享
@@ -480,6 +515,15 @@
         window.pendingCurrentPage = 1;
         window.pendingRowsPerPage = 50;
         window.duplicateGroups = [];
+        window.assignmentRowsPerPage = 500;
+        window.assignmentModalState = {
+            key: '',
+            title: '',
+            assets: [],
+            page: 1,
+            loading: false,
+            error: ''
+        };
 
         window.openPendingApprovalModal = () => {
             if (!window.pendingApprovals || window.pendingApprovals.length === 0) return;
@@ -504,6 +548,28 @@
             if (!window.duplicateGroups || window.duplicateGroups.length === 0) return;
             renderDuplicateAssetsModal();
             $('#duplicateAssetsModal').modal('show');
+        };
+
+        window.openInventoryAssignmentModal = (state = {}) => {
+            window.assignmentModalState = {
+                key: '',
+                title: '',
+                assets: [],
+                page: 1,
+                loading: false,
+                error: '',
+                ...state
+            };
+            renderAssignmentAssetsModal();
+            $('#assignmentAssetsModal').modal('show');
+        };
+
+        window.updateInventoryAssignmentModal = (state = {}) => {
+            window.assignmentModalState = {
+                ...window.assignmentModalState,
+                ...state
+            };
+            renderAssignmentAssetsModal();
         };
 
         function populatePendingFilters() {
@@ -683,6 +749,128 @@
             pagination.innerHTML = '';
             pagination.appendChild(info);
             pagination.appendChild(nav);
+        }
+
+        function renderAssignmentAssetsModal() {
+            const titleEl = document.getElementById('assignmentAssetsTitle');
+            const metaEl = document.getElementById('assignment-assets-meta');
+            const bodyEl = document.getElementById('assignment-assets-body');
+            const paginationEl = document.getElementById('assignment-assets-pagination');
+            const state = window.assignmentModalState || {};
+
+            const normalizedKey = state.key || '未指派';
+            const titleLabel = normalizedKey === '未指派'
+                ? '未指派'
+                : (String(normalizedKey).includes('@')
+                    ? `${state.title || normalizedKey} (${normalizedKey})`
+                    : (state.title || normalizedKey));
+
+            if (titleEl) titleEl.textContent = `分派清單 - ${titleLabel}`;
+            if (metaEl) metaEl.textContent = state.loading
+                ? '載入中...'
+                : (state.error ? '' : `共 ${(state.assets || []).length} 筆資產`);
+
+            if (!bodyEl || !paginationEl) return;
+            bodyEl.innerHTML = '';
+            paginationEl.innerHTML = '';
+
+            if (state.loading) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 6;
+                cell.className = 'text-center text-muted';
+                cell.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>載入中...';
+                row.appendChild(cell);
+                bodyEl.appendChild(row);
+                return;
+            }
+
+            if (state.error) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 6;
+                cell.className = 'text-center text-danger';
+                cell.textContent = state.error;
+                row.appendChild(cell);
+                bodyEl.appendChild(row);
+                return;
+            }
+
+            const assets = Array.isArray(state.assets) ? state.assets : [];
+            const total = assets.length;
+            if (total === 0) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 6;
+                cell.className = 'text-center text-muted';
+                cell.textContent = '沒有符合條件的資產';
+                row.appendChild(cell);
+                bodyEl.appendChild(row);
+                return;
+            }
+
+            const pageCount = Math.max(1, Math.ceil(total / window.assignmentRowsPerPage));
+            let page = Number(state.page || 1);
+            if (page > pageCount) page = pageCount;
+
+            const start = (page - 1) * window.assignmentRowsPerPage;
+            const end = start + window.assignmentRowsPerPage;
+            const pageAssets = assets.slice(start, end);
+            const fragment = document.createDocumentFragment();
+
+            pageAssets.forEach(asset => {
+                const row = document.createElement('tr');
+                const cells = [
+                    asset.assetId,
+                    asset.assetName,
+                    asset.userName,
+                    asset.keeperName,
+                    asset.location,
+                    asset.inventoryResult
+                ];
+                cells.forEach(value => {
+                    const td = document.createElement('td');
+                    td.textContent = value || '';
+                    row.appendChild(td);
+                });
+                fragment.appendChild(row);
+            });
+
+            bodyEl.appendChild(fragment);
+
+            if (pageCount <= 1) return;
+
+            const info = document.createElement('div');
+            info.className = 'text-muted';
+            info.textContent = `第 ${page} / ${pageCount} 頁`;
+            paginationEl.appendChild(info);
+
+            const nav = document.createElement('div');
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'btn btn-sm btn-outline-secondary mr-2';
+            prevBtn.textContent = '上一頁';
+            prevBtn.disabled = page <= 1;
+            prevBtn.addEventListener('click', () => {
+                if (page > 1) {
+                    window.assignmentModalState.page = page - 1;
+                    renderAssignmentAssetsModal();
+                }
+            });
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn btn-sm btn-outline-secondary';
+            nextBtn.textContent = '下一頁';
+            nextBtn.disabled = page >= pageCount;
+            nextBtn.addEventListener('click', () => {
+                if (page < pageCount) {
+                    window.assignmentModalState.page = page + 1;
+                    renderAssignmentAssetsModal();
+                }
+            });
+
+            nav.appendChild(prevBtn);
+            nav.appendChild(nextBtn);
+            paginationEl.appendChild(nav);
         }
 
         function submitPendingApproval() {
@@ -921,6 +1109,7 @@
             const [isLoadingStats, setIsLoadingStats] = useState(false);
             const [statsError, setStatsError] = useState('');
             const [isExpanded, setIsExpanded] = useState(true);
+            const sessionDetailsCacheRef = useRef(new Map());
 
             const sessions = inventorySessions?.activeSessions || [];
             const isLoadingSessions = !inventorySessions;
@@ -980,6 +1169,82 @@
             useEffect(() => {
                 fetchGroupStats(selectedSessionId);
             }, [selectedSessionId, fetchGroupStats]);
+
+            const normalizeAssignmentKey = useCallback((value) => {
+                const raw = String(value || '').trim();
+                if (!raw) return '';
+                return raw.includes('@') ? raw.toLowerCase() : raw;
+            }, []);
+
+            const resolveAssignmentKey = useCallback((value) => {
+                const normalized = normalizeAssignmentKey(value);
+                return normalized || '未指派';
+            }, [normalizeAssignmentKey]);
+
+            const openAssignmentDetails = useCallback((stat) => {
+                if (!selectedSessionId) {
+                    alert('尚未選擇盤點會話');
+                    return;
+                }
+
+                const assignmentKey = resolveAssignmentKey(stat?.email || stat?.name || stat?.displayName);
+                const displayName = stat?.displayName || stat?.name || stat?.email || assignmentKey;
+
+                if (typeof window.openInventoryAssignmentModal === 'function') {
+                    window.openInventoryAssignmentModal({
+                        key: assignmentKey,
+                        title: displayName,
+                        assets: [],
+                        page: 1,
+                        loading: true,
+                        error: ''
+                    });
+                }
+
+                const renderAssets = (details) => {
+                    const list = Array.isArray(details) ? details : [];
+                    const assets = list.filter(asset => resolveAssignmentKey(asset.assignedUser) === assignmentKey);
+                    if (typeof window.updateInventoryAssignmentModal === 'function') {
+                        window.updateInventoryAssignmentModal({
+                            key: assignmentKey,
+                            title: displayName,
+                            assets: assets,
+                            page: 1,
+                            loading: false,
+                            error: ''
+                        });
+                    }
+                };
+
+                const cached = sessionDetailsCacheRef.current.get(selectedSessionId);
+                if (cached) {
+                    renderAssets(cached);
+                    return;
+                }
+
+                google.script.run
+                    .withSuccessHandler(details => {
+                        const safeDetails = Array.isArray(details) ? details : [];
+                        sessionDetailsCacheRef.current.set(selectedSessionId, safeDetails);
+                        renderAssets(safeDetails);
+                    })
+                    .withFailureHandler(error => {
+                        const message = error?.message || '載入失敗';
+                        if (typeof window.updateInventoryAssignmentModal === 'function') {
+                            window.updateInventoryAssignmentModal({
+                                key: assignmentKey,
+                                title: displayName,
+                                assets: [],
+                                page: 1,
+                                loading: false,
+                                error: message
+                            });
+                        } else {
+                            alert(`載入詳細清單失敗：${message}`);
+                        }
+                    })
+                    .getInventoryDetails(selectedSessionId);
+            }, [resolveAssignmentKey, selectedSessionId]);
 
             // 如果沒有進行中的會話，不顯示卡片
             if (!isLoadingSessions && sessions.length === 0) {
@@ -1130,12 +1395,23 @@
                                                         const isUnassigned = label === '未指派';
                                                         
                                                         return (
-                                                            <tr key={idx} className="hover:bg-slate-50">
+                                                            <tr
+                                                                key={idx}
+                                                                className="hover:bg-slate-50 cursor-pointer"
+                                                                onClick={() => openAssignmentDetails(stat)}
+                                                                title="查看詳細清單"
+                                                            >
                                                                 <td className="px-3 py-2">
                                                                     {isUnassigned ? (
-                                                                        <span className="text-red-600 font-medium">⚠️ 未指派</span>
+                                                                        <span className="inline-flex items-center gap-2 text-red-600 font-medium">
+                                                                            <span>⚠️ 未指派</span>
+                                                                            <span className="text-xs text-teal-600 font-normal">查看</span>
+                                                                        </span>
                                                                     ) : (
-                                                                        label
+                                                                        <span className="inline-flex items-center gap-2">
+                                                                            <span>{label}</span>
+                                                                            <span className="text-xs text-teal-600">查看</span>
+                                                                        </span>
                                                                     )}
                                                                 </td>
                                                                 <td className="px-3 py-2">
