@@ -419,6 +419,34 @@
         </div>
     </div>
 
+    <div class="modal fade" id="assignmentModeModal" tabindex="-1" role="dialog" aria-labelledby="assignmentModeTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assignmentModeTitle">選擇分派方式</h5>
+                    <button type="button" class="close" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">請選擇本次盤點的分派方式：</p>
+                    <div class="custom-control custom-radio mb-2">
+                        <input type="radio" id="assignment-mode-group" name="assignmentMode" class="custom-control-input" value="group" checked>
+                        <label class="custom-control-label" for="assignment-mode-group">依照組別分派</label>
+                    </div>
+                    <div class="custom-control custom-radio">
+                        <input type="radio" id="assignment-mode-person" name="assignmentMode" class="custom-control-input" value="person">
+                        <label class="custom-control-label" for="assignment-mode-person">依照人名分派</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="window.inventoryConfirmAssignmentMode && window.inventoryConfirmAssignmentMode()">開始盤點</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 全域函數橋接 jQuery Modal -->
     <script>
         // 全域變數供 React 與 jQuery 共享
@@ -1140,7 +1168,7 @@
             );
         };
 
-        const InventoryManagementModal = ({ onClose }) => {
+        const InventoryManagementModal = ({ onClose, isAdminView }) => {
             const [historyItems, setHistoryItems] = useState([]);
             const [isHistoryLoading, setIsHistoryLoading] = useState(true);
             const [historyError, setHistoryError] = useState('');
@@ -1154,6 +1182,7 @@
             const [deleteMessage, setDeleteMessage] = useState('');
             const [deleteError, setDeleteError] = useState('');
             const [deletingSessionId, setDeletingSessionId] = useState('');
+            const pendingStartOptionsRef = useRef(null);
 
             const runScript = useCallback((fnName, ...args) => new Promise((resolve, reject) => {
                 google.script.run
@@ -1219,11 +1248,65 @@
                 setFilterValue('');
             }, [filterType]);
 
+            const hideAssignmentModal = useCallback(() => {
+                if (window.$ && typeof window.$.fn?.modal === 'function') {
+                    window.$('#assignmentModeModal').modal('hide');
+                }
+            }, []);
+
             const handleOverlayClick = (event) => {
                 if (event.target === event.currentTarget) {
+                    hideAssignmentModal();
                     onClose();
                 }
             };
+
+            const submitStartSession = useCallback((options) => {
+                setIsStarting(true);
+                google.script.run
+                    .withSuccessHandler(result => {
+                        setIsStarting(false);
+                        if (result && result.success) {
+                            loadModalData();
+                            setStartMessage(result.message || '盤點會話已成功建立。');
+                        } else {
+                            setStartError(result?.error || '開始盤點失敗');
+                        }
+                    })
+                    .withFailureHandler(error => {
+                        setIsStarting(false);
+                        setStartError(error.message || '開始盤點失敗');
+                    })
+                    .startInventorySession(options);
+            }, [loadModalData]);
+
+            const handleAssignmentModeConfirm = useCallback(() => {
+                const selectedMode = document.querySelector('input[name="assignmentMode"]:checked');
+                const assignmentMode = selectedMode ? selectedMode.value : 'person';
+                const options = pendingStartOptionsRef.current;
+                pendingStartOptionsRef.current = null;
+                hideAssignmentModal();
+                if (!options) return;
+                submitStartSession({
+                    ...options,
+                    assignmentMode: assignmentMode
+                });
+            }, [hideAssignmentModal, submitStartSession]);
+
+            const handleAssignmentModeCancel = useCallback(() => {
+                pendingStartOptionsRef.current = null;
+                hideAssignmentModal();
+            }, [hideAssignmentModal]);
+
+            useEffect(() => {
+                window.inventoryConfirmAssignmentMode = handleAssignmentModeConfirm;
+                window.inventoryCancelAssignmentMode = handleAssignmentModeCancel;
+                return () => {
+                    delete window.inventoryConfirmAssignmentMode;
+                    delete window.inventoryCancelAssignmentMode;
+                    hideAssignmentModal();
+                };
+            }, [handleAssignmentModeConfirm, handleAssignmentModeCancel]);
 
             const handleStartSession = () => {
                 setStartError('');
@@ -1256,22 +1339,16 @@
                     assetIds: []
                 };
 
-                setIsStarting(true);
-                google.script.run
-                    .withSuccessHandler(result => {
-                        setIsStarting(false);
-                        if (result && result.success) {
-                            loadModalData();
-                            setStartMessage(result.message || '盤點會話已成功建立。');
-                        } else {
-                            setStartError(result?.error || '開始盤點失敗');
-                        }
-                    })
-                    .withFailureHandler(error => {
-                        setIsStarting(false);
-                        setStartError(error.message || '開始盤點失敗');
-                    })
-                    .startInventorySession(options);
+                if (isAdminView) {
+                    pendingStartOptionsRef.current = options;
+                    if (window.$ && typeof window.$.fn?.modal === 'function') {
+                        window.$('#assignmentModeModal').modal('show');
+                    } else {
+                        submitStartSession({ ...options, assignmentMode: 'person' });
+                    }
+                    return;
+                }
+                submitStartSession({ ...options, assignmentMode: 'person' });
             };
 
             const startDisabled = isStarting;
@@ -1548,7 +1625,10 @@
                             <button
                                 type="button"
                                 className="inventory-secondary-button"
-                                onClick={onClose}
+                                onClick={() => {
+                                    hideAssignmentModal();
+                                    onClose();
+                                }}
                             >
                                 關閉
                             </button>
@@ -7411,6 +7491,7 @@
                     {/* 盤點管理 Modal */}
                     {showInventoryMgmtModal && (
                         <InventoryManagementModal
+                            isAdminView={isAdminView}
                             onClose={() => setShowInventoryMgmtModal(false)}
                         />
                     )}

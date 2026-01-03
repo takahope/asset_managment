@@ -2993,7 +2993,7 @@ function getAdminEmails() {
   // 步驟 1: 嘗試從快取中讀取資料
   const cachedAdmins = cache.get(cacheKey);
   if (cachedAdmins) {
-    Logger.log("從快取中成功讀取管理員名單。 সনাক্তকরণ");
+    Logger.log("從快取中成功讀取管理員名單。");
     return JSON.parse(cachedAdmins); // 將快取的字串轉回陣列
   }
 
