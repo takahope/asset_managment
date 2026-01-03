@@ -5232,11 +5232,11 @@ function getInventoryDetails(inventoryId) {
 }
 
 /**
- * ✨ 新增：取得盤點會話的保管人分組統計 (用於儀表板)
+ * ✨ 新增：取得盤點會話的指派對象分組統計 (用於儀表板)
  * @param {string} inventoryId - 盤點ID
  * @returns {Array} 統計資料列表
  */
-function getInventoryStatsByKeeper(inventoryId) {
+function getInventoryStatsByAssignee(inventoryId) {
   try {
     const details = getInventoryDetails(inventoryId);
 
@@ -5299,9 +5299,16 @@ function getInventoryStatsByKeeper(inventoryId) {
     return result.sort((a, b) => a.progress - b.progress);
     
   } catch (e) {
-    Logger.log(`getInventoryStatsByKeeper 失敗: ${e.message}`);
+    Logger.log(`getInventoryStatsByAssignee 失敗: ${e.message}`);
     return [];
   }
+}
+
+/**
+ * @deprecated 改用 getInventoryStatsByAssignee，保留相容性
+ */
+function getInventoryStatsByKeeper(inventoryId) {
+  return getInventoryStatsByAssignee(inventoryId);
 }
 
 /**
