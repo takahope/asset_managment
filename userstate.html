@@ -51,8 +51,8 @@
         .inventory-modal {
             background: #ffffff;
             border-radius: 16px;
-            width: min(980px, 94vw);
-            max-height: 90vh;
+            width: min(1040px, 96vw);
+            max-height: 94vh;
             box-shadow: 0 32px 80px rgba(15, 23, 42, 0.25);
             display: flex;
             flex-direction: column;
@@ -69,9 +69,9 @@
         }
 
         .inventory-modal-body {
-            padding: 20px;
+            padding: 24px;
             display: grid;
-            gap: 24px;
+            gap: 20px;
             overflow-y: auto;
             grid-template-columns: minmax(0, 1fr);
             flex: 1;
@@ -88,6 +88,7 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            min-height: 0;
         }
 
         .inventory-card {
@@ -96,6 +97,30 @@
             overflow: hidden;
             background: #ffffff;
             box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .inventory-card--stretch {
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+        }
+
+        .inventory-card--stretch .inventory-card-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .inventory-action-footer {
+            margin-top: auto;
+            padding-top: 8px;
+        }
+
+        @media (min-width: 1024px) {
+            #inventory-action-area {
+                min-height: 560px;
+            }
         }
 
         .inventory-card-header {
@@ -197,7 +222,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            max-height: 520px;
+            max-height: min(62vh, 640px);
             overflow-y: auto;
             padding-right: 4px;
         }
@@ -1183,7 +1208,6 @@
             const [deleteError, setDeleteError] = useState('');
             const [deletingSessionId, setDeletingSessionId] = useState('');
             const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
-            const [groupSearchTerm, setGroupSearchTerm] = useState('');
             const pendingStartOptionsRef = useRef(null);
             const groupDropdownRef = useRef(null);
 
@@ -1252,7 +1276,6 @@
                 setFilterValue(filterType === 'group' ? [] : '');
                 if (filterType !== 'group') {
                     setGroupDropdownOpen(false);
-                    setGroupSearchTerm('');
                 }
             }, [filterType]);
 
@@ -1377,9 +1400,6 @@
 
             const selectedGroups = Array.isArray(filterValue) ? filterValue : [];
             const availableGroups = filterOptions.groups || [];
-            const filteredGroups = availableGroups.filter(group =>
-                group.toLowerCase().includes(groupSearchTerm.toLowerCase())
-            );
             const toggleGroupOption = (group) => {
                 setFilterValue(prev => {
                     const current = Array.isArray(prev) ? prev : [];
@@ -1541,7 +1561,7 @@
                         </div>
                         <div className="inventory-modal-body">
                             <div className="inventory-column">
-                                <section className="inventory-card" id="inventory-action-area">
+                                <section className="inventory-card inventory-card--stretch" id="inventory-action-area">
                                     <div className="inventory-card-header inventory-card-header--primary">
                                         <i className="fa-solid fa-circle-plus"></i>
                                         開始新的盤點
@@ -1664,17 +1684,7 @@
                                                         {groupDropdownOpen && (
                                                             <div className="absolute z-20 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
                                                                 <div className="p-2 border-b border-slate-100 bg-slate-50">
-                                                                    <div className="relative">
-                                                                        <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="搜尋組別..."
-                                                                            value={groupSearchTerm}
-                                                                            onChange={(event) => setGroupSearchTerm(event.target.value)}
-                                                                            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-blue-500"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="mt-2 flex justify-between px-1 text-xs">
+                                                                    <div className="flex justify-between px-1 text-xs">
                                                                         <button
                                                                             type="button"
                                                                             onClick={selectAllGroups}
@@ -1691,9 +1701,9 @@
                                                                         </button>
                                                                     </div>
                                                                 </div>
-                                                                <div className="max-h-56 overflow-y-auto p-1">
-                                                                    {filteredGroups.length > 0 ? (
-                                                                        filteredGroups.map(group => (
+                                                                <div className="max-h-72 overflow-y-auto p-1">
+                                                                    {availableGroups.length > 0 ? (
+                                                                        availableGroups.map(group => (
                                                                             <label
                                                                                 key={group}
                                                                                 className="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700"
@@ -1751,7 +1761,7 @@
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="mt-5">
+                                        <div className="inventory-action-footer">
                                             <button
                                                 id="btn-start-continue"
                                                 type="button"
