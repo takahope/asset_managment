@@ -1144,7 +1144,6 @@
             const [historyItems, setHistoryItems] = useState([]);
             const [isHistoryLoading, setIsHistoryLoading] = useState(true);
             const [historyError, setHistoryError] = useState('');
-            const [isSessionLoading, setIsSessionLoading] = useState(true);
             const [filterType, setFilterType] = useState('all');
             const [filterValue, setFilterValue] = useState('');
             const [filterOptions, setFilterOptions] = useState({ locations: [], keepers: [], users: [] });
@@ -1165,7 +1164,6 @@
             const loadModalData = useCallback((options = {}) => {
                 const { keepDeleteMessage = false } = options;
                 setIsHistoryLoading(true);
-                setIsSessionLoading(true);
                 setHistoryError('');
                 setOptionsError('');
                 setStartError('');
@@ -1210,7 +1208,6 @@
 
                     setOptionsError(optionsErrorMessage);
                     setIsHistoryLoading(false);
-                    setIsSessionLoading(false);
                 });
             }, [runScript]);
 
@@ -1277,7 +1274,7 @@
                     .startInventorySession(options);
             };
 
-            const startDisabled = isStarting || isSessionLoading;
+            const startDisabled = isStarting;
 
             const handleDeleteSession = (sessionId) => {
                 if (!sessionId) return;
@@ -1422,13 +1419,7 @@
                                         開始新的盤點
                                     </div>
                                     <div className="inventory-card-body inventory-card-body--primary">
-                                        {isSessionLoading ? (
-                                            <div className="inventory-empty-state">
-                                                <i className="fa-solid fa-spinner fa-spin mr-2 text-slate-400"></i>
-                                                載入盤點狀態中...
-                                            </div>
-                                        ) : (
-                                            <>
+                                        <>
                                         <div className="text-sm font-semibold text-slate-700 mb-3">選擇盤點範圍：</div>
                                         <div className="inventory-option-group">
                                             <label className="inventory-option-label">
@@ -1528,8 +1519,7 @@
                                         {startError && (
                                             <div className="text-sm text-rose-600 mt-2">{startError}</div>
                                         )}
-                                            </>
-                                        )}
+                                        </>
                                     </div>
                                 </section>
                             </div>
