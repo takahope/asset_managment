@@ -1182,7 +1182,10 @@
             const [deleteMessage, setDeleteMessage] = useState('');
             const [deleteError, setDeleteError] = useState('');
             const [deletingSessionId, setDeletingSessionId] = useState('');
+            const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
+            const [groupSearchTerm, setGroupSearchTerm] = useState('');
             const pendingStartOptionsRef = useRef(null);
+            const groupDropdownRef = useRef(null);
 
             const runScript = useCallback((fnName, ...args) => new Promise((resolve, reject) => {
                 google.script.run
@@ -1247,7 +1250,21 @@
 
             useEffect(() => {
                 setFilterValue(filterType === 'group' ? [] : '');
+                if (filterType !== 'group') {
+                    setGroupDropdownOpen(false);
+                    setGroupSearchTerm('');
+                }
             }, [filterType]);
+
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (groupDropdownRef.current && !groupDropdownRef.current.contains(event.target)) {
+                        setGroupDropdownOpen(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
 
             const hideAssignmentModal = useCallback(() => {
                 if (window.$ && typeof window.$.fn?.modal === 'function') {
@@ -1333,7 +1350,6 @@
                         return;
                     }
                 } else if (filterType === 'group') {
-                    const selectedGroups = Array.isArray(filterValue) ? filterValue : [];
                     if (selectedGroups.length === 0) {
                         setStartError('請選擇組別');
                         return;
@@ -1357,6 +1373,33 @@
                     return;
                 }
                 submitStartSession({ ...options, assignmentMode: 'person' });
+            };
+
+            const selectedGroups = Array.isArray(filterValue) ? filterValue : [];
+            const availableGroups = filterOptions.groups || [];
+            const filteredGroups = availableGroups.filter(group =>
+                group.toLowerCase().includes(groupSearchTerm.toLowerCase())
+            );
+            const toggleGroupOption = (group) => {
+                setFilterValue(prev => {
+                    const current = Array.isArray(prev) ? prev : [];
+                    if (current.includes(group)) {
+                        return current.filter(item => item !== group);
+                    }
+                    return [...current, group];
+                });
+            };
+            const removeGroupOption = (group) => {
+                setFilterValue(prev => {
+                    const current = Array.isArray(prev) ? prev : [];
+                    return current.filter(item => item !== group);
+                });
+            };
+            const selectAllGroups = () => {
+                setFilterValue(availableGroups.slice());
+            };
+            const clearGroups = () => {
+                setFilterValue([]);
             };
 
             const startDisabled = isStarting;
@@ -1595,22 +1638,116 @@
                                             </label>
                                             {filterType === 'group' && (
                                                 <div className="space-y-2">
-                                                    <select
-                                                        multiple
-                                                        value={Array.isArray(filterValue) ? filterValue : []}
-                                                        onChange={(event) => {
-                                                            const values = Array.from(event.target.selectedOptions)
-                                                                .map(option => option.value)
-                                                                .filter(Boolean);
-                                                            setFilterValue(values);
-                                                        }}
-                                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                                    >
-                                                        {filterOptions.groups.map(group => (
-                                                            <option key={group} value={group}>{group}</option>
-                                                        ))}
-                                                    </select>
-                                                    <div className="text-xs text-slate-500">可使用 Ctrl / Command 進行複選</div>
+                                                    <div className="text-sm text-slate-600">
+                                                        選擇組別（已選 {selectedGroups.length} 項）
+                                                    </div>
+                                                    <div className="relative" ref={groupDropdownRef}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setGroupDropdownOpen(prev => !prev)}
+                                                            className={`w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${
+                                                                groupDropdownOpen
+                                                                    ? 'border-blue-400 ring-2 ring-blue-100'
+                                                                    : 'border-slate-200 hover:border-slate-300'
+                                                            }`}
+                                                        >
+                                                            <span className={selectedGroups.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
+                                                                {selectedGroups.length === 0 ? '請選擇組別...' : `已選擇 ${selectedGroups.length} 個組別`}
+                                                            </span>
+                                                            <i
+                                                                className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${
+                                                                    groupDropdownOpen ? 'rotate-180' : ''
+                                                                }`}
+                                                            ></i>
+                                                        </button>
+
+                                                        {groupDropdownOpen && (
+                                                            <div className="absolute z-20 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
+                                                                <div className="p-2 border-b border-slate-100 bg-slate-50">
+                                                                    <div className="relative">
+                                                                        <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="搜尋組別..."
+                                                                            value={groupSearchTerm}
+                                                                            onChange={(event) => setGroupSearchTerm(event.target.value)}
+                                                                            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-blue-500"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="mt-2 flex justify-between px-1 text-xs">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={selectAllGroups}
+                                                                            className="text-blue-600 hover:text-blue-800 font-medium"
+                                                                        >
+                                                                            全選
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={clearGroups}
+                                                                            className="text-slate-500 hover:text-slate-700"
+                                                                        >
+                                                                            清除所有
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="max-h-56 overflow-y-auto p-1">
+                                                                    {filteredGroups.length > 0 ? (
+                                                                        filteredGroups.map(group => (
+                                                                            <label
+                                                                                key={group}
+                                                                                className="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700"
+                                                                            >
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    className="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
+                                                                                    checked={selectedGroups.includes(group)}
+                                                                                    onChange={() => toggleGroupOption(group)}
+                                                                                />
+                                                                                <span className="flex-1">{group}</span>
+                                                                                {selectedGroups.includes(group) && (
+                                                                                    <i className="fa-solid fa-check text-blue-600 text-xs"></i>
+                                                                                )}
+                                                                            </label>
+                                                                        ))
+                                                                    ) : (
+                                                                        <div className="py-4 text-center text-sm text-slate-500">找不到符合的組別</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {selectedGroups.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {selectedGroups.map(group => (
+                                                                <span
+                                                                    key={group}
+                                                                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+                                                                >
+                                                                    {group}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeGroupOption(group)}
+                                                                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
+                                                                        aria-label={`移除 ${group}`}
+                                                                    >
+                                                                        <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                            <button
+                                                                type="button"
+                                                                onClick={clearGroups}
+                                                                className="text-xs text-slate-500 hover:text-rose-600 underline"
+                                                            >
+                                                                清除
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <div className="text-xs text-slate-500">
+                                                        提示：點擊下拉選單勾選，標籤可快速移除。
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
