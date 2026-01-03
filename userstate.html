@@ -56,7 +56,7 @@
             box-shadow: 0 32px 80px rgba(15, 23, 42, 0.25);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .inventory-modal-header {
@@ -72,7 +72,7 @@
             padding: 24px;
             display: grid;
             gap: 20px;
-            overflow-y: auto;
+            overflow: visible;
             grid-template-columns: minmax(0, 1fr);
             flex: 1;
             min-height: 0;
@@ -1682,7 +1682,7 @@
                                                         </button>
 
                                                         {groupDropdownOpen && (
-                                                            <div className="absolute z-20 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
+                                                            <div className="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
                                                                 <div className="p-2 border-b border-slate-100 bg-slate-50">
                                                                     <div className="flex justify-between px-1 text-xs">
                                                                         <button
