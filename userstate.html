@@ -949,7 +949,7 @@
                         setStatsError(error.message || '載入失敗');
                         setIsLoadingStats(false);
                     })
-                    .getInventoryStatsByKeeper(sessionId);
+                    .getInventoryStatsByAssignee(sessionId);
             }, []);
 
             useEffect(() => {
