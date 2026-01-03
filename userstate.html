@@ -1101,7 +1101,7 @@
                                                         let colorClass = 'bg-red-500';
                                                         if (percent >= 50) colorClass = 'bg-yellow-500';
                                                         if (percent >= 100) colorClass = 'bg-green-500';
-                                                        const label = stat.name || stat.email || '未指派';
+                                                        const label = stat.displayName || stat.name || stat.email || '未指派';
                                                         const isUnassigned = label === '未指派';
                                                         
                                                         return (

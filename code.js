@@ -5239,26 +5239,51 @@ function getInventoryDetails(inventoryId) {
 function getInventoryStatsByKeeper(inventoryId) {
   try {
     const details = getInventoryDetails(inventoryId);
-    
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const emailToNameMap = {};
+    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+      keeperData.forEach(row => {
+        const name = row[0];
+        const email = row[1];
+        if (!email) return;
+        const normalizedEmail = String(email).toLowerCase();
+        emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
+      });
+    }
+
     // 聚合統計
-    const statsMap = {}; // { 'email': { name: 'xxx', assigned: 0, verified: 0 } }
-    
+    const statsMap = {}; // { 'assignmentKey': { displayName, assignedCount, verifiedCount } }
+
     details.forEach(item => {
-      const assignedUser = item.assignedUser ? item.assignedUser.toLowerCase() : '未指派';
-      const keeperName = item.keeperName || '未知保管人'; // 用資產上的保管人姓名作為顯示名稱
-      
-      if (!statsMap[assignedUser]) {
-        statsMap[assignedUser] = {
-          email: assignedUser,
-          name: assignedUser === '未指派' ? '未指派' : keeperName,
+      const rawAssigned = item.assignedUser ? String(item.assignedUser).trim() : '';
+      let assignmentKey = '未指派';
+      let displayName = '未指派';
+      if (rawAssigned) {
+        if (rawAssigned.includes('@')) {
+          assignmentKey = rawAssigned.toLowerCase();
+          displayName = emailToNameMap[assignmentKey] || rawAssigned.split('@')[0] || assignmentKey;
+        } else {
+          assignmentKey = rawAssigned;
+          displayName = rawAssigned;
+        }
+      }
+
+      if (!statsMap[assignmentKey]) {
+        statsMap[assignmentKey] = {
+          email: assignmentKey,
+          name: displayName,
+          displayName: displayName,
           assignedCount: 0,
           verifiedCount: 0
         };
       }
-      
-      const stats = statsMap[assignedUser];
+
+      const stats = statsMap[assignmentKey];
       stats.assignedCount++;
-      
+
       if (item.inventoryResult && item.inventoryResult !== '未盤點') {
         stats.verifiedCount++;
       }
