@@ -1103,7 +1103,7 @@
         };
 
         // InventoryDashboardCard 組件 - 盤點進度監控儀表板
-        const InventoryDashboardCard = ({ isAdminView, isAdmin, currentUserEmail, currentUserGroup, onRefresh, inventorySessions }) => {
+        const InventoryDashboardCard = ({ isAdminView, currentUserEmail, currentUserGroup, onRefresh, inventorySessions }) => {
             const [selectedSessionId, setSelectedSessionId] = useState('');
             const [groupStats, setGroupStats] = useState([]);
             const [isLoadingStats, setIsLoadingStats] = useState(false);
@@ -1184,13 +1184,13 @@
             const normalizeEmail = useCallback((value) => String(value || '').trim().toLowerCase(), []);
             const normalizeGroup = useCallback((value) => String(value || '').trim(), []);
             const canViewAssignmentDetails = useCallback((assignmentKey) => {
-                if (isAdmin) return true;
+                if (isAdminView) return true;
                 if (!assignmentKey || assignmentKey === '未指派') return false;
                 if (assignmentKey.includes('@')) {
                     return assignmentKey === normalizeEmail(currentUserEmail);
                 }
                 return assignmentKey === normalizeGroup(currentUserGroup);
-            }, [isAdmin, currentUserEmail, currentUserGroup, normalizeEmail, normalizeGroup]);
+            }, [isAdminView, currentUserEmail, currentUserGroup, normalizeEmail, normalizeGroup]);
 
             const openAssignmentDetails = useCallback((stat) => {
                 if (!selectedSessionId) {
@@ -7791,7 +7791,6 @@
                     {/* ✨ 新增：盤點進度監控儀表板 */}
                     <InventoryDashboardCard 
                         isAdminView={isAdminView}
-                        isAdmin={isAdmin}
                         currentUserEmail={currentUserEmail}
                         currentUserGroup={currentUserGroup}
                         inventorySessions={inventorySessions}
