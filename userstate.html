@@ -6756,6 +6756,16 @@
                                     return;
                                 }
 
+                                setIsAdmin(response.isAdmin);
+                                setCurrentUserEmail(response.userEmail);
+                                setCurrentUserName(response.userName || '');
+                                if (!viewModeInitializedRef.current && response.isAdmin && forceUserScope) {
+                                    setViewMode('admin');
+                                    viewModeInitializedRef.current = true;
+                                    loadData('admin');
+                                    return;
+                                }
+
                                 // ✨ 方案 B：預處理搜尋文字，避免每次搜尋都重新計算
                                 const processedAssets = (response.assets || []).map(asset => ({
                                     ...asset,
@@ -6767,13 +6777,10 @@
                                     ].filter(Boolean).join(' ').toLowerCase()
                                 }));
                                 setAllAssets(processedAssets);
-                                setIsAdmin(response.isAdmin);
                                 if (!viewModeInitializedRef.current) {
                                     setViewMode(response.isAdmin ? 'admin' : 'user');
                                     viewModeInitializedRef.current = true;
                                 }
-                                setCurrentUserEmail(response.userEmail);
-                                setCurrentUserName(response.userName || '');
 
                                 let pendingLoaded = false;
                                 let inventoryLoaded = false;
