@@ -1114,7 +1114,7 @@
             const [isExpanded, setIsExpanded] = useState(true);
             const sessionDetailsCacheRef = useRef(new Map());
 
-            const sessions = inventorySessions?.activeSessions || [];
+            const sessions = useMemo(() => inventorySessions?.activeSessions || [], [inventorySessions]);
             const isLoadingSessions = !inventorySessions;
             const isLoadingDashboard = isLoadingSessions || (sessions.length > 0 && !selectedSessionId);
 
