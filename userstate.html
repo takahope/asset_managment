@@ -1201,6 +1201,7 @@
             const [filterValue, setFilterValue] = useState('');
             const [filterOptions, setFilterOptions] = useState({ locations: [], keepers: [], users: [], groups: [] });
             const [optionsError, setOptionsError] = useState('');
+            const [isOptionsLoading, setIsOptionsLoading] = useState(true);
             const [isStarting, setIsStarting] = useState(false);
             const [startError, setStartError] = useState('');
             const [startMessage, setStartMessage] = useState('');
@@ -1224,6 +1225,7 @@
                 setOptionsError('');
                 setStartError('');
                 setStartMessage('');
+                setIsOptionsLoading(true);
                 if (!keepDeleteMessage) {
                     setDeleteMessage('');
                     setDeleteError('');
@@ -1264,6 +1266,7 @@
                     }
 
                     setOptionsError(optionsErrorMessage);
+                    setIsOptionsLoading(false);
                     setIsHistoryLoading(false);
                 });
             }, [runScript]);
@@ -1400,6 +1403,7 @@
 
             const selectedGroups = Array.isArray(filterValue) ? filterValue : [];
             const availableGroups = filterOptions.groups || [];
+            const isGroupOptionsLoading = isOptionsLoading && availableGroups.length === 0;
             const toggleGroupOption = (group) => {
                 setFilterValue(prev => {
                     const current = Array.isArray(prev) ? prev : [];
@@ -1672,13 +1676,19 @@
                                                             }`}
                                                         >
                                                             <span className={selectedGroups.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
-                                                                {selectedGroups.length === 0 ? '請選擇組別...' : `已選擇 ${selectedGroups.length} 個組別`}
+                                                                {isGroupOptionsLoading
+                                                                    ? '載入組別中...'
+                                                                    : (selectedGroups.length === 0 ? '請選擇組別...' : `已選擇 ${selectedGroups.length} 個組別`)}
                                                             </span>
-                                                            <i
-                                                                className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${
-                                                                    groupDropdownOpen ? 'rotate-180' : ''
-                                                                }`}
-                                                            ></i>
+                                                            {isGroupOptionsLoading ? (
+                                                                <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>
+                                                            ) : (
+                                                                <i
+                                                                    className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${
+                                                                        groupDropdownOpen ? 'rotate-180' : ''
+                                                                    }`}
+                                                                ></i>
+                                                            )}
                                                         </button>
 
                                                         {groupDropdownOpen && (
@@ -1702,7 +1712,12 @@
                                                                     </div>
                                                                 </div>
                                                                 <div className="max-h-72 overflow-y-auto p-1">
-                                                                    {availableGroups.length > 0 ? (
+                                                                    {isGroupOptionsLoading ? (
+                                                                        <div className="py-6 text-center text-sm text-slate-500">
+                                                                            <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                                                                            組別載入中...
+                                                                        </div>
+                                                                    ) : availableGroups.length > 0 ? (
                                                                         availableGroups.map(group => (
                                                                             <label
                                                                                 key={group}
