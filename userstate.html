@@ -1103,7 +1103,7 @@
         };
 
         // InventoryDashboardCard 組件 - 盤點進度監控儀表板
-        const InventoryDashboardCard = ({ isAdminView, onRefresh, inventorySessions }) => {
+        const InventoryDashboardCard = ({ isAdminView, isAdmin, currentUserEmail, currentUserGroup, onRefresh, inventorySessions }) => {
             const [selectedSessionId, setSelectedSessionId] = useState('');
             const [groupStats, setGroupStats] = useState([]);
             const [isLoadingStats, setIsLoadingStats] = useState(false);
@@ -1181,6 +1181,17 @@
                 return normalized || '未指派';
             }, [normalizeAssignmentKey]);
 
+            const normalizeEmail = useCallback((value) => String(value || '').trim().toLowerCase(), []);
+            const normalizeGroup = useCallback((value) => String(value || '').trim(), []);
+            const canViewAssignmentDetails = useCallback((assignmentKey) => {
+                if (isAdmin) return true;
+                if (!assignmentKey || assignmentKey === '未指派') return false;
+                if (assignmentKey.includes('@')) {
+                    return assignmentKey === normalizeEmail(currentUserEmail);
+                }
+                return assignmentKey === normalizeGroup(currentUserGroup);
+            }, [isAdmin, currentUserEmail, currentUserGroup, normalizeEmail, normalizeGroup]);
+
             const openAssignmentDetails = useCallback((stat) => {
                 if (!selectedSessionId) {
                     alert('尚未選擇盤點會話');
@@ -1188,6 +1199,10 @@
                 }
 
                 const assignmentKey = resolveAssignmentKey(stat?.email || stat?.name || stat?.displayName);
+                if (!canViewAssignmentDetails(assignmentKey)) {
+                    alert('一般使用者僅能查看分配給自己或所屬組別的清單。');
+                    return;
+                }
                 const displayName = stat?.displayName || stat?.name || stat?.email || assignmentKey;
 
                 if (typeof window.openInventoryAssignmentModal === 'function') {
@@ -1244,7 +1259,7 @@
                         }
                     })
                     .getInventoryDetails(selectedSessionId);
-            }, [resolveAssignmentKey, selectedSessionId]);
+            }, [resolveAssignmentKey, selectedSessionId, canViewAssignmentDetails]);
 
             // 如果沒有進行中的會話，不顯示卡片
             if (!isLoadingSessions && sessions.length === 0) {
@@ -1393,24 +1408,30 @@
                                                         if (percent >= 100) colorClass = 'bg-green-500';
                                                         const label = stat.displayName || stat.name || stat.email || '未指派';
                                                         const isUnassigned = label === '未指派';
+                                                        const assignmentKey = resolveAssignmentKey(stat?.email || stat?.name || stat?.displayName);
+                                                        const canView = canViewAssignmentDetails(assignmentKey);
                                                         
                                                         return (
                                                             <tr
                                                                 key={idx}
-                                                                className="hover:bg-slate-50 cursor-pointer"
-                                                                onClick={() => openAssignmentDetails(stat)}
-                                                                title="查看詳細清單"
+                                                                className={`hover:bg-slate-50 ${canView ? 'cursor-pointer' : 'opacity-60'}`}
+                                                                onClick={canView ? () => openAssignmentDetails(stat) : undefined}
+                                                                title={canView ? '查看詳細清單' : '僅限本人/組別查看'}
                                                             >
                                                                 <td className="px-3 py-2">
                                                                     {isUnassigned ? (
                                                                         <span className="inline-flex items-center gap-2 text-red-600 font-medium">
                                                                             <span>⚠️ 未指派</span>
-                                                                            <span className="text-xs text-teal-600 font-normal">查看</span>
+                                                                            <span className={`text-xs font-normal ${canView ? 'text-teal-600' : 'text-slate-400'}`}>
+                                                                                {canView ? '查看' : '限本人/組別'}
+                                                                            </span>
                                                                         </span>
                                                                     ) : (
                                                                         <span className="inline-flex items-center gap-2">
                                                                             <span>{label}</span>
-                                                                            <span className="text-xs text-teal-600">查看</span>
+                                                                            <span className={`text-xs ${canView ? 'text-teal-600' : 'text-slate-400'}`}>
+                                                                                {canView ? '查看' : '限本人/組別'}
+                                                                            </span>
                                                                         </span>
                                                                     )}
                                                                 </td>
@@ -7770,6 +7791,9 @@
                     {/* ✨ 新增：盤點進度監控儀表板 */}
                     <InventoryDashboardCard 
                         isAdminView={isAdminView}
+                        isAdmin={isAdmin}
+                        currentUserEmail={currentUserEmail}
+                        currentUserGroup={currentUserGroup}
                         inventorySessions={inventorySessions}
                         onRefresh={() => {
                             refreshCardData();
