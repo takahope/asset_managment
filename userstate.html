@@ -6819,6 +6819,7 @@
             const [batchInventorySessionId, setBatchInventorySessionId] = useState('');
             const [currentUserGroup, setCurrentUserGroup] = useState('');
             const viewModeInitializedRef = useRef(false);
+            const inventoryToastTimerRef = useRef(null);
 
             const isAdminView = isAdmin && viewMode === 'admin';
             const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -6952,11 +6953,15 @@
 
             const loadPendingInventoryAssignments = useCallback((forceUserScope, options = {}) => {
               const { onComplete } = options;
+              setIsLoadingPendingInventory(true);
+              setPendingInventoryError('');
               google.script.run
                 .withSuccessHandler((response) => {
                   if (!response) {
                     setInventoryPendingByAsset({});
                     setPendingInventoryItems([]);
+                    setIsLoadingPendingInventory(false);
+                    setPendingInventoryError('沒有回應');
                     if (typeof onComplete === 'function') {
                       onComplete(new Error('沒有回應'));
                     }
@@ -6966,6 +6971,8 @@
                     console.warn('載入盤點待辦失敗：', response.error);
                     setInventoryPendingByAsset({});
                     setPendingInventoryItems([]);
+                    setIsLoadingPendingInventory(false);
+                    setPendingInventoryError(response.error);
                     if (typeof onComplete === 'function') {
                       onComplete(new Error(response.error));
                     }
@@ -6975,6 +6982,8 @@
                   const map = buildInventoryPendingByAsset(pendingItems);
                   setInventoryPendingByAsset(map);
                   setPendingInventoryItems(pendingItems);
+                  setIsLoadingPendingInventory(false);
+                  setPendingInventoryError('');
                   if (typeof onComplete === 'function') {
                     onComplete(null, response);
                   }
@@ -6983,6 +6992,8 @@
                   console.error('載入盤點待辦失敗:', error);
                   setInventoryPendingByAsset({});
                   setPendingInventoryItems([]);
+                  setIsLoadingPendingInventory(false);
+                  setPendingInventoryError(error.message || '載入失敗');
                   if (typeof onComplete === 'function') {
                     onComplete(error);
                   }
@@ -7182,6 +7193,8 @@
             const refreshCardData = useCallback(async () => {
                 const MIN_LOADING_DURATION = 500; // 最短顯示時間 500ms
                 setIsLoadingCards(true);
+                setIsLoadingPendingInventory(true);
+                setPendingInventoryError('');
                 const startTime = Date.now();
                 const forceUserScope = viewMode === 'user';
 
@@ -7259,6 +7272,7 @@
                         setTransferringCount(transferringResponse.value.count);
                         setTransferringAssets(transferringResponse.value.assets || []);
                     }
+                    let pendingInventoryLoadError = '';
                     if (pendingInventoryResponse.status === 'fulfilled') {
                       const response = pendingInventoryResponse.value;
                       if (response && !response.error) {
@@ -7269,7 +7283,15 @@
                       } else {
                         setInventoryPendingByAsset({});
                         setPendingInventoryItems([]);
+                        pendingInventoryLoadError = response?.error || '載入失敗';
                       }
+                    } else {
+                      setInventoryPendingByAsset({});
+                      setPendingInventoryItems([]);
+                      pendingInventoryLoadError = pendingInventoryResponse.reason?.message || '載入失敗';
+                    }
+                    if (pendingInventoryLoadError) {
+                      setPendingInventoryError(pendingInventoryLoadError);
                     }
                     if (lentResponse.status === 'fulfilled') {
                         const response = lentResponse.value;
@@ -7300,6 +7322,9 @@
                     setIsLoadingCards(false);
                     console.error('重新整理失敗：', error);
                     alert('重新整理失敗：' + error.message);
+                    setPendingInventoryError(error.message || '載入失敗');
+                } finally {
+                    setIsLoadingPendingInventory(false);
                 }
             }, [buildInventoryPendingByAsset, viewMode]);
 
@@ -7336,6 +7361,43 @@
             useEffect(() => {
                 window.pendingApprovals = pendingApprovalsData;
             }, [pendingApprovalsData]);
+
+            useEffect(() => {
+                if (!isReady) return;
+
+                if (isLoadingPendingInventory) {
+                    if (!inventoryToastTimerRef.current) {
+                        inventoryToastTimerRef.current = setTimeout(() => {
+                            if (typeof window.showInventoryLoadingToast === 'function') {
+                                window.showInventoryLoadingToast('盤點資料載入中，盤點確認按鈕即將出現...');
+                            }
+                            inventoryToastTimerRef.current = null;
+                        }, 250);
+                    }
+                    return;
+                }
+
+                if (inventoryToastTimerRef.current) {
+                    clearTimeout(inventoryToastTimerRef.current);
+                    inventoryToastTimerRef.current = null;
+                }
+
+                if (typeof window.hideInventoryLoadingToast === 'function') {
+                    const completionText = pendingInventoryError
+                        ? '盤點資料載入失敗，請稍後重試'
+                        : '盤點確認按鈕已就緒';
+                    window.hideInventoryLoadingToast(completionText, 300, !pendingInventoryError);
+                }
+            }, [isLoadingPendingInventory, isReady, pendingInventoryError]);
+
+            useEffect(() => {
+                return () => {
+                    if (inventoryToastTimerRef.current) {
+                        clearTimeout(inventoryToastTimerRef.current);
+                        inventoryToastTimerRef.current = null;
+                    }
+                };
+            }, []);
 
             // 計算篩選後的資產
             const filteredAssets = useMemo(() => {
@@ -7665,16 +7727,7 @@
                         break;
                     case 'inventory':
                         setActiveModal('inventoryPending');
-                        setPendingInventoryError('');
-                        setIsLoadingPendingInventory(true);
-                        loadPendingInventoryAssignments(viewMode === 'user', {
-                          onComplete: (error) => {
-                            setIsLoadingPendingInventory(false);
-                            if (error) {
-                              setPendingInventoryError(error.message || '載入失敗');
-                            }
-                          }
-                        });
+                        loadPendingInventoryAssignments(viewMode === 'user');
                         break;
                 }
             };

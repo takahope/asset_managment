@@ -49,6 +49,45 @@
     font-weight: 600;
     color: #0d6efd;
   }
+
+  /* 盤點載入 Toast */
+  .inventory-toast {
+    border-left: 4px solid #14b8a6;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+    backdrop-filter: blur(6px);
+  }
+
+  .inventory-toast .toast-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .inventory-toast .toast-body {
+    padding: 14px 16px 16px;
+  }
+
+  .inventory-toast .progress {
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+  }
+
+  .inventory-toast .progress-bar {
+    background: linear-gradient(90deg, #14b8a6, #38bdf8);
+    transition: width 0.3s ease-out;
+  }
+
+  .inventory-toast .toast-status-text {
+    color: #475569;
+  }
+
+  .inventory-toast .toast-percent-text {
+    color: #0f766e;
+  }
 </style>
 
 <!-- Toast 容器 -->
@@ -156,6 +195,97 @@
         }
         _currentToast = null;
       }, 500); // Bootstrap toast 隱藏動畫時間
+    }, delay);
+  }
+
+  let _inventoryToastInterval = null;
+  let _inventoryToast = null;
+
+  /**
+   * 顯示盤點資料載入 Toast
+   * @param {string} statusText - 狀態文字
+   */
+  function showInventoryLoadingToast(statusText = '盤點資料載入中...') {
+    const container = document.getElementById('toastProgressContainer');
+    if (!container) return;
+
+    if (_inventoryToast) {
+      const statusTextEl = _inventoryToast.querySelector('.toast-status-text');
+      if (statusTextEl) {
+        statusTextEl.textContent = statusText;
+      }
+      return;
+    }
+
+    const toastId = 'toast-inventory-' + Date.now();
+    const toastHTML = `
+      <div id="${toastId}" class="toast inventory-toast" role="status" aria-live="polite" aria-atomic="true" data-autohide="false">
+        <div class="toast-header">
+          <strong class="mr-auto">盤點資料同步</strong>
+        </div>
+        <div class="toast-body">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="toast-status-text">${statusText}</span>
+            <span class="toast-percent-text">0%</span>
+          </div>
+          <div class="progress">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.insertAdjacentHTML('beforeend', toastHTML);
+    _inventoryToast = document.getElementById(toastId);
+    $(_inventoryToast).toast('show');
+
+    let progress = 0;
+    const progressBar = _inventoryToast.querySelector('.progress-bar');
+    const percentText = _inventoryToast.querySelector('.toast-percent-text');
+
+    _inventoryToastInterval = setInterval(() => {
+      if (progress < 92) {
+        progress += 1;
+        progressBar.style.width = progress + '%';
+        percentText.textContent = progress + '%';
+      }
+    }, 35);
+  }
+
+  /**
+   * 隱藏盤點資料載入 Toast
+   * @param {string} completionText - 完成文字
+   * @param {number} delay - 延遲時間 (毫秒)
+   * @param {boolean} isSuccess - 是否成功
+   */
+  function hideInventoryLoadingToast(completionText = '盤點確認按鈕已就緒', delay = 300, isSuccess = true) {
+    if (!_inventoryToast) return;
+
+    if (_inventoryToastInterval) {
+      clearInterval(_inventoryToastInterval);
+      _inventoryToastInterval = null;
+    }
+
+    const progressBar = _inventoryToast.querySelector('.progress-bar');
+    const statusText = _inventoryToast.querySelector('.toast-status-text');
+    const percentText = _inventoryToast.querySelector('.toast-percent-text');
+
+    if (statusText) statusText.textContent = completionText;
+    if (progressBar) {
+      progressBar.style.width = '100%';
+      progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+      progressBar.classList.add(isSuccess ? 'bg-success' : 'bg-danger');
+    }
+    if (percentText) percentText.textContent = '100%';
+
+    setTimeout(() => {
+      $(_inventoryToast).toast('hide');
+      setTimeout(() => {
+        if (_inventoryToast && _inventoryToast.parentNode) {
+          _inventoryToast.remove();
+        }
+        _inventoryToast = null;
+      }, 500);
     }, delay);
   }
 </script>
