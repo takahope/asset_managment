@@ -7748,7 +7748,7 @@
                     if (!inventoryToastTimerRef.current) {
                         inventoryToastTimerRef.current = setTimeout(() => {
                             if (typeof window.showInventoryLoadingToast === 'function') {
-                                window.showInventoryLoadingToast('盤點資料載入中，盤點確認按鈕即將出現...');
+                                window.showInventoryLoadingToast('盤點資料載入中...');
                             }
                             inventoryToastTimerRef.current = null;
                         }, 250);
@@ -7764,7 +7764,7 @@
                 if (typeof window.hideInventoryLoadingToast === 'function') {
                     const completionText = pendingInventoryError
                         ? '盤點資料載入失敗，請稍後重試'
-                        : '盤點確認按鈕已就緒';
+                        : '盤點資料已就緒';
                     window.hideInventoryLoadingToast(completionText, 300, !pendingInventoryError);
                 }
             }, [isLoadingPendingInventory, isReady, pendingInventoryError]);
