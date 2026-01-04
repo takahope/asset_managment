@@ -7026,7 +7026,8 @@
                                 setIsAdmin(response.isAdmin);
                                 setCurrentUserEmail(response.userEmail);
                                 setCurrentUserName(response.userName || '');
-                                if (!viewModeInitializedRef.current && response.isAdmin && forceUserScope) {
+                                const shouldSwitchToAdmin = response.isAdmin && forceUserScope && !viewModeInitializedRef.current;
+                                if (shouldSwitchToAdmin) {
                                     setViewMode('admin');
                                     viewModeInitializedRef.current = true;
                                     loadData('admin');
@@ -7444,6 +7445,8 @@
 
             // 同步「在庫」資產到全域變數，供 BatchList 和 Scanner 模組使用
             useEffect(() => {
+                if (!isReady) return;
+
                 // ⚠️ 只包含「在庫」狀態的資產，限制可選取範圍
                 window.allAssets = allAssets
                     .filter(asset => asset.status === '在庫')
@@ -7469,7 +7472,7 @@
                 }
 
                 console.log('[App] 已更新 window.allAssets，共', window.allAssets.length, '筆「在庫」資產');
-            }, [allAssets]);
+            }, [allAssets, isReady]);
 
             // 計算卡片統計數量
             const cardCounts = useMemo(() => {
