@@ -34,8 +34,8 @@ const PROPERTY_COLUMN_INDICES = {
   LOCATION: 8,      // H欄: 保管地點 (財產)
   LEADER_EMAIL: 13, // M欄: 保管人電子郵件
   LEADER_NAME: 10,  // J欄: 保管人
-  USER_NAME: 11,    // K欄: 使用者
-  USER_EMAIL: 14,   // N欄: 使用者電子郵件 ✨ 新增
+  USER_NAME: 11,    // K欄: 使用人
+  USER_EMAIL: 14,   // N欄: 使用人電子郵件 ✨ 新增
   ASSET_STATUS: 15, // O欄: 財產狀態 (原N欄)
   APPLICATION_TIME: 16, // P欄: 申請時間 (原O欄)
   TRANSFER_TIME: 17,    // Q欄: 接收時間 (原P欄)
