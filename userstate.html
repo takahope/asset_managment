@@ -2,6 +2,23 @@
 <html>
 <head>
     <base target="_top">
+
+    <!-- 攔截並過濾產線環境警告 (Tailwind & Babel) -->
+    <script>
+        (function() {
+            const originalWarn = console.warn;
+            console.warn = function(...args) {
+                if (typeof args[0] === 'string') {
+                    // 過濾 Tailwind 警告
+                    if (args[0].includes('cdn.tailwindcss.com')) return;
+                    // 過濾 Babel 警告
+                    if (args[0].includes('in-browser Babel transformer')) return;
+                }
+                originalWarn.apply(console, args);
+            };
+        })();
+    </script>
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
