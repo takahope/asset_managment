@@ -4274,6 +4274,186 @@ function getTransferringAssets(forceUserScope) {
 }
 
 /**
+ * [供 userstate.html 呼叫] 取得單一資產狀態詳情
+ * @param {string} assetId 資產編號
+ * @param {boolean} forceUserScope 是否強制使用者視角
+ * @returns {Object} { assetId, assetName, status, type, detail } 或 { error }
+ */
+function getAssetStatusDetail(assetId, forceUserScope) {
+  try {
+    const normalizedAssetId = String(assetId || '').trim();
+    if (!normalizedAssetId) {
+      return { error: '缺少資產編號' };
+    }
+
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
+    const allAssets = getAllAssets();
+    const asset = allAssets.find(item => String(item.assetId || '').trim() === normalizedAssetId);
+
+    if (!asset) {
+      return { error: '找不到資產資料' };
+    }
+
+    if (!useAdminScope) {
+      const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase());
+      const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
+      const userEmail = String(asset.userEmail || '').toLowerCase();
+      const hasAccess = groupEmails.includes(leaderEmail) || (userEmail && groupEmails.includes(userEmail));
+      if (!hasAccess) {
+        return { error: '權限不足，無法查看此資產狀態詳情。' };
+      }
+    }
+
+    const status = String(asset.assetStatus || '').trim();
+    const baseResult = {
+      assetId: normalizedAssetId,
+      assetName: String(asset.assetName || ''),
+      status: status
+    };
+    const formatDateValue = (value, pattern) => {
+      if (!value) return '';
+      try {
+        return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+      } catch (e) {
+        return String(value);
+      }
+    };
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    if (status === '轉移中' || status === '待接收') {
+      const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+      if (!appLogSheet || appLogSheet.getLastRow() < 2) {
+        return { error: '找不到轉移申請紀錄資料。' };
+      }
+      const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+      let latestRow = null;
+      let latestTime = 0;
+
+      appLogData.forEach(row => {
+        const logAssetId = String(row[AL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+        const logStatus = row[AL_STATUS_COLUMN_INDEX - 1];
+        if (logAssetId !== normalizedAssetId) return;
+        if (logStatus !== '待接收' && logStatus !== '轉移中') return;
+
+        const rawTime = row[AL_APP_TIME_COLUMN_INDEX - 1];
+        const timeValue = rawTime ? new Date(rawTime).getTime() : 0;
+        const normalizedTime = Number.isNaN(timeValue) ? 0 : timeValue;
+        if (!latestRow || normalizedTime >= latestTime) {
+          latestRow = row;
+          latestTime = normalizedTime;
+        }
+      });
+
+      if (!latestRow) {
+        return { error: '找不到此資產的轉移申請資料。' };
+      }
+
+      return {
+        ...baseResult,
+        type: 'transfer',
+        detail: {
+          workflowStatus: latestRow[AL_STATUS_COLUMN_INDEX - 1] || '',
+          applicationTime: formatDateValue(latestRow[AL_APP_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd HH:mm'),
+          transferType: latestRow[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
+          oldKeeper: latestRow[AL_OLD_LEADER_COLUMN_INDEX - 1] || '',
+          newKeeper: latestRow[AL_NEW_LEADER_COLUMN_INDEX - 1] || '',
+          oldUser: latestRow[AL_OLD_USER_COLUMN_INDEX - 1] || '',
+          newUser: latestRow[AL_NEW_USER_COLUMN_INDEX - 1] || '',
+          oldLocation: latestRow[AL_OLD_LOCATION_COLUMN_INDEX - 1] || '',
+          newLocation: latestRow[AL_NEW_LOCATION_COLUMN_INDEX - 1] || '',
+          applicantEmail: latestRow[AL_APPLICANT_EMAIL_COLUMN_INDEX - 1] || ''
+        }
+      };
+    }
+
+    if (status === '出借中' || status === '借出中') {
+      const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
+      if (!lendingLogSheet || lendingLogSheet.getLastRow() < 2) {
+        return { error: '找不到出借紀錄資料。' };
+      }
+      const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, 10).getValues();
+      let latestRow = null;
+      let latestTime = 0;
+
+      lendingData.forEach(row => {
+        const logAssetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+        const logStatus = row[LL_STATUS_COLUMN_INDEX - 1];
+        if (logAssetId !== normalizedAssetId) return;
+        if (logStatus !== '出借中') return;
+
+        const rawTime = row[LL_LEND_TIME_COLUMN_INDEX - 1];
+        const timeValue = rawTime ? new Date(rawTime).getTime() : 0;
+        const normalizedTime = Number.isNaN(timeValue) ? 0 : timeValue;
+        if (!latestRow || normalizedTime >= latestTime) {
+          latestRow = row;
+          latestTime = normalizedTime;
+        }
+      });
+
+      if (!latestRow) {
+        return { error: '找不到此資產的出借紀錄。' };
+      }
+
+      const lenderEmail = String(latestRow[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
+      let lenderName = lenderEmail || '';
+      if (lenderEmail) {
+        const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+        if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+          const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+          for (let i = 0; i < keeperData.length; i++) {
+            const name = keeperData[i][0];
+            const email = keeperData[i][1];
+            if (email && String(email).toLowerCase() === lenderEmail) {
+              lenderName = name || lenderEmail;
+              break;
+            }
+          }
+        }
+      }
+
+      return {
+        ...baseResult,
+        type: 'lending',
+        detail: {
+          lendId: latestRow[LL_LEND_ID_COLUMN_INDEX - 1] || '',
+          applyTime: formatDateValue(latestRow[LL_LEND_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd'),
+          lenderName: lenderName,
+          borrower: latestRow[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '',
+          expectedReturnDate: formatDateValue(latestRow[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1], 'yyyy/MM/dd'),
+          reason: latestRow[LL_REASON_COLUMN_INDEX - 1] || '',
+          lendingLocation: latestRow[LL_LENDING_LOCATION_COLUMN_INDEX - 1] || '',
+          originalLocation: String(asset.location || ''),
+          keeperName: String(asset.leaderName || ''),
+          userName: String(asset.userName || '')
+        }
+      };
+    }
+
+    if (status === '報廢中') {
+      return {
+        ...baseResult,
+        type: 'scrap',
+        detail: {
+          scrapDate: formatDateValue(asset.lastModified, 'yyyy/MM/dd'),
+          scrapReason: String(asset.remarks || ''),
+          originalKeeper: String(asset.leaderName || ''),
+          originalUser: String(asset.userName || ''),
+          location: String(asset.location || '')
+        }
+      };
+    }
+
+    return { error: `此資產狀態為「${status}」，目前無詳細資訊。` };
+  } catch (e) {
+    Logger.log(`getAssetStatusDetail 失敗: ${e.message} at ${e.stack}`);
+    return { error: `讀取資料時發生錯誤：${e.message}` };
+  }
+}
+
+/**
  * [供 printScrap.html 呼叫] 獲取已列印的報廢文件歷史紀錄
  * @param {string} assetCategory - 財產類別
  * @returns {Array<Object>} 文件列表 { url, applicant, date, count }
