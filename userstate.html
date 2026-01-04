@@ -4518,6 +4518,12 @@
             const [selectedIds, setSelectedIds] = useState([]);
             const [selectAll, setSelectAll] = useState(false);
             const [isGenerating, setIsGenerating] = useState(false);
+            const [activeTab, setActiveTab] = useState('pending');
+            const [historyRecords, setHistoryRecords] = useState([]);
+            const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+            const [historyError, setHistoryError] = useState('');
+            const [hasHistoryLoaded, setHasHistoryLoaded] = useState(false);
+            const [historyLoadedCategory, setHistoryLoadedCategory] = useState('');
 
             // 當前類別的資產列表
             const currentAssets = useMemo(() => {
@@ -4529,6 +4535,10 @@
             useEffect(() => {
                 setSelectedIds([]);
                 setSelectAll(false);
+                setHistoryRecords([]);
+                setHistoryError('');
+                setHasHistoryLoaded(false);
+                setHistoryLoadedCategory('');
             }, [selectedCategory]);
 
             // 檢查是否收到 null（序列化失敗）
@@ -4615,6 +4625,40 @@
                     .getAdminName();
             };
 
+            const loadHistoryRecords = useCallback(() => {
+                setIsLoadingHistory(true);
+                setHistoryError('');
+                setHistoryRecords([]);
+
+                google.script.run
+                    .withSuccessHandler((records) => {
+                        if (records === null || !Array.isArray(records)) {
+                            setHistoryError('載入失敗：資料格式錯誤');
+                            setHistoryRecords([]);
+                        } else {
+                            setHistoryRecords(records);
+                        }
+                        setIsLoadingHistory(false);
+                        setHasHistoryLoaded(true);
+                        setHistoryLoadedCategory(selectedCategory);
+                    })
+                    .withFailureHandler((error) => {
+                        setHistoryError('載入失敗：' + (error.message || error));
+                        setHistoryRecords([]);
+                        setIsLoadingHistory(false);
+                        setHasHistoryLoaded(true);
+                        setHistoryLoadedCategory(selectedCategory);
+                    })
+                    .getTransferDocHistory(selectedCategory);
+            }, [selectedCategory]);
+
+            useEffect(() => {
+                if (activeTab !== 'history') return;
+                if (isLoadingHistory) return;
+                if (hasHistoryLoaded && historyLoadedCategory === selectedCategory) return;
+                loadHistoryRecords();
+            }, [activeTab, hasHistoryLoaded, historyLoadedCategory, selectedCategory, isLoadingHistory, loadHistoryRecords]);
+
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out] flex flex-col">
@@ -4626,135 +4670,272 @@
                             </button>
                         </div>
 
-                        {/* Category Selector */}
-                        <div className="px-6 py-4 border-b bg-purple-50/50">
-                            <label className="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
-                            <label className="inline-flex items-center mr-6">
-                                <input
-                                    type="radio"
-                                    name="transferCategory"
-                                    value="財產"
-                                    checked={selectedCategory === '財產'}
-                                    onChange={(e) => setSelectedCategory(e.target.value)}
-                                    className="mr-2"
-                                />
-                                <span>財產</span>
-                            </label>
-                            <label className="inline-flex items-center">
-                                <input
-                                    type="radio"
-                                    name="transferCategory"
-                                    value="物品"
-                                    checked={selectedCategory === '物品'}
-                                    onChange={(e) => setSelectedCategory(e.target.value)}
-                                    className="mr-2"
-                                />
-                                <span>物品</span>
-                            </label>
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-6">
-                            {isLoading ? (
-                                <div className="flex items-center justify-center py-16">
-                                    <div className="text-center">
-                                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-                                        <p className="mt-4 text-slate-600">載入中...</p>
-                                    </div>
-                                </div>
-                            ) : currentAssets.length === 0 ? (
-                                <div className="text-center py-16 text-slate-500">
-                                    <i className="fas fa-inbox text-5xl mb-4 text-slate-300"></i>
-                                    <p>目前沒有任何已完成轉移的{selectedCategory}記錄。</p>
-                                </div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-purple-50 sticky top-0">
-                                            <tr>
-                                                <th className="px-3 py-2 text-left">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectAll}
-                                                        onChange={handleSelectAll}
-                                                        className="rounded"
-                                                    />
-                                                </th>
-                                                <th className="px-3 py-2 text-left">財產編號</th>
-                                                <th className="px-3 py-2 text-left">財產名稱</th>
-                                                <th className="px-3 py-2 text-left">型號/廠牌</th>
-                                                <th className="px-3 py-2 text-left">原保管人</th>
-                                                <th className="px-3 py-2 text-left">原使用人</th>
-                                                <th className="px-3 py-2 text-left">原地點</th>
-                                                <th className="px-3 py-2 text-left">新保管人</th>
-                                                <th className="px-3 py-2 text-left">新使用人</th>
-                                                <th className="px-3 py-2 text-left">新地點</th>
-                                                <th className="px-3 py-2 text-left">轉移類型</th>
-                                                <th className="px-3 py-2 text-left">轉移日期</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {currentAssets.map(asset => (
-                                                <tr key={asset.assetId} className="border-b hover:bg-purple-50/30">
-                                                    <td className="px-3 py-2">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedIds.includes(asset.assetId)}
-                                                            onChange={() => handleSelectOne(asset.assetId)}
-                                                            className="rounded"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-2">{asset.assetId}</td>
-                                                    <td className="px-3 py-2">{asset.assetName}</td>
-                                                    <td className="px-3 py-2">{asset.modelBrand}</td>
-                                                    <td className="px-3 py-2">{asset.oldKeeper}</td>
-                                                    <td className="px-3 py-2">{asset.oldUser || ''}</td>
-                                                    <td className="px-3 py-2">{asset.oldLocation}</td>
-                                                    <td className="px-3 py-2">{asset.newKeeper}</td>
-                                                    <td className="px-3 py-2">{asset.newUser || ''}</td>
-                                                    <td className="px-3 py-2">{asset.newLocation}</td>
-                                                    <td className="px-3 py-2">{asset.transferType}</td>
-                                                    <td className="px-3 py-2">{asset.transferDate}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Footer */}
-                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
-                            <div className="text-sm text-slate-600">
-                                已選擇 <span className="font-bold text-purple-600">{selectedIds.length}</span> 筆資產
+                        {/* Tabs */}
+                        <div className="px-6 border-b bg-slate-50">
+                            <div className="flex">
+                                <button
+                                    onClick={() => setActiveTab('pending')}
+                                    className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+                                        activeTab === 'pending'
+                                            ? 'border-purple-600 text-purple-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                                >
+                                    待列印清單
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('history')}
+                                    className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${
+                                        activeTab === 'history'
+                                            ? 'border-purple-600 text-purple-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                    }`}
+                                >
+                                    查看歷史紀錄
+                                </button>
                             </div>
-                            <div className="flex gap-3">
+                        </div>
+
+                        {/* ========== Tab 1: 待列印清單 ========== */}
+                        {activeTab === 'pending' && (
+                            <>
+                                <div className="px-6 py-4 border-b bg-purple-50/50">
+                                    <label className="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
+                                    <label className="inline-flex items-center mr-6">
+                                        <input
+                                            type="radio"
+                                            name="transferCategory"
+                                            value="財產"
+                                            checked={selectedCategory === '財產'}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>財產</span>
+                                    </label>
+                                    <label className="inline-flex items-center">
+                                        <input
+                                            type="radio"
+                                            name="transferCategory"
+                                            value="物品"
+                                            checked={selectedCategory === '物品'}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>物品</span>
+                                    </label>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    {isLoading ? (
+                                        <div className="flex items-center justify-center py-16">
+                                            <div className="text-center">
+                                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                                                <p className="mt-4 text-slate-600">載入中...</p>
+                                            </div>
+                                        </div>
+                                    ) : currentAssets.length === 0 ? (
+                                        <div className="text-center py-16 text-slate-500">
+                                            <i className="fas fa-inbox text-5xl mb-4 text-slate-300"></i>
+                                            <p>目前沒有任何已完成轉移的{selectedCategory}記錄。</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-purple-50 sticky top-0">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectAll}
+                                                                onChange={handleSelectAll}
+                                                                className="rounded"
+                                                            />
+                                                        </th>
+                                                        <th className="px-3 py-2 text-left">財產編號</th>
+                                                        <th className="px-3 py-2 text-left">財產名稱</th>
+                                                        <th className="px-3 py-2 text-left">型號/廠牌</th>
+                                                        <th className="px-3 py-2 text-left">原保管人</th>
+                                                        <th className="px-3 py-2 text-left">原使用人</th>
+                                                        <th className="px-3 py-2 text-left">原地點</th>
+                                                        <th className="px-3 py-2 text-left">新保管人</th>
+                                                        <th className="px-3 py-2 text-left">新使用人</th>
+                                                        <th className="px-3 py-2 text-left">新地點</th>
+                                                        <th className="px-3 py-2 text-left">轉移類型</th>
+                                                        <th className="px-3 py-2 text-left">轉移日期</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {currentAssets.map(asset => (
+                                                        <tr key={asset.assetId} className="border-b hover:bg-purple-50/30">
+                                                            <td className="px-3 py-2">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedIds.includes(asset.assetId)}
+                                                                    onChange={() => handleSelectOne(asset.assetId)}
+                                                                    className="rounded"
+                                                                />
+                                                            </td>
+                                                            <td className="px-3 py-2">{asset.assetId}</td>
+                                                            <td className="px-3 py-2">{asset.assetName}</td>
+                                                            <td className="px-3 py-2">{asset.modelBrand}</td>
+                                                            <td className="px-3 py-2">{asset.oldKeeper}</td>
+                                                            <td className="px-3 py-2">{asset.oldUser || ''}</td>
+                                                            <td className="px-3 py-2">{asset.oldLocation}</td>
+                                                            <td className="px-3 py-2">{asset.newKeeper}</td>
+                                                            <td className="px-3 py-2">{asset.newUser || ''}</td>
+                                                            <td className="px-3 py-2">{asset.newLocation}</td>
+                                                            <td className="px-3 py-2">{asset.transferType}</td>
+                                                            <td className="px-3 py-2">{asset.transferDate}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {/* ========== Tab 2: 查看歷史紀錄 ========== */}
+                        {activeTab === 'history' && (
+                            <div className="flex-1 overflow-y-auto p-6">
+                                <div className="mb-4 p-4 bg-purple-50/60 rounded-lg flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <label className="font-medium text-slate-700 mr-4">財產類別：</label>
+                                        <label className="inline-flex items-center mr-6">
+                                            <input
+                                                type="radio"
+                                                name="transferCategoryHistory"
+                                                value="財產"
+                                                checked={selectedCategory === '財產'}
+                                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                                className="mr-2"
+                                            />
+                                            <span>財產</span>
+                                        </label>
+                                        <label className="inline-flex items-center">
+                                            <input
+                                                type="radio"
+                                                name="transferCategoryHistory"
+                                                value="物品"
+                                                checked={selectedCategory === '物品'}
+                                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                                className="mr-2"
+                                            />
+                                            <span>物品</span>
+                                        </label>
+                                    </div>
+                                    <button
+                                        onClick={loadHistoryRecords}
+                                        className="text-sm text-purple-600 hover:text-purple-800 transition-colors"
+                                    >
+                                        <i className="fas fa-sync-alt mr-1"></i>重新整理
+                                    </button>
+                                </div>
+
+                                {isLoadingHistory ? (
+                                    <div className="flex items-center justify-center py-16">
+                                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                                        <span className="ml-3 text-slate-600">載入中...</span>
+                                    </div>
+                                ) : historyError ? (
+                                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                                        {historyError}
+                                    </div>
+                                ) : historyRecords.length === 0 ? (
+                                    <div className="text-center py-16 text-slate-500">
+                                        <i className="fas fa-folder-open text-5xl mb-4 text-slate-300"></i>
+                                        <p>目前沒有已列印的轉移文件紀錄。</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="font-medium text-slate-700">已列印轉移文件</h4>
+                                            <div className="text-xs text-slate-500">共 {historyRecords.length} 筆</div>
+                                        </div>
+                                        <div className="overflow-x-auto border rounded-lg">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-purple-50">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">新保管人</th>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">轉移日期</th>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">包含筆數</th>
+                                                        <th className="px-4 py-3 text-left font-medium text-slate-600">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {historyRecords.map((record, idx) => (
+                                                        <tr key={`${record.url || 'record'}-${idx}`} className="border-t hover:bg-purple-50/30">
+                                                            <td className="px-4 py-3">{record.keeper || '-'}</td>
+                                                            <td className="px-4 py-3 text-slate-600">{record.date || '-'}</td>
+                                                            <td className="px-4 py-3 text-slate-600">
+                                                                {record.count !== undefined && record.count !== null ? record.count : '-'}
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <a
+                                                                    href={record.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-purple-600 hover:text-purple-800 font-medium"
+                                                                >
+                                                                    <i className="fas fa-external-link-alt mr-1"></i>開啟文件
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Footer - 根據 Tab 顯示不同內容 */}
+                        {activeTab === 'pending' && (
+                            <div className="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                                <div className="text-sm text-slate-600">
+                                    已選擇 <span className="font-bold text-purple-600">{selectedIds.length}</span> 筆資產
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={onClose}
+                                        className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                        disabled={isGenerating}
+                                    >
+                                        取消
+                                    </button>
+                                    <button
+                                        onClick={handleGenerateDoc}
+                                        disabled={isGenerating || selectedIds.length === 0}
+                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isGenerating ? (
+                                            <>
+                                                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                <span>產生中...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-file-alt"></i>
+                                                <span>生成轉移申請單</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'history' && (
+                            <div className="px-6 py-4 border-t bg-slate-50 flex justify-end">
                                 <button
                                     onClick={onClose}
                                     className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                    disabled={isGenerating}
                                 >
-                                    取消
-                                </button>
-                                <button
-                                    onClick={handleGenerateDoc}
-                                    disabled={isGenerating || selectedIds.length === 0}
-                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            <span>產生中...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="fas fa-file-alt"></i>
-                                            <span>生成轉移申請單</span>
-                                        </>
-                                    )}
+                                    關閉
                                 </button>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             );
