@@ -1246,6 +1246,44 @@
 
         const SearchIcon = (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>;
 
+        const STATUS_COLORS = {
+            '在庫': 'bg-green-50 text-green-700 border-green-200',
+            '出借中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+            '借出中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+            '報廢中': 'bg-red-50 text-red-700 border-red-200',
+            '已報廢': 'bg-gray-50 text-gray-700 border-gray-200',
+            '轉移中': 'bg-blue-50 text-blue-700 border-blue-200',
+            '待接收': 'bg-purple-50 text-purple-700 border-purple-200'
+        };
+
+        const STATUS_DETAIL_TYPES = {
+            '轉移中': 'transfer',
+            '出借中': 'lending',
+            '借出中': 'lending',
+            '報廢中': 'scrap'
+        };
+
+        const STATUS_DETAIL_THEMES = {
+            transfer: {
+                title: '轉移中資訊',
+                icon: 'fa-right-left',
+                headerClass: 'bg-cyan-50',
+                textClass: 'text-cyan-800'
+            },
+            lending: {
+                title: '出借中資訊',
+                icon: 'fa-hand-holding-hand',
+                headerClass: 'bg-amber-50',
+                textClass: 'text-amber-800'
+            },
+            scrap: {
+                title: '報廢中資訊',
+                icon: 'fa-trash-can',
+                headerClass: 'bg-red-50',
+                textClass: 'text-red-700'
+            }
+        };
+
         // LoadingCard 組件 - 卡片載入佔位符（水平長方形樣式）
         const LoadingCard = () => (
             <div className="status-card px-4 py-3 rounded-2xl">
@@ -2620,15 +2658,7 @@
         };
 
         // AssetTable 組件
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, isAssetPendingInventory, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
-            const statusColors = {
-                '在庫': 'bg-green-50 text-green-700 border-green-200',
-                '出借中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-                '報廢中': 'bg-red-50 text-red-700 border-red-200',
-                '已報廢': 'bg-gray-50 text-gray-700 border-gray-200',
-                '轉移中': 'bg-blue-50 text-blue-700 border-blue-200',
-                '待接收': 'bg-purple-50 text-purple-700 border-purple-200'
-            };
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, isAssetPendingInventory, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
 
             // ✨ 分頁設定
             const ROWS_PER_PAGE = 500;
@@ -2744,6 +2774,9 @@
                                     const rowHoverClass = isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50';
                                     const rowBaseClass = isTask ? 'bg-teal-50' : '';
                                     const rowSelectedClass = isSelected ? 'ring-1 ring-blue-200 ring-inset' : '';
+                                    const statusBadgeClass = STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+                                    const statusDetailType = STATUS_DETAIL_TYPES[asset.status];
+                                    const canOpenStatusDetail = statusDetailType && typeof onOpenStatusDetail === 'function';
 
                                     return (
                                         <tr key={`${asset.assetId}-${index}`} className={`${rowHoverClass} transition-colors ${rowBaseClass} ${rowSelectedClass} ${!isTask && isSelected ? 'bg-blue-50' : ''}`}>
@@ -2787,9 +2820,22 @@
                                                 </span>
                                             </td>
                                             <td className="px-2 py-3 align-top">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${statusColors[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                                                    {asset.status}
-                                                </span>
+                                                {canOpenStatusDetail ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onOpenStatusDetail(asset)}
+                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap cursor-pointer transition-shadow hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-200 ${statusBadgeClass}`}
+                                                        title={`查看${asset.status}詳情`}
+                                                        aria-label={`查看 ${asset.assetId} ${asset.status} 詳情`}
+                                                    >
+                                                        <span>{asset.status}</span>
+                                                        <i className="fa-solid fa-circle-info text-[10px]"></i>
+                                                    </button>
+                                                ) : (
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${statusBadgeClass}`}>
+                                                        {asset.status}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-2 py-3 text-left align-top whitespace-nowrap">
                                                 {/* 操作按鈕區域 */}
@@ -4708,6 +4754,144 @@
                                     )}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const StatusDetailModal = ({ state, onClose }) => {
+            if (!state) return null;
+
+            const { asset, type, detail, isLoading, error } = state;
+            const theme = STATUS_DETAIL_THEMES[type] || {
+                title: '狀態詳情',
+                icon: 'fa-circle-info',
+                headerClass: 'bg-slate-50',
+                textClass: 'text-slate-800'
+            };
+            const statusBadgeClass = STATUS_COLORS[asset?.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+            const normalizeText = (value) => String(value || '').trim();
+            const formatValue = (value) => {
+                const text = normalizeText(value);
+                return text ? text : '-';
+            };
+            const formatChange = (oldValue, newValue) => {
+                const oldText = normalizeText(oldValue);
+                const newText = normalizeText(newValue);
+                if (!oldText && !newText) return '-';
+                if (!newText || oldText === newText) return oldText || newText || '-';
+                return `${oldText || '-'} → ${newText}`;
+            };
+
+            const detailRows = (() => {
+                if (!detail) return [];
+                if (type === 'transfer') {
+                    const rows = [
+                        { label: '流程狀態', value: formatValue(detail.workflowStatus || detail.status) },
+                        { label: '申請時間', value: formatValue(detail.applicationTime) },
+                        { label: '轉移類型', value: formatValue(detail.transferType) },
+                        { label: '保管人變更', value: formatChange(detail.oldKeeper, detail.newKeeper), full: true },
+                        { label: '使用人變更', value: formatChange(detail.oldUser, detail.newUser), full: true },
+                        { label: '地點變更', value: formatChange(detail.oldLocation, detail.newLocation), full: true }
+                    ];
+                    if (detail.applicantEmail) {
+                        rows.push({ label: '申請人', value: formatValue(detail.applicantEmail), full: true });
+                    }
+                    return rows;
+                }
+                if (type === 'lending') {
+                    return [
+                        { label: '出借人', value: formatValue(detail.lenderName) },
+                        { label: '借用人', value: formatValue(detail.borrower) },
+                        { label: '出借日期', value: formatValue(detail.applyTime) },
+                        { label: '預計歸還日', value: formatValue(detail.expectedReturnDate) },
+                        { label: '原放置地點', value: formatValue(detail.originalLocation) },
+                        { label: '出借後地點', value: formatValue(detail.lendingLocation) },
+                        { label: '出借事由', value: formatValue(detail.reason), full: true }
+                    ];
+                }
+                if (type === 'scrap') {
+                    return [
+                        { label: '報廢日期', value: formatValue(detail.scrapDate) },
+                        { label: '報廢原因', value: formatValue(detail.scrapReason), full: true },
+                        { label: '原保管人', value: formatValue(detail.originalKeeper) },
+                        { label: '原使用人', value: formatValue(detail.originalUser) },
+                        { label: '保管位置', value: formatValue(detail.location) }
+                    ];
+                }
+                return [];
+            })();
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                        <div className={`px-6 py-4 border-b flex justify-between items-center ${theme.headerClass}`}>
+                            <div>
+                                <h3 className={`text-lg font-bold ${theme.textClass}`}>
+                                    <i className={`fa-solid ${theme.icon} mr-2`}></i>
+                                    {theme.title}
+                                </h3>
+                                <div className="text-xs text-slate-500 mt-1">
+                                    {asset?.assetId || ''} {asset?.assetName ? `・${asset.assetName}` : ''}
+                                </div>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 mb-4">
+                                <div className="text-xs text-slate-500 mb-1">資產狀態</div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-mono text-slate-700">{asset?.assetId || '-'}</span>
+                                    <span className="text-slate-700">{asset?.assetName || '-'}</span>
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${statusBadgeClass}`}>
+                                        {asset?.status || '-'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                                    <i className="fas fa-spinner fa-spin text-3xl text-slate-400"></i>
+                                    <p className="text-slate-500 font-medium">載入狀態詳情中...</p>
+                                </div>
+                            ) : error ? (
+                                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                                    {error}
+                                </div>
+                            ) : detailRows.length === 0 ? (
+                                <div className="text-center py-10 text-slate-500">
+                                    <i className="fas fa-info-circle text-3xl mb-2 text-slate-300"></i>
+                                    <p>目前沒有可顯示的詳情。</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {detailRows.map(row => (
+                                        <div
+                                            key={row.label}
+                                            className={`rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 ${row.full ? 'md:col-span-2' : ''}`}
+                                        >
+                                            <div className="text-xs font-semibold text-slate-500">{row.label}</div>
+                                            <div className="text-sm text-slate-700 mt-1 whitespace-pre-line">{row.value}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                關閉
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -6761,6 +6945,8 @@
             const [transferPendingCount, setTransferPendingCount] = useState(0);
             const [isLoadingScrapDetails, setIsLoadingScrapDetails] = useState(false);
             const [isLoadingTransferDetails, setIsLoadingTransferDetails] = useState(false);
+            const [statusDetailState, setStatusDetailState] = useState(null);
+            const statusDetailRequestRef = useRef(0);
 
             // 轉移中（我申請的轉移）相關 state
             const [transferringCount, setTransferringCount] = useState(0);
@@ -7764,6 +7950,63 @@
                 loadData();
             };
 
+            const handleOpenStatusDetail = useCallback((asset) => {
+                if (!asset) return;
+                const detailType = STATUS_DETAIL_TYPES[asset.status];
+                if (!detailType) return;
+
+                statusDetailRequestRef.current += 1;
+                const requestId = statusDetailRequestRef.current;
+
+                setStatusDetailState({
+                    asset: {
+                        assetId: asset.assetId,
+                        assetName: asset.assetName,
+                        status: asset.status
+                    },
+                    type: detailType,
+                    detail: null,
+                    isLoading: true,
+                    error: ''
+                });
+
+                google.script.run
+                    .withSuccessHandler(response => {
+                        if (statusDetailRequestRef.current !== requestId) return;
+                        if (!response || response.error) {
+                            const message = response?.error || '載入失敗';
+                            setStatusDetailState(prev => prev ? { ...prev, isLoading: false, error: message } : prev);
+                            return;
+                        }
+                        setStatusDetailState(prev => {
+                            if (!prev) return prev;
+                            const updatedAsset = {
+                                ...prev.asset,
+                                assetName: response.assetName || prev.asset.assetName,
+                                status: response.status || prev.asset.status
+                            };
+                            return {
+                                ...prev,
+                                asset: updatedAsset,
+                                type: response.type || prev.type,
+                                detail: response.detail || null,
+                                isLoading: false,
+                                error: ''
+                            };
+                        });
+                    })
+                    .withFailureHandler(error => {
+                        if (statusDetailRequestRef.current !== requestId) return;
+                        const message = error?.message || '載入失敗';
+                        setStatusDetailState(prev => prev ? { ...prev, isLoading: false, error: message } : prev);
+                    })
+                    .getAssetStatusDetail(asset.assetId, viewMode === 'user');
+            }, [viewMode]);
+
+            const handleCloseStatusDetail = useCallback(() => {
+                setStatusDetailState(null);
+            }, []);
+
             // ========== 編輯資產 Modal 處理函數（僅管理員）==========
             const handleOpenEditModal = (asset) => {
                 setEditingAsset(asset);
@@ -8159,12 +8402,20 @@
                         onOpenLendingModal={handleOpenLendingModal}
                         onOpenScrapModal={handleOpenScrapModal}
                         onOpenEditModal={handleOpenEditModal}
+                        onOpenStatusDetail={handleOpenStatusDetail}
                         isAssetPendingInventory={isAssetPendingInventory}
                         onOpenInventoryModal={handleOpenInventoryModal}
                         selectedAssetIds={selectedAssetIds}
                         onAssetSelect={handleAssetSelect}
                         onSelectAll={handleSelectAll}
                     />
+
+                    {statusDetailState && (
+                        <StatusDetailModal
+                            state={statusDetailState}
+                            onClose={handleCloseStatusDetail}
+                        />
+                    )}
 
                     {activeModal === 'transferring' && (
                         <TransferringModal
