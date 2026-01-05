@@ -759,6 +759,9 @@
         }
 
         function getAdjustedYearsUsedValue(asset) {
+            if (asset.yearsUsed === null || asset.yearsUsed === undefined || asset.yearsUsed === '') {
+                return null;
+            }
             const yearsUsedValue = Number(asset.yearsUsed);
             if (!Number.isFinite(yearsUsedValue)) {
                 return null;

@@ -7,11 +7,54 @@ function formatDashboardDate(value, pattern) {
   if (!value) {
     return '';
   }
-  try {
-    return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
-  } catch (e) {
+  const parsedDate = parseDashboardDate(value);
+  if (!parsedDate) {
     return String(value);
   }
+  return Utilities.formatDate(parsedDate, Session.getScriptTimeZone(), pattern);
+}
+
+function parseDashboardDate(value) {
+  if (!value) {
+    return null;
+  }
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : value;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const firstLine = raw
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line) || raw;
+
+  const dateMatch = firstLine.match(/(\d{1,4})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})/);
+  if (dateMatch) {
+    let year = parseInt(dateMatch[1], 10);
+    const month = parseInt(dateMatch[2], 10);
+    const day = parseInt(dateMatch[3], 10);
+    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+      if (year < 1911) {
+        year += 1911;
+      }
+      const parsed = new Date(year, month - 1, day);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+  }
+
+  const fallback = new Date(firstLine);
+  if (!Number.isNaN(fallback.getTime())) {
+    return fallback;
+  }
+
+  return null;
 }
 
 function normalizeUseLifeValue(useLife) {
@@ -40,8 +83,8 @@ function isAssetExpired(purchaseDate, useLife) {
   }
 
   try {
-    const purchase = new Date(purchaseDate);
-    if (Number.isNaN(purchase.getTime())) {
+    const purchase = parseDashboardDate(purchaseDate);
+    if (!purchase) {
       return false;
     }
     const today = new Date();
@@ -169,11 +212,13 @@ function getDashboardData() {
     // 整理過期資產詳細資訊
     const expiredAssetsDetails = expiredAssets.map(asset => {
       const normalizedUseLife = normalizeUseLifeValue(asset.useLife);
-      let yearsUsed = 0;
+      let yearsUsed = null;
       if (asset.purchaseDate) {
-        const purchase = new Date(asset.purchaseDate);
+        const purchase = parseDashboardDate(asset.purchaseDate);
         const today = new Date();
-        yearsUsed = Math.floor((today - purchase) / (1000 * 60 * 60 * 24 * 365.25));
+        if (purchase) {
+          yearsUsed = Math.floor((today - purchase) / (1000 * 60 * 60 * 24 * 365.25));
+        }
       }
 
       const purchaseDate = asset.purchaseDate
