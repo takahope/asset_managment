@@ -6951,6 +6951,7 @@
             const [result, setResult] = useState('正常');
             const [remarks, setRemarks] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
+            const [isResetting, setIsResetting] = useState(false);
             const initialSessionId = isBatch ? sessionId : (defaultSessionId || sessionId || '');
             const [selectedSessionId, setSelectedSessionId] = useState(initialSessionId);
 
@@ -7018,6 +7019,70 @@
                             setIsSubmitting(false);
                         })
                         .markAssetInventory(selectedSessionId, asset.assetId, result, remarks);
+                }
+            };
+
+            const handleReset = () => {
+                if (!selectedSessionId) {
+                    alert('請選擇盤點會話');
+                    return;
+                }
+
+                const totalCount = isBatch ? (assetIds?.length || 0) : 1;
+                const confirmMessage = isBatch
+                    ? `確定要取消所選的 ${totalCount} 筆盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。`
+                    : '確定要取消此資產的盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。';
+
+                if (!confirm(confirmMessage)) return;
+
+                setIsResetting(true);
+                showFlyProgressBar('正在取消盤點結果...');
+
+                if (isBatch) {
+                    if (!assetIds || assetIds.length === 0) {
+                        hideFlyProgressBar('取消失敗', 0);
+                        alert('沒有可取消的資產');
+                        setIsResetting(false);
+                        return;
+                    }
+
+                    google.script.run
+                        .withSuccessHandler((response) => {
+                            hideFlyProgressBar('取消完成！', 300);
+                            if (response.success) {
+                                alert(response.message || '已取消盤點結果');
+                                onSuccess();
+                                onClose();
+                            } else {
+                                alert('取消失敗：' + (response.message || response.error));
+                            }
+                            setIsResetting(false);
+                        })
+                        .withFailureHandler((error) => {
+                            hideFlyProgressBar('取消失敗', 0);
+                            alert('取消失敗：' + error.message);
+                            setIsResetting(false);
+                        })
+                        .resetBatchInventory(selectedSessionId, assetIds);
+                } else {
+                    google.script.run
+                        .withSuccessHandler((response) => {
+                            hideFlyProgressBar('取消完成！', 300);
+                            if (response.success) {
+                                alert(response.message || '已取消盤點結果');
+                                onSuccess();
+                                onClose();
+                            } else {
+                                alert('取消失敗：' + (response.error || response.message));
+                            }
+                            setIsResetting(false);
+                        })
+                        .withFailureHandler((error) => {
+                            hideFlyProgressBar('取消失敗', 0);
+                            alert('取消失敗：' + error.message);
+                            setIsResetting(false);
+                        })
+                        .resetAssetInventory(selectedSessionId, asset.assetId);
                 }
             };
 
@@ -7102,14 +7167,25 @@
                         <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
                             <button
                                 onClick={onClose}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || isResetting}
                                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 取消
                             </button>
                             <button
+                                onClick={handleReset}
+                                disabled={isSubmitting || isResetting}
+                                className="px-4 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isResetting ? (
+                                    <><i className="fas fa-spinner fa-spin"></i><span>取消中...</span></>
+                                ) : (
+                                    <><i className="fas fa-rotate-left"></i><span>取消確認</span></>
+                                )}
+                            </button>
+                            <button
                                 onClick={handleSubmit}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || isResetting}
                                 className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                                 {isSubmitting ? (

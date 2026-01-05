@@ -5522,7 +5522,7 @@ function getInventoryStatsByAssignee(inventoryId) {
  * 標記資產盤點結果
  * @param {string} inventoryId - 盤點ID
  * @param {string} assetId - 資產ID
- * @param {string} result - 盤點結果（正常/遺失/損壞）
+ * @param {string} result - 盤點結果（正常/遺失/損壞/過舊）
  * @param {string} remarks - 備註
  * @returns {object} 操作結果
  */
@@ -5575,6 +5575,61 @@ function markAssetInventory(inventoryId, assetId, result, remarks) {
 
   } catch (e) {
     Logger.log(`markAssetInventory 失敗: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 取消單筆盤點結果（重設為「未盤點」）
+ * @param {string} inventoryId - 盤點ID
+ * @param {string} assetId - 資產ID
+ * @returns {object} 操作結果
+ */
+function resetAssetInventory(inventoryId, assetId) {
+  try {
+    // 🛡️ 權限檢查：確認使用者是會話擁有者或管理員
+    if (!checkInventorySessionOwner(inventoryId)) {
+      Logger.log(`權限不足：使用者 ${Session.getActiveUser().getEmail()} 嘗試取消盤點會話 ${inventoryId} 的資產 ${assetId}`);
+      return { success: false, error: '權限不足：您無法取消此盤點會話的資產' };
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    if (!inventoryDetailSheet) {
+      throw new Error('找不到盤點明細工作表');
+    }
+
+    // 找到對應的明細記錄
+    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+    let rowIndex = -1;
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId &&
+          row[ID_ASSET_ID_COLUMN_INDEX - 1] === assetId) {
+        rowIndex = i + 2;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      throw new Error(`找不到盤點明細記錄 (inventoryId: ${inventoryId}, assetId: ${assetId})`);
+    }
+
+    inventoryDetailSheet.getRange(rowIndex, ID_INVENTORY_RESULT_COLUMN_INDEX).setValue('未盤點');
+    inventoryDetailSheet.getRange(rowIndex, ID_REMARKS_COLUMN_INDEX).setValue('');
+    inventoryDetailSheet.getRange(rowIndex, ID_VERIFICATION_TIME_COLUMN_INDEX).setValue('');
+    inventoryDetailSheet.getRange(rowIndex, ID_VERIFIED_BY_COLUMN_INDEX).setValue('');
+
+    updateInventoryProgress(inventoryId);
+
+    Logger.log(`成功取消盤點資產: ${assetId}`);
+
+    return { success: true, message: '已取消盤點結果' };
+
+  } catch (e) {
+    Logger.log(`resetAssetInventory 失敗: ${e.message}`);
     return { success: false, error: e.message };
   }
 }
@@ -5672,6 +5727,86 @@ function markBatchInventory(inventoryId, assetResults) {
     return {
       success: false,
       message: '批次標記失敗: ' + error.message
+    };
+  }
+}
+
+/**
+ * 取消批次盤點結果（重設為「未盤點」）
+ * @param {string} inventoryId - 盤點 ID
+ * @param {Array<string>} assetIds - 資產ID陣列
+ * @returns {Object} {success: boolean, count: number, message: string}
+ */
+function resetBatchInventory(inventoryId, assetIds) {
+  try {
+    // 🛡️ 權限檢查：確認使用者是會話擁有者或管理員
+    if (!checkInventorySessionOwner(inventoryId)) {
+      Logger.log(`權限不足：使用者 ${Session.getActiveUser().getEmail()} 嘗試批次取消會話 ${inventoryId}`);
+      return { success: false, message: '權限不足：您無法取消此盤點會話的資產' };
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+
+    if (!inventoryDetailSheet) {
+      return { success: false, message: '找不到盤點明細工作表' };
+    }
+
+    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, inventoryDetailSheet.getLastColumn()).getValues();
+    const assetRowMap = new Map();
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        assetRowMap.set(row[ID_ASSET_ID_COLUMN_INDEX - 1], i + 2);
+      }
+    }
+
+    let successCount = 0;
+    let errorMessages = [];
+
+    assetIds.forEach(assetId => {
+      try {
+        const rowIndex = assetRowMap.get(assetId);
+        if (!rowIndex) {
+          errorMessages.push(`找不到資產 ${assetId} 的盤點明細`);
+          return;
+        }
+
+        inventoryDetailSheet.getRange(rowIndex, ID_INVENTORY_RESULT_COLUMN_INDEX).setValue('未盤點');
+        inventoryDetailSheet.getRange(rowIndex, ID_REMARKS_COLUMN_INDEX).setValue('');
+        inventoryDetailSheet.getRange(rowIndex, ID_VERIFICATION_TIME_COLUMN_INDEX).setValue('');
+        inventoryDetailSheet.getRange(rowIndex, ID_VERIFIED_BY_COLUMN_INDEX).setValue('');
+
+        successCount++;
+      } catch (error) {
+        errorMessages.push(`取消 ${assetId} 時發生錯誤: ${error.message}`);
+      }
+    });
+
+    if (successCount > 0) {
+      updateInventoryProgress(inventoryId);
+    }
+
+    if (errorMessages.length > 0) {
+      return {
+        success: true,
+        count: successCount,
+        message: `成功取消 ${successCount} 筆，${errorMessages.length} 筆失敗\n${errorMessages.slice(0, 5).join('\n')}${errorMessages.length > 5 ? '\n...' : ''}`
+      };
+    }
+
+    return {
+      success: true,
+      count: successCount,
+      message: `成功取消 ${successCount} 筆資產的盤點結果`
+    };
+
+  } catch (error) {
+    Logger.log('[Inventory] 批次取消失敗: ' + error.message);
+    return {
+      success: false,
+      message: '批次取消失敗: ' + error.message
     };
   }
 }

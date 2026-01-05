@@ -415,6 +415,10 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-outline-danger" id="reset-inventory-btn" onclick="resetInventoryResult()">
+                        <span class="btn-text">取消確認</span>
+                        <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
+                    </button>
                     <button type="button" class="btn btn-primary" onclick="saveInventoryResult()">
                         <span class="btn-text">儲存</span>
                         <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
@@ -454,6 +458,10 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-outline-danger" id="batch-cancel-btn" onclick="resetBatchMark()">
+                        <span class="btn-text">取消確認</span>
+                        <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
+                    </button>
                     <button type="button" class="btn btn-primary" id="batch-submit-btn" onclick="submitBatchMark()">
                         <span class="btn-text">確認標記</span>
                         <span class="spinner-border spinner-border-sm" role="status" style="display:none;"></span>
@@ -1516,6 +1524,54 @@
                 .markAssetInventory(currentSessionId, assetId, result, remarks);
         }
 
+        function resetInventoryResult() {
+            const assetId = document.getElementById('modal-asset-id').textContent;
+
+            if (!currentSessionId) {
+                alert('尚未選擇盤點會話');
+                return;
+            }
+
+            if (!assetId) {
+                alert('找不到資產資訊');
+                return;
+            }
+
+            const confirmed = confirm('確定要取消此資產的盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。');
+            if (!confirmed) return;
+
+            const resetBtn = document.getElementById('reset-inventory-btn');
+            const saveBtn = $("#markAssetModal").find('.btn-primary');
+
+            resetBtn.disabled = true;
+            resetBtn.querySelector('.btn-text').style.display = 'none';
+            resetBtn.querySelector('.spinner-border').style.display = 'inline-block';
+            saveBtn.prop('disabled', true);
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    resetBtn.disabled = false;
+                    resetBtn.querySelector('.btn-text').style.display = 'inline';
+                    resetBtn.querySelector('.spinner-border').style.display = 'none';
+                    saveBtn.prop('disabled', false);
+
+                    if (response.success) {
+                        $('#markAssetModal').modal('hide');
+                        refreshSessionDetails();
+                    } else {
+                        alert('取消失敗：' + (response.error || response.message));
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    resetBtn.disabled = false;
+                    resetBtn.querySelector('.btn-text').style.display = 'inline';
+                    resetBtn.querySelector('.spinner-border').style.display = 'none';
+                    saveBtn.prop('disabled', false);
+                    alert('取消失敗：' + error.message);
+                })
+                .resetAssetInventory(currentSessionId, assetId);
+        }
+
         function refreshSessionDetails() {
             if (currentSessionId) {
                 loadSessionDetails(currentSessionId);
@@ -1761,6 +1817,63 @@
                     alert('標記失敗：' + error.message);
                 })
                 .markBatchInventory(currentSessionId, assetResults);
+        }
+
+        function resetBatchMark() {
+            if (!currentSessionId) {
+                alert('尚未選擇盤點會話');
+                return;
+            }
+
+            if (selectedAssets.size === 0) {
+                alert('請先選擇要取消的資產');
+                return;
+            }
+
+            const assetIds = Array.from(selectedAssets);
+            const confirmed = confirm(`確定要取消所選的 ${assetIds.length} 筆盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。`);
+            if (!confirmed) return;
+
+            const cancelBtn = document.getElementById('batch-cancel-btn');
+            const submitBtn = document.getElementById('batch-submit-btn');
+            const cancelText = cancelBtn.querySelector('.btn-text');
+            const cancelSpinner = cancelBtn.querySelector('.spinner-border');
+
+            cancelBtn.disabled = true;
+            cancelText.style.display = 'none';
+            cancelSpinner.style.display = 'inline-block';
+            submitBtn.disabled = true;
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    cancelBtn.disabled = false;
+                    cancelText.style.display = 'inline';
+                    cancelSpinner.style.display = 'none';
+                    submitBtn.disabled = false;
+
+                    if (response.success) {
+                        $('#batchMarkModal').modal('hide');
+                        if (typeof BatchList_showToast === 'function') {
+                            BatchList_showToast(response.message || '已取消盤點結果', 'success');
+                        } else {
+                            alert(response.message || '已取消盤點結果');
+                        }
+
+                        deselectAllAssets();
+                        document.getElementById('batchRemarks').value = '';
+                        refreshSessionDetails();
+                    } else {
+                        alert('取消失敗：' + (response.message || response.error));
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    cancelBtn.disabled = false;
+                    cancelText.style.display = 'inline';
+                    cancelSpinner.style.display = 'none';
+                    submitBtn.disabled = false;
+                    alert('取消失敗：' + error.message);
+                })
+                .resetBatchInventory(currentSessionId, assetIds);
         }
 
         // ========== 批次處理函數結束 ========== 
