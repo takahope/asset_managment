@@ -1797,8 +1797,14 @@
             const [deleteMessage, setDeleteMessage] = useState('');
             const [deleteError, setDeleteError] = useState('');
             const [deletingSessionId, setDeletingSessionId] = useState('');
+            const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
+            const [keeperDropdownOpen, setKeeperDropdownOpen] = useState(false);
+            const [userDropdownOpen, setUserDropdownOpen] = useState(false);
             const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
             const pendingStartOptionsRef = useRef(null);
+            const locationDropdownRef = useRef(null);
+            const keeperDropdownRef = useRef(null);
+            const userDropdownRef = useRef(null);
             const groupDropdownRef = useRef(null);
 
             const runScript = useCallback((fnName, ...args) => new Promise((resolve, reject) => {
@@ -1865,14 +1871,25 @@
             }, [loadModalData]);
 
             useEffect(() => {
-                setFilterValue(filterType === 'group' ? [] : '');
-                if (filterType !== 'group') {
-                    setGroupDropdownOpen(false);
-                }
+                const multiSelectTypes = ['location', 'keeper', 'user', 'group'];
+                setFilterValue(multiSelectTypes.includes(filterType) ? [] : '');
+                setLocationDropdownOpen(false);
+                setKeeperDropdownOpen(false);
+                setUserDropdownOpen(false);
+                setGroupDropdownOpen(false);
             }, [filterType]);
 
             useEffect(() => {
                 const handleClickOutside = (event) => {
+                    if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target)) {
+                        setLocationDropdownOpen(false);
+                    }
+                    if (keeperDropdownRef.current && !keeperDropdownRef.current.contains(event.target)) {
+                        setKeeperDropdownOpen(false);
+                    }
+                    if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+                        setUserDropdownOpen(false);
+                    }
                     if (groupDropdownRef.current && !groupDropdownRef.current.contains(event.target)) {
                         setGroupDropdownOpen(false);
                     }
@@ -1941,35 +1958,66 @@
                 };
             }, [handleAssignmentModeConfirm, handleAssignmentModeCancel]);
 
+            const selectedValues = Array.isArray(filterValue) ? filterValue : [];
+            const availableLocations = filterOptions.locations || [];
+            const availableKeepers = filterOptions.keepers || [];
+            const availableUsers = filterOptions.users || [];
+            const availableGroups = filterOptions.groups || [];
+            const isLocationOptionsLoading = isOptionsLoading && availableLocations.length === 0;
+            const isKeeperOptionsLoading = isOptionsLoading && availableKeepers.length === 0;
+            const isUserOptionsLoading = isOptionsLoading && availableUsers.length === 0;
+            const isGroupOptionsLoading = isOptionsLoading && availableGroups.length === 0;
+            const toggleFilterOption = (value) => {
+                setFilterValue(prev => {
+                    const current = Array.isArray(prev) ? prev : [];
+                    if (current.includes(value)) {
+                        return current.filter(item => item !== value);
+                    }
+                    return [...current, value];
+                });
+            };
+            const removeFilterOption = (value) => {
+                setFilterValue(prev => {
+                    const current = Array.isArray(prev) ? prev : [];
+                    return current.filter(item => item !== value);
+                });
+            };
+            const selectAllFilterOptions = (optionsList) => {
+                setFilterValue(optionsList.slice());
+            };
+            const clearFilterOptions = () => {
+                setFilterValue([]);
+            };
+
             const handleStartSession = () => {
                 setStartError('');
                 setStartMessage('');
 
                 let selectedValue = '';
                 if (filterType === 'location') {
-                    selectedValue = filterValue;
-                    if (!selectedValue) {
+                    selectedValue = selectedValues;
+                    if (selectedValue.length === 0) {
                         setStartError('請選擇地點');
                         return;
                     }
                 } else if (filterType === 'keeper') {
-                    selectedValue = filterValue;
-                    if (!selectedValue) {
+                    selectedValue = selectedValues;
+                    if (selectedValue.length === 0) {
                         setStartError('請選擇保管人');
                         return;
                     }
                 } else if (filterType === 'user') {
-                    selectedValue = filterValue;
-                    if (!selectedValue) {
+                    selectedValue = selectedValues;
+                    if (selectedValue.length === 0) {
                         setStartError('請選擇使用人');
                         return;
                     }
                 } else if (filterType === 'group') {
-                    if (selectedGroups.length === 0) {
+                    if (selectedValues.length === 0) {
                         setStartError('請選擇組別');
                         return;
                     }
-                    selectedValue = selectedGroups;
+                    selectedValue = selectedValues;
                 }
 
                 const options = {
@@ -1988,31 +2036,6 @@
                     return;
                 }
                 submitStartSession({ ...options, assignmentMode: 'person' });
-            };
-
-            const selectedGroups = Array.isArray(filterValue) ? filterValue : [];
-            const availableGroups = filterOptions.groups || [];
-            const isGroupOptionsLoading = isOptionsLoading && availableGroups.length === 0;
-            const toggleGroupOption = (group) => {
-                setFilterValue(prev => {
-                    const current = Array.isArray(prev) ? prev : [];
-                    if (current.includes(group)) {
-                        return current.filter(item => item !== group);
-                    }
-                    return [...current, group];
-                });
-            };
-            const removeGroupOption = (group) => {
-                setFilterValue(prev => {
-                    const current = Array.isArray(prev) ? prev : [];
-                    return current.filter(item => item !== group);
-                });
-            };
-            const selectAllGroups = () => {
-                setFilterValue(availableGroups.slice());
-            };
-            const clearGroups = () => {
-                setFilterValue([]);
             };
 
             const startDisabled = isStarting;
@@ -2184,16 +2207,119 @@
                                                 依地點篩選
                                             </label>
                                             {filterType === 'location' && (
-                                                <select
-                                                    value={filterValue}
-                                                    onChange={(event) => setFilterValue(event.target.value)}
-                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                                >
-                                                    <option value="">請選擇地點</option>
-                                                    {filterOptions.locations.map(loc => (
-                                                        <option key={loc} value={loc}>{loc}</option>
-                                                    ))}
-                                                </select>
+                                                <div className="space-y-2">
+                                                    <div className="text-sm text-slate-600">
+                                                        選擇地點（已選 {selectedValues.length} 項）
+                                                    </div>
+                                                    <div className="relative" ref={locationDropdownRef}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setLocationDropdownOpen(prev => !prev)}
+                                                            className={`w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${
+                                                                locationDropdownOpen
+                                                                    ? 'border-blue-400 ring-2 ring-blue-100'
+                                                                    : 'border-slate-200 hover:border-slate-300'
+                                                            }`}
+                                                        >
+                                                            <span className={selectedValues.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
+                                                                {isLocationOptionsLoading
+                                                                    ? '載入地點中...'
+                                                                    : (selectedValues.length === 0 ? '請選擇地點...' : `已選擇 ${selectedValues.length} 個地點`)}
+                                                            </span>
+                                                            {isLocationOptionsLoading ? (
+                                                                <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>
+                                                            ) : (
+                                                                <i
+                                                                    className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${
+                                                                        locationDropdownOpen ? 'rotate-180' : ''
+                                                                    }`}
+                                                                ></i>
+                                                            )}
+                                                        </button>
+
+                                                        {locationDropdownOpen && (
+                                                            <div className="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
+                                                                <div className="p-2 border-b border-slate-100 bg-slate-50">
+                                                                    <div className="flex justify-between px-1 text-xs">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => selectAllFilterOptions(availableLocations)}
+                                                                            className="text-blue-600 hover:text-blue-800 font-medium"
+                                                                        >
+                                                                            全選
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={clearFilterOptions}
+                                                                            className="text-slate-500 hover:text-slate-700"
+                                                                        >
+                                                                            清除所有
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="max-h-72 overflow-y-auto p-1">
+                                                                    {isLocationOptionsLoading ? (
+                                                                        <div className="py-6 text-center text-sm text-slate-500">
+                                                                            <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                                                                            地點載入中...
+                                                                        </div>
+                                                                    ) : availableLocations.length > 0 ? (
+                                                                        availableLocations.map(loc => (
+                                                                            <label
+                                                                                key={loc}
+                                                                                className="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700"
+                                                                            >
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    className="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
+                                                                                    checked={selectedValues.includes(loc)}
+                                                                                    onChange={() => toggleFilterOption(loc)}
+                                                                                />
+                                                                                <span className="flex-1">{loc}</span>
+                                                                                {selectedValues.includes(loc) && (
+                                                                                    <i className="fa-solid fa-check text-blue-600 text-xs"></i>
+                                                                                )}
+                                                                            </label>
+                                                                        ))
+                                                                    ) : (
+                                                                        <div className="py-4 text-center text-sm text-slate-500">找不到符合的地點</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {selectedValues.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {selectedValues.map(value => (
+                                                                <span
+                                                                    key={value}
+                                                                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+                                                                >
+                                                                    {value}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeFilterOption(value)}
+                                                                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
+                                                                        aria-label={`移除 ${value}`}
+                                                                    >
+                                                                        <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                            <button
+                                                                type="button"
+                                                                onClick={clearFilterOptions}
+                                                                className="text-xs text-slate-500 hover:text-rose-600 underline"
+                                                            >
+                                                                清除
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <div className="text-xs text-slate-500">
+                                                        提示：點擊下拉選單勾選，標籤可快速移除。
+                                                    </div>
+                                                </div>
                                             )}
                                             <label className="inventory-option-label">
                                                 <input
@@ -2206,16 +2332,119 @@
                                                 依保管人篩選
                                             </label>
                                             {filterType === 'keeper' && (
-                                                <select
-                                                    value={filterValue}
-                                                    onChange={(event) => setFilterValue(event.target.value)}
-                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                                >
-                                                    <option value="">請選擇保管人</option>
-                                                    {filterOptions.keepers.map(keeper => (
-                                                        <option key={keeper} value={keeper}>{keeper}</option>
-                                                    ))}
-                                                </select>
+                                                <div className="space-y-2">
+                                                    <div className="text-sm text-slate-600">
+                                                        選擇保管人（已選 {selectedValues.length} 項）
+                                                    </div>
+                                                    <div className="relative" ref={keeperDropdownRef}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setKeeperDropdownOpen(prev => !prev)}
+                                                            className={`w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${
+                                                                keeperDropdownOpen
+                                                                    ? 'border-blue-400 ring-2 ring-blue-100'
+                                                                    : 'border-slate-200 hover:border-slate-300'
+                                                            }`}
+                                                        >
+                                                            <span className={selectedValues.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
+                                                                {isKeeperOptionsLoading
+                                                                    ? '載入保管人中...'
+                                                                    : (selectedValues.length === 0 ? '請選擇保管人...' : `已選擇 ${selectedValues.length} 位保管人`)}
+                                                            </span>
+                                                            {isKeeperOptionsLoading ? (
+                                                                <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>
+                                                            ) : (
+                                                                <i
+                                                                    className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${
+                                                                        keeperDropdownOpen ? 'rotate-180' : ''
+                                                                    }`}
+                                                                ></i>
+                                                            )}
+                                                        </button>
+
+                                                        {keeperDropdownOpen && (
+                                                            <div className="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
+                                                                <div className="p-2 border-b border-slate-100 bg-slate-50">
+                                                                    <div className="flex justify-between px-1 text-xs">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => selectAllFilterOptions(availableKeepers)}
+                                                                            className="text-blue-600 hover:text-blue-800 font-medium"
+                                                                        >
+                                                                            全選
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={clearFilterOptions}
+                                                                            className="text-slate-500 hover:text-slate-700"
+                                                                        >
+                                                                            清除所有
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="max-h-72 overflow-y-auto p-1">
+                                                                    {isKeeperOptionsLoading ? (
+                                                                        <div className="py-6 text-center text-sm text-slate-500">
+                                                                            <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                                                                            保管人載入中...
+                                                                        </div>
+                                                                    ) : availableKeepers.length > 0 ? (
+                                                                        availableKeepers.map(keeper => (
+                                                                            <label
+                                                                                key={keeper}
+                                                                                className="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700"
+                                                                            >
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    className="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
+                                                                                    checked={selectedValues.includes(keeper)}
+                                                                                    onChange={() => toggleFilterOption(keeper)}
+                                                                                />
+                                                                                <span className="flex-1">{keeper}</span>
+                                                                                {selectedValues.includes(keeper) && (
+                                                                                    <i className="fa-solid fa-check text-blue-600 text-xs"></i>
+                                                                                )}
+                                                                            </label>
+                                                                        ))
+                                                                    ) : (
+                                                                        <div className="py-4 text-center text-sm text-slate-500">找不到符合的保管人</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {selectedValues.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {selectedValues.map(value => (
+                                                                <span
+                                                                    key={value}
+                                                                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+                                                                >
+                                                                    {value}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeFilterOption(value)}
+                                                                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
+                                                                        aria-label={`移除 ${value}`}
+                                                                    >
+                                                                        <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                            <button
+                                                                type="button"
+                                                                onClick={clearFilterOptions}
+                                                                className="text-xs text-slate-500 hover:text-rose-600 underline"
+                                                            >
+                                                                清除
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <div className="text-xs text-slate-500">
+                                                        提示：點擊下拉選單勾選，標籤可快速移除。
+                                                    </div>
+                                                </div>
                                             )}
                                             <label className="inventory-option-label">
                                                 <input
@@ -2228,16 +2457,119 @@
                                                 依使用人篩選
                                             </label>
                                             {filterType === 'user' && (
-                                                <select
-                                                    value={filterValue}
-                                                    onChange={(event) => setFilterValue(event.target.value)}
-                                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                                >
-                                                    <option value="">請選擇使用人</option>
-                                                    {filterOptions.users.map(user => (
-                                                        <option key={user} value={user}>{user}</option>
-                                                    ))}
-                                                </select>
+                                                <div className="space-y-2">
+                                                    <div className="text-sm text-slate-600">
+                                                        選擇使用人（已選 {selectedValues.length} 項）
+                                                    </div>
+                                                    <div className="relative" ref={userDropdownRef}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setUserDropdownOpen(prev => !prev)}
+                                                            className={`w-full px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${
+                                                                userDropdownOpen
+                                                                    ? 'border-blue-400 ring-2 ring-blue-100'
+                                                                    : 'border-slate-200 hover:border-slate-300'
+                                                            }`}
+                                                        >
+                                                            <span className={selectedValues.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
+                                                                {isUserOptionsLoading
+                                                                    ? '載入使用人中...'
+                                                                    : (selectedValues.length === 0 ? '請選擇使用人...' : `已選擇 ${selectedValues.length} 位使用人`)}
+                                                            </span>
+                                                            {isUserOptionsLoading ? (
+                                                                <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>
+                                                            ) : (
+                                                                <i
+                                                                    className={`fa-solid fa-chevron-down text-slate-400 transition-transform ${
+                                                                        userDropdownOpen ? 'rotate-180' : ''
+                                                                    }`}
+                                                                ></i>
+                                                            )}
+                                                        </button>
+
+                                                        {userDropdownOpen && (
+                                                            <div className="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
+                                                                <div className="p-2 border-b border-slate-100 bg-slate-50">
+                                                                    <div className="flex justify-between px-1 text-xs">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => selectAllFilterOptions(availableUsers)}
+                                                                            className="text-blue-600 hover:text-blue-800 font-medium"
+                                                                        >
+                                                                            全選
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={clearFilterOptions}
+                                                                            className="text-slate-500 hover:text-slate-700"
+                                                                        >
+                                                                            清除所有
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="max-h-72 overflow-y-auto p-1">
+                                                                    {isUserOptionsLoading ? (
+                                                                        <div className="py-6 text-center text-sm text-slate-500">
+                                                                            <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                                                                            使用人載入中...
+                                                                        </div>
+                                                                    ) : availableUsers.length > 0 ? (
+                                                                        availableUsers.map(user => (
+                                                                            <label
+                                                                                key={user}
+                                                                                className="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700"
+                                                                            >
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    className="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
+                                                                                    checked={selectedValues.includes(user)}
+                                                                                    onChange={() => toggleFilterOption(user)}
+                                                                                />
+                                                                                <span className="flex-1">{user}</span>
+                                                                                {selectedValues.includes(user) && (
+                                                                                    <i className="fa-solid fa-check text-blue-600 text-xs"></i>
+                                                                                )}
+                                                                            </label>
+                                                                        ))
+                                                                    ) : (
+                                                                        <div className="py-4 text-center text-sm text-slate-500">找不到符合的使用人</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {selectedValues.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {selectedValues.map(value => (
+                                                                <span
+                                                                    key={value}
+                                                                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+                                                                >
+                                                                    {value}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeFilterOption(value)}
+                                                                        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
+                                                                        aria-label={`移除 ${value}`}
+                                                                    >
+                                                                        <i className="fa-solid fa-xmark text-[10px]"></i>
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                            <button
+                                                                type="button"
+                                                                onClick={clearFilterOptions}
+                                                                className="text-xs text-slate-500 hover:text-rose-600 underline"
+                                                            >
+                                                                清除
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <div className="text-xs text-slate-500">
+                                                        提示：點擊下拉選單勾選，標籤可快速移除。
+                                                    </div>
+                                                </div>
                                             )}
                                             <label className="inventory-option-label">
                                                 <input
@@ -2252,7 +2584,7 @@
                                             {filterType === 'group' && (
                                                 <div className="space-y-2">
                                                     <div className="text-sm text-slate-600">
-                                                        選擇組別（已選 {selectedGroups.length} 項）
+                                                        選擇組別（已選 {selectedValues.length} 項）
                                                     </div>
                                                     <div className="relative" ref={groupDropdownRef}>
                                                         <button
@@ -2264,10 +2596,10 @@
                                                                     : 'border-slate-200 hover:border-slate-300'
                                                             }`}
                                                         >
-                                                            <span className={selectedGroups.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
+                                                            <span className={selectedValues.length === 0 ? 'text-slate-400' : 'text-slate-700'}>
                                                                 {isGroupOptionsLoading
                                                                     ? '載入組別中...'
-                                                                    : (selectedGroups.length === 0 ? '請選擇組別...' : `已選擇 ${selectedGroups.length} 個組別`)}
+                                                                    : (selectedValues.length === 0 ? '請選擇組別...' : `已選擇 ${selectedValues.length} 個組別`)}
                                                             </span>
                                                             {isGroupOptionsLoading ? (
                                                                 <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>
@@ -2286,14 +2618,14 @@
                                                                     <div className="flex justify-between px-1 text-xs">
                                                                         <button
                                                                             type="button"
-                                                                            onClick={selectAllGroups}
+                                                                            onClick={() => selectAllFilterOptions(availableGroups)}
                                                                             className="text-blue-600 hover:text-blue-800 font-medium"
                                                                         >
                                                                             全選
                                                                         </button>
                                                                         <button
                                                                             type="button"
-                                                                            onClick={clearGroups}
+                                                                            onClick={clearFilterOptions}
                                                                             className="text-slate-500 hover:text-slate-700"
                                                                         >
                                                                             清除所有
@@ -2315,11 +2647,11 @@
                                                                                 <input
                                                                                     type="checkbox"
                                                                                     className="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
-                                                                                    checked={selectedGroups.includes(group)}
-                                                                                    onChange={() => toggleGroupOption(group)}
+                                                                                    checked={selectedValues.includes(group)}
+                                                                                    onChange={() => toggleFilterOption(group)}
                                                                                 />
                                                                                 <span className="flex-1">{group}</span>
-                                                                                {selectedGroups.includes(group) && (
+                                                                                {selectedValues.includes(group) && (
                                                                                     <i className="fa-solid fa-check text-blue-600 text-xs"></i>
                                                                                 )}
                                                                             </label>
@@ -2332,9 +2664,9 @@
                                                         )}
                                                     </div>
 
-                                                    {selectedGroups.length > 0 && (
+                                                    {selectedValues.length > 0 && (
                                                         <div className="flex flex-wrap gap-2">
-                                                            {selectedGroups.map(group => (
+                                                            {selectedValues.map(group => (
                                                                 <span
                                                                     key={group}
                                                                     className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
@@ -2342,7 +2674,7 @@
                                                                     {group}
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => removeGroupOption(group)}
+                                                                        onClick={() => removeFilterOption(group)}
                                                                         className="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
                                                                         aria-label={`移除 ${group}`}
                                                                     >
@@ -2352,7 +2684,7 @@
                                                             ))}
                                                             <button
                                                                 type="button"
-                                                                onClick={clearGroups}
+                                                                onClick={clearFilterOptions}
                                                                 className="text-xs text-slate-500 hover:text-rose-600 underline"
                                                             >
                                                                 清除

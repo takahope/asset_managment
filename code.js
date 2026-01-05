@@ -5237,25 +5237,29 @@ function startInventorySession(options) {
     const inventoryId = 'INV' + new Date().getTime();
     const inventoryDate = new Date();
 
+    const normalizeFilterValues = (value) => (
+      Array.isArray(value) ? value : [value]
+    ).map(item => String(item || '').trim()).filter(Boolean);
+    const locationFilterValues = options.filterType === 'location' ? normalizeFilterValues(options.filterValue) : [];
+    const keeperFilterValues = options.filterType === 'keeper' ? normalizeFilterValues(options.filterValue) : [];
+    const userFilterValues = options.filterType === 'user' ? normalizeFilterValues(options.filterValue) : [];
+    const groupFilterValues = options.filterType === 'group' ? normalizeFilterValues(options.filterValue) : [];
+
     // 建立篩選描述
     let filterDescription = '全部';
     if (options.filterType === 'location') {
-      filterDescription = `地點: ${options.filterValue}`;
+      filterDescription = locationFilterValues.length > 0 ? `地點: ${locationFilterValues.join('、')}` : '地點: (未選擇)';
     } else if (options.filterType === 'keeper') {
-      filterDescription = `保管人: ${options.filterValue}`;
+      filterDescription = keeperFilterValues.length > 0 ? `保管人: ${keeperFilterValues.join('、')}` : '保管人: (未選擇)';
     } else if (options.filterType === 'user') {
-      filterDescription = `使用人: ${options.filterValue}`;
+      filterDescription = userFilterValues.length > 0 ? `使用人: ${userFilterValues.join('、')}` : '使用人: (未選擇)';
     } else if (options.filterType === 'group') {
-      const rawGroupValues = Array.isArray(options.filterValue) ? options.filterValue : [options.filterValue];
-      const groupLabels = rawGroupValues.map(value => String(value || '').trim()).filter(Boolean);
-      filterDescription = groupLabels.length > 0 ? `組別: ${groupLabels.join('、')}` : '組別: (未選擇)';
+      filterDescription = groupFilterValues.length > 0 ? `組別: ${groupFilterValues.join('、')}` : '組別: (未選擇)';
     }
 
-    const groupFilterValues = options.filterType === 'group'
-      ? (Array.isArray(options.filterValue) ? options.filterValue : [options.filterValue])
-        .map(value => String(value || '').trim())
-        .filter(Boolean)
-      : [];
+    const locationFilterSet = new Set(locationFilterValues);
+    const keeperFilterSet = new Set(keeperFilterValues);
+    const userFilterSet = new Set(userFilterValues);
     const groupFilterSet = new Set(groupFilterValues);
 
     // 建立 Email -> 組別 對照表（組別篩選/分派時使用）
@@ -5293,9 +5297,9 @@ function startInventorySession(options) {
       if (asset.assetStatus !== '在庫' && asset.assetStatus !== '出借中' && asset.assetStatus !== '轉移中' && asset.assetStatus !== '報廢中') return false;
 
       if (options.filterType === 'all') return true;
-      if (options.filterType === 'location') return asset.location === options.filterValue;
-      if (options.filterType === 'keeper') return asset.leaderName === options.filterValue;
-      if (options.filterType === 'user') return asset.userName === options.filterValue;
+      if (options.filterType === 'location') return locationFilterSet.size > 0 && locationFilterSet.has(asset.location);
+      if (options.filterType === 'keeper') return keeperFilterSet.size > 0 && keeperFilterSet.has(asset.leaderName);
+      if (options.filterType === 'user') return userFilterSet.size > 0 && userFilterSet.has(asset.userName);
       if (options.filterType === 'group') {
         const assetGroup = resolveAssetGroup(asset);
         return assetGroup && groupFilterSet.has(assetGroup);
