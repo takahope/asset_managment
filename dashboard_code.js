@@ -166,6 +166,7 @@ function getDashboardData() {
         assetId: asset.assetId,
         assetName: asset.assetName,
         leaderName: asset.leaderName,
+        userName: asset.userName || '',
         location: asset.location,
         purchaseDate: purchaseDate,
         useLife: asset.useLife,

@@ -154,6 +154,24 @@
             margin-left: 5px;
             vertical-align: middle;
         }
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .filter-dropdown .dropdown-menu {
+            max-height: 260px;
+            overflow-y: auto;
+            padding: 8px 12px;
+            min-width: 220px;
+        }
+        .filter-dropdown .dropdown-item {
+            padding: 6px 0;
+        }
+        .filter-dropdown .custom-control-label {
+            cursor: pointer;
+        }
         /* 覆蓋側邊欄的 .nav-item 樣式，避免 Tab 垂直排列 */
         #dashboardTabs .nav-item {
             width: auto;
@@ -295,6 +313,26 @@
                             <div class="detail-section">
                                 <h5>達使用年限資產明細</h5>
                                 <hr>
+                                <div class="filter-bar" id="expired-filter-bar">
+                                    <div class="dropdown filter-dropdown">
+                                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="expired-filter-leader-btn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            保管人：全部
+                                        </button>
+                                        <div class="dropdown-menu" id="expired-filter-leader-menu" aria-labelledby="expired-filter-leader-btn"></div>
+                                    </div>
+                                    <div class="dropdown filter-dropdown">
+                                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="expired-filter-user-btn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            使用人：全部
+                                        </button>
+                                        <div class="dropdown-menu" id="expired-filter-user-menu" aria-labelledby="expired-filter-user-btn"></div>
+                                    </div>
+                                    <div class="dropdown filter-dropdown">
+                                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="expired-filter-location-btn" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            存置地點：全部
+                                        </button>
+                                        <div class="dropdown-menu" id="expired-filter-location-menu" aria-labelledby="expired-filter-location-btn"></div>
+                                    </div>
+                                </div>
                                 <div id="expired-details">
                                     <p class="text-muted">無達使用年限資產</p>
                                 </div>
@@ -435,6 +473,12 @@
     <script>
         // 儲存整合後的資料
         let dashboardData = null;
+        let expiredAssetsRaw = [];
+        let expiredFilterOptions = {
+            leader: [],
+            user: [],
+            location: []
+        };
 
         // 頁面載入時獲取儀表板資料
         document.addEventListener('DOMContentLoaded', function() {
@@ -510,7 +554,9 @@
             renderPendingUploadDetails(data.pendingUpload.assets);
 
             // 渲染達使用年限資產詳情
-            renderExpiredDetails(data.expiredAssets.assets);
+            expiredAssetsRaw = data.expiredAssets.assets || [];
+            initExpiredFilters(expiredAssetsRaw);
+            applyExpiredFilters();
         }
 
         function renderPendingDetails(users) {
@@ -626,6 +672,7 @@
                                 <th>財產編號</th>
                                 <th>財產名稱</th>
                                 <th>保管人</th>
+                                <th>使用人</th>
                                 <th>存置地點</th>
                                 <th>取得日期</th>
                                 <th>使用年限</th>
@@ -638,15 +685,25 @@
 
             assets.forEach(asset => {
                 const purchaseDate = asset.purchaseDate || '-';
+                const leaderName = normalizeFilterValue(asset.leaderName);
+                const userName = normalizeFilterValue(asset.userName);
+                const location = normalizeFilterValue(asset.location);
+                const useLifeText = asset.useLife ? `${asset.useLife} 年` : '-';
+                const yearsUsedValue = Number(asset.yearsUsed);
+                const adjustedYearsUsed = Number.isFinite(yearsUsedValue) && yearsUsedValue > 100
+                    ? yearsUsedValue - 1911
+                    : yearsUsedValue;
+                const yearsUsedText = Number.isFinite(yearsUsedValue) ? `${adjustedYearsUsed} 年` : '-';
                 html += `
                     <tr>
                         <td>${asset.assetId}</td>
                         <td>${asset.assetName}</td>
-                        <td>${asset.leaderName}</td>
-                        <td>${asset.location || '-'}</td>
+                        <td>${leaderName}</td>
+                        <td>${userName}</td>
+                        <td>${location}</td>
                         <td>${purchaseDate}</td>
-                        <td>${asset.useLife} 年</td>
-                        <td><span class="badge badge-secondary">${asset.yearsUsed} 年</span></td>
+                        <td>${useLifeText}</td>
+                        <td><span class="badge badge-secondary">${yearsUsedText}</span></td>
                         <td>${asset.status}</td>
                     </tr>
                 `;
@@ -658,6 +715,167 @@
                 </div>
             `;
             container.innerHTML = html;
+        }
+
+        function normalizeFilterValue(value) {
+            const normalized = String(value || '').trim();
+            return normalized ? normalized : '-';
+        }
+
+        function collectUniqueValues(assets, key) {
+            const values = new Set();
+            assets.forEach(asset => {
+                values.add(normalizeFilterValue(asset[key]));
+            });
+            return Array.from(values).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+        }
+
+        function buildFilterOptions(menuId, filterType, values) {
+            const menu = document.getElementById(menuId);
+            if (!menu) {
+                return;
+            }
+            menu.innerHTML = '';
+
+            if (values.length === 0) {
+                const empty = document.createElement('span');
+                empty.className = 'dropdown-item text-muted';
+                empty.textContent = '無資料';
+                menu.appendChild(empty);
+                return;
+            }
+
+            values.forEach((value, index) => {
+                const optionId = `${menuId}-option-${index}`;
+                const item = document.createElement('div');
+                item.className = 'dropdown-item';
+
+                const control = document.createElement('div');
+                control.className = 'custom-control custom-checkbox';
+
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.className = 'custom-control-input filter-option';
+                input.id = optionId;
+                input.dataset.filterType = filterType;
+                input.value = value;
+
+                const label = document.createElement('label');
+                label.className = 'custom-control-label';
+                label.setAttribute('for', optionId);
+                label.textContent = value;
+
+                control.appendChild(input);
+                control.appendChild(label);
+                item.appendChild(control);
+                menu.appendChild(item);
+            });
+        }
+
+        function getSelectedFilterValues(filterType) {
+            return Array.from(document.querySelectorAll(`.filter-option[data-filter-type="${filterType}"]:checked`))
+                .map(input => input.value);
+        }
+
+        function updateFilterButtonLabel(filterType, selectedValues) {
+            const button = document.getElementById(`expired-filter-${filterType}-btn`);
+            if (!button) {
+                return;
+            }
+            const labelMap = {
+                leader: '保管人',
+                user: '使用人',
+                location: '存置地點'
+            };
+            const options = expiredFilterOptions[filterType] || [];
+            const label = labelMap[filterType] || '篩選';
+
+            if (options.length === 0) {
+                button.textContent = `${label}：無資料`;
+                button.disabled = true;
+                return;
+            }
+
+            button.disabled = false;
+
+            if (selectedValues.length === 0 || selectedValues.length === options.length) {
+                button.textContent = `${label}：全部`;
+            } else if (selectedValues.length === 1) {
+                button.textContent = `${label}：${selectedValues[0]}`;
+            } else {
+                button.textContent = `${label}：已選${selectedValues.length}`;
+            }
+        }
+
+        function updateFilterButtonLabels() {
+            ['leader', 'user', 'location'].forEach(type => {
+                updateFilterButtonLabel(type, getSelectedFilterValues(type));
+            });
+        }
+
+        function initExpiredFilters(assets) {
+            const filterBar = document.getElementById('expired-filter-bar');
+            if (!filterBar) {
+                return;
+            }
+
+            expiredFilterOptions = {
+                leader: collectUniqueValues(assets, 'leaderName'),
+                user: collectUniqueValues(assets, 'userName'),
+                location: collectUniqueValues(assets, 'location')
+            };
+
+            buildFilterOptions('expired-filter-leader-menu', 'leader', expiredFilterOptions.leader);
+            buildFilterOptions('expired-filter-user-menu', 'user', expiredFilterOptions.user);
+            buildFilterOptions('expired-filter-location-menu', 'location', expiredFilterOptions.location);
+
+            updateFilterButtonLabels();
+
+            if (!filterBar.dataset.bound) {
+                filterBar.addEventListener('change', function(event) {
+                    if (event.target.classList.contains('filter-option')) {
+                        applyExpiredFilters();
+                    }
+                });
+                filterBar.dataset.bound = 'true';
+            }
+
+            document.querySelectorAll('#expired-filter-bar .dropdown-menu').forEach(menu => {
+                if (menu.dataset.bound) {
+                    return;
+                }
+                menu.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                });
+                menu.dataset.bound = 'true';
+            });
+        }
+
+        function applyExpiredFilters() {
+            if (!expiredAssetsRaw || expiredAssetsRaw.length === 0) {
+                renderExpiredDetails([]);
+                updateFilterButtonLabels();
+                return;
+            }
+
+            const selectedLeaders = getSelectedFilterValues('leader');
+            const selectedUsers = getSelectedFilterValues('user');
+            const selectedLocations = getSelectedFilterValues('location');
+
+            const filteredAssets = expiredAssetsRaw.filter(asset => {
+                const leaderValue = normalizeFilterValue(asset.leaderName);
+                const userValue = normalizeFilterValue(asset.userName);
+                const locationValue = normalizeFilterValue(asset.location);
+
+                const leaderMatch = selectedLeaders.length === 0 || selectedLeaders.includes(leaderValue);
+                const userMatch = selectedUsers.length === 0 || selectedUsers.includes(userValue);
+                const locationMatch = selectedLocations.length === 0 || selectedLocations.includes(locationValue);
+
+                return leaderMatch && userMatch && locationMatch;
+            });
+
+            renderExpiredDetails(filteredAssets);
+            updateFilterButtonLabels();
         }
 
         // ===== 電腦回報統計渲染函式 =====
