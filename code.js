@@ -638,6 +638,10 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('inventory');
       title = "資產盤點管理";
       break;
+    case 'dashboard':
+      template = HtmlService.createTemplateFromFile('dashboard');
+      title = "系統儀表板";
+      break;
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('main');
