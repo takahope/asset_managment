@@ -99,6 +99,8 @@
         .nav-tabs {
             border-bottom: 2px solid #dee2e6;
             margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
         }
         .nav-tabs .nav-link {
             border: none;
@@ -151,6 +153,14 @@
             padding: 3px 8px;
             margin-left: 5px;
             vertical-align: middle;
+        }
+        /* 覆蓋側邊欄的 .nav-item 樣式，避免 Tab 垂直排列 */
+        #dashboardTabs .nav-item {
+            width: auto;
+            height: auto;
+            display: block;
+            flex: 0 0 auto;
+            align-items: stretch;
         }
     </style>
 </head>
