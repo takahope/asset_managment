@@ -1592,7 +1592,7 @@
                 google.script.run
                     .withSuccessHandler(result => {
                         if (result.success) {
-                            alert(`盤點會話已完成！\n\n統計：\n正常：${result.stats.normal}\n遺失：${result.stats.missing}\n損壞：${result.stats.damaged}`);
+                            alert(`盤點會話已完成！\n\n統計：\n正常：${result.stats.normal}\n遺失：${result.stats.missing}\n損壞：${result.stats.damaged}\n過舊：${result.stats.old || 0}`);
                             onRefresh && onRefresh();
                         } else {
                             alert(result.message || '操作失敗');
@@ -7067,7 +7067,7 @@
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-2">盤點結果</label>
                                 <div className="space-y-2">
-                                    {['正常', '遺失', '損壞'].map(opt => (
+                                    {['正常', '遺失', '損壞', '過舊'].map(opt => (
                                         <label key={opt} className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="radio"
@@ -7077,7 +7077,7 @@
                                                 onChange={(e) => setResult(e.target.value)}
                                                 className="w-4 h-4 text-teal-600"
                                             />
-                                            <span className={`${opt === '遺失' ? 'text-red-600' : opt === '損壞' ? 'text-orange-600' : 'text-green-600'}`}>
+                                            <span className={`${opt === '遺失' ? 'text-red-600' : opt === '損壞' ? 'text-orange-600' : opt === '過舊' ? 'text-amber-700' : 'text-green-600'}`}>
                                                 {opt}
                                             </span>
                                         </label>

@@ -5740,6 +5740,7 @@ function completeInventorySession(inventoryId) {
       normal: 0,
       missing: 0,
       damaged: 0,
+      old: 0,
       unverified: 0
     };
 
@@ -5750,6 +5751,7 @@ function completeInventorySession(inventoryId) {
         if (result === '正常') stats.normal++;
         else if (result === '遺失') stats.missing++;
         else if (result === '損壞') stats.damaged++;
+        else if (result === '過舊') stats.old++;
         else stats.unverified++;
       }
     }
