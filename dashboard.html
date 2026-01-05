@@ -159,6 +159,7 @@
             flex-wrap: wrap;
             gap: 10px;
             margin-bottom: 12px;
+            align-items: center;
         }
         .filter-dropdown .dropdown-menu {
             max-height: 260px;
@@ -171,6 +172,31 @@
         }
         .filter-dropdown .custom-control-label {
             cursor: pointer;
+        }
+        .expired-search {
+            min-width: 240px;
+            flex: 1 1 240px;
+        }
+        .filter-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .sort-button {
+            background: none;
+            border: none;
+            padding: 0;
+            font-weight: 600;
+            color: #343a40;
+            cursor: pointer;
+        }
+        .sort-button:focus {
+            outline: none;
+            box-shadow: none;
+        }
+        .sort-indicator {
+            margin-left: 4px;
+            font-size: 0.85rem;
+            color: #6c757d;
         }
         /* 覆蓋側邊欄的 .nav-item 樣式，避免 Tab 垂直排列 */
         #dashboardTabs .nav-item {
@@ -332,6 +358,16 @@
                                         </button>
                                         <div class="dropdown-menu" id="expired-filter-location-menu" aria-labelledby="expired-filter-location-btn"></div>
                                     </div>
+                                    <div class="input-group input-group-sm expired-search">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">關鍵字</span>
+                                        </div>
+                                        <input type="text" class="form-control" id="expired-search-input" placeholder="財產編號/名稱/保管人/使用人/地點">
+                                    </div>
+                                    <div class="filter-actions">
+                                        <button class="btn btn-outline-primary btn-sm" type="button" id="expired-filter-select-all">全選</button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" id="expired-filter-clear">清除</button>
+                                    </div>
                                 </div>
                                 <div id="expired-details">
                                     <p class="text-muted">無達使用年限資產</p>
@@ -479,6 +515,8 @@
             user: [],
             location: []
         };
+        let expiredSearchTimer = null;
+        let expiredSortDirection = null;
 
         // 頁面載入時獲取儀表板資料
         document.addEventListener('DOMContentLoaded', function() {
@@ -556,6 +594,7 @@
             // 渲染達使用年限資產詳情
             expiredAssetsRaw = data.expiredAssets.assets || [];
             initExpiredFilters(expiredAssetsRaw);
+            initExpiredSort();
             applyExpiredFilters();
         }
 
@@ -664,6 +703,7 @@
                 return;
             }
 
+            const sortIndicator = getExpiredSortIndicator();
             let html = `
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
@@ -676,7 +716,11 @@
                                 <th>存置地點</th>
                                 <th>取得日期</th>
                                 <th>使用年限</th>
-                                <th>已使用</th>
+                                <th>
+                                    <button type="button" class="sort-button" data-sort-key="yearsUsed" title="點擊切換升冪/降冪">
+                                        已使用 <span class="sort-indicator">${sortIndicator}</span>
+                                    </button>
+                                </th>
                                 <th>狀態</th>
                             </tr>
                         </thead>
@@ -689,11 +733,8 @@
                 const userName = normalizeFilterValue(asset.userName);
                 const location = normalizeFilterValue(asset.location);
                 const useLifeText = asset.useLife ? `${asset.useLife} 年` : '-';
-                const yearsUsedValue = Number(asset.yearsUsed);
-                const adjustedYearsUsed = Number.isFinite(yearsUsedValue) && yearsUsedValue > 100
-                    ? yearsUsedValue - 1911
-                    : yearsUsedValue;
-                const yearsUsedText = Number.isFinite(yearsUsedValue) ? `${adjustedYearsUsed} 年` : '-';
+                const adjustedYearsUsed = getAdjustedYearsUsedValue(asset);
+                const yearsUsedText = Number.isFinite(adjustedYearsUsed) ? `${adjustedYearsUsed} 年` : '-';
                 html += `
                     <tr>
                         <td>${asset.assetId}</td>
@@ -717,9 +758,52 @@
             container.innerHTML = html;
         }
 
+        function getAdjustedYearsUsedValue(asset) {
+            const yearsUsedValue = Number(asset.yearsUsed);
+            if (!Number.isFinite(yearsUsedValue)) {
+                return null;
+            }
+            return yearsUsedValue > 100 ? yearsUsedValue - 1911 : yearsUsedValue;
+        }
+
+        function getExpiredSortIndicator() {
+            if (expiredSortDirection === 'asc') {
+                return '^';
+            }
+            if (expiredSortDirection === 'desc') {
+                return 'v';
+            }
+            return '^v';
+        }
+
         function normalizeFilterValue(value) {
             const normalized = String(value || '').trim();
             return normalized ? normalized : '-';
+        }
+
+        function normalizeSearchText(text) {
+            let normalized = String(text || '');
+            if (normalized.normalize) {
+                normalized = normalized.normalize('NFKC');
+            }
+            normalized = normalized.toLowerCase();
+            normalized = normalized.replace(/[-_/|,，、.。;；:：]+/g, ' ');
+            normalized = normalized.replace(/[\u3000\s]+/g, ' ').trim();
+            return normalized;
+        }
+
+        function compactSearchText(text) {
+            return String(text || '').replace(/[^0-9a-z\u4e00-\u9fff]+/gi, '');
+        }
+
+        function preprocessSearchQuery(raw) {
+            const normalized = normalizeSearchText(raw);
+            if (!normalized) {
+                return { tokens: [], compactTokens: [] };
+            }
+            const tokens = normalized.split(' ').filter(Boolean);
+            const compactTokens = tokens.map(token => compactSearchText(token));
+            return { tokens, compactTokens };
         }
 
         function collectUniqueValues(assets, key) {
@@ -769,6 +853,70 @@
                 control.appendChild(label);
                 item.appendChild(control);
                 menu.appendChild(item);
+            });
+        }
+
+        function buildExpiredSearchIndex(assets) {
+            assets.forEach(asset => {
+                const source = [
+                    asset.assetId,
+                    asset.assetName,
+                    asset.leaderName,
+                    asset.userName,
+                    asset.location,
+                    asset.status
+                ]
+                    .map(normalizeFilterValue)
+                    .join(' ');
+                const normalized = normalizeSearchText(source);
+                asset.__searchText = normalized;
+                asset.__searchCompact = compactSearchText(normalized);
+            });
+        }
+
+        function setExpiredFilterSelections(checked) {
+            document.querySelectorAll('#expired-filter-bar .filter-option').forEach(input => {
+                input.checked = checked;
+            });
+        }
+
+        function initExpiredSort() {
+            const container = document.getElementById('expired-details');
+            if (!container || container.dataset.sortBound) {
+                return;
+            }
+            container.addEventListener('click', function(event) {
+                const button = event.target.closest('[data-sort-key="yearsUsed"]');
+                if (!button) {
+                    return;
+                }
+                expiredSortDirection = expiredSortDirection === 'asc' ? 'desc' : 'asc';
+                applyExpiredFilters();
+            });
+            container.dataset.sortBound = 'true';
+        }
+
+        function sortExpiredAssets(assets) {
+            if (!expiredSortDirection) {
+                return assets;
+            }
+            const direction = expiredSortDirection === 'asc' ? 1 : -1;
+            return assets.slice().sort((a, b) => {
+                const aValue = getAdjustedYearsUsedValue(a);
+                const bValue = getAdjustedYearsUsedValue(b);
+                const aHas = Number.isFinite(aValue);
+                const bHas = Number.isFinite(bValue);
+
+                if (!aHas && !bHas) {
+                    return 0;
+                }
+                if (!aHas) {
+                    return 1;
+                }
+                if (!bHas) {
+                    return -1;
+                }
+                return direction * (aValue - bValue);
             });
         }
 
@@ -828,8 +976,43 @@
             buildFilterOptions('expired-filter-leader-menu', 'leader', expiredFilterOptions.leader);
             buildFilterOptions('expired-filter-user-menu', 'user', expiredFilterOptions.user);
             buildFilterOptions('expired-filter-location-menu', 'location', expiredFilterOptions.location);
+            buildExpiredSearchIndex(assets);
 
             updateFilterButtonLabels();
+
+            const searchInput = document.getElementById('expired-search-input');
+            if (searchInput && !searchInput.dataset.bound) {
+                searchInput.addEventListener('input', function() {
+                    if (expiredSearchTimer) {
+                        clearTimeout(expiredSearchTimer);
+                    }
+                    expiredSearchTimer = setTimeout(function() {
+                        applyExpiredFilters();
+                    }, 150);
+                });
+                searchInput.dataset.bound = 'true';
+            }
+
+            const selectAllButton = document.getElementById('expired-filter-select-all');
+            if (selectAllButton && !selectAllButton.dataset.bound) {
+                selectAllButton.addEventListener('click', function() {
+                    setExpiredFilterSelections(true);
+                    applyExpiredFilters();
+                });
+                selectAllButton.dataset.bound = 'true';
+            }
+
+            const clearButton = document.getElementById('expired-filter-clear');
+            if (clearButton && !clearButton.dataset.bound) {
+                clearButton.addEventListener('click', function() {
+                    setExpiredFilterSelections(false);
+                    if (searchInput) {
+                        searchInput.value = '';
+                    }
+                    applyExpiredFilters();
+                });
+                clearButton.dataset.bound = 'true';
+            }
 
             if (!filterBar.dataset.bound) {
                 filterBar.addEventListener('change', function(event) {
@@ -861,6 +1044,9 @@
             const selectedLeaders = getSelectedFilterValues('leader');
             const selectedUsers = getSelectedFilterValues('user');
             const selectedLocations = getSelectedFilterValues('location');
+            const searchInput = document.getElementById('expired-search-input');
+            const searchQuery = preprocessSearchQuery(searchInput ? searchInput.value : '');
+            const hasSearch = searchQuery.tokens.length > 0;
 
             const filteredAssets = expiredAssetsRaw.filter(asset => {
                 const leaderValue = normalizeFilterValue(asset.leaderName);
@@ -870,12 +1056,25 @@
                 const leaderMatch = selectedLeaders.length === 0 || selectedLeaders.includes(leaderValue);
                 const userMatch = selectedUsers.length === 0 || selectedUsers.includes(userValue);
                 const locationMatch = selectedLocations.length === 0 || selectedLocations.includes(locationValue);
+                const searchMatch = !hasSearch || matchesSearchQuery(asset, searchQuery);
 
-                return leaderMatch && userMatch && locationMatch;
+                return leaderMatch && userMatch && locationMatch && searchMatch;
             });
 
-            renderExpiredDetails(filteredAssets);
+            const sortedAssets = sortExpiredAssets(filteredAssets);
+            renderExpiredDetails(sortedAssets);
             updateFilterButtonLabels();
+        }
+
+        function matchesSearchQuery(asset, query) {
+            const searchText = asset.__searchText || '';
+            const searchCompact = asset.__searchCompact || '';
+            return query.tokens.every((token, index) => {
+                const compactToken = query.compactTokens[index];
+                const tokenMatch = token ? searchText.includes(token) : true;
+                const compactMatch = compactToken ? searchCompact.includes(compactToken) : false;
+                return tokenMatch || compactMatch;
+            });
         }
 
         // ===== 電腦回報統計渲染函式 =====

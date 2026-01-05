@@ -14,6 +14,18 @@ function formatDashboardDate(value, pattern) {
   }
 }
 
+function normalizeUseLifeValue(useLife) {
+  if (useLife === null || useLife === undefined || useLife === '') {
+    return 0;
+  }
+  if (typeof useLife === 'number') {
+    return useLife;
+  }
+  const cleaned = String(useLife).replace(/[^0-9.]/g, '');
+  const numeric = Number(cleaned);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
 /**
  * 計算資產是否已達使用年限
  * @param {Date|string} purchaseDate - 取得日期
@@ -21,15 +33,20 @@ function formatDashboardDate(value, pattern) {
  * @returns {boolean} - 是否已達使用年限
  */
 function isAssetExpired(purchaseDate, useLife) {
-  if (!purchaseDate || !useLife || useLife === 0) {
+  const normalizedUseLife = normalizeUseLifeValue(useLife);
+
+  if (!purchaseDate || !normalizedUseLife || normalizedUseLife === 0) {
     return false;
   }
 
   try {
     const purchase = new Date(purchaseDate);
+    if (Number.isNaN(purchase.getTime())) {
+      return false;
+    }
     const today = new Date();
     const yearsDiff = (today - purchase) / (1000 * 60 * 60 * 24 * 365.25);
-    return yearsDiff >= useLife;
+    return yearsDiff >= normalizedUseLife;
   } catch (e) {
     Logger.log(`計算使用年限錯誤: ${e}`);
     return false;
@@ -151,8 +168,9 @@ function getDashboardData() {
 
     // 整理過期資產詳細資訊
     const expiredAssetsDetails = expiredAssets.map(asset => {
+      const normalizedUseLife = normalizeUseLifeValue(asset.useLife);
       let yearsUsed = 0;
-      if (asset.purchaseDate && asset.useLife) {
+      if (asset.purchaseDate) {
         const purchase = new Date(asset.purchaseDate);
         const today = new Date();
         yearsUsed = Math.floor((today - purchase) / (1000 * 60 * 60 * 24 * 365.25));
@@ -169,7 +187,7 @@ function getDashboardData() {
         userName: asset.userName || '',
         location: asset.location,
         purchaseDate: purchaseDate,
-        useLife: asset.useLife,
+        useLife: normalizedUseLife,
         yearsUsed: yearsUsed,
         status: asset.assetStatus
       };
