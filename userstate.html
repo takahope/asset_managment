@@ -2884,7 +2884,6 @@
                 const {
                     filterKey,
                     label,
-                    selectionLabel,
                     options,
                     selectedValues,
                     isOpen,
@@ -2895,11 +2894,11 @@
 
                 return (
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
+                        <label className="flex items-center justify-between text-sm font-medium text-slate-700 mb-2">
+                            <span>{label}</span>
+                            <span className="text-xs text-slate-500">已選 {selectedValues.length} 項</span>
+                        </label>
                         <div className="space-y-2">
-                            <div className="text-sm text-slate-600">
-                                選擇{selectionLabel}（已選 {selectedValues.length} 項）
-                            </div>
                             <div className="relative" ref={dropdownRef}>
                                 <button
                                     type="button"
@@ -3005,7 +3004,6 @@
                         {renderMultiSelect({
                             filterKey: 'status',
                             label: '依狀態篩選',
-                            selectionLabel: '狀態',
                             options: statusOptions,
                             selectedValues: selectedStatuses,
                             isOpen: statusDropdownOpen,
@@ -3031,7 +3029,6 @@
                         {renderMultiSelect({
                             filterKey: 'leader',
                             label: '依保管人篩選',
-                            selectionLabel: '保管人',
                             options: leaderOptions,
                             selectedValues: selectedLeaders,
                             isOpen: leaderDropdownOpen,
@@ -3043,7 +3040,6 @@
                         {renderMultiSelect({
                             filterKey: 'user',
                             label: '依使用人篩選',
-                            selectionLabel: '使用人',
                             options: userOptions,
                             selectedValues: selectedUsers,
                             isOpen: userDropdownOpen,
@@ -3055,7 +3051,6 @@
                         {renderMultiSelect({
                             filterKey: 'location',
                             label: '依保管位置篩選',
-                            selectionLabel: '保管位置',
                             options: locationOptions,
                             selectedValues: selectedLocations,
                             isOpen: locationDropdownOpen,
