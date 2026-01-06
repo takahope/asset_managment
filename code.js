@@ -5515,6 +5515,110 @@ function getInventoryDetails(inventoryId) {
   }
 }
 
+function getInventoryAssigneeNameMap() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const emailToNameMap = {};
+  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+    keeperData.forEach(row => {
+      const name = row[0];
+      const email = row[1];
+      if (!email) return;
+      const normalizedEmail = String(email).toLowerCase();
+      emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
+    });
+  }
+  return emailToNameMap;
+}
+
+function buildInventoryStatsByAssignee(details, emailToNameMap) {
+  const statsMap = {};
+  (details || []).forEach(item => {
+    const rawAssigned = item && item.assignedUser ? String(item.assignedUser).trim() : '';
+    let assignmentKey = '未指派';
+    let displayName = '未指派';
+    if (rawAssigned) {
+      if (rawAssigned.includes('@')) {
+        assignmentKey = rawAssigned.toLowerCase();
+        displayName = emailToNameMap[assignmentKey] || rawAssigned.split('@')[0] || assignmentKey;
+      } else {
+        assignmentKey = rawAssigned;
+        displayName = rawAssigned;
+      }
+    }
+
+    if (!statsMap[assignmentKey]) {
+      statsMap[assignmentKey] = {
+        email: assignmentKey,
+        name: displayName,
+        displayName: displayName,
+        assignedCount: 0,
+        verifiedCount: 0
+      };
+    }
+
+    const stats = statsMap[assignmentKey];
+    stats.assignedCount += 1;
+
+    if (item.inventoryResult && item.inventoryResult !== '未盤點') {
+      stats.verifiedCount += 1;
+    }
+  });
+
+  const result = Object.values(statsMap).map(item => {
+    const assignedCount = Number(item.assignedCount || 0);
+    const verifiedCount = Number(item.verifiedCount || 0);
+    return {
+      email: item.email || '',
+      name: item.name || '',
+      displayName: item.displayName || item.name || '',
+      assignedCount: assignedCount,
+      verifiedCount: verifiedCount,
+      progress: assignedCount > 0 ? Math.round((verifiedCount / assignedCount) * 100) : 0
+    };
+  });
+
+  return result.sort((a, b) => a.progress - b.progress);
+}
+
+function getInventoryDashboardData(inventoryId) {
+  try {
+    const details = getInventoryDetails(inventoryId);
+    const emailToNameMap = getInventoryAssigneeNameMap();
+    const stats = buildInventoryStatsByAssignee(details, emailToNameMap);
+    const safeDetails = (Array.isArray(details) ? details : []).map(item => ({
+      rowIndex: Number(item?.rowIndex || 0),
+      assetId: item?.assetId || '',
+      assetName: item?.assetName || '',
+      keeperName: item?.keeperName || '',
+      userName: item?.userName || '',
+      location: item?.location || '',
+      originalStatus: item?.originalStatus || '',
+      inventoryResult: item?.inventoryResult || '',
+      remarks: item?.remarks || '',
+      verificationTime: item?.verificationTime || '',
+      verifiedBy: item?.verifiedBy || '',
+      assignedUser: item?.assignedUser || ''
+    }));
+    const safeStats = (Array.isArray(stats) ? stats : []).map(item => ({
+      email: item?.email || '',
+      name: item?.name || '',
+      displayName: item?.displayName || item?.name || '',
+      assignedCount: Number(item?.assignedCount || 0),
+      verifiedCount: Number(item?.verifiedCount || 0),
+      progress: Number(item?.progress || 0)
+    }));
+    return {
+      stats: safeStats,
+      details: safeDetails
+    };
+  } catch (e) {
+    Logger.log(`getInventoryDashboardData 失敗: ${e.message}`);
+    return { stats: [], details: [], error: e.message };
+  }
+}
+
 /**
  * ✨ 新增：取得盤點會話的指派對象分組統計 (用於儀表板)
  * @param {string} inventoryId - 盤點ID
@@ -5523,65 +5627,8 @@ function getInventoryDetails(inventoryId) {
 function getInventoryStatsByAssignee(inventoryId) {
   try {
     const details = getInventoryDetails(inventoryId);
-
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const emailToNameMap = {};
-    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
-      keeperData.forEach(row => {
-        const name = row[0];
-        const email = row[1];
-        if (!email) return;
-        const normalizedEmail = String(email).toLowerCase();
-        emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
-      });
-    }
-
-    // 聚合統計
-    const statsMap = {}; // { 'assignmentKey': { displayName, assignedCount, verifiedCount } }
-
-    details.forEach(item => {
-      const rawAssigned = item.assignedUser ? String(item.assignedUser).trim() : '';
-      let assignmentKey = '未指派';
-      let displayName = '未指派';
-      if (rawAssigned) {
-        if (rawAssigned.includes('@')) {
-          assignmentKey = rawAssigned.toLowerCase();
-          displayName = emailToNameMap[assignmentKey] || rawAssigned.split('@')[0] || assignmentKey;
-        } else {
-          assignmentKey = rawAssigned;
-          displayName = rawAssigned;
-        }
-      }
-
-      if (!statsMap[assignmentKey]) {
-        statsMap[assignmentKey] = {
-          email: assignmentKey,
-          name: displayName,
-          displayName: displayName,
-          assignedCount: 0,
-          verifiedCount: 0
-        };
-      }
-
-      const stats = statsMap[assignmentKey];
-      stats.assignedCount++;
-
-      if (item.inventoryResult && item.inventoryResult !== '未盤點') {
-        stats.verifiedCount++;
-      }
-    });
-    
-    // 轉換為陣列並計算百分比
-    const result = Object.values(statsMap).map(s => ({
-      ...s,
-      progress: s.assignedCount > 0 ? Math.round((s.verifiedCount / s.assignedCount) * 100) : 0
-    }));
-    
-    // 排序：完成率低的在前 (優先關注落後者)
-    return result.sort((a, b) => a.progress - b.progress);
-    
+    const emailToNameMap = getInventoryAssigneeNameMap();
+    return buildInventoryStatsByAssignee(details, emailToNameMap);
   } catch (e) {
     Logger.log(`getInventoryStatsByAssignee 失敗: ${e.message}`);
     return [];
