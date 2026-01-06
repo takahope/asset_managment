@@ -772,6 +772,7 @@
         window.assignmentModalState = {
             key: '',
             title: '',
+            sessionId: '',
             assets: [],
             page: 1,
             loading: false,
@@ -807,6 +808,7 @@
             window.assignmentModalState = {
                 key: '',
                 title: '',
+                sessionId: '',
                 assets: [],
                 page: 1,
                 loading: false,
@@ -1402,6 +1404,7 @@
             const [statsError, setStatsError] = useState('');
             const [isExpanded, setIsExpanded] = useState(true);
             const sessionDetailsCacheRef = useRef(new Map());
+            const dashboardRequestRef = useRef(0);
 
             const sessions = useMemo(() => inventorySessions?.activeSessions || [], [inventorySessions]);
             const isLoadingSessions = !inventorySessions;
@@ -1427,6 +1430,8 @@
                 if (sessions.length === 0) {
                     setSelectedSessionId('');
                     setGroupStats([]);
+                    setStatsError('');
+                    setIsLoadingStats(false);
                     return;
                 }
                 const exists = sessions.some(s => s.inventoryId === selectedSessionId);
@@ -1434,33 +1439,6 @@
                     setSelectedSessionId(pickLatestSessionId(sessions));
                 }
             }, [sessions, selectedSessionId, pickLatestSessionId]);
-
-            const fetchGroupStats = useCallback((sessionId) => {
-                if (!sessionId) {
-                    setGroupStats([]);
-                    setStatsError('');
-                    setIsLoadingStats(false);
-                    return;
-                }
-                setIsLoadingStats(true);
-                setStatsError('');
-                google.script.run
-                    .withSuccessHandler(result => {
-                        setGroupStats(result || []);
-                        setIsLoadingStats(false);
-                    })
-                    .withFailureHandler(error => {
-                        console.error('載入盤點分組統計失敗:', error);
-                        setGroupStats([]);
-                        setStatsError(error.message || '載入失敗');
-                        setIsLoadingStats(false);
-                    })
-                    .getInventoryStatsByAssignee(sessionId);
-            }, []);
-
-            useEffect(() => {
-                fetchGroupStats(selectedSessionId);
-            }, [selectedSessionId, fetchGroupStats]);
 
             const normalizeAssignmentKey = useCallback((value) => {
                 const raw = String(value || '').trim();
@@ -1484,12 +1462,123 @@
                 return assignmentKey === normalizeGroup(currentUserGroup);
             }, [isAdminView, currentUserEmail, currentUserGroup, normalizeEmail, normalizeGroup]);
 
+            const updateAssignmentModalError = useCallback((assignmentKey, displayName, message, sessionId) => {
+                if (typeof window.updateInventoryAssignmentModal === 'function') {
+                    window.updateInventoryAssignmentModal({
+                        key: assignmentKey,
+                        title: displayName,
+                        sessionId: sessionId || '',
+                        assets: [],
+                        page: 1,
+                        loading: false,
+                        error: message
+                    });
+                } else {
+                    alert(`載入詳細清單失敗：${message}`);
+                }
+            }, []);
+
+            const renderAssignmentAssets = useCallback((details, assignmentKey, displayName, sessionId) => {
+                const list = Array.isArray(details) ? details : [];
+                const assets = list.filter(asset => resolveAssignmentKey(asset.assignedUser) === assignmentKey);
+                if (typeof window.updateInventoryAssignmentModal === 'function') {
+                    window.updateInventoryAssignmentModal({
+                        key: assignmentKey,
+                        title: displayName,
+                        sessionId: sessionId || '',
+                        assets: assets,
+                        page: 1,
+                        loading: false,
+                        error: ''
+                    });
+                }
+            }, [resolveAssignmentKey]);
+
+            const fetchDashboardData = useCallback((sessionId, options = {}) => {
+                if (!sessionId) {
+                    setGroupStats([]);
+                    setStatsError('');
+                    setIsLoadingStats(false);
+                    return;
+                }
+
+                const {
+                    showLoading = true,
+                    assignmentKey = '',
+                    displayName = '',
+                    refreshModal = false
+                } = options;
+                const requestId = (dashboardRequestRef.current += 1);
+
+                if (showLoading) {
+                    setIsLoadingStats(true);
+                    setStatsError('');
+                }
+
+                google.script.run
+                    .withSuccessHandler(result => {
+                        if (dashboardRequestRef.current !== requestId) return;
+                        const safeResult = result || {};
+                        if (safeResult.error) {
+                            setIsLoadingStats(false);
+                            if (showLoading) {
+                                setGroupStats([]);
+                                setStatsError(safeResult.error);
+                            }
+                            if (assignmentKey) {
+                                updateAssignmentModalError(assignmentKey, displayName, safeResult.error, sessionId);
+                            }
+                            return;
+                        }
+
+                        const stats = Array.isArray(safeResult.stats) ? safeResult.stats : [];
+                        const details = Array.isArray(safeResult.details) ? safeResult.details : [];
+                        setGroupStats(stats);
+                        setStatsError('');
+                        setIsLoadingStats(false);
+
+                        sessionDetailsCacheRef.current.set(sessionId, details);
+
+                        if (assignmentKey) {
+                            renderAssignmentAssets(details, assignmentKey, displayName, sessionId);
+                            return;
+                        }
+
+                        if (refreshModal) {
+                            const modalState = window.assignmentModalState || {};
+                            if (modalState.sessionId === sessionId && modalState.key) {
+                                const modalTitle = modalState.title || modalState.key;
+                                renderAssignmentAssets(details, modalState.key, modalTitle, sessionId);
+                            }
+                        }
+                    })
+                    .withFailureHandler(error => {
+                        if (dashboardRequestRef.current !== requestId) return;
+                        const message = error?.message || '載入失敗';
+                        console.error('載入盤點儀表板資料失敗:', error);
+                        setIsLoadingStats(false);
+                        if (showLoading) {
+                            setGroupStats([]);
+                            setStatsError(message);
+                        }
+                        if (assignmentKey) {
+                            updateAssignmentModalError(assignmentKey, displayName, message, sessionId);
+                        }
+                    })
+                    .getInventoryDashboardData(sessionId);
+            }, [renderAssignmentAssets, updateAssignmentModalError]);
+
+            useEffect(() => {
+                fetchDashboardData(selectedSessionId);
+            }, [selectedSessionId, fetchDashboardData]);
+
             const openAssignmentDetails = useCallback((stat) => {
                 if (!selectedSessionId) {
                     alert('尚未選擇盤點會話');
                     return;
                 }
 
+                const sessionId = selectedSessionId;
                 const assignmentKey = resolveAssignmentKey(stat?.email || stat?.name || stat?.displayName);
                 if (!canViewAssignmentDetails(assignmentKey)) {
                     alert('一般使用者僅能查看分配給自己或所屬組別的清單。');
@@ -1501,6 +1590,7 @@
                     window.openInventoryAssignmentModal({
                         key: assignmentKey,
                         title: displayName,
+                        sessionId: sessionId,
                         assets: [],
                         page: 1,
                         loading: true,
@@ -1508,50 +1598,18 @@
                     });
                 }
 
-                const renderAssets = (details) => {
-                    const list = Array.isArray(details) ? details : [];
-                    const assets = list.filter(asset => resolveAssignmentKey(asset.assignedUser) === assignmentKey);
-                    if (typeof window.updateInventoryAssignmentModal === 'function') {
-                        window.updateInventoryAssignmentModal({
-                            key: assignmentKey,
-                            title: displayName,
-                            assets: assets,
-                            page: 1,
-                            loading: false,
-                            error: ''
-                        });
-                    }
-                };
-
-                const cached = sessionDetailsCacheRef.current.get(selectedSessionId);
+                const cached = sessionDetailsCacheRef.current.get(sessionId);
                 if (cached) {
-                    renderAssets(cached);
+                    renderAssignmentAssets(cached, assignmentKey, displayName, sessionId);
                     return;
                 }
 
-                google.script.run
-                    .withSuccessHandler(details => {
-                        const safeDetails = Array.isArray(details) ? details : [];
-                        sessionDetailsCacheRef.current.set(selectedSessionId, safeDetails);
-                        renderAssets(safeDetails);
-                    })
-                    .withFailureHandler(error => {
-                        const message = error?.message || '載入失敗';
-                        if (typeof window.updateInventoryAssignmentModal === 'function') {
-                            window.updateInventoryAssignmentModal({
-                                key: assignmentKey,
-                                title: displayName,
-                                assets: [],
-                                page: 1,
-                                loading: false,
-                                error: message
-                            });
-                        } else {
-                            alert(`載入詳細清單失敗：${message}`);
-                        }
-                    })
-                    .getInventoryDetails(selectedSessionId);
-            }, [resolveAssignmentKey, selectedSessionId, canViewAssignmentDetails]);
+                fetchDashboardData(sessionId, {
+                    showLoading: false,
+                    assignmentKey: assignmentKey,
+                    displayName: displayName
+                });
+            }, [resolveAssignmentKey, selectedSessionId, canViewAssignmentDetails, fetchDashboardData, renderAssignmentAssets]);
 
             // 如果沒有進行中的會話，不顯示卡片
             if (!isLoadingSessions && sessions.length === 0) {
@@ -1756,7 +1814,7 @@
                                         <div className="mt-4 flex justify-end gap-2">
                                             <button
                                                 onClick={() => {
-                                                    fetchGroupStats(selectedSessionId);
+                                                    fetchDashboardData(selectedSessionId, { refreshModal: true });
                                                     onRefresh && onRefresh();
                                                 }}
                                                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
