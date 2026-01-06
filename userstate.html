@@ -3182,11 +3182,21 @@
         };
 
         // AssetTable 組件
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, isAssetPendingInventory, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
 
             // ✨ 分頁設定
             const ROWS_PER_PAGE = 500;
             const [currentPage, setCurrentPage] = useState(1);
+            const inventoryStatusStyles = {
+                '未盤點': 'text-teal-600 hover:text-teal-800',
+                '正常': 'text-emerald-600 hover:text-emerald-800',
+                '遺失': 'text-rose-600 hover:text-rose-800',
+                '損壞': 'text-orange-600 hover:text-orange-800',
+                '過舊': 'text-amber-600 hover:text-amber-800'
+            };
+            const resolveInventoryButtonClass = (status) => (
+                inventoryStatusStyles[status] || 'text-slate-500 hover:text-slate-700'
+            );
 
             // ✨ 當 assets 變化時（篩選條件改變），重置頁碼
             useEffect(() => {
@@ -3301,6 +3311,25 @@
                                     const statusBadgeClass = STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200';
                                     const statusDetailType = STATUS_DETAIL_TYPES[asset.status];
                                     const canOpenStatusDetail = statusDetailType && typeof onOpenStatusDetail === 'function';
+                                    const inventoryEntry = inventoryStatusByAsset?.[asset.assetId];
+                                    const inventoryStatus = inventoryEntry ? (inventoryEntry.status || '未盤點') : '';
+                                    const inventorySessionCount = inventoryEntry && typeof inventoryEntry.sessionCount === 'number'
+                                        ? inventoryEntry.sessionCount
+                                        : 0;
+                                    const inventoryTitle = inventoryStatus
+                                        ? `盤點狀態：${inventoryStatus}${inventorySessionCount > 0 ? `（進行中會話 ${inventorySessionCount} 個）` : ''}`
+                                        : '盤點確認';
+                                    const inventoryButtonClass = resolveInventoryButtonClass(inventoryStatus);
+                                    const inventoryButton = inventoryEntry ? (
+                                        <button
+                                            onClick={() => onOpenInventoryModal && onOpenInventoryModal(asset)}
+                                            className={`${inventoryButtonClass} transition-colors p-1`}
+                                            title={inventoryTitle}
+                                            aria-label={inventoryTitle}
+                                        >
+                                            <i className="fa-solid fa-clipboard-check text-lg"></i>
+                                        </button>
+                                    ) : null;
 
                                     return (
                                         <tr key={`${asset.assetId}-${index}`} className={`${rowHoverClass} transition-colors ${rowBaseClass} ${rowSelectedClass} ${!isTask && isSelected ? 'bg-blue-50' : ''}`}>
@@ -3398,29 +3427,13 @@
                                                             >
                                                                 <i className="fa-regular fa-trash-can text-lg"></i>
                                                             </button>
-                                                            {/* 盤點按鈕 - 如果資產在待盤點清單中顯示 */}
-                                                            {isAssetPendingInventory && isAssetPendingInventory(asset.assetId) && (
-                                                                <button
-                                                                    onClick={() => onOpenInventoryModal(asset)}
-                                                                    className="text-teal-600 hover:text-teal-800 transition-colors p-1"
-                                                                    title="盤點確認"
-                                                                >
-                                                                    <i className="fa-solid fa-clipboard-check text-lg"></i>
-                                                                </button>
-                                                            )}
+                                                            {inventoryButton}
                                                         </>
                                                     )}
+                                                    {!isTask && asset.status !== '在庫' && inventoryButton}
                                                     {isTask && (
                                                         <>
-                                                            {isAssetPendingInventory && isAssetPendingInventory(asset.assetId) && (
-                                                                <button
-                                                                    onClick={() => onOpenInventoryModal(asset)}
-                                                                    className="text-teal-600 hover:text-teal-800 transition-colors p-1"
-                                                                    title="盤點確認"
-                                                                >
-                                                                    <i className="fa-solid fa-clipboard-check text-lg"></i>
-                                                                </button>
-                                                            )}
+                                                            {inventoryButton}
                                                             <span className="text-slate-400 p-1" title="僅限盤點">
                                                                 <i className="fa-solid fa-lock text-lg"></i>
                                                             </span>
@@ -7447,12 +7460,12 @@
         };
 
         // ========== 盤點確認 Modal（單筆/批次共用）==========
-            const InventoryConfirmModal = ({ asset, assetIds, isBatch, availableSessions, onClose, onSuccess }) => {
+            const InventoryConfirmModal = ({ asset, assetIds, isBatch, sessionCount, onClose, onSuccess }) => {
             const [result, setResult] = useState('正常');
             const [remarks, setRemarks] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [isResetting, setIsResetting] = useState(false);
-            const sessionCount = Array.isArray(availableSessions) ? availableSessions.length : 0;
+            const normalizedSessionCount = typeof sessionCount === 'number' ? sessionCount : 0;
 
             const handleSubmit = () => {
                 setIsSubmitting(true);
@@ -7602,7 +7615,7 @@
                             )}
 
                             <div className="rounded-lg border border-teal-100 bg-teal-50 px-3 py-2 text-xs text-teal-700">
-                                送出後會同步更新所有進行中的盤點會話{sessionCount > 0 ? `（共 ${sessionCount} 個）` : ''}。
+                                送出後會同步更新所有進行中的盤點會話{normalizedSessionCount > 0 ? `（共 ${normalizedSessionCount} 個）` : ''}。
                             </div>
 
                             {/* 盤點結果選項 */}
@@ -7745,10 +7758,11 @@
             const [currentInventorySessionId, setCurrentInventorySessionId] = useState(null);
             const [showInventoryModal, setShowInventoryModal] = useState(false);
             const [inventoryModalAsset, setInventoryModalAsset] = useState(null); // 單筆盤點
-            const [inventoryModalSessions, setInventoryModalSessions] = useState([]);
+            const [inventoryModalSessionCount, setInventoryModalSessionCount] = useState(0);
             const [showBatchInventoryModal, setShowBatchInventoryModal] = useState(false);
             const [selectedInventoryAssetIds, setSelectedInventoryAssetIds] = useState([]);
             const [currentUserGroup, setCurrentUserGroup] = useState('');
+            const [inventoryStatusByAsset, setInventoryStatusByAsset] = useState({});
             const viewModeInitializedRef = useRef(false);
             const inventoryToastTimerRef = useRef(null);
 
@@ -7891,6 +7905,7 @@
                   if (!response) {
                     setInventoryPendingByAsset({});
                     setPendingInventoryItems([]);
+                    setInventoryStatusByAsset({});
                     setIsLoadingPendingInventory(false);
                     setPendingInventoryError('沒有回應');
                     if (typeof onComplete === 'function') {
@@ -7902,6 +7917,7 @@
                     console.warn('載入盤點待辦失敗：', response.error);
                     setInventoryPendingByAsset({});
                     setPendingInventoryItems([]);
+                    setInventoryStatusByAsset({});
                     setIsLoadingPendingInventory(false);
                     setPendingInventoryError(response.error);
                     if (typeof onComplete === 'function') {
@@ -7913,6 +7929,7 @@
                   const map = buildInventoryPendingByAsset(pendingItems);
                   setInventoryPendingByAsset(map);
                   setPendingInventoryItems(pendingItems);
+                  setInventoryStatusByAsset(response.inventoryStatusByAsset || {});
                   setIsLoadingPendingInventory(false);
                   setPendingInventoryError('');
                   if (typeof onComplete === 'function') {
@@ -7923,6 +7940,7 @@
                   console.error('載入盤點待辦失敗:', error);
                   setInventoryPendingByAsset({});
                   setPendingInventoryItems([]);
+                  setInventoryStatusByAsset({});
                   setIsLoadingPendingInventory(false);
                   setPendingInventoryError(error.message || '載入失敗');
                   if (typeof onComplete === 'function') {
@@ -7936,6 +7954,16 @@
                 const entry = inventoryPendingByAsset[assetId];
                 return entry ? entry.sessions || [] : [];
             }, [inventoryPendingByAsset]);
+
+            const getAssetInventorySessionCount = useCallback((assetId) => {
+                const entry = inventoryStatusByAsset[assetId];
+                if (!entry) return 0;
+                return typeof entry.sessionCount === 'number' ? entry.sessionCount : 0;
+            }, [inventoryStatusByAsset]);
+
+            const hasActiveInventoryForAsset = useCallback((assetId) => (
+                !!inventoryStatusByAsset[assetId]
+            ), [inventoryStatusByAsset]);
 
             // 檢查資產是否在待盤點清單中（可指定盤點會話）
             const isAssetPendingInventory = useCallback((assetId, sessionId) => {
@@ -8211,14 +8239,17 @@
                         const map = buildInventoryPendingByAsset(pendingItems);
                         setInventoryPendingByAsset(map);
                         setPendingInventoryItems(pendingItems);
+                        setInventoryStatusByAsset(response.inventoryStatusByAsset || {});
                       } else {
                         setInventoryPendingByAsset({});
                         setPendingInventoryItems([]);
+                        setInventoryStatusByAsset({});
                         pendingInventoryLoadError = response?.error || '載入失敗';
                       }
                     } else {
                       setInventoryPendingByAsset({});
                       setPendingInventoryItems([]);
+                      setInventoryStatusByAsset({});
                       pendingInventoryLoadError = pendingInventoryResponse.reason?.message || '載入失敗';
                     }
                     if (pendingInventoryLoadError) {
@@ -8786,12 +8817,11 @@
             // ========== 盤點操作處理函數 ==========
             // 開啟單筆盤點 Modal
                     const handleOpenInventoryModal = (asset) => {
-                        const sessions = getAssetPendingSessions(asset.assetId);
-                        if (!sessions || sessions.length === 0) {
-                            alert('此資產目前沒有待盤點的會話');
-                            return;
-                        }
-                setInventoryModalSessions(sessions);
+                if (!hasActiveInventoryForAsset(asset.assetId)) {
+                    alert('此資產目前沒有進行中的盤點會話');
+                    return;
+                }
+                setInventoryModalSessionCount(getAssetInventorySessionCount(asset.assetId));
                         setInventoryModalAsset(asset);
                         setShowInventoryModal(true);
                     };
@@ -9131,6 +9161,7 @@
                         isAdmin={isAdminView}
                         currentUserEmail={currentUserEmail}
                         isInventoryTaskOnly={isInventoryTaskOnly}
+                        inventoryStatusByAsset={inventoryStatusByAsset}
                         onCancel={handleCancel}
                         onRestore={handleRestore}
                         onOpenTransferModal={handleOpenTransferModal}
@@ -9138,7 +9169,6 @@
                         onOpenScrapModal={handleOpenScrapModal}
                         onOpenEditModal={handleOpenEditModal}
                         onOpenStatusDetail={handleOpenStatusDetail}
-                        isAssetPendingInventory={isAssetPendingInventory}
                         onOpenInventoryModal={handleOpenInventoryModal}
                         selectedAssetIds={selectedAssetIds}
                         onAssetSelect={handleAssetSelect}
@@ -9320,11 +9350,11 @@
                         <InventoryConfirmModal
                             asset={inventoryModalAsset}
                             isBatch={false}
-                            availableSessions={inventoryModalSessions}
+                            sessionCount={inventoryModalSessionCount}
                             onClose={() => {
                                 setShowInventoryModal(false);
                                 setInventoryModalAsset(null);
-                                setInventoryModalSessions([]);
+                                setInventoryModalSessionCount(0);
                             }}
                             onSuccess={handleInventorySuccess}
                         />
@@ -9335,6 +9365,7 @@
                         <InventoryConfirmModal
                             assetIds={selectedInventoryAssetIds}
                             isBatch={true}
+                            sessionCount={0}
                             onClose={() => {
                                 setShowBatchInventoryModal(false);
                                 setSelectedInventoryAssetIds([]);
