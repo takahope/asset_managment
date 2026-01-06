@@ -7765,6 +7765,7 @@
             const [inventoryStatusByAsset, setInventoryStatusByAsset] = useState({});
             const viewModeInitializedRef = useRef(false);
             const inventoryToastTimerRef = useRef(null);
+            const pendingInventoryLoadRef = useRef(null);
 
             const isAdminView = isAdmin && viewMode === 'admin';
             const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
@@ -7950,6 +7951,31 @@
                 .getPendingInventoryAssignments(forceUserScope);
             }, [buildInventoryPendingByAsset]);
 
+            const schedulePendingInventoryLoad = useCallback((forceUserScope) => {
+                if (pendingInventoryLoadRef.current) {
+                    const { type, id } = pendingInventoryLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    pendingInventoryLoadRef.current = null;
+                }
+
+                const runLoad = () => {
+                    pendingInventoryLoadRef.current = null;
+                    loadPendingInventoryAssignments(forceUserScope);
+                };
+
+                if (typeof window.requestIdleCallback === 'function') {
+                    const id = window.requestIdleCallback(runLoad, { timeout: 2000 });
+                    pendingInventoryLoadRef.current = { type: 'idle', id: id };
+                } else {
+                    const id = setTimeout(runLoad, 300);
+                    pendingInventoryLoadRef.current = { type: 'timeout', id: id };
+                }
+            }, [loadPendingInventoryAssignments]);
+
             const getAssetPendingSessions = useCallback((assetId) => {
                 const entry = inventoryPendingByAsset[assetId];
                 return entry ? entry.sessions || [] : [];
@@ -8057,7 +8083,7 @@
                                                 setCurrentInventorySessionId(sessionId);
                                             }
                                         }
-                                        loadPendingInventoryAssignments(forceUserScope);
+                                        schedulePendingInventoryLoad(forceUserScope);
                                         inventoryLoaded = true;
                                         finishCardLoading();
                                     })
@@ -8357,6 +8383,15 @@
                     if (inventoryToastTimerRef.current) {
                         clearTimeout(inventoryToastTimerRef.current);
                         inventoryToastTimerRef.current = null;
+                    }
+                    if (pendingInventoryLoadRef.current) {
+                        const { type, id } = pendingInventoryLoadRef.current;
+                        if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                            window.cancelIdleCallback(id);
+                        } else if (type === 'timeout') {
+                            clearTimeout(id);
+                        }
+                        pendingInventoryLoadRef.current = null;
                     }
                 };
             }, []);
