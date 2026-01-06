@@ -3165,7 +3165,7 @@
                             >
                                 <i className="fa-regular fa-trash-can"></i> 批次報廢
                             </button>
-                            {/* 批次盤點按鈕 - 如果有待盤點資產則顯示 */}
+                            {/* 批次盤點按鈕 - 如果有進行中的盤點會話則顯示 */}
                             {hasPendingInventory && (
                                 <button
                                     onClick={onBatchInventory}
@@ -8533,6 +8533,9 @@
                     inventory: inventoryCount
                 };
             }, [allAssets, pendingApprovalsData, inventorySessions, currentUserEmail, isAdminView, transferPendingCount, transferringCount]);
+            const hasActiveInventory = useMemo(() => (
+                Object.keys(inventoryStatusByAsset || {}).length > 0
+            ), [inventoryStatusByAsset]);
 
             // 處理卡片點擊
             const handleCardClick = (cardId) => {
@@ -8837,13 +8840,13 @@
                     alert('請先選取要處理的資產');
                     return;
                 }
-                // 過濾出待盤點的資產
-                const pendingItems = items.filter(id => isAssetPendingInventory(id));
-                if (pendingItems.length === 0) {
-                    alert('選取的資產中沒有待盤點的項目');
+                // 過濾出在進行中盤點會話的資產
+                const activeItems = items.filter(id => hasActiveInventoryForAsset(id));
+                if (activeItems.length === 0) {
+                    alert('選取的資產中沒有進行中的盤點會話項目');
                     return;
                 }
-                setSelectedInventoryAssetIds(pendingItems);
+                setSelectedInventoryAssetIds(activeItems);
                 setShowBatchInventoryModal(true);
             };
 
@@ -9145,7 +9148,7 @@
                         onBatchTransfer={handleBatchTransfer}
                         onBatchLending={handleBatchLending}
                         onBatchScrap={handleBatchScrap}
-                        hasPendingInventory={cardCounts.inventory > 0}
+                        hasPendingInventory={hasActiveInventory}
                         onBatchInventory={handleBatchInventory}
                     />
 
