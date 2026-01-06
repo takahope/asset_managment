@@ -27,11 +27,14 @@ const INVENTORY_DETAIL_SHEET_NAME = "盤點明細"; // ✨ **新增：資產盤�
 const PROPERTY_COLUMN_INDICES = {
   ASSET_ID: 1,      // A欄: 財產編號
   ASSET_NAME: 2,    // B欄: 財產名稱
+  ASSET_ALIAS: 3,   // C欄: 財產別名
   MODEL_BRAND: 4,   // D欄: 型號/廠牌
+  UNIT: 5,          // E欄: 單位
   PURCHASE_DATE: 6, // F欄: 取得日期
   USE_LIFE: 7,      // G欄: 使用年限
   ASSET_CATEGORY: 12, // L欄: 財產類別
   LOCATION: 8,      // H欄: 保管地點 (財產)
+  ACCESSORY: 9,     // I欄: 附屬設備
   LEADER_EMAIL: 13, // M欄: 保管人電子郵件
   LEADER_NAME: 10,  // J欄: 保管人
   USER_NAME: 11,    // K欄: 使用人
@@ -55,9 +58,13 @@ const PROPERTY_COLUMN_INDICES = {
 const ITEM_COLUMN_INDICES = {
   ASSET_ID: 1,      // A欄: 物品編號
   ASSET_NAME: 2,    // B欄: 物品名稱
+  PRODUCT_SERIAL: 3, // C欄: 產品序號
   MODEL_BRAND: 4,   // D欄: 型號/廠牌
   PURCHASE_DATE: 5, // E欄: 取得日期
   USE_LIFE: 6,      // F欄: 使用年限
+  UNIT: 7,          // G欄: 單位
+  AMOUNT_TWD: 8,    // H欄: 台幣金額
+  PURCHASE_ORDER: 9, // I欄: 申購單號
   ASSET_CATEGORY: 10, // J欄: 財產類別
   LOCATION: 13,     // M欄: 保管地點 (物品)
   LEADER_EMAIL: 14, // N欄: 保管人電子郵件
@@ -158,11 +165,17 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
     return {
       assetId: row[indices.ASSET_ID - 1],
       assetName: row[indices.ASSET_NAME - 1],
+      assetAlias: indices.ASSET_ALIAS ? row[indices.ASSET_ALIAS - 1] : null,
+      productSerial: indices.PRODUCT_SERIAL ? row[indices.PRODUCT_SERIAL - 1] : null,
       modelBrand: row[indices.MODEL_BRAND - 1] || '',
+      unit: indices.UNIT ? row[indices.UNIT - 1] : null,
+      amountTwd: indices.AMOUNT_TWD ? row[indices.AMOUNT_TWD - 1] : null,
+      purchaseOrder: indices.PURCHASE_ORDER ? row[indices.PURCHASE_ORDER - 1] : null,
       purchaseDate: row[indices.PURCHASE_DATE - 1],
       useLife: row[indices.USE_LIFE - 1],
       assetCategory: row[indices.ASSET_CATEGORY - 1],
       location: row[indices.LOCATION - 1],
+      accessory: indices.ACCESSORY ? row[indices.ACCESSORY - 1] : null,
       leaderEmail: row[indices.LEADER_EMAIL - 1],
       leaderName: row[indices.LEADER_NAME - 1],
       userName: indices.USER_NAME ? row[indices.USER_NAME - 1] : null, // 使用者 (僅財產總表有此欄位)
@@ -700,7 +713,8 @@ function getUserStateData(forceUserScope) {
     location: asset.location,
     status: asset.assetStatus,
     category: asset.assetCategory,
-    userName: asset.userName || '無' // 使用者名稱，物品總表顯示「無」
+    userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
+    sourceSheet: asset.sourceSheet
   }));
 
   return {
@@ -709,6 +723,136 @@ function getUserStateData(forceUserScope) {
     userName: currentUserName, // ✨ 新增使用者姓名
     assets: results
   };
+}
+
+function getUserStateExportDataByTargets(targets, forceUserScope) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
+
+    let filteredData;
+
+    if (useAdminScope) {
+      filteredData = getAllAssets();
+    } else {
+      const groupEmails = getGroupMemberEmails(currentUserEmail);
+      const groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
+      const allAssets = getAllAssets();
+      filteredData = allAssets.filter(asset => {
+        const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
+        const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
+        return groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
+      });
+    }
+
+    const targetList = Array.isArray(targets) ? targets : [];
+    const normalizedTargets = targetList.map(item => ({
+      assetId: String(item?.assetId || '').trim(),
+      sourceSheet: String(item?.sourceSheet || '').trim()
+    })).filter(item => item.assetId);
+
+    if (normalizedTargets.length === 0) {
+      return { property: { headers: [], rows: [] }, items: { headers: [], rows: [] } };
+    }
+
+    const targetKeySet = new Set(
+      normalizedTargets.map(item => `${item.sourceSheet}::${item.assetId}`)
+    );
+
+    const filteredTargets = filteredData.filter(asset => {
+      const assetId = String(asset.assetId || '').trim();
+      const sourceSheet = String(asset.sourceSheet || '').trim();
+      if (!assetId || !sourceSheet) return false;
+      return targetKeySet.has(`${sourceSheet}::${assetId}`);
+    });
+
+    const timeZone = Session.getScriptTimeZone();
+    const formatCell = (value) => {
+      if (value instanceof Date) {
+        return Utilities.formatDate(value, timeZone, 'yyyy/MM/dd');
+      }
+      if (value === null || value === undefined) return '';
+      return String(value);
+    };
+
+    const propertyHeaders = [
+      '財產編號',
+      '財產名稱',
+      '財產別名',
+      '型號/廠牌',
+      '單位',
+      '取得日期',
+      '使用年限',
+      '保管地點',
+      '附屬設備',
+      '保管人',
+      '使用人'
+    ];
+
+    const itemHeaders = [
+      '物品編號',
+      '物品名稱',
+      '產品序號',
+      '型號/廠牌',
+      '取得日期',
+      '使用年限',
+      '單位',
+      '台幣金額',
+      '申購單號',
+      '財產類別',
+      '保管人',
+      '保管地點'
+    ];
+
+    const propertyRows = [];
+    const itemRows = [];
+
+    filteredTargets.forEach(asset => {
+      if (asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME) {
+        propertyRows.push([
+          formatCell(asset.assetId),
+          formatCell(asset.assetName),
+          formatCell(asset.assetAlias),
+          formatCell(asset.modelBrand),
+          formatCell(asset.unit),
+          formatCell(asset.purchaseDate),
+          formatCell(asset.useLife),
+          formatCell(asset.location),
+          formatCell(asset.accessory),
+          formatCell(asset.leaderName),
+          formatCell(asset.userName)
+        ]);
+      } else if (asset.sourceSheet === ITEM_MASTER_SHEET_NAME) {
+        itemRows.push([
+          formatCell(asset.assetId),
+          formatCell(asset.assetName),
+          formatCell(asset.productSerial),
+          formatCell(asset.modelBrand),
+          formatCell(asset.purchaseDate),
+          formatCell(asset.useLife),
+          formatCell(asset.unit),
+          formatCell(asset.amountTwd),
+          formatCell(asset.purchaseOrder),
+          formatCell(asset.assetCategory),
+          formatCell(asset.leaderName),
+          formatCell(asset.location)
+        ]);
+      }
+    });
+
+    return {
+      property: { headers: propertyHeaders, rows: propertyRows },
+      items: { headers: itemHeaders, rows: itemRows }
+    };
+  } catch (e) {
+    Logger.log(`getUserStateExportDataByTargets 失敗: ${e.message}`);
+    return {
+      property: { headers: [], rows: [] },
+      items: { headers: [], rows: [] },
+      error: e.message
+    };
+  }
 }
 
 function getAppUrl() {
