@@ -5816,6 +5816,230 @@ function resetBatchInventory(inventoryId, assetIds) {
 }
 
 /**
+ * 取得使用者所屬組別（供盤點權限判斷）
+ * @param {Spreadsheet} ss - 既有 Spreadsheet 物件
+ * @param {string} currentUserEmail - 使用者 Email（小寫）
+ * @returns {string} 組別名稱
+ */
+function getInventoryUserGroup_(ss, currentUserEmail) {
+  let currentUserGroup = '未分組';
+  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+    for (let i = 0; i < keeperData.length; i++) {
+      const row = keeperData[i];
+      const email = row[1];
+      if (!email) continue;
+      const normalizedEmail = String(email).toLowerCase().trim();
+      if (normalizedEmail === currentUserEmail) {
+        const groupName = row[6];
+        if (groupName) {
+          currentUserGroup = String(groupName).trim();
+        }
+        break;
+      }
+    }
+  }
+  return currentUserGroup;
+}
+
+/**
+ * 判斷指派對象是否符合目前使用者（Email 或組別）
+ * @param {string} assignedRaw - 指派欄位原始值
+ * @param {string} currentUserEmail - 使用者 Email（小寫）
+ * @param {string} currentUserGroup - 使用者組別
+ * @returns {boolean} 是否有權限
+ */
+function isInventoryAssignedToUser_(assignedRaw, currentUserEmail, currentUserGroup) {
+  const assignedValue = String(assignedRaw || '').trim();
+  if (!assignedValue) return false;
+  if (assignedValue.includes('@')) {
+    return assignedValue.toLowerCase() === currentUserEmail;
+  }
+  return assignedValue === currentUserGroup;
+}
+
+/**
+ * 更新進行中盤點會話內的資產盤點結果
+ * @param {Array<{assetId: string, result?: string, remarks?: string}>} assetResults - 資產結果
+ * @param {Object} options - 更新選項
+ * @param {boolean} options.reset - 是否重設為未盤點
+ * @returns {Object} 操作結果
+ */
+function updateInventoryDetailsInActiveSessions_(assetResults, options) {
+  try {
+    const isReset = options && options.reset === true;
+    if (!Array.isArray(assetResults) || assetResults.length === 0) {
+      return { success: false, error: '沒有可處理的資產' };
+    }
+
+    const sanitizedResults = {};
+    const invalidResults = [];
+    assetResults.forEach(item => {
+      const assetId = String(item.assetId || '').trim();
+      if (!assetId) return;
+      if (!isReset) {
+        const result = String(item.result || '').trim();
+        if (!result) {
+          invalidResults.push(assetId);
+          return;
+        }
+        sanitizedResults[assetId] = {
+          result: result,
+          remarks: item.remarks
+        };
+      } else {
+        sanitizedResults[assetId] = { result: '', remarks: '' };
+      }
+    });
+
+    const assetIds = Object.keys(sanitizedResults);
+    if (assetIds.length === 0) {
+      return { success: false, error: '沒有可處理的資產' };
+    }
+    if (!isReset && invalidResults.length > 0) {
+      return { success: false, error: `盤點結果不可為空：${invalidResults.join(', ')}` };
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+    if (!inventoryLogSheet || inventoryLogSheet.getLastRow() <= 1) {
+      return { success: false, error: '找不到盤點紀錄工作表' };
+    }
+
+    const logData = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    const activeSessionOwners = {};
+    logData.forEach(row => {
+      const status = row[IL_STATUS_COLUMN_INDEX - 1];
+      if (status !== '進行中') return;
+      const inventoryId = row[IL_INVENTORY_ID_COLUMN_INDEX - 1];
+      if (!inventoryId) return;
+      const sessionEmail = row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1];
+      activeSessionOwners[inventoryId] = sessionEmail ? String(sessionEmail).toLowerCase() : '';
+    });
+
+    const activeSessionIds = Object.keys(activeSessionOwners);
+    if (activeSessionIds.length === 0) {
+      return { success: false, error: '目前沒有進行中的盤點會話' };
+    }
+
+    const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+    if (!inventoryDetailSheet || inventoryDetailSheet.getLastRow() <= 1) {
+      return { success: false, error: '找不到盤點明細工作表' };
+    }
+
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const currentUserName = currentUserEmail.split('@')[0];
+    const isAdmin = checkAdminPermissions();
+    const currentUserGroup = getInventoryUserGroup_(ss, currentUserEmail);
+    const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
+    const updatedSessionMap = {};
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const now = new Date();
+
+    for (let i = 0; i < detailData.length; i++) {
+      const row = detailData[i];
+      const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
+      if (!inventoryId || !activeSessionOwners[inventoryId]) continue;
+
+      const assetId = String(row[ID_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      const assetResult = sanitizedResults[assetId];
+      if (!assetResult) continue;
+
+      const ownerEmail = activeSessionOwners[inventoryId];
+      const assignedRaw = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
+      const hasPermission = isAdmin ||
+        (ownerEmail && ownerEmail === currentUserEmail) ||
+        isInventoryAssignedToUser_(assignedRaw, currentUserEmail, currentUserGroup);
+
+      if (!hasPermission) {
+        skippedCount++;
+        continue;
+      }
+
+      const rowIndex = i + 2;
+      if (isReset) {
+        inventoryDetailSheet.getRange(rowIndex, ID_INVENTORY_RESULT_COLUMN_INDEX, 1, 4)
+          .setValues([['未盤點', '', '', '']]);
+      } else {
+        inventoryDetailSheet.getRange(rowIndex, ID_INVENTORY_RESULT_COLUMN_INDEX, 1, 4)
+          .setValues([[assetResult.result, assetResult.remarks || '', now, currentUserName]]);
+      }
+
+      updatedCount++;
+      updatedSessionMap[inventoryId] = true;
+    }
+
+    const updatedSessionIds = Object.keys(updatedSessionMap);
+    updatedSessionIds.forEach(sessionId => updateInventoryProgress(sessionId));
+
+    if (updatedCount === 0) {
+      const errorMessage = skippedCount > 0
+        ? '權限不足：您無法更新任何進行中的盤點會話'
+        : '找不到符合條件的盤點明細';
+      return { success: false, error: errorMessage };
+    }
+
+    const sessionCount = updatedSessionIds.length;
+    const skippedSuffix = skippedCount > 0 ? `，略過 ${skippedCount} 筆（權限不足）` : '';
+    const message = isReset
+      ? `已取消 ${updatedCount} 筆盤點結果（${sessionCount} 個會話）${skippedSuffix}`
+      : `已更新 ${updatedCount} 筆盤點結果（${sessionCount} 個會話）${skippedSuffix}`;
+
+    return {
+      success: true,
+      updatedCount: updatedCount,
+      sessionCount: sessionCount,
+      skippedCount: skippedCount,
+      message: message
+    };
+  } catch (e) {
+    Logger.log(`updateInventoryDetailsInActiveSessions_ 失敗: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 更新單筆資產於所有進行中盤點會話的盤點結果
+ * @param {string} assetId - 資產 ID
+ * @param {string} result - 盤點結果
+ * @param {string} remarks - 備註
+ * @returns {Object} 操作結果
+ */
+function markAssetInventoryInActiveSessions(assetId, result, remarks) {
+  return updateInventoryDetailsInActiveSessions_([{ assetId: assetId, result: result, remarks: remarks }], { reset: false });
+}
+
+/**
+ * 批次更新資產於所有進行中盤點會話的盤點結果
+ * @param {Array<{assetId: string, result: string, remarks: string}>} assetResults - 資產結果
+ * @returns {Object} 操作結果
+ */
+function markBatchInventoryInActiveSessions(assetResults) {
+  return updateInventoryDetailsInActiveSessions_(assetResults, { reset: false });
+}
+
+/**
+ * 取消單筆資產於所有進行中盤點會話的盤點結果
+ * @param {string} assetId - 資產 ID
+ * @returns {Object} 操作結果
+ */
+function resetAssetInventoryInActiveSessions(assetId) {
+  return updateInventoryDetailsInActiveSessions_([{ assetId: assetId }], { reset: true });
+}
+
+/**
+ * 批次取消資產於所有進行中盤點會話的盤點結果
+ * @param {Array<string>} assetIds - 資產 ID 陣列
+ * @returns {Object} 操作結果
+ */
+function resetBatchInventoryInActiveSessions(assetIds) {
+  const results = (assetIds || []).map(assetId => ({ assetId: assetId }));
+  return updateInventoryDetailsInActiveSessions_(results, { reset: true });
+}
+
+/**
  * 更新盤點進度
  * @param {string} inventoryId - 盤點ID
  */
