@@ -4885,7 +4885,7 @@ function getInventoryData(forceUserScope) {
  * [供 userstate.html 呼叫] 取得待盤點資產與盤點會話對應清單
  * 管理員：回傳所有進行中會話的未盤點資產
  * 一般使用者：僅回傳指派給自己的未盤點資產（Email 或組別）
- * @returns {Object} { pendingItems: Array, currentUserEmail, currentUserGroup, isAdmin }
+ * @returns {Object} { pendingItems: Array, currentUserEmail, currentUserGroup, isAdmin, inventoryStatusByAsset }
  */
 function getPendingInventoryAssignments(forceUserScope) {
   try {
@@ -4893,6 +4893,38 @@ function getPendingInventoryAssignments(forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
+    const inventoryStatusByAsset = {};
+    const inventoryStatusPriority = {
+      '未盤點': 0,
+      '遺失': 1,
+      '損壞': 2,
+      '過舊': 3,
+      '正常': 4
+    };
+    const getStatusPriority = (status) => (
+      Object.prototype.hasOwnProperty.call(inventoryStatusPriority, status)
+        ? inventoryStatusPriority[status]
+        : 99
+    );
+    const normalizeInventoryStatus = (value) => {
+      const normalized = String(value || '').trim();
+      if (!normalized || normalized === '未盤點') return '未盤點';
+      return normalized;
+    };
+    const trackInventoryStatus = (assetId, inventoryId, statusValue) => {
+      if (!inventoryStatusByAsset[assetId]) {
+        inventoryStatusByAsset[assetId] = {
+          status: statusValue,
+          sessionIds: {}
+        };
+      } else {
+        const currentStatus = inventoryStatusByAsset[assetId].status;
+        if (getStatusPriority(statusValue) < getStatusPriority(currentStatus)) {
+          inventoryStatusByAsset[assetId].status = statusValue;
+        }
+      }
+      inventoryStatusByAsset[assetId].sessionIds[inventoryId] = true;
+    };
 
     // 建立 Email -> 姓名 / 組別 對照表
     let currentUserGroup = '未分組';
@@ -4920,7 +4952,13 @@ function getPendingInventoryAssignments(forceUserScope) {
 
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
     if (!inventoryLogSheet || inventoryLogSheet.getLastRow() <= 1) {
-      return { pendingItems: [], currentUserEmail: currentUserEmail, currentUserGroup: currentUserGroup, isAdmin: isAdmin };
+      return {
+        pendingItems: [],
+        currentUserEmail: currentUserEmail,
+        currentUserGroup: currentUserGroup,
+        isAdmin: isAdmin,
+        inventoryStatusByAsset: {}
+      };
     }
 
     // 讀取所有進行中的盤點會話
@@ -4950,12 +4988,24 @@ function getPendingInventoryAssignments(forceUserScope) {
     });
 
     if (Object.keys(activeSessions).length === 0) {
-      return { pendingItems: [], currentUserEmail: currentUserEmail, currentUserGroup: currentUserGroup, isAdmin: isAdmin };
+      return {
+        pendingItems: [],
+        currentUserEmail: currentUserEmail,
+        currentUserGroup: currentUserGroup,
+        isAdmin: isAdmin,
+        inventoryStatusByAsset: {}
+      };
     }
 
     const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
     if (!inventoryDetailSheet || inventoryDetailSheet.getLastRow() <= 1) {
-      return { pendingItems: [], currentUserEmail: currentUserEmail, currentUserGroup: currentUserGroup, isAdmin: isAdmin };
+      return {
+        pendingItems: [],
+        currentUserEmail: currentUserEmail,
+        currentUserGroup: currentUserGroup,
+        isAdmin: isAdmin,
+        inventoryStatusByAsset: {}
+      };
     }
 
     const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
@@ -4964,9 +5014,6 @@ function getPendingInventoryAssignments(forceUserScope) {
     detailData.forEach(row => {
       const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
       if (!inventoryId || !activeSessions[inventoryId]) return;
-
-      const inventoryResult = row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1];
-      if (inventoryResult && inventoryResult !== '未盤點') return;
 
       const assignedUser = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
       if (!useAdminScope) {
@@ -4978,6 +5025,15 @@ function getPendingInventoryAssignments(forceUserScope) {
           : normalized === currentUserGroup;
         if (!isMyTask) return;
       }
+
+      const inventoryResult = row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1];
+      const normalizedStatus = normalizeInventoryStatus(inventoryResult);
+      const assetId = row[ID_ASSET_ID_COLUMN_INDEX - 1];
+      if (assetId) {
+        trackInventoryStatus(String(assetId).trim(), inventoryId, normalizedStatus);
+      }
+
+      if (normalizedStatus !== '未盤點') return;
 
       const session = activeSessions[inventoryId];
       const assignedUserValue = assignedUser ? String(assignedUser).trim() : '';
@@ -5002,7 +5058,7 @@ function getPendingInventoryAssignments(forceUserScope) {
         inventoryDate: session.inventoryDate,
         inventoryPerson: session.inventoryPerson,
         inventoryEmail: session.inventoryEmail,
-        assetId: row[ID_ASSET_ID_COLUMN_INDEX - 1],
+        assetId: assetId,
         assetName: row[ID_ASSET_NAME_COLUMN_INDEX - 1],
         keeperName: row[ID_KEEPER_NAME_COLUMN_INDEX - 1],
         userName: row[ID_USER_NAME_COLUMN_INDEX - 1],
@@ -5015,15 +5071,25 @@ function getPendingInventoryAssignments(forceUserScope) {
       });
     });
 
+    Object.keys(inventoryStatusByAsset).forEach(assetId => {
+      const entry = inventoryStatusByAsset[assetId];
+      const sessionIds = entry.sessionIds || {};
+      inventoryStatusByAsset[assetId] = {
+        status: entry.status || '未盤點',
+        sessionCount: Object.keys(sessionIds).length
+      };
+    });
+
     return {
       pendingItems: pendingItems,
       currentUserEmail: currentUserEmail,
       currentUserGroup: currentUserGroup,
-      isAdmin: isAdmin
+      isAdmin: isAdmin,
+      inventoryStatusByAsset: inventoryStatusByAsset
     };
   } catch (e) {
     Logger.log(`getPendingInventoryAssignments 失敗: ${e.message}`);
-    return { pendingItems: [], error: e.message };
+    return { pendingItems: [], error: e.message, inventoryStatusByAsset: {} };
   }
 }
 
