@@ -29,6 +29,9 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
+    <!-- SheetJS (Excel Export) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
     <!-- Babel Standalone -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
@@ -2806,7 +2809,7 @@
         };
 
         // FilterSection 組件
-        const FilterSection = ({ filters, onFilterChange, allAssets }) => {
+        const FilterSection = ({ filters, onFilterChange, allAssets, exportCount = 0, isExporting = false, onExportExcel, onExportCsv }) => {
             // ✨ Debounce 機制：本地搜尋狀態（即時更新輸入框）
             const [localSearch, setLocalSearch] = useState(filters.search);
             const debounceTimerRef = useRef(null);
@@ -2938,6 +2941,8 @@
             const clearFilterOptions = (filterKey) => {
                 onFilterChange(filterKey, []);
             };
+            const totalExportCount = Number.isFinite(exportCount) ? exportCount : 0;
+            const exportDisabled = totalExportCount === 0 || isExporting;
             const renderMultiSelect = (config) => {
                 const {
                     filterKey,
@@ -3058,7 +3063,45 @@
 
             return (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="text-sm text-slate-600">
+                                已篩選 <span className="font-semibold text-slate-800">{totalExportCount}</span> 筆
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={onExportExcel}
+                                    disabled={exportDisabled}
+                                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                        exportDisabled
+                                            ? 'border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed'
+                                            : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                    }`}
+                                    title={exportDisabled ? '沒有可匯出的資料' : '匯出 Excel'}
+                                    aria-label="匯出 Excel"
+                                >
+                                    <i className="fa-solid fa-file-excel"></i>
+                                    匯出 Excel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onExportCsv}
+                                    disabled={exportDisabled}
+                                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                        exportDisabled
+                                            ? 'border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed'
+                                            : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'
+                                    }`}
+                                    title={exportDisabled ? '沒有可匯出的資料' : '匯出 CSV'}
+                                    aria-label="匯出 CSV"
+                                >
+                                    <i className="fa-solid fa-file-csv"></i>
+                                    匯出 CSV
+                                </button>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                         {renderMultiSelect({
                             filterKey: 'status',
                             label: '依狀態篩選',
@@ -3143,6 +3186,7 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             );
@@ -7769,6 +7813,7 @@
             });
             const [activeModal, setActiveModal] = useState(null);
             const [isLoadingCards, setIsLoadingCards] = useState(false);
+            const [isExporting, setIsExporting] = useState(false);
             const [lentAssetsDetails, setLentAssetsDetails] = useState(null);
             const [isLoadingLentDetails, setIsLoadingLentDetails] = useState(false);
             const [scrapPendingDetails, setScrapPendingDetails] = useState(null);
@@ -8476,6 +8521,166 @@
                     return statusMatch && categoryMatch && leaderMatch && userMatch && locationMatch && searchMatch;
                 });
             }, [allAssets, filters]);
+
+            const buildExportTimestamp = () => {
+                const now = new Date();
+                const pad = (value) => String(value).padStart(2, '0');
+                return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+            };
+
+            const buildExportFilename = (prefix, timestamp, extension) => (
+                `${prefix}_${timestamp}.${extension}`
+            );
+
+            const escapeCsvValue = (value) => {
+                if (value === null || value === undefined) return '';
+                const text = String(value);
+                const escaped = text.replace(/"/g, '""');
+                return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+            };
+
+            const downloadBlob = (content, filename, mimeType) => {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(url), 0);
+            };
+
+            const buildColumnWidths = (rows) => {
+                const columnCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
+                return Array.from({ length: columnCount }, (_, columnIndex) => {
+                    let maxLength = 0;
+                    rows.forEach(row => {
+                        const cell = row[columnIndex];
+                        if (cell === null || cell === undefined) return;
+                        const length = String(cell).length;
+                        if (length > maxLength) maxLength = length;
+                    });
+                    const width = Math.min(36, Math.max(8, Math.round(maxLength * 1.6)));
+                    return { wch: width };
+                });
+            };
+
+            const requestExportData = useCallback((format) => {
+                if (isExporting) return;
+
+                const targets = filteredAssets.map(asset => ({
+                    assetId: asset.assetId,
+                    sourceSheet: asset.sourceSheet
+                }));
+
+                if (targets.length === 0) {
+                    alert('沒有可匯出的資料');
+                    return;
+                }
+
+                if (format === 'excel' && !window.XLSX) {
+                    alert('Excel 匯出元件尚未載入，請重新整理後再試。');
+                    return;
+                }
+
+                setIsExporting(true);
+                if (typeof showToastProgress === 'function') {
+                    showToastProgress(format === 'excel' ? '正在匯出 Excel...' : '正在匯出 CSV...');
+                }
+
+                const forceUserScope = viewMode === 'user';
+                google.script.run
+                    .withSuccessHandler(response => {
+                        if (!response || response.error) {
+                            const message = response?.error || '匯出失敗';
+                            if (typeof hideToastProgress === 'function') {
+                                hideToastProgress('匯出失敗', 300);
+                            }
+                            alert(message);
+                            setIsExporting(false);
+                            return;
+                        }
+
+                        const propertyData = response.property || {};
+                        const itemData = response.items || {};
+                        const propertyHeaders = Array.isArray(propertyData.headers) ? propertyData.headers : [];
+                        const propertyRows = Array.isArray(propertyData.rows) ? propertyData.rows : [];
+                        const itemHeaders = Array.isArray(itemData.headers) ? itemData.headers : [];
+                        const itemRows = Array.isArray(itemData.rows) ? itemData.rows : [];
+
+                        const hasProperty = propertyRows.length > 0;
+                        const hasItems = itemRows.length > 0;
+
+                        if (!hasProperty && !hasItems) {
+                            if (typeof hideToastProgress === 'function') {
+                                hideToastProgress('沒有可匯出的資料', 300);
+                            }
+                            alert('沒有可匯出的資料');
+                            setIsExporting(false);
+                            return;
+                        }
+
+                        const timestamp = buildExportTimestamp();
+
+                        if (format === 'excel') {
+                            const workbook = XLSX.utils.book_new();
+                            if (hasProperty) {
+                                const rows = [propertyHeaders, ...propertyRows];
+                                const sheet = XLSX.utils.aoa_to_sheet(rows);
+                                sheet['!cols'] = buildColumnWidths(rows);
+                                XLSX.utils.book_append_sheet(workbook, sheet, '財產總表');
+                            }
+                            if (hasItems) {
+                                const rows = [itemHeaders, ...itemRows];
+                                const sheet = XLSX.utils.aoa_to_sheet(rows);
+                                sheet['!cols'] = buildColumnWidths(rows);
+                                XLSX.utils.book_append_sheet(workbook, sheet, '物品總表');
+                            }
+                            const filename = buildExportFilename('userstate_export', timestamp, 'xlsx');
+                            XLSX.writeFile(workbook, filename);
+                        } else {
+                            if (hasProperty) {
+                                const rows = [propertyHeaders, ...propertyRows];
+                                const csvContent = rows
+                                    .map(row => row.map(escapeCsvValue).join(','))
+                                    .join('\r\n');
+                                const filename = buildExportFilename('userstate_property', timestamp, 'csv');
+                                downloadBlob(`\uFEFF${csvContent}`, filename, 'text/csv;charset=utf-8;');
+                            }
+                            if (hasItems) {
+                                const rows = [itemHeaders, ...itemRows];
+                                const csvContent = rows
+                                    .map(row => row.map(escapeCsvValue).join(','))
+                                    .join('\r\n');
+                                const filename = buildExportFilename('userstate_item', timestamp, 'csv');
+                                downloadBlob(`\uFEFF${csvContent}`, filename, 'text/csv;charset=utf-8;');
+                            }
+                        }
+
+                        if (typeof hideToastProgress === 'function') {
+                            hideToastProgress('匯出完成！', 300);
+                        }
+                        setIsExporting(false);
+                    })
+                    .withFailureHandler(error => {
+                        console.error('匯出失敗：', error);
+                        if (typeof hideToastProgress === 'function') {
+                            hideToastProgress('匯出失敗', 300);
+                        }
+                        alert('匯出失敗：' + (error?.message || error));
+                        setIsExporting(false);
+                    })
+                    .getUserStateExportDataByTargets(targets, forceUserScope);
+            }, [filteredAssets, isExporting, viewMode]);
+
+            const handleExportExcel = useCallback(() => {
+                requestExportData('excel');
+            }, [requestExportData]);
+
+            const handleExportCsv = useCallback(() => {
+                requestExportData('csv');
+            }, [requestExportData]);
 
             // 處理全選（必須在 filteredAssets 定義之後）
             const handleSelectAll = useCallback((checked) => {
@@ -9231,6 +9436,10 @@
                         filters={filters}
                         onFilterChange={handleFilterChange}
                         allAssets={allAssets}
+                        exportCount={filteredAssets.length}
+                        isExporting={isExporting}
+                        onExportExcel={handleExportExcel}
+                        onExportCsv={handleExportCsv}
                     />
 
                     {/* 掃描區域 - 供 Scanner 模組使用 */}
