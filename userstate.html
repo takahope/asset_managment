@@ -3017,7 +3017,9 @@
                             <select
                                 value={filters.category}
                                 onChange={(e) => onFilterChange('category', e.target.value)}
-                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className={`w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm hover:border-slate-300 ${
+                                    filters.category ? 'text-slate-700 bg-white' : 'text-slate-400 bg-white'
+                                }`}
                             >
                                 <option value="">-- 顯示全部 --</option>
                                 {categoryOptions.map(opt => (
