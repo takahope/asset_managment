@@ -2161,7 +2161,7 @@
                     const assetName = escapeHtml(item.assetName || '');
                     const assetIdRaw = String(item.assetId || '');
                     const assetIdText = escapeHtml(assetIdRaw);
-                    const assetIdArg = JSON.stringify(assetIdRaw);
+                    const assetIdArg = escapeHtml(JSON.stringify(assetIdRaw));
                     const summaryText = item.actionSummary ? escapeHtml(item.actionSummary) : '';
                     const summaryHtml = summaryText ? `<div class="advanced-batch-summary">${summaryText}</div>` : '';
                     return `
