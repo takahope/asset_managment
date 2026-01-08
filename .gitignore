@@ -22,3 +22,5 @@ md_temp/
 docs/
 test/
 plan/
+.gemini/
+gha-creds-*.json
