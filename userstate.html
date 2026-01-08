@@ -712,6 +712,67 @@
             transform: translateX(calc(var(--toggle-width) - var(--toggle-thumb) - (var(--toggle-padding) * 2)));
         }
 
+        .mobile-scan-card {
+            display: none;
+            margin: 0 0 18px;
+        }
+
+        .mobile-scan-card__button {
+            width: 100%;
+            border: 0;
+            border-radius: 22px;
+            padding: 22px 18px;
+            background: linear-gradient(160deg, #2f6c7f 0%, #1aa39f 55%, #23b7a9 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            text-align: center;
+            box-shadow: 0 18px 38px rgba(26, 163, 159, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+
+        .mobile-scan-card__button:active {
+            transform: translateY(1px);
+            box-shadow: 0 14px 30px rgba(26, 163, 159, 0.25);
+        }
+
+        .mobile-scan-card__button:focus-visible {
+            outline: 3px solid rgba(125, 211, 199, 0.7);
+            outline-offset: 3px;
+        }
+
+        .mobile-scan-card__icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+        }
+
+        .mobile-scan-card__title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .mobile-scan-card__subtitle {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        @media (max-width: 768px) {
+            .mobile-scan-card {
+                display: block;
+            }
+        }
+
         .advanced-scanner-overlay {
             position: fixed;
             inset: 0;
@@ -11181,6 +11242,21 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+
+                    <div className="mobile-scan-card">
+                        <button
+                            type="button"
+                            className="mobile-scan-card__button"
+                            onClick={() => window.Scanner_toggle && window.Scanner_toggle()}
+                            aria-label="開啟相機掃描"
+                        >
+                            <span className="mobile-scan-card__icon" aria-hidden="true">
+                                <i className="fa-solid fa-camera"></i>
+                            </span>
+                            <span className="mobile-scan-card__title">Tap to Scan Item</span>
+                            <span className="mobile-scan-card__subtitle">開啟相機掃描資產條碼</span>
+                        </button>
                     </div>
 
                     <DashboardCards counts={cardCounts} onClick={handleCardClick} isLoading={isLoadingCards} />
