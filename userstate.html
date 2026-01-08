@@ -4007,7 +4007,7 @@
             </div>
         );
 
-        const ActionPanel = ({ asset, displayMode = 'modal', hasInventoryTask, onSelectAction, onSelectInventory, onClose }) => {
+        const ActionPanel = ({ asset, displayMode = 'modal', hasInventoryTask, inventoryStatusLabel, onSelectAction, onSelectInventory, onClose }) => {
             const hasAsset = Boolean(asset && asset.assetId);
             return (
                 <div className={`action-panel ${displayMode === 'embedded' ? 'action-panel--embedded' : ''}`}>
@@ -4027,6 +4027,7 @@
                             <div><strong>使用人：</strong>{asset.userName || '-'}</div>
                             <div><strong>地點：</strong>{asset.location || '-'}</div>
                             <div><strong>狀態：</strong>{asset.status || '-'}</div>
+                            <div><strong>盤點狀態：</strong>{inventoryStatusLabel || '無盤點任務'}</div>
                         </div>
                     ) : (
                         <div className="action-panel__info">
@@ -9447,19 +9448,17 @@
                 return typeof entry.sessionCount === 'number' ? entry.sessionCount : 0;
             }, [inventoryStatusByAsset]);
 
-            // 檢查資產是否在待盤點清單中（可指定盤點會話）
-            const isAssetPendingInventory = useCallback((assetId, sessionId) => {
-                const sessions = getAssetPendingSessions(assetId);
-                if (sessions.length === 0) return false;
-                if (!sessionId) return true;
-                return sessions.some(session => session.inventoryId === sessionId);
-            }, [getAssetPendingSessions]);
+            const resolveInventoryStatusLabel = useCallback((assetId) => {
+                if (!assetId) return '無盤點任務';
+                const entry = inventoryStatusByAsset[assetId];
+                if (!entry) return '無盤點任務';
+                return entry.status || '未盤點';
+            }, [inventoryStatusByAsset]);
 
             const hasInventoryTaskForActionPanel = useCallback((assetId) => {
                 if (!assetId) return false;
-                if (isAdminView) return hasActiveInventoryForAsset(assetId);
-                return isAssetPendingInventory(assetId);
-            }, [isAdminView, hasActiveInventoryForAsset, isAssetPendingInventory]);
+                return hasActiveInventoryForAsset(assetId);
+            }, [hasActiveInventoryForAsset]);
 
             // 載入資料
             const loadData = (overrideViewMode) => {
@@ -11071,6 +11070,7 @@
                                 asset={actionPanelState.isOpen ? actionPanelState.asset : null}
                                 displayMode="embedded"
                                 hasInventoryTask={actionPanelState.isOpen ? hasInventoryTaskForActionPanel(actionPanelState.assetId) : false}
+                                inventoryStatusLabel={actionPanelState.isOpen ? resolveInventoryStatusLabel(actionPanelState.assetId) : '無盤點任務'}
                                 onSelectAction={(actionType) => openQueueActionModal(actionType)}
                                 onSelectInventory={(status) => commitActionSelection('INVENTORY', status)}
                                 onClose={closeActionPanel}
@@ -11103,6 +11103,7 @@
                                     asset={actionPanelState.asset}
                                     displayMode="modal"
                                     hasInventoryTask={actionPanelState.assetId ? hasInventoryTaskForActionPanel(actionPanelState.assetId) : false}
+                                    inventoryStatusLabel={actionPanelState.assetId ? resolveInventoryStatusLabel(actionPanelState.assetId) : '無盤點任務'}
                                     onSelectAction={(actionType) => openQueueActionModal(actionType)}
                                     onSelectInventory={(status) => commitActionSelection('INVENTORY', status)}
                                     onClose={closeActionPanel}
