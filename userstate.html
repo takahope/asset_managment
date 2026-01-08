@@ -599,6 +599,256 @@
             background: #e2e8f0;
             color: #475569;
         }
+
+        .mode-toggle-card {
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 18px;
+            padding: 16px 20px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .mode-toggle-text h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .mode-toggle-text p {
+            margin: 0;
+            font-size: 13px;
+            color: var(--ink-500);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 54px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: 0.25s ease;
+            border-radius: 999px;
+        }
+
+        .toggle-slider::after {
+            content: "";
+            position: absolute;
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            top: 4px;
+            background-color: #ffffff;
+            transition: 0.25s ease;
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #1aa39f;
+        }
+
+        .toggle-switch input:checked + .toggle-slider::after {
+            transform: translateX(24px);
+        }
+
+        .advanced-scanner-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            z-index: 2000;
+        }
+
+        .advanced-scanner-shell {
+            position: relative;
+        }
+
+        .advanced-scanner-shell--open {
+            position: fixed;
+            top: 6vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(760px, 94vw);
+            max-height: 88vh;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 22px;
+            padding: 16px 18px 18px;
+            box-shadow: var(--shadow-soft);
+            z-index: 2001;
+        }
+
+        .action-panel-modal {
+            position: fixed;
+            top: 18vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(520px, 92vw);
+            z-index: 2001;
+        }
+
+        .action-panel {
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            padding: 16px;
+            background: #ffffff;
+        }
+
+        .action-panel--embedded {
+            background: #f8fafc;
+            border-style: dashed;
+        }
+
+        .action-panel__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .action-panel__header h5 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .action-panel__info {
+            display: grid;
+            gap: 6px;
+            font-size: 13px;
+            color: #475569;
+            margin-bottom: 12px;
+        }
+
+        .action-panel__info strong {
+            color: #0f172a;
+        }
+
+        .action-panel__actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .action-panel__button {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .action-panel__button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .action-panel__button--transfer {
+            background: linear-gradient(135deg, #1e88e5, #1565c0);
+        }
+
+        .action-panel__button--lend {
+            background: linear-gradient(135deg, #8e24aa, #5e35b1);
+        }
+
+        .action-panel__button--scrap {
+            background: linear-gradient(135deg, #e53935, #c62828);
+        }
+
+        .action-panel__button--inventory {
+            background: linear-gradient(135deg, #0f9d58, #0b8043);
+        }
+
+        .action-panel__inventory-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .action-panel__chip {
+            border: 1px solid #e2e8f0;
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #334155;
+            background: #ffffff;
+            cursor: pointer;
+        }
+
+        .action-panel__chip--normal { color: #0f766e; border-color: #99f6e4; }
+        .action-panel__chip--lost { color: #b91c1c; border-color: #fecaca; }
+        .action-panel__chip--damaged { color: #c2410c; border-color: #fed7aa; }
+        .action-panel__chip--old { color: #b45309; border-color: #fde68a; }
+
+        .action-panel__footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .action-panel__secondary {
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #475569;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .advanced-batch-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .advanced-batch-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .advanced-batch-tag {
+            background: #f1f5f9;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-weight: 600;
+            color: #0f172a;
+        }
     </style>
 </head>
 <body>
@@ -1231,6 +1481,323 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
+        const ACTION_LABELS = {
+            TRANSFER: '轉移',
+            LEND: '出借',
+            SCRAP: '報廢',
+            INVENTORY: '盤點',
+            NONE: '未指定'
+        };
+
+        const INVENTORY_STATUS_LABELS = {
+            NORMAL: '正常',
+            LOST: '遺失',
+            DAMAGED: '損壞',
+            OLD: '過舊'
+        };
+
+        class LocalDB {
+            constructor(dbName, storeName) {
+                this.dbName = dbName;
+                this.storeName = storeName;
+                this._dbPromise = null;
+            }
+
+            init() {
+                if (this._dbPromise) return this._dbPromise;
+                this._dbPromise = new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, 1);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            db.createObjectStore(this.storeName, { keyPath: 'key' });
+                        }
+                    };
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+                return this._dbPromise;
+            }
+
+            async saveCart(payload) {
+                const db = await this.init();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(this.storeName, 'readwrite');
+                    const store = tx.objectStore(this.storeName);
+                    store.put(payload);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+
+            async loadCart() {
+                const db = await this.init();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(this.storeName, 'readonly');
+                    const store = tx.objectStore(this.storeName);
+                    const request = store.get('cart');
+                    request.onsuccess = () => resolve(request.result || null);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        }
+
+        const AssetCartStore = (() => {
+            let mode = 'STANDARD';
+            let items = [];
+            let pendingAssetId = null;
+            let listeners = new Set();
+            let syncing = false;
+            let ready = false;
+            let persistTimer = null;
+            const db = new LocalDB('assetCartDB', 'assetCartStore');
+
+            const normalizeItem = (raw) => {
+                if (!raw) return null;
+                const assetId = String(raw.assetId || '').trim();
+                if (!assetId) return null;
+                const actionType = ACTION_LABELS[raw.actionType] ? raw.actionType : 'NONE';
+                return {
+                    assetId: assetId,
+                    assetName: String(raw.assetName || ''),
+                    actionType: actionType,
+                    status: raw.status ? String(raw.status) : null,
+                    timestamp: typeof raw.timestamp === 'number' ? raw.timestamp : Date.now()
+                };
+            };
+
+            const getSnapshot = () => ({
+                mode,
+                items: items.slice(),
+                pendingAssetId
+            });
+
+            const notify = (event, payload) => {
+                const snapshot = getSnapshot();
+                listeners.forEach(handler => handler(snapshot, event, payload));
+            };
+
+            const schedulePersist = () => {
+                if (!ready) return;
+                if (persistTimer) clearTimeout(persistTimer);
+                persistTimer = setTimeout(() => {
+                    db.saveCart({
+                        key: 'cart',
+                        mode,
+                        items,
+                        updatedAt: Date.now()
+                    }).catch(error => console.warn('[AssetCartStore] 儲存失敗：', error));
+                }, 200);
+            };
+
+            const applyBatchListUpdate = () => {
+                if (typeof window.BatchList_updateUI === 'function') {
+                    window.BatchList_updateUI();
+                }
+            };
+
+            const applyBatchListAdd = (assetId) => {
+                if (typeof window.BatchList_addItemSilent === 'function') {
+                    syncing = true;
+                    window.BatchList_addItemSilent(assetId);
+                    syncing = false;
+                    applyBatchListUpdate();
+                    return;
+                }
+                if (window.BatchList_base && typeof window.BatchList_base.addItem === 'function') {
+                    syncing = true;
+                    window.BatchList_base.addItem(assetId);
+                    syncing = false;
+                }
+            };
+
+            const applyBatchListRemove = (assetId) => {
+                if (window.BatchList_base && typeof window.BatchList_base.removeItem === 'function') {
+                    syncing = true;
+                    window.BatchList_base.removeItem(assetId);
+                    syncing = false;
+                }
+            };
+
+            const applyBatchListClear = (options = {}) => {
+                const { silent = false } = options;
+                if (silent && typeof window.BatchList_resetOnSubmit === 'function') {
+                    syncing = true;
+                    window.BatchList_resetOnSubmit();
+                    syncing = false;
+                    return;
+                }
+                if (window.BatchList_base && typeof window.BatchList_base.clearAll === 'function') {
+                    syncing = true;
+                    window.BatchList_base.clearAll();
+                    syncing = false;
+                }
+            };
+
+            const syncBatchListFromStore = () => {
+                if (!window.BatchList_base) return;
+                applyBatchListClear({ silent: true });
+                items.forEach(item => applyBatchListAdd(item.assetId));
+                applyBatchListUpdate();
+            };
+
+            const init = async () => {
+                if (ready) return getSnapshot();
+                try {
+                    await db.init();
+                    const payload = await db.loadCart();
+                    if (payload) {
+                        mode = payload.mode === 'ADVANCED' ? 'ADVANCED' : 'STANDARD';
+                        const restored = Array.isArray(payload.items) ? payload.items : [];
+                        items = restored.map(normalizeItem).filter(Boolean);
+                    }
+                } catch (error) {
+                    console.warn('[AssetCartStore] IndexedDB 初始化失敗：', error);
+                }
+                ready = true;
+                schedulePersist();
+                notify('init');
+                if (items.length > 0) {
+                    const message = `已從離線暫存恢復 ${items.length} 筆清單`;
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast(message, 'info');
+                    } else {
+                        console.log(message);
+                    }
+                }
+                const syncWhenReady = () => {
+                    if (window.BatchList_base) {
+                        syncBatchListFromStore();
+                        return;
+                    }
+                    setTimeout(syncWhenReady, 300);
+                };
+                syncWhenReady();
+                return getSnapshot();
+            };
+
+            const addOrUpdateItem = (rawItem) => {
+                const item = normalizeItem(rawItem);
+                if (!item) return false;
+                const existingIndex = items.findIndex(entry => entry.assetId === item.assetId);
+                if (existingIndex < 0) {
+                    const maxSize = typeof window.BatchList_getMaxSize === 'function'
+                        ? window.BatchList_getMaxSize()
+                        : 500;
+                    if (items.length >= maxSize) {
+                        const message = `已達上限 ${maxSize} 筆，無法新增更多`;
+                        if (typeof window.BatchList_showToast === 'function') {
+                            window.BatchList_showToast(message, 'warning');
+                        } else {
+                            alert(message);
+                        }
+                        return false;
+                    }
+                }
+                if (existingIndex >= 0) {
+                    items[existingIndex] = {
+                        ...items[existingIndex],
+                        ...item,
+                        timestamp: Date.now()
+                    };
+                    applyBatchListUpdate();
+                } else {
+                    items.push(item);
+                    applyBatchListAdd(item.assetId);
+                }
+                schedulePersist();
+                notify('add', item);
+                return true;
+            };
+
+            const removeItem = (assetId) => {
+                const normalizedId = String(assetId || '').trim();
+                if (!normalizedId) return false;
+                const nextItems = items.filter(item => item.assetId !== normalizedId);
+                if (nextItems.length === items.length) return false;
+                items = nextItems;
+                applyBatchListRemove(normalizedId);
+                schedulePersist();
+                notify('remove', normalizedId);
+                return true;
+            };
+
+            const removeItemsByAction = (actionType) => {
+                const removedIds = items.filter(item => item.actionType === actionType).map(item => item.assetId);
+                if (removedIds.length === 0) return [];
+                items = items.filter(item => item.actionType !== actionType);
+                removedIds.forEach(id => applyBatchListRemove(id));
+                schedulePersist();
+                notify('remove-action', actionType);
+                return removedIds;
+            };
+
+            const removeItemsByIds = (assetIds) => {
+                const targets = new Set((assetIds || []).map(id => String(id || '').trim()).filter(Boolean));
+                if (targets.size === 0) return [];
+                const removed = [];
+                items = items.filter(item => {
+                    if (targets.has(item.assetId)) {
+                        removed.push(item.assetId);
+                        return false;
+                    }
+                    return true;
+                });
+                removed.forEach(id => applyBatchListRemove(id));
+                schedulePersist();
+                notify('remove-ids', removed);
+                return removed;
+            };
+
+            const clearAll = (options = {}) => {
+                items = [];
+                pendingAssetId = null;
+                applyBatchListClear(options);
+                schedulePersist();
+                notify('clear');
+            };
+
+            const setMode = (nextMode) => {
+                mode = nextMode === 'ADVANCED' ? 'ADVANCED' : 'STANDARD';
+                schedulePersist();
+                notify('mode', mode);
+            };
+
+            const subscribe = (handler) => {
+                listeners.add(handler);
+                handler(getSnapshot(), 'subscribe');
+                return () => listeners.delete(handler);
+            };
+
+            return {
+                init,
+                subscribe,
+                getSnapshot,
+                getMode: () => mode,
+                isAdvancedMode: () => mode === 'ADVANCED',
+                getItems: () => items.slice(),
+                hasItem: (assetId) => items.some(item => item.assetId === assetId),
+                addOrUpdateItem,
+                removeItem,
+                removeItemsByAction,
+                removeItemsByIds,
+                clearAll,
+                setMode,
+                setPendingAssetId: (assetId) => {
+                    pendingAssetId = assetId ? String(assetId) : null;
+                    notify('pending', pendingAssetId);
+                },
+                clearPendingAsset: () => {
+                    pendingAssetId = null;
+                    notify('pending');
+                },
+                isPendingAction: () => Boolean(pendingAssetId),
+                isInternalSync: () => syncing
+            };
+        })();
+
+        window.AssetCartStore = AssetCartStore;
+
         // Icons (參考 onepage_example.html)
         const IconBase = ({ children, size = 20, className = "" }) => (
             <svg
@@ -1250,6 +1817,166 @@
         );
 
         const SearchIcon = (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>;
+
+        const ACTION_TYPE_BY_MODAL = {
+            transfer: 'TRANSFER',
+            lending: 'LEND',
+            scrap: 'SCRAP'
+        };
+
+        const escapeHtml = (value) => {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const setupBatchListOverrides = () => {
+            if (window.BatchList_overridesReady) return;
+            if (typeof window.BatchList_addItem !== 'function') {
+                setTimeout(setupBatchListOverrides, 300);
+                return;
+            }
+            window.BatchList_overridesReady = true;
+            window.BatchList_base = {
+                addItem: window.BatchList_addItem,
+                addItems: window.BatchList_addItems,
+                removeItem: window.BatchList_removeItem,
+                clearAll: window.BatchList_clearAll,
+                updateUI: window.BatchList_updateUI
+            };
+
+            window.BatchList_addItem = function(assetId) {
+                if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                    if (window.AssetCartStore.isInternalSync()) {
+                        return window.BatchList_base.addItem(assetId);
+                    }
+                    if (typeof window.AdvancedMode_openActionPanel === 'function') {
+                        window.AdvancedMode_openActionPanel(assetId, { source: 'batchlist' });
+                    }
+                    return false;
+                }
+                return window.BatchList_base.addItem(assetId);
+            };
+
+            window.BatchList_addItems = function(assetIds) {
+                if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast('進階模式不支援全選加入，請逐筆選擇動作', 'warning');
+                    } else {
+                        alert('進階模式不支援全選加入，請逐筆選擇動作');
+                    }
+                    return 0;
+                }
+                return window.BatchList_base.addItems(assetIds);
+            };
+
+            window.BatchList_removeItem = function(assetId) {
+                if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                    if (window.AssetCartStore.isInternalSync()) {
+                        return window.BatchList_base.removeItem(assetId);
+                    }
+                    return window.AssetCartStore.removeItem(assetId);
+                }
+                return window.BatchList_base.removeItem(assetId);
+            };
+
+            window.BatchList_clearAll = function() {
+                if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                    return window.AssetCartStore.clearAll();
+                }
+                return window.BatchList_base.clearAll();
+            };
+
+            window.BatchList_updateUI = function() {
+                if (!window.AssetCartStore || !window.AssetCartStore.isAdvancedMode()) {
+                    return window.BatchList_base.updateUI();
+                }
+                const listContainer = document.getElementById('BatchList_itemList');
+                const badge = document.getElementById('BatchList_badge');
+                const count = document.getElementById('BatchList_count');
+                if (!listContainer || !badge || !count) return;
+
+                const items = window.AssetCartStore.getItems();
+                const itemCount = items.length;
+                badge.textContent = itemCount;
+                count.textContent = itemCount;
+
+                if (itemCount === 0) {
+                    listContainer.innerHTML = `
+                        <div class="batch-list-empty">
+                            <i class="fas fa-shopping-cart"></i>
+                            <p>尚未加入資產</p>
+                        </div>`;
+                    return;
+                }
+
+                listContainer.innerHTML = items.map(item => {
+                    const label = ACTION_LABELS[item.actionType] || ACTION_LABELS.NONE;
+                    const statusLabel = item.actionType === 'INVENTORY' && item.status ? item.status : '未設定';
+                    const timeText = item.timestamp ? new Date(item.timestamp).toLocaleString('zh-TW') : '-';
+                    const assetName = escapeHtml(item.assetName || '');
+                    const assetIdRaw = String(item.assetId || '');
+                    const assetIdText = escapeHtml(assetIdRaw);
+                    const assetIdArg = JSON.stringify(assetIdRaw);
+                    return `
+                        <div class="batch-list-item">
+                            <div class="item-info advanced-batch-item">
+                                <strong>${assetIdText}</strong>
+                                <small>${assetName || '（無名稱）'}</small>
+                                <div class="advanced-batch-meta">
+                                    <span class="advanced-batch-tag">${escapeHtml(label)}</span>
+                                    ${item.actionType === 'INVENTORY' ? `<span class="advanced-batch-tag">${escapeHtml(statusLabel)}</span>` : ''}
+                                    <span>${escapeHtml(timeText)}</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger" onclick="window.AdvancedCart_removeItem && window.AdvancedCart_removeItem(${assetIdArg})">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            };
+        };
+
+        const setupScannerOverrides = () => {
+            if (window.Scanner_overridesReady) return;
+            if (typeof window.Scanner_processBarcode !== 'function') {
+                setTimeout(setupScannerOverrides, 300);
+                return;
+            }
+            window.Scanner_overridesReady = true;
+            window.Scanner_processBarcode_base = window.Scanner_processBarcode;
+            window.Scanner_processBarcode = function(rawCode) {
+                if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                    if (window.AssetCartStore.isPendingAction()) {
+                        if (typeof window.BatchList_showToast === 'function') {
+                            window.BatchList_showToast('請先完成上一筆動作', 'warning');
+                        }
+                        return;
+                    }
+                    if (typeof window.AdvancedMode_handleScan === 'function') {
+                        window.AdvancedMode_handleScan(rawCode, { source: 'camera' });
+                        return;
+                    }
+                }
+                return window.Scanner_processBarcode_base(rawCode);
+            };
+
+            if (typeof window.Scanner_toggle === 'function') {
+                window.Scanner_toggle_base = window.Scanner_toggle;
+                window.Scanner_toggle = function() {
+                    if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                        if (typeof window.AdvancedMode_toggleScanner === 'function') {
+                            return window.AdvancedMode_toggleScanner();
+                        }
+                    }
+                    return window.Scanner_toggle_base();
+                };
+            }
+        };
 
         const STATUS_COLORS = {
             '在庫': 'bg-green-50 text-green-700 border-green-200',
@@ -3207,6 +3934,124 @@
                 </div>
             </div>
         );
+
+        const ModeToggleCard = ({ isAdvancedMode, onToggle }) => (
+            <div className="mode-toggle-card">
+                <div className="mode-toggle-text">
+                    <h3>進階批次處理模式</h3>
+                    <p>掃描時先選擇動作，並以離線暫存保護未送出清單。</p>
+                </div>
+                <label className="toggle-switch" title="切換進階批次模式">
+                    <input
+                        type="checkbox"
+                        checked={isAdvancedMode}
+                        onChange={(event) => onToggle(event.target.checked ? 'ADVANCED' : 'STANDARD')}
+                    />
+                    <span className="toggle-slider"></span>
+                </label>
+            </div>
+        );
+
+        const ActionPanel = ({ asset, displayMode = 'modal', hasInventoryTask, onSelectAction, onSelectInventory, onClose }) => {
+            const hasAsset = Boolean(asset && asset.assetId);
+            return (
+                <div className={`action-panel ${displayMode === 'embedded' ? 'action-panel--embedded' : ''}`}>
+                    <div className="action-panel__header">
+                        <h5>動作決策面板</h5>
+                        {displayMode === 'modal' && (
+                            <button type="button" className="action-panel__secondary" onClick={onClose}>
+                                關閉
+                            </button>
+                        )}
+                    </div>
+                    {hasAsset ? (
+                        <div className="action-panel__info">
+                            <div><strong>資產編號：</strong>{asset.assetId}</div>
+                            <div><strong>資產名稱：</strong>{asset.assetName || '-'}</div>
+                            <div><strong>保管人：</strong>{asset.leader || '-'}</div>
+                            <div><strong>使用人：</strong>{asset.userName || '-'}</div>
+                            <div><strong>地點：</strong>{asset.location || '-'}</div>
+                            <div><strong>狀態：</strong>{asset.status || '-'}</div>
+                        </div>
+                    ) : (
+                        <div className="action-panel__info">
+                            <div><strong>等待掃描或輸入資產編號...</strong></div>
+                            <div>掃描成功後請選擇動作。</div>
+                        </div>
+                    )}
+
+                    <div className="action-panel__actions">
+                        <button
+                            type="button"
+                            className="action-panel__button action-panel__button--transfer"
+                            disabled={!hasAsset}
+                            onClick={() => onSelectAction && onSelectAction('TRANSFER')}
+                        >
+                            <i className="fa-solid fa-right-left"></i>轉移
+                        </button>
+                        <button
+                            type="button"
+                            className="action-panel__button action-panel__button--lend"
+                            disabled={!hasAsset}
+                            onClick={() => onSelectAction && onSelectAction('LEND')}
+                        >
+                            <i className="fa-solid fa-hand-holding-hand"></i>出借
+                        </button>
+                        <button
+                            type="button"
+                            className="action-panel__button action-panel__button--scrap"
+                            disabled={!hasAsset}
+                            onClick={() => onSelectAction && onSelectAction('SCRAP')}
+                        >
+                            <i className="fa-regular fa-trash-can"></i>報廢
+                        </button>
+                    </div>
+
+                    {hasInventoryTask && (
+                        <div className="action-panel__inventory-group">
+                            <button
+                                type="button"
+                                className="action-panel__chip action-panel__chip--normal"
+                                disabled={!hasAsset}
+                                onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.NORMAL)}
+                            >
+                                正常
+                            </button>
+                            <button
+                                type="button"
+                                className="action-panel__chip action-panel__chip--lost"
+                                disabled={!hasAsset}
+                                onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.LOST)}
+                            >
+                                遺失
+                            </button>
+                            <button
+                                type="button"
+                                className="action-panel__chip action-panel__chip--damaged"
+                                disabled={!hasAsset}
+                                onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.DAMAGED)}
+                            >
+                                損壞
+                            </button>
+                            <button
+                                type="button"
+                                className="action-panel__chip action-panel__chip--old"
+                                disabled={!hasAsset}
+                                onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.OLD)}
+                            >
+                                過舊
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="action-panel__footer">
+                        <button type="button" className="action-panel__secondary" onClick={onClose}>
+                            取消
+                        </button>
+                    </div>
+                </div>
+            );
+        };
 
         // BatchActionButtons 組件 - 批次操作按鈕卡片
         const BatchActionButtons = ({ onBatchTransfer, onBatchLending, onBatchScrap, hasPendingInventory, onBatchInventory }) => {
@@ -7869,8 +8714,19 @@
             const viewModeInitializedRef = useRef(false);
             const inventoryToastTimerRef = useRef(null);
             const pendingInventoryLoadRef = useRef(null);
+            const [cartSnapshot, setCartSnapshot] = useState(() => (
+                window.AssetCartStore ? window.AssetCartStore.getSnapshot() : { mode: 'STANDARD', items: [], pendingAssetId: null }
+            ));
+            const [isScannerOpen, setIsScannerOpen] = useState(false);
+            const [actionPanelState, setActionPanelState] = useState({
+                isOpen: false,
+                assetId: '',
+                asset: null,
+                displayMode: 'modal'
+            });
 
             const isAdminView = isAdmin && viewMode === 'admin';
+            const isAdvancedMode = cartSnapshot.mode === 'ADVANCED';
             const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
             const isInventoryTaskOnly = useCallback((asset) => {
                 if (!asset) return false;
@@ -7927,6 +8783,14 @@
             // 處理單個資產選取
             const handleAssetSelect = useCallback((assetId) => {
                 setSelectedAssetIds(prev => {
+                    if (isAdvancedMode) {
+                        if (window.AssetCartStore?.hasItem(assetId)) {
+                            window.AssetCartStore.removeItem(assetId);
+                        } else {
+                            openActionPanel(assetId, { displayMode: 'modal', source: 'manual' });
+                        }
+                        return prev;
+                    }
                     const isSelected = prev.includes(assetId);
                     let newSelection;
 
@@ -7945,7 +8809,7 @@
                     }
                     return newSelection;
                 });
-            }, []);
+            }, [isAdvancedMode, openActionPanel]);
 
             // 監聽 BatchList 變化並同步（處理 Scanner Enter 鍵掃描的情況）
             useEffect(() => {
@@ -7967,6 +8831,301 @@
                 const interval = setInterval(syncFromBatchList, 500);
                 return () => clearInterval(interval);
             }, []);
+
+            useEffect(() => {
+                if (!window.AssetCartStore) return undefined;
+                const unsubscribe = window.AssetCartStore.subscribe((snapshot) => {
+                    setCartSnapshot(snapshot);
+                });
+                window.AssetCartStore.init();
+                return () => {
+                    if (typeof unsubscribe === 'function') unsubscribe();
+                };
+            }, []);
+
+            useEffect(() => {
+                setupBatchListOverrides();
+                setupScannerOverrides();
+            }, []);
+
+            useEffect(() => {
+                if (!isAdvancedMode) return;
+                const advancedIds = cartSnapshot.items.map(item => item.assetId);
+                setSelectedAssetIds(advancedIds);
+            }, [isAdvancedMode, cartSnapshot.items]);
+
+            useEffect(() => {
+                const handler = (event) => {
+                    if (!isAdvancedMode) return;
+                    const target = event.target;
+                    if (!target || !target.classList || !target.classList.contains('asset-checkbox')) return;
+                    event.stopPropagation();
+                };
+                document.addEventListener('change', handler, true);
+                return () => document.removeEventListener('change', handler, true);
+            }, [isAdvancedMode]);
+
+            useEffect(() => {
+                let buffer = '';
+                let timerId = null;
+
+                const resetBuffer = () => {
+                    buffer = '';
+                    if (timerId) {
+                        clearTimeout(timerId);
+                        timerId = null;
+                    }
+                };
+
+                const handleKeyDown = (event) => {
+                    if (!isAdvancedMode) return;
+                    const target = event.target;
+                    const isEditable = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+                    if (isEditable) return;
+
+                    if (event.key === 'Enter') {
+                        if (buffer.length >= 4) {
+                            if (typeof window.AdvancedMode_handleScan === 'function') {
+                                window.AdvancedMode_handleScan(buffer, { source: 'hardware' });
+                            }
+                        }
+                        resetBuffer();
+                        return;
+                    }
+
+                    if (event.key.length === 1) {
+                        buffer += event.key;
+                        if (timerId) clearTimeout(timerId);
+                        timerId = setTimeout(resetBuffer, 120);
+                    }
+                };
+
+                document.addEventListener('keydown', handleKeyDown);
+                return () => {
+                    document.removeEventListener('keydown', handleKeyDown);
+                    resetBuffer();
+                };
+            }, [isAdvancedMode]);
+
+            useEffect(() => {
+                const searchBox = document.getElementById('search-box');
+                if (!searchBox) return undefined;
+                const handler = (event) => {
+                    if (!isAdvancedMode) return;
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    const value = String(searchBox.value || '').trim();
+                    if (!value) return;
+                    if (typeof window.AdvancedMode_handleScan === 'function') {
+                        window.AdvancedMode_handleScan(value, { source: 'manual' });
+                    }
+                    if (typeof window.clearSearchBox === 'function') {
+                        window.clearSearchBox();
+                    } else {
+                        searchBox.value = '';
+                        searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                };
+                searchBox.addEventListener('keypress', handler, true);
+                return () => searchBox.removeEventListener('keypress', handler, true);
+            }, [isAdvancedMode]);
+
+            const resolveAssetDetail = useCallback((assetId) => {
+                const normalizedId = String(assetId || '').trim();
+                if (!normalizedId) return null;
+                const asset = assetIndex.get(normalizedId);
+                if (asset) {
+                    return asset;
+                }
+                const fallback = (window.allAssets || []).find(entry => entry.id === normalizedId || entry.assetId === normalizedId);
+                if (fallback) {
+                    return {
+                        assetId: fallback.id || fallback.assetId,
+                        assetName: fallback.assetName || '',
+                        leader: fallback.keeperName || fallback.leader || '',
+                        userName: fallback.userName || '',
+                        location: fallback.location || '',
+                        status: fallback.status || ''
+                    };
+                }
+                return {
+                    assetId: normalizedId,
+                    assetName: '',
+                    leader: '',
+                    userName: '',
+                    location: '',
+                    status: ''
+                };
+            }, [assetIndex]);
+
+            const hasActiveInventoryForAsset = useCallback((assetId) => (
+                !!inventoryStatusByAsset[assetId]
+            ), [inventoryStatusByAsset]);
+
+            const closeActionPanel = useCallback((options = {}) => {
+                const { skipScannerStatus = false } = options;
+                setActionPanelState({
+                    isOpen: false,
+                    assetId: '',
+                    asset: null,
+                    displayMode: 'modal'
+                });
+                if (window.AssetCartStore) {
+                    window.AssetCartStore.clearPendingAsset();
+                }
+                if (!skipScannerStatus && isScannerOpen && typeof window.Scanner_updateStatus === 'function') {
+                    window.Scanner_updateStatus('掃描器運作中...', 'success');
+                }
+            }, [isScannerOpen]);
+
+            const openActionPanel = useCallback((assetId, options = {}) => {
+                if (!window.AssetCartStore || !window.AssetCartStore.isAdvancedMode()) return;
+                const normalizedId = String(assetId || '').trim();
+                if (!normalizedId) return;
+                if (window.AssetCartStore.isPendingAction()) return;
+                const displayMode = options.displayMode || (isScannerOpen ? 'embedded' : 'modal');
+                const asset = resolveAssetDetail(normalizedId);
+                window.AssetCartStore.setPendingAssetId(normalizedId);
+                setActionPanelState({
+                    isOpen: true,
+                    assetId: normalizedId,
+                    asset: asset,
+                    displayMode: displayMode
+                });
+                if (options.source === 'camera' && typeof window.Scanner_updateStatus === 'function') {
+                    window.Scanner_updateStatus('已掃描，請選擇動作', 'success');
+                }
+            }, [isScannerOpen, resolveAssetDetail]);
+
+            const commitActionSelection = useCallback((actionType, statusValue = null) => {
+                if (!window.AssetCartStore || !actionPanelState.assetId) return;
+                const isTaskOnly = actionType !== 'INVENTORY' && resolveAssetIsTask(actionPanelState.assetId);
+                if (isTaskOnly) {
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast('此資產屬於同組成員，僅能進行盤點', 'warning');
+                    } else {
+                        alert('此資產屬於同組成員，僅能進行盤點');
+                    }
+                    return;
+                }
+                if (actionType === 'INVENTORY' && !hasActiveInventoryForAsset(actionPanelState.assetId)) {
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast('此資產目前沒有盤點任務', 'warning');
+                    } else {
+                        alert('此資產目前沒有盤點任務');
+                    }
+                    return;
+                }
+                if (actionType === 'INVENTORY' && !statusValue) {
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast('請選擇盤點結果', 'warning');
+                    }
+                    return;
+                }
+                const asset = actionPanelState.asset || resolveAssetDetail(actionPanelState.assetId);
+                const added = window.AssetCartStore.addOrUpdateItem({
+                    assetId: actionPanelState.assetId,
+                    assetName: asset?.assetName || '',
+                    actionType: actionType,
+                    status: statusValue
+                });
+                if (!added) {
+                    return;
+                }
+                const message = `已加入：${asset?.assetName || actionPanelState.assetId}`;
+                if (typeof window.BatchList_showToast === 'function') {
+                    window.BatchList_showToast(message, 'success');
+                }
+                closeActionPanel();
+            }, [actionPanelState, closeActionPanel, resolveAssetDetail, resolveAssetIsTask, hasActiveInventoryForAsset]);
+
+            const handleModeToggle = useCallback((nextMode) => {
+                if (!window.AssetCartStore) return;
+                if (nextMode === cartSnapshot.mode) return;
+                const confirmed = confirm('切換模式會清空目前清單，是否繼續？');
+                if (!confirmed) return;
+                window.AssetCartStore.clearAll({ silent: true });
+                window.AssetCartStore.setMode(nextMode);
+                setSelectedAssetIds([]);
+                if (typeof window.BatchList_showToast === 'function') {
+                    const label = nextMode === 'ADVANCED' ? '已切換為進階模式' : '已切換為一般模式';
+                    window.BatchList_showToast(label, 'info');
+                }
+            }, [cartSnapshot.mode]);
+
+            useEffect(() => {
+                window.AdvancedCart_removeItem = (assetId) => {
+                    if (!window.AssetCartStore) return;
+                    window.AssetCartStore.removeItem(assetId);
+                };
+                window.AdvancedMode_openActionPanel = (assetId, options = {}) => {
+                    openActionPanel(assetId, options);
+                };
+                window.AdvancedMode_handleScan = (rawCode, options = {}) => {
+                    if (!window.AssetCartStore || !window.AssetCartStore.isAdvancedMode()) return;
+                    if (window.AssetCartStore.isPendingAction()) {
+                        if (typeof window.BatchList_showToast === 'function') {
+                            window.BatchList_showToast('請先完成上一筆動作', 'warning');
+                        }
+                        return;
+                    }
+                    const rawValue = String(rawCode || '').trim();
+                    const formatted = typeof window.Scanner_formatBarcode === 'function'
+                        ? window.Scanner_formatBarcode(rawValue)
+                        : rawValue;
+                    const asset = (typeof window.BatchList_findAsset === 'function'
+                        ? (window.BatchList_findAsset(formatted) || window.BatchList_findAsset(rawValue))
+                        : null) || (window.allAssets || []).find(entry => entry.id === formatted || entry.id === rawValue);
+                    if (!asset) {
+                        const message = `未找到資產：${formatted}`;
+                        if (typeof window.BatchList_showToast === 'function') {
+                            window.BatchList_showToast(message, 'error');
+                        }
+                        if (typeof window.Scanner_updateStatus === 'function' && options.source === 'camera') {
+                            window.Scanner_updateStatus(message, 'error');
+                        }
+                        return;
+                    }
+                    const assetId = asset.id || asset.assetId || formatted;
+                    const displayMode = options.source === 'camera' ? 'embedded' : 'modal';
+                    openActionPanel(assetId, { displayMode: displayMode, source: options.source });
+                    if (typeof window.Scanner_playSound === 'function') {
+                        window.Scanner_playSound();
+                    }
+                };
+                window.AdvancedMode_toggleScanner = () => {
+                    const zone = document.getElementById('Scanner_zone');
+                    if (!zone) return;
+                    const isOpen = zone && zone.style.display && zone.style.display !== 'none';
+                    if (isOpen) {
+                        if (typeof window.Scanner_toggle_base === 'function') {
+                            window.Scanner_toggle_base();
+                        } else if (typeof window.Scanner_stop === 'function') {
+                            window.Scanner_stop();
+                            zone.style.display = 'none';
+                        }
+                        setIsScannerOpen(false);
+                        closeActionPanel({ skipScannerStatus: true });
+                        return;
+                    }
+                    if (typeof window.Scanner_toggle_base === 'function') {
+                        window.Scanner_toggle_base();
+                    } else if (typeof window.Scanner_start === 'function') {
+                        zone.style.display = 'block';
+                        window.Scanner_start();
+                    }
+                    setIsScannerOpen(true);
+                };
+            }, [closeActionPanel, openActionPanel]);
+
+            useEffect(() => {
+                if (!isAdvancedMode) {
+                    setIsScannerOpen(false);
+                    closeActionPanel({ skipScannerStatus: true });
+                }
+            }, [isAdvancedMode, closeActionPanel]);
 
             // ========== 盤點功能輔助函數 ==========
 
@@ -8089,10 +9248,6 @@
                 if (!entry) return 0;
                 return typeof entry.sessionCount === 'number' ? entry.sessionCount : 0;
             }, [inventoryStatusByAsset]);
-
-            const hasActiveInventoryForAsset = useCallback((assetId) => (
-                !!inventoryStatusByAsset[assetId]
-            ), [inventoryStatusByAsset]);
 
             // 檢查資產是否在待盤點清單中（可指定盤點會話）
             const isAssetPendingInventory = useCallback((assetId, sessionId) => {
@@ -8684,6 +9839,15 @@
 
             // 處理全選（必須在 filteredAssets 定義之後）
             const handleSelectAll = useCallback((checked) => {
+                if (isAdvancedMode) {
+                    const message = '進階模式不支援全選加入，請逐筆選擇動作';
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast(message, 'warning');
+                    } else {
+                        alert(message);
+                    }
+                    return;
+                }
                 const selectableAssets = filteredAssets.filter(a => a.status === '在庫');
                 const selectableIds = selectableAssets.map(a => a.assetId);
 
@@ -8737,7 +9901,7 @@
                         return prev.filter(id => !selectableIds.includes(id));
                     });
                 }
-            }, [filteredAssets]);
+            }, [filteredAssets, isAdvancedMode]);
 
             // 計算重複產編
             const duplicateInfo = useMemo(() => {
@@ -9129,6 +10293,52 @@
 
             // 開啟批次盤點 Modal
             const handleBatchInventory = () => {
+                if (isAdvancedMode) {
+                    const inventoryItems = window.AssetCartStore
+                        ? window.AssetCartStore.getItems().filter(item => item.actionType === 'INVENTORY')
+                        : [];
+                    if (inventoryItems.length === 0) {
+                        alert('進階模式尚未標記盤點動作');
+                        return;
+                    }
+                    const activeItems = inventoryItems.filter(item => hasActiveInventoryForAsset(item.assetId));
+                    if (activeItems.length === 0) {
+                        alert('標記盤點的資產中沒有進行中的盤點會話');
+                        return;
+                    }
+                    const missingStatus = activeItems.filter(item => !item.status);
+                    if (missingStatus.length > 0) {
+                        alert('仍有未選擇盤點結果的資產，請先完成選擇');
+                        return;
+                    }
+                    const confirmed = confirm(`即將送出 ${activeItems.length} 筆盤點結果，是否繼續？`);
+                    if (!confirmed) return;
+
+                    showFlyProgressBar('正在提交盤點結果...');
+                    const payload = activeItems.map(item => ({
+                        assetId: item.assetId,
+                        result: item.status,
+                        remarks: ''
+                    }));
+                    google.script.run
+                        .withSuccessHandler((response) => {
+                            hideFlyProgressBar('盤點完成！', 300);
+                            if (response && response.error) {
+                                alert('盤點送出失敗：' + response.error);
+                                return;
+                            }
+                            if (window.AssetCartStore) {
+                                window.AssetCartStore.removeItemsByIds(activeItems.map(item => item.assetId));
+                            }
+                            handleInventorySuccess();
+                        })
+                        .withFailureHandler((error) => {
+                            hideFlyProgressBar('盤點失敗', 0);
+                            alert('盤點送出失敗：' + (error?.message || error));
+                        })
+                        .markBatchInventoryInActiveSessions(payload);
+                    return;
+                }
                 if (typeof BatchList_getItems !== 'function') {
                     alert('批次選取功能尚未載入');
                     return;
@@ -9162,6 +10372,20 @@
                     alert('轉移選項尚未載入，請稍後再試');
                     return;
                 }
+                if (isAdvancedMode) {
+                    const items = window.AssetCartStore
+                        ? window.AssetCartStore.getItems()
+                            .filter(item => item.actionType === 'TRANSFER')
+                            .map(item => item.assetId)
+                        : [];
+                    if (items.length === 0) {
+                        alert('進階模式尚未標記轉移動作');
+                        return;
+                    }
+                    setBatchActionAssetIds(items);
+                    setBatchModalType('transfer');
+                    return;
+                }
                 if (typeof BatchList_getItems !== 'function') {
                     alert('批次選取功能尚未載入');
                     return;
@@ -9185,6 +10409,20 @@
                     alert('出借選項尚未載入，請稍後再試');
                     return;
                 }
+                if (isAdvancedMode) {
+                    const items = window.AssetCartStore
+                        ? window.AssetCartStore.getItems()
+                            .filter(item => item.actionType === 'LEND')
+                            .map(item => item.assetId)
+                        : [];
+                    if (items.length === 0) {
+                        alert('進階模式尚未標記出借動作');
+                        return;
+                    }
+                    setBatchActionAssetIds(items);
+                    setBatchModalType('lending');
+                    return;
+                }
                 if (typeof BatchList_getItems !== 'function') {
                     alert('批次選取功能尚未載入');
                     return;
@@ -9204,6 +10442,20 @@
             };
 
             const handleBatchScrap = () => {
+                if (isAdvancedMode) {
+                    const items = window.AssetCartStore
+                        ? window.AssetCartStore.getItems()
+                            .filter(item => item.actionType === 'SCRAP')
+                            .map(item => item.assetId)
+                        : [];
+                    if (items.length === 0) {
+                        alert('進階模式尚未標記報廢動作');
+                        return;
+                    }
+                    setBatchActionAssetIds(items);
+                    setBatchModalType('scrap');
+                    return;
+                }
                 if (typeof BatchList_getItems !== 'function') {
                     alert('批次選取功能尚未載入');
                     return;
@@ -9228,14 +10480,22 @@
             };
 
             const handleBatchActionSuccess = () => {
+                const currentType = batchModalType;
                 setBatchModalType(null);
                 setBatchActionAssetIds([]);
-                // 清空批次清單
-                if (typeof BatchList_resetOnSubmit === 'function') {
-                    BatchList_resetOnSubmit();
+                if (isAdvancedMode) {
+                    const actionType = ACTION_TYPE_BY_MODAL[currentType];
+                    if (actionType && window.AssetCartStore) {
+                        window.AssetCartStore.removeItemsByAction(actionType);
+                    }
+                } else {
+                    // 清空批次清單
+                    if (typeof BatchList_resetOnSubmit === 'function') {
+                        BatchList_resetOnSubmit();
+                    }
+                    // 清空 React 選取狀態
+                    setSelectedAssetIds([]);
                 }
-                // 清空 React 選取狀態
-                setSelectedAssetIds([]);
                 // 重新載入資料
                 loadData();
             };
@@ -9432,6 +10692,11 @@
                         }} 
                     />
 
+                    <ModeToggleCard
+                        isAdvancedMode={isAdvancedMode}
+                        onToggle={handleModeToggle}
+                    />
+
                     <FilterSection
                         filters={filters}
                         onFilterChange={handleFilterChange}
@@ -9443,7 +10708,25 @@
                     />
 
                     {/* 掃描區域 - 供 Scanner 模組使用 */}
-                    <div id="Scanner_zone" className="scanner-zone mb-6" style={{ display: 'none' }}></div>
+                    {isAdvancedMode && isScannerOpen && (
+                        <div
+                            className="advanced-scanner-overlay"
+                            onClick={() => window.AdvancedMode_toggleScanner && window.AdvancedMode_toggleScanner()}
+                        ></div>
+                    )}
+                    <div className={`advanced-scanner-shell ${isAdvancedMode && isScannerOpen ? 'advanced-scanner-shell--open' : ''}`}>
+                        <div id="Scanner_zone" className="scanner-zone mb-6" style={{ display: 'none' }}></div>
+                        {isAdvancedMode && isScannerOpen && (
+                            <ActionPanel
+                                asset={actionPanelState.isOpen ? actionPanelState.asset : null}
+                                displayMode="embedded"
+                                hasInventoryTask={actionPanelState.isOpen ? hasActiveInventoryForAsset(actionPanelState.assetId) : false}
+                                onSelectAction={(actionType) => commitActionSelection(actionType)}
+                                onSelectInventory={(status) => commitActionSelection('INVENTORY', status)}
+                                onClose={closeActionPanel}
+                            />
+                        )}
+                    </div>
 
                     {/* 批次操作按鈕卡片 */}
                     <BatchActionButtons
@@ -9459,6 +10742,22 @@
                             count={duplicateInfo.duplicateCount}
                             onClick={() => window.openDuplicateAssetsModal()}
                         />
+                    )}
+
+                    {isAdvancedMode && actionPanelState.isOpen && actionPanelState.displayMode === 'modal' && (
+                        <>
+                            <div className="advanced-scanner-overlay" onClick={closeActionPanel}></div>
+                            <div className="action-panel-modal" onClick={(event) => event.stopPropagation()}>
+                                <ActionPanel
+                                    asset={actionPanelState.asset}
+                                    displayMode="modal"
+                                    hasInventoryTask={actionPanelState.assetId ? hasActiveInventoryForAsset(actionPanelState.assetId) : false}
+                                    onSelectAction={(actionType) => commitActionSelection(actionType)}
+                                    onSelectInventory={(status) => commitActionSelection('INVENTORY', status)}
+                                    onClose={closeActionPanel}
+                                />
+                            </div>
+                        </>
                     )}
 
                     <AssetTable
