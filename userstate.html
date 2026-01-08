@@ -288,16 +288,20 @@
             }
 
             .mode-toggle-card--compact {
-                width: 76px;
-                height: 76px;
+                width: 100%;
+                height: auto;
                 min-width: 0;
-                padding: 10px;
-                flex-direction: column;
-                justify-content: center;
+                padding: 10px 14px;
+                flex-direction: row;
+                justify-content: space-between;
                 align-items: center;
             }
 
             .mode-toggle-card--compact .mode-toggle-text {
+                display: block;
+            }
+
+            .mode-toggle-card--compact .mode-toggle-text p {
                 display: none;
             }
         }
