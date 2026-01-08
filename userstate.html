@@ -613,6 +613,20 @@
             margin-bottom: 20px;
         }
 
+        .mode-toggle-card--compact {
+            padding: 12px 16px;
+            margin-bottom: 0;
+            min-width: 280px;
+        }
+
+        .mode-toggle-card--compact .mode-toggle-text h3 {
+            font-size: 14px;
+        }
+
+        .mode-toggle-card--compact .mode-toggle-text p {
+            font-size: 12px;
+        }
+
         .mode-toggle-text h3 {
             font-size: 16px;
             font-weight: 600;
@@ -4078,8 +4092,8 @@
             </div>
         );
 
-        const ModeToggleCard = ({ isAdvancedMode, onToggle }) => (
-            <div className="mode-toggle-card">
+        const ModeToggleCard = ({ isAdvancedMode, onToggle, compact = false }) => (
+            <div className={`mode-toggle-card ${compact ? 'mode-toggle-card--compact' : ''}`}>
                 <div className="mode-toggle-text">
                     <h3>進階批次處理模式</h3>
                     <p>掃描時先選擇動作，並以離線暫存保護未送出清單。</p>
@@ -11055,6 +11069,11 @@
 
                         {/* 右側：視角切換 + 重新整理按鈕 + 載入狀態指示 */}
                         <div className="page-hero__actions">
+                            <ModeToggleCard
+                                isAdvancedMode={isAdvancedMode}
+                                onToggle={handleModeToggle}
+                                compact={true}
+                            />
                             {isAdmin && (
                                 <div className="hero-status">
                                     <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -11149,11 +11168,6 @@
                             refreshCardData();
                             loadPendingInventoryAssignments(viewMode === 'user');
                         }} 
-                    />
-
-                    <ModeToggleCard
-                        isAdvancedMode={isAdvancedMode}
-                        onToggle={handleModeToggle}
                     />
 
                     <FilterSection
