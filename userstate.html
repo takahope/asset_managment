@@ -6852,6 +6852,8 @@
             const [isSubmitting, setIsSubmitting] = useState(false);
 
             if (!asset || !transferOptions) return null;
+            const uniqueLocations = Array.from(new Set((transferOptions.locations || []).filter(Boolean)));
+            const uniqueStationLocations = Array.from(new Set((transferOptions.stationLocations || []).filter(Boolean)));
 
             const buildSummary = () => {
                 if (transferMode === 'station') {
@@ -7067,7 +7069,7 @@
                                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             >
                                                 <option value="">請選擇新地點...</option>
-                                                {transferOptions.locations?.map(loc => (
+                                                {uniqueLocations.map(loc => (
                                                     <option key={loc} value={loc}>{loc}</option>
                                                 ))}
                                             </select>
@@ -7163,7 +7165,7 @@
                                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                             >
                                                 <option value="">請選擇駐站地點...</option>
-                                                {transferOptions.stationLocations && transferOptions.stationLocations.map(loc => (
+                                                {uniqueStationLocations.map(loc => (
                                                     <option key={loc} value={loc}>{loc}</option>
                                                 ))}
                                             </select>
