@@ -9146,7 +9146,7 @@
                     }
                     return;
                 }
-                if (actionType === 'INVENTORY' && !hasActiveInventoryForAsset(actionPanelState.assetId)) {
+                if (actionType === 'INVENTORY' && !hasInventoryTaskForActionPanel(actionPanelState.assetId)) {
                     if (typeof window.BatchList_showToast === 'function') {
                         window.BatchList_showToast('此資產目前沒有盤點任務', 'warning');
                     } else {
@@ -9177,7 +9177,7 @@
                     window.BatchList_showToast(message, 'success');
                 }
                 closeActionPanel();
-            }, [actionPanelState, closeActionPanel, resolveAssetDetail, resolveAssetIsTask, hasActiveInventoryForAsset]);
+            }, [actionPanelState, closeActionPanel, resolveAssetDetail, resolveAssetIsTask, hasInventoryTaskForActionPanel]);
 
             const handleQueueAction = useCallback((actionType, payload, summary, assetOverride = null) => {
                 if (!window.AssetCartStore) return;
@@ -9454,6 +9454,12 @@
                 if (!sessionId) return true;
                 return sessions.some(session => session.inventoryId === sessionId);
             }, [getAssetPendingSessions]);
+
+            const hasInventoryTaskForActionPanel = useCallback((assetId) => {
+                if (!assetId) return false;
+                if (isAdminView) return hasActiveInventoryForAsset(assetId);
+                return isAssetPendingInventory(assetId);
+            }, [isAdminView, hasActiveInventoryForAsset, isAssetPendingInventory]);
 
             // 載入資料
             const loadData = (overrideViewMode) => {
@@ -10503,7 +10509,7 @@
                         alert('進階模式尚未標記盤點動作');
                         return;
                     }
-                    const activeItems = inventoryItems.filter(item => hasActiveInventoryForAsset(item.assetId));
+                    const activeItems = inventoryItems.filter(item => hasInventoryTaskForActionPanel(item.assetId));
                     if (activeItems.length === 0) {
                         alert('標記盤點的資產中沒有進行中的盤點會話');
                         return;
@@ -11064,7 +11070,7 @@
                             <ActionPanel
                                 asset={actionPanelState.isOpen ? actionPanelState.asset : null}
                                 displayMode="embedded"
-                                hasInventoryTask={actionPanelState.isOpen ? hasActiveInventoryForAsset(actionPanelState.assetId) : false}
+                                hasInventoryTask={actionPanelState.isOpen ? hasInventoryTaskForActionPanel(actionPanelState.assetId) : false}
                                 onSelectAction={(actionType) => openQueueActionModal(actionType)}
                                 onSelectInventory={(status) => commitActionSelection('INVENTORY', status)}
                                 onClose={closeActionPanel}
@@ -11096,7 +11102,7 @@
                                 <ActionPanel
                                     asset={actionPanelState.asset}
                                     displayMode="modal"
-                                    hasInventoryTask={actionPanelState.assetId ? hasActiveInventoryForAsset(actionPanelState.assetId) : false}
+                                    hasInventoryTask={actionPanelState.assetId ? hasInventoryTaskForActionPanel(actionPanelState.assetId) : false}
                                     onSelectAction={(actionType) => openQueueActionModal(actionType)}
                                     onSelectInventory={(status) => commitActionSelection('INVENTORY', status)}
                                     onClose={closeActionPanel}
