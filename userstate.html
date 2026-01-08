@@ -744,21 +744,88 @@
             color: #0f172a;
         }
 
-        .action-panel__actions {
+        .action-panel__status-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid #fde68a;
+            background: #fefce8;
+            margin-bottom: 14px;
+        }
+
+        .action-panel__status-card small {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #b45309;
+            margin-bottom: 4px;
+        }
+
+        .action-panel__status-card h4 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .action-panel__status-card p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .action-panel__status-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            border: 1px solid #d1fae5;
+            background: #ecfdf3;
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
+            place-items: center;
+            color: #16a34a;
+            font-size: 18px;
+        }
+
+        .action-panel__meta {
+            font-size: 12px;
+            color: #475569;
             margin-bottom: 10px;
         }
 
+        .action-panel__meta span {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .action-panel__section-title {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin: 8px 0;
+        }
+
+        .action-panel__actions {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
         .action-panel__button {
-            border: none;
-            border-radius: 12px;
+            border-radius: 14px;
+            border: 1px solid #cbd5f5;
+            background: #f8fafc;
             padding: 10px 12px;
             font-size: 13px;
             font-weight: 600;
-            color: #ffffff;
+            color: #1f2937;
             display: inline-flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 6px;
@@ -774,15 +841,21 @@
         }
 
         .action-panel__button--transfer {
-            background: linear-gradient(135deg, #1e88e5, #1565c0);
+            border-color: #a5b4fc;
+            color: #4338ca;
+            background: #eef2ff;
         }
 
         .action-panel__button--lend {
-            background: linear-gradient(135deg, #8e24aa, #5e35b1);
+            border-color: #c4b5fd;
+            color: #6d28d9;
+            background: #f5f3ff;
         }
 
         .action-panel__button--scrap {
-            background: linear-gradient(135deg, #e53935, #c62828);
+            border-color: #fca5a5;
+            color: #b91c1c;
+            background: #fef2f2;
         }
 
         .action-panel__button--inventory {
@@ -790,27 +863,35 @@
         }
 
         .action-panel__inventory-group {
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 14px;
         }
 
         .action-panel__chip {
             border: 1px solid #e2e8f0;
-            border-radius: 999px;
-            padding: 6px 12px;
+            border-radius: 14px;
+            padding: 10px 12px;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
             color: #334155;
             background: #ffffff;
             cursor: pointer;
+            display: inline-flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: center;
         }
 
-        .action-panel__chip--normal { color: #0f766e; border-color: #99f6e4; }
-        .action-panel__chip--lost { color: #b91c1c; border-color: #fecaca; }
-        .action-panel__chip--damaged { color: #c2410c; border-color: #fed7aa; }
-        .action-panel__chip--old { color: #b45309; border-color: #fde68a; }
+        .action-panel__chip--normal { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+        .action-panel__chip--lost { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
+        .action-panel__chip--damaged { color: #c2410c; border-color: #fdba74; background: #fff7ed; }
+        .action-panel__chip--old { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
+
+        .action-panel__chip i {
+            font-size: 16px;
+        }
 
         .action-panel__footer {
             display: flex;
@@ -826,6 +907,13 @@
             padding: 8px 12px;
             font-size: 12px;
             cursor: pointer;
+        }
+
+        .action-panel__hint {
+            font-size: 12px;
+            color: #94a3b8;
+            text-align: center;
+            margin-top: 6px;
         }
 
         .advanced-batch-item {
@@ -4007,7 +4095,7 @@
             </div>
         );
 
-        const ActionPanel = ({ asset, displayMode = 'modal', hasInventoryTask, inventoryStatusLabel, onSelectAction, onSelectInventory, onClose }) => {
+            const ActionPanel = ({ asset, displayMode = 'modal', hasInventoryTask, inventoryStatusLabel, onSelectAction, onSelectInventory, onClose }) => {
             const hasAsset = Boolean(asset && asset.assetId);
             return (
                 <div className={`action-panel ${displayMode === 'embedded' ? 'action-panel--embedded' : ''}`}>
@@ -4020,15 +4108,25 @@
                         )}
                     </div>
                     {hasAsset ? (
-                        <div className="action-panel__info">
-                            <div><strong>資產編號：</strong>{asset.assetId}</div>
-                            <div><strong>資產名稱：</strong>{asset.assetName || '-'}</div>
-                            <div><strong>保管人：</strong>{asset.leader || '-'}</div>
-                            <div><strong>使用人：</strong>{asset.userName || '-'}</div>
-                            <div><strong>地點：</strong>{asset.location || '-'}</div>
-                            <div><strong>狀態：</strong>{asset.status || '-'}</div>
-                            <div><strong>盤點狀態：</strong>{inventoryStatusLabel || '無盤點任務'}</div>
-                        </div>
+                        <>
+                            <div className="action-panel__status-card">
+                                <div>
+                                    <small>顯示掃描結果</small>
+                                    <h4>{asset.assetId}</h4>
+                                    <p>{asset.assetName || '-'}</p>
+                                </div>
+                                <div className="action-panel__status-badge">
+                                    <i className="fa-solid fa-check"></i>
+                                </div>
+                            </div>
+                            <div className="action-panel__meta">
+                                <div><span>保管人：</span>{asset.leader || '-'}</div>
+                                <div><span>使用人：</span>{asset.userName || '-'}</div>
+                                <div><span>地點：</span>{asset.location || '-'}</div>
+                                <div><span>狀態：</span>{asset.status || '-'}</div>
+                                <div><span>盤點狀態：</span>{inventoryStatusLabel || '無盤點任務'}</div>
+                            </div>
+                        </>
                     ) : (
                         <div className="action-panel__info">
                             <div><strong>等待掃描或輸入資產編號...</strong></div>
@@ -4036,6 +4134,7 @@
                         </div>
                     )}
 
+                    <div className="action-panel__section-title">資產操作 ACTIONS</div>
                     <div className="action-panel__actions">
                         <button
                             type="button"
@@ -4043,7 +4142,8 @@
                             disabled={!hasAsset}
                             onClick={() => onSelectAction && onSelectAction('TRANSFER')}
                         >
-                            <i className="fa-solid fa-right-left"></i>轉移
+                            <i className="fa-solid fa-right-left"></i>
+                            轉移
                         </button>
                         <button
                             type="button"
@@ -4051,7 +4151,8 @@
                             disabled={!hasAsset}
                             onClick={() => onSelectAction && onSelectAction('LEND')}
                         >
-                            <i className="fa-solid fa-hand-holding-hand"></i>出借
+                            <i className="fa-solid fa-hand-holding-hand"></i>
+                            出借
                         </button>
                         <button
                             type="button"
@@ -4059,18 +4160,22 @@
                             disabled={!hasAsset}
                             onClick={() => onSelectAction && onSelectAction('SCRAP')}
                         >
-                            <i className="fa-regular fa-trash-can"></i>報廢
+                            <i className="fa-regular fa-trash-can"></i>
+                            報廢
                         </button>
                     </div>
 
                     {hasInventoryTask && (
-                        <div className="action-panel__inventory-group">
+                        <>
+                            <div className="action-panel__section-title">盤點狀態 INVENTORY STATUS</div>
+                            <div className="action-panel__inventory-group">
                             <button
                                 type="button"
                                 className="action-panel__chip action-panel__chip--normal"
                                 disabled={!hasAsset}
                                 onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.NORMAL)}
                             >
+                                <i className="fa-solid fa-circle-check"></i>
                                 正常
                             </button>
                             <button
@@ -4079,6 +4184,7 @@
                                 disabled={!hasAsset}
                                 onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.LOST)}
                             >
+                                <i className="fa-solid fa-magnifying-glass"></i>
                                 遺失
                             </button>
                             <button
@@ -4087,6 +4193,7 @@
                                 disabled={!hasAsset}
                                 onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.DAMAGED)}
                             >
+                                <i className="fa-solid fa-triangle-exclamation"></i>
                                 損壞
                             </button>
                             <button
@@ -4095,9 +4202,11 @@
                                 disabled={!hasAsset}
                                 onClick={() => onSelectInventory && onSelectInventory(INVENTORY_STATUS_LABELS.OLD)}
                             >
+                                <i className="fa-solid fa-clock-rotate-left"></i>
                                 過舊
                             </button>
-                        </div>
+                            </div>
+                        </>
                     )}
 
                     <div className="action-panel__footer">
@@ -4105,6 +4214,7 @@
                             取消
                         </button>
                     </div>
+                    <div className="action-panel__hint">點擊上方按鈕將資產加入進階批次處理清單</div>
                 </div>
             );
         };
