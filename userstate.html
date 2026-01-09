@@ -8126,7 +8126,7 @@
         };
 
         // ========== 新增資產 Modal ==========
-        const AddAssetModal = ({ onClose, onSuccess }) => {
+        const AddAssetModal = ({ onClose, onSuccess, preloadedData }) => {
             // 載入與提交狀態
             const [isLoading, setIsLoading] = useState(true);
             const [isSubmitting, setIsSubmitting] = useState(false);
@@ -8150,17 +8150,30 @@
 
             // 載入下拉選單資料
             useEffect(() => {
+                if (preloadedData) {
+                    setDropdownData(preloadedData);
+                    setIsLoading(false);
+                    return;
+                }
+
+                let isMounted = true;
                 google.script.run
                     .withSuccessHandler((data) => {
+                        if (!isMounted) return;
                         setDropdownData(data);
                         setIsLoading(false);
                     })
                     .withFailureHandler((error) => {
+                        if (!isMounted) return;
                         alert('載入選單資料失敗：' + error.message);
                         onClose();
                     })
                     .getDropdownData();
-            }, []);
+
+                return () => {
+                    isMounted = false;
+                };
+            }, [onClose, preloadedData]);
 
             // 資訊資產連動邏輯：取消主選項時清空子選項
             useEffect(() => {
@@ -9074,6 +9087,8 @@
             const scrapPendingRequestRef = useRef(0);
             const transferPendingLoadRef = useRef(null);
             const transferPendingRequestRef = useRef(0);
+            const addAssetDropdownLoadRef = useRef(null);
+            const addAssetDropdownRequestRef = useRef(0);
             const [cartSnapshot, setCartSnapshot] = useState(() => (
                 window.AssetCartStore ? window.AssetCartStore.getSnapshot() : { mode: 'STANDARD', items: [], pendingAssetId: null }
             ));
@@ -9959,6 +9974,74 @@
                 }
             }, [loadTransferPendingDetails]);
 
+            const loadAddAssetDropdownData = useCallback((options = {}) => {
+                const { silent = false, force = false, onComplete } = options || {};
+                if (!force && addAssetDropdownData) {
+                    if (typeof onComplete === 'function') {
+                        onComplete(null);
+                    }
+                    return;
+                }
+
+                addAssetDropdownRequestRef.current += 1;
+                const requestId = addAssetDropdownRequestRef.current;
+
+                google.script.run
+                    .withSuccessHandler((data) => {
+                        if (addAssetDropdownRequestRef.current !== requestId) {
+                            if (typeof onComplete === 'function') {
+                                onComplete(new Error('已切換視角'));
+                            }
+                            return;
+                        }
+                        setAddAssetDropdownData(data || null);
+                        if (typeof onComplete === 'function') {
+                            onComplete(null, data);
+                        }
+                    })
+                    .withFailureHandler((error) => {
+                        if (addAssetDropdownRequestRef.current !== requestId) {
+                            if (typeof onComplete === 'function') {
+                                onComplete(new Error('已切換視角'));
+                            }
+                            return;
+                        }
+                        if (!silent) {
+                            console.warn('載入新增資產選單失敗：', error?.message || error);
+                        }
+                        if (typeof onComplete === 'function') {
+                            onComplete(error);
+                        }
+                    })
+                    .getDropdownData();
+            }, [addAssetDropdownData]);
+
+            const scheduleAddAssetDropdownPreload = useCallback(() => {
+                if (addAssetDropdownData) return;
+                if (addAssetDropdownLoadRef.current) {
+                    const { type, id } = addAssetDropdownLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    addAssetDropdownLoadRef.current = null;
+                }
+
+                const runLoad = () => {
+                    addAssetDropdownLoadRef.current = null;
+                    loadAddAssetDropdownData({ silent: true });
+                };
+
+                if (typeof window.requestIdleCallback === 'function') {
+                    const id = window.requestIdleCallback(runLoad, { timeout: 1500 });
+                    addAssetDropdownLoadRef.current = { type: 'idle', id: id };
+                } else {
+                    const id = setTimeout(runLoad, 250);
+                    addAssetDropdownLoadRef.current = { type: 'timeout', id: id };
+                }
+            }, [addAssetDropdownData, loadAddAssetDropdownData]);
+
             const getAssetPendingSessions = useCallback((assetId) => {
                 const entry = inventoryPendingByAsset[assetId];
                 return entry ? entry.sessions || [] : [];
@@ -10042,6 +10125,7 @@
                                 finishCardLoading();
                                 scheduleScrapPendingPreload(forceUserScope);
                                 scheduleTransferPendingPreload(forceUserScope);
+                                scheduleAddAssetDropdownPreload();
 
                                 // 載入盤點資料
                                 google.script.run
@@ -10142,6 +10226,7 @@
                 const forceUserScope = viewMode === 'user';
                 scheduleScrapPendingPreload(forceUserScope);
                 scheduleTransferPendingPreload(forceUserScope);
+                scheduleAddAssetDropdownPreload();
 
                 try {
                     // 並行載入多個 API
@@ -10281,7 +10366,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [buildInventoryPendingByAsset, scheduleScrapPendingPreload, scheduleTransferPendingPreload, viewMode]);
+            }, [buildInventoryPendingByAsset, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -10306,6 +10391,7 @@
                 transferOverviewRequestRef.current += 1;
                 scrapPendingRequestRef.current += 1;
                 transferPendingRequestRef.current += 1;
+                addAssetDropdownRequestRef.current += 1;
                 if (scrapPendingLoadRef.current) {
                     const { type, id } = scrapPendingLoadRef.current;
                     if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
@@ -10323,6 +10409,15 @@
                         clearTimeout(id);
                     }
                     transferPendingLoadRef.current = null;
+                }
+                if (addAssetDropdownLoadRef.current) {
+                    const { type, id } = addAssetDropdownLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    addAssetDropdownLoadRef.current = null;
                 }
                 loadData(mode);
             };
@@ -10416,6 +10511,15 @@
                             clearTimeout(id);
                         }
                         transferPendingLoadRef.current = null;
+                    }
+                    if (addAssetDropdownLoadRef.current) {
+                        const { type, id } = addAssetDropdownLoadRef.current;
+                        if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                            window.cancelIdleCallback(id);
+                        } else if (type === 'timeout') {
+                            clearTimeout(id);
+                        }
+                        addAssetDropdownLoadRef.current = null;
                     }
                 };
             }, []);
@@ -11875,6 +11979,7 @@
                         <AddAssetModal
                             onClose={() => setShowAddAssetModal(false)}
                             onSuccess={handleAddAssetSuccess}
+                            preloadedData={addAssetDropdownData}
                         />
                     )}
 
