@@ -9072,6 +9072,8 @@
             const advancedSubmitRef = useRef(false);
             const scrapPendingLoadRef = useRef(null);
             const scrapPendingRequestRef = useRef(0);
+            const transferPendingLoadRef = useRef(null);
+            const transferPendingRequestRef = useRef(0);
             const [cartSnapshot, setCartSnapshot] = useState(() => (
                 window.AssetCartStore ? window.AssetCartStore.getSnapshot() : { mode: 'STANDARD', items: [], pendingAssetId: null }
             ));
@@ -9850,6 +9852,113 @@
                 }
             }, [loadScrapPendingDetails]);
 
+            const loadTransferPendingDetails = useCallback((forceUserScope, options = {}) => {
+                const { silent = false, onComplete } = options || {};
+                transferPendingRequestRef.current += 1;
+                const requestId = transferPendingRequestRef.current;
+
+                if (!silent) {
+                    setIsLoadingTransferDetails(true);
+                }
+
+                Promise.allSettled([
+                    new Promise((resolve, reject) => {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getAllTransferableItems('財產', forceUserScope);
+                    }),
+                    new Promise((resolve, reject) => {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getAllTransferableItems('物品', forceUserScope);
+                    })
+                ]).then(([propertyResult, itemResult]) => {
+                    if (transferPendingRequestRef.current !== requestId) {
+                        if (typeof onComplete === 'function') {
+                            onComplete(new Error('已切換視角'));
+                        }
+                        return;
+                    }
+
+                    const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
+                    const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
+                    const hasInvalidData = (propertyResult.status === 'fulfilled' && !Array.isArray(propertyAssets)) ||
+                        (itemResult.status === 'fulfilled' && !Array.isArray(itemAssets));
+                    if (hasInvalidData) {
+                        console.error('收到的轉移資料格式錯誤，可能是後端序列化失敗', {
+                            propertyAssets,
+                            itemAssets
+                        });
+                        if (!silent) {
+                            alert('載入失敗：資料格式錯誤');
+                            setActiveModal(null);
+                        }
+                        if (!silent) {
+                            setIsLoadingTransferDetails(false);
+                        }
+                        if (typeof onComplete === 'function') {
+                            onComplete(new Error('資料格式錯誤'));
+                        }
+                        return;
+                    }
+
+                    setTransferPendingDetails({
+                        property: propertyAssets,
+                        items: itemAssets,
+                        total: (propertyAssets?.length || 0) + (itemAssets?.length || 0)
+                    });
+                    if (!silent) {
+                        setIsLoadingTransferDetails(false);
+                    }
+                    if (typeof onComplete === 'function') {
+                        onComplete(null);
+                    }
+                }).catch(error => {
+                    if (transferPendingRequestRef.current !== requestId) {
+                        if (typeof onComplete === 'function') {
+                            onComplete(new Error('已切換視角'));
+                        }
+                        return;
+                    }
+                    console.error('載入轉移詳情失敗：', error);
+                    if (!silent) {
+                        alert('載入轉移詳情失敗：' + (error.message || error));
+                        setActiveModal(null);
+                        setIsLoadingTransferDetails(false);
+                    }
+                    if (typeof onComplete === 'function') {
+                        onComplete(error);
+                    }
+                });
+            }, []);
+
+            const scheduleTransferPendingPreload = useCallback((forceUserScope) => {
+                if (transferPendingLoadRef.current) {
+                    const { type, id } = transferPendingLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    transferPendingLoadRef.current = null;
+                }
+
+                const runLoad = () => {
+                    transferPendingLoadRef.current = null;
+                    loadTransferPendingDetails(forceUserScope, { silent: true });
+                };
+
+                if (typeof window.requestIdleCallback === 'function') {
+                    const id = window.requestIdleCallback(runLoad, { timeout: 1500 });
+                    transferPendingLoadRef.current = { type: 'idle', id: id };
+                } else {
+                    const id = setTimeout(runLoad, 250);
+                    transferPendingLoadRef.current = { type: 'timeout', id: id };
+                }
+            }, [loadTransferPendingDetails]);
+
             const getAssetPendingSessions = useCallback((assetId) => {
                 const entry = inventoryPendingByAsset[assetId];
                 return entry ? entry.sessions || [] : [];
@@ -9932,6 +10041,7 @@
                                 transferLoaded = true;
                                 finishCardLoading();
                                 scheduleScrapPendingPreload(forceUserScope);
+                                scheduleTransferPendingPreload(forceUserScope);
 
                                 // 載入盤點資料
                                 google.script.run
@@ -10031,6 +10141,7 @@
                 const startTime = Date.now();
                 const forceUserScope = viewMode === 'user';
                 scheduleScrapPendingPreload(forceUserScope);
+                scheduleTransferPendingPreload(forceUserScope);
 
                 try {
                     // 並行載入多個 API
@@ -10170,7 +10281,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [buildInventoryPendingByAsset, scheduleScrapPendingPreload, viewMode]);
+            }, [buildInventoryPendingByAsset, scheduleScrapPendingPreload, scheduleTransferPendingPreload, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -10188,10 +10299,13 @@
                 setTransferStatusDetailMap({});
                 setScrapPendingDetails(null);
                 setIsLoadingScrapDetails(false);
+                setTransferPendingDetails(null);
+                setIsLoadingTransferDetails(false);
                 setTransferOverviewLoaded(false);
                 setIsLoadingTransferOverview(false);
                 transferOverviewRequestRef.current += 1;
                 scrapPendingRequestRef.current += 1;
+                transferPendingRequestRef.current += 1;
                 if (scrapPendingLoadRef.current) {
                     const { type, id } = scrapPendingLoadRef.current;
                     if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
@@ -10200,6 +10314,15 @@
                         clearTimeout(id);
                     }
                     scrapPendingLoadRef.current = null;
+                }
+                if (transferPendingLoadRef.current) {
+                    const { type, id } = transferPendingLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    transferPendingLoadRef.current = null;
                 }
                 loadData(mode);
             };
@@ -10284,6 +10407,15 @@
                             clearTimeout(id);
                         }
                         scrapPendingLoadRef.current = null;
+                    }
+                    if (transferPendingLoadRef.current) {
+                        const { type, id } = transferPendingLoadRef.current;
+                        if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                            window.cancelIdleCallback(id);
+                        } else if (type === 'timeout') {
+                            clearTimeout(id);
+                        }
+                        transferPendingLoadRef.current = null;
                     }
                 };
             }, []);
@@ -10708,51 +10840,14 @@
                         loadScrapPendingDetails(viewMode === 'user');
                         break;
                     case 'transferPending':
-                        setIsLoadingTransferDetails(true);
                         setActiveModal('transferPrint');
 
-                        // 並行載入財產和物品兩個類別
-                        Promise.allSettled([
-                            new Promise((resolve, reject) => {
-                                google.script.run
-                                    .withSuccessHandler(resolve)
-                                    .withFailureHandler(reject)
-                                    .getAllTransferableItems('財產', viewMode === 'user');
-                            }),
-                            new Promise((resolve, reject) => {
-                                google.script.run
-                                    .withSuccessHandler(resolve)
-                                    .withFailureHandler(reject)
-                                    .getAllTransferableItems('物品', viewMode === 'user');
-                            })
-                        ]).then(([propertyResult, itemResult]) => {
-                            const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
-                            const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
-                            const hasInvalidData = (propertyResult.status === 'fulfilled' && !Array.isArray(propertyAssets)) ||
-                                (itemResult.status === 'fulfilled' && !Array.isArray(itemAssets));
-                            if (hasInvalidData) {
-                                console.error('收到的轉移資料格式錯誤，可能是後端序列化失敗', {
-                                    propertyAssets,
-                                    itemAssets
-                                });
-                                alert('載入失敗：資料格式錯誤');
-                                setActiveModal(null);
-                                setIsLoadingTransferDetails(false);
-                                return;
-                            }
+                        if (transferPendingDetails !== null) {
+                            setIsLoadingTransferDetails(false);
+                            return;
+                        }
 
-                            setTransferPendingDetails({
-                                property: propertyAssets,
-                                items: itemAssets,
-                                total: (propertyAssets?.length || 0) + (itemAssets?.length || 0)
-                            });
-                            setIsLoadingTransferDetails(false);
-                        }).catch(error => {
-                            console.error('載入轉移詳情失敗：', error);
-                            alert('載入轉移詳情失敗：' + (error.message || error));
-                            setActiveModal(null);
-                            setIsLoadingTransferDetails(false);
-                        });
+                        loadTransferPendingDetails(viewMode === 'user');
                         break;
                     case 'inventory':
                         setActiveModal('inventoryPending');
@@ -10949,7 +11044,7 @@
                         }
                     })
                     .getAssetStatusDetail(asset.assetId, viewMode === 'user');
-            }, [buildCachedStatusDetail, loadScrapPendingDetails, scrapPendingDetails, viewMode]);
+            }, [buildCachedStatusDetail, loadScrapPendingDetails, loadTransferPendingDetails, scrapPendingDetails, transferPendingDetails, viewMode]);
 
             const handleCloseStatusDetail = useCallback(() => {
                 setStatusDetailState(null);
