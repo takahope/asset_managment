@@ -10659,6 +10659,27 @@
                     }
                 }
 
+                if (detailType === 'transfer' && Array.isArray(pendingApprovalsData)) {
+                    const match = pendingApprovalsData.find(item => String(item?.assetId || '').trim() === assetId);
+                    if (match) {
+                        return {
+                            type: 'transfer',
+                            detail: {
+                                workflowStatus: '待接收',
+                                applicationTime: match.applyTime || '',
+                                transferType: match.transferType || '',
+                                oldKeeper: match.oldKeeper || '',
+                                newKeeper: match.newKeeper || '',
+                                oldUser: match.oldUser || '',
+                                newUser: match.newUser || '',
+                                oldLocation: match.oldLocation || '',
+                                newLocation: match.newLocation || '',
+                                applicantEmail: ''
+                            }
+                        };
+                    }
+                }
+
                 if (detailType === 'lending' && Array.isArray(lentAssetsDetails)) {
                     const match = lentAssetsDetails.find(item => String(item?.assetId || '').trim() === assetId);
                     if (match) {
@@ -10678,7 +10699,7 @@
                 }
 
                 return null;
-            }, [lentAssetsDetails, transferringAssets]);
+            }, [lentAssetsDetails, pendingApprovalsData, transferringAssets]);
 
             const handleOpenStatusDetail = useCallback((asset) => {
                 if (!asset) return;
