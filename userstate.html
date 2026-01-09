@@ -9018,6 +9018,9 @@
             const statusDetailRequestRef = useRef(0);
             const [transferStatusDetailMap, setTransferStatusDetailMap] = useState({});
             const transferStatusDetailLoadRef = useRef(null);
+            const [isLoadingTransferOverview, setIsLoadingTransferOverview] = useState(false);
+            const [transferOverviewLoaded, setTransferOverviewLoaded] = useState(false);
+            const pendingApprovalAutoOpenRef = useRef(false);
 
             // 轉移中（我申請的轉移）相關 state
             const [transferringCount, setTransferringCount] = useState(0);
@@ -9652,33 +9655,53 @@
                 }
             }, [loadPendingInventoryAssignments]);
 
-            const loadTransferStatusDetails = useCallback((assets, forceUserScope) => {
-                const assetIds = (Array.isArray(assets) ? assets : [])
-                    .filter(asset => asset && (asset.status === '轉移中' || asset.status === '待接收'))
-                    .map(asset => String(asset.assetId || '').trim())
-                    .filter(assetId => assetId);
-                const uniqueAssetIds = Array.from(new Set(assetIds));
-
-                if (uniqueAssetIds.length === 0) {
-                    setTransferStatusDetailMap({});
-                    return;
-                }
-
+            const loadTransferOverview = useCallback((forceUserScope, options = {}) => {
+                const { onComplete } = options || {};
+                setIsLoadingTransferOverview(true);
                 google.script.run
                     .withSuccessHandler(response => {
+                        setIsLoadingTransferOverview(false);
+                        setTransferOverviewLoaded(true);
                         if (!response || response.error) {
-                            console.warn('載入轉移狀態詳情失敗：', response?.error || '沒有回應');
+                            console.warn('載入轉移總覽失敗：', response?.error || '沒有回應');
+                            if (typeof onComplete === 'function') {
+                                onComplete(new Error(response?.error || '沒有回應'));
+                            }
                             return;
                         }
-                        setTransferStatusDetailMap(response.details || {});
+
+                        const transferring = response.transferring || {};
+                        const pending = response.pending || {};
+                        setTransferringAssets(Array.isArray(transferring.assets) ? transferring.assets : []);
+                        setTransferringCount(typeof transferring.count === 'number'
+                            ? transferring.count
+                            : (Array.isArray(transferring.assets) ? transferring.assets.length : 0));
+                        setPendingApprovalsData(Array.isArray(pending.approvals) ? pending.approvals : []);
+                        setTransferStatusDetailMap(response.transferDetailMap || {});
+
+                        if (pendingApprovalAutoOpenRef.current) {
+                            pendingApprovalAutoOpenRef.current = false;
+                            if (typeof window.openPendingApprovalModal === 'function') {
+                                window.openPendingApprovalModal();
+                            }
+                        }
+
+                        if (typeof onComplete === 'function') {
+                            onComplete(null, response);
+                        }
                     })
                     .withFailureHandler(error => {
-                        console.warn('載入轉移狀態詳情失敗：', error?.message || error);
+                        setIsLoadingTransferOverview(false);
+                        setTransferOverviewLoaded(true);
+                        console.warn('載入轉移總覽失敗：', error?.message || error);
+                        if (typeof onComplete === 'function') {
+                            onComplete(error);
+                        }
                     })
-                    .getTransferStatusDetailsByAssets(uniqueAssetIds, forceUserScope);
+                    .getTransferOverviewForUserState(forceUserScope);
             }, []);
 
-            const scheduleTransferStatusDetailPreload = useCallback((assets, forceUserScope) => {
+            const scheduleTransferOverviewLoad = useCallback((forceUserScope) => {
                 if (transferStatusDetailLoadRef.current) {
                     const { type, id } = transferStatusDetailLoadRef.current;
                     if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
@@ -9691,7 +9714,7 @@
 
                 const runLoad = () => {
                     transferStatusDetailLoadRef.current = null;
-                    loadTransferStatusDetails(assets, forceUserScope);
+                    loadTransferOverview(forceUserScope);
                 };
 
                 if (typeof window.requestIdleCallback === 'function') {
@@ -9701,7 +9724,7 @@
                     const id = setTimeout(runLoad, 200);
                     transferStatusDetailLoadRef.current = { type: 'timeout', id: id };
                 }
-            }, [loadTransferStatusDetails]);
+            }, [loadTransferOverview]);
 
             const getAssetPendingSessions = useCallback((assetId) => {
                 const entry = inventoryPendingByAsset[assetId];
@@ -9768,35 +9791,22 @@
                                     ].filter(Boolean).join(' ').toLowerCase()
                                 }));
                                 setAllAssets(processedAssets);
-                                scheduleTransferStatusDetailPreload(processedAssets, forceUserScope);
                                 if (!viewModeInitializedRef.current) {
                                     setViewMode(response.isAdmin ? 'admin' : 'user');
                                     viewModeInitializedRef.current = true;
                                 }
 
-                                let pendingLoaded = false;
+                                let transferLoaded = false;
                                 let inventoryLoaded = false;
                                 const finishCardLoading = () => {
-                                    if (pendingLoaded && inventoryLoaded) {
+                                    if (transferLoaded && inventoryLoaded) {
                                         setIsLoadingCards(false);
                                     }
                                 };
 
-                                // 載入待接收資料
-                                google.script.run
-                                    .withSuccessHandler(pendingResponse => {
-                                        if (pendingResponse && pendingResponse.approvals) {
-                                            setPendingApprovalsData(pendingResponse.approvals);
-                                        }
-                                        pendingLoaded = true;
-                                        finishCardLoading();
-                                    })
-                                    .withFailureHandler(error => {
-                                        console.warn('載入待接收清單失敗：', error.message);
-                                        pendingLoaded = true;
-                                        finishCardLoading();
-                                    })
-                                    .getPendingApprovals(forceUserScope);
+                                scheduleTransferOverviewLoad(forceUserScope);
+                                transferLoaded = true;
+                                finishCardLoading();
 
                                 // 載入盤點資料
                                 google.script.run
@@ -9834,21 +9844,6 @@
                                         setTransferPendingCount(0);
                                     })
                                     .getTransferableItemsCount(forceUserScope);
-
-                                // 載入我申請的轉移中資產數量
-                                google.script.run
-                                    .withSuccessHandler(response => {
-                                        if (response && typeof response.count === 'number') {
-                                            setTransferringCount(response.count);
-                                            setTransferringAssets(response.assets || []);
-                                        }
-                                    })
-                                    .withFailureHandler(error => {
-                                        console.warn('載入轉移中數量失敗：', error.message);
-                                        setTransferringCount(0);
-                                        setTransferringAssets(null);
-                                    })
-                                    .getTransferringAssets(forceUserScope);
 
                                 // 載入轉移選項資料（保管人、地點等）
                                 google.script.run
@@ -9912,13 +9907,13 @@
                 const forceUserScope = viewMode === 'user';
 
                 try {
-                    // 並行載入五個 API
-                    const [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse, lentResponse] = await Promise.allSettled([
+                    // 並行載入多個 API
+                    const [transferOverviewResponse, inventoryResponse, assetsResponse, transferCountResponse, pendingInventoryResponse, lentResponse] = await Promise.allSettled([
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getPendingApprovals(forceUserScope);
+                                .getTransferOverviewForUserState(forceUserScope);
                         }),
                         new Promise((resolve, reject) => {
                             google.script.run
@@ -9942,12 +9937,6 @@
                             google.script.run
                                 .withSuccessHandler(resolve)
                                 .withFailureHandler(reject)
-                                .getTransferringAssets(forceUserScope);
-                        }),
-                        new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler(resolve)
-                                .withFailureHandler(reject)
                                 .getPendingInventoryAssignments(forceUserScope);
                         }),
                         new Promise((resolve, reject) => {
@@ -9959,8 +9948,25 @@
                     ]);
 
                     // 處理成功的結果
-                    if (pendingResponse.status === 'fulfilled' && pendingResponse.value?.approvals) {
-                        setPendingApprovalsData(pendingResponse.value.approvals);
+                    if (transferOverviewResponse.status === 'fulfilled') {
+                        const response = transferOverviewResponse.value;
+                        if (response && !response.error) {
+                            const transferring = response.transferring || {};
+                            const pending = response.pending || {};
+                            setTransferringAssets(Array.isArray(transferring.assets) ? transferring.assets : []);
+                            setTransferringCount(typeof transferring.count === 'number'
+                                ? transferring.count
+                                : (Array.isArray(transferring.assets) ? transferring.assets.length : 0));
+                            setPendingApprovalsData(Array.isArray(pending.approvals) ? pending.approvals : []);
+                            setTransferStatusDetailMap(response.transferDetailMap || {});
+                            setTransferOverviewLoaded(true);
+                        } else {
+                            setTransferringAssets([]);
+                            setTransferringCount(0);
+                            setPendingApprovalsData([]);
+                            setTransferStatusDetailMap({});
+                            setTransferOverviewLoaded(true);
+                        }
                     }
                     if (inventoryResponse.status === 'fulfilled' && inventoryResponse.value) {
                         setInventorySessions(inventoryResponse.value);
@@ -9977,14 +9983,9 @@
                             ].filter(Boolean).join(' ').toLowerCase()
                         }));
                         setAllAssets(processedAssets);
-                        scheduleTransferStatusDetailPreload(processedAssets, forceUserScope);
                     }
                     if (transferCountResponse.status === 'fulfilled' && typeof transferCountResponse.value === 'number') {
                         setTransferPendingCount(transferCountResponse.value);
-                    }
-                    if (transferringResponse.status === 'fulfilled' && typeof transferringResponse.value?.count === 'number') {
-                        setTransferringCount(transferringResponse.value.count);
-                        setTransferringAssets(transferringResponse.value.assets || []);
                     }
                     let pendingInventoryLoadError = '';
                     if (pendingInventoryResponse.status === 'fulfilled') {
@@ -10020,7 +10021,7 @@
                     }
 
                     // 檢查失敗的請求
-                    const failures = [pendingResponse, inventoryResponse, assetsResponse, transferCountResponse, transferringResponse, pendingInventoryResponse, lentResponse]
+                    const failures = [transferOverviewResponse, inventoryResponse, assetsResponse, transferCountResponse, pendingInventoryResponse, lentResponse]
                         .filter(r => r.status === 'rejected');
                     if (failures.length > 0) {
                         console.warn('部分數據載入失敗：', failures);
@@ -10043,7 +10044,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [buildInventoryPendingByAsset, scheduleTransferStatusDetailPreload, viewMode]);
+            }, [buildInventoryPendingByAsset, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -10056,7 +10057,11 @@
                 setViewMode(mode);
                 setTransferringAssets(null);
                 setLentAssetsDetails(null);
+                setPendingApprovalsData([]);
+                setTransferringCount(0);
                 setTransferStatusDetailMap({});
+                setTransferOverviewLoaded(false);
+                setIsLoadingTransferOverview(false);
                 loadData(mode);
             };
 
@@ -10493,28 +10498,26 @@
                         }
 
                         setIsLoadingTransferring(true);
-                        // 調用後端獲取轉移中資產詳情
-                        google.script.run
-                            .withSuccessHandler(response => {
-                                if (response.error) {
-                                    alert('載入轉移中資料失敗：' + response.error);
+                        loadTransferOverview(viewMode === 'user', {
+                            onComplete: (error) => {
+                                if (error) {
+                                    alert('載入轉移中資料失敗：' + (error.message || error));
                                     setActiveModal(null);
-                                    setIsLoadingTransferring(false);
-                                    return;
                                 }
-                                setTransferringAssets(response.assets || []);
                                 setIsLoadingTransferring(false);
-                            })
-                            .withFailureHandler(error => {
-                                console.error('載入轉移中詳情失敗：', error.message);
-                                alert('載入轉移中詳情失敗：' + error.message);
-                                setActiveModal(null);
-                                setIsLoadingTransferring(false);
-                            })
-                            .getTransferringAssets(viewMode === 'user');
+                            }
+                        });
                         break;
                     case 'pending':
-                        window.openPendingApprovalModal();
+                        pendingApprovalAutoOpenRef.current = true;
+                        if (transferOverviewLoaded) {
+                            pendingApprovalAutoOpenRef.current = false;
+                            window.openPendingApprovalModal();
+                            return;
+                        }
+                        if (!isLoadingTransferOverview) {
+                            loadTransferOverview(viewMode === 'user');
+                        }
                         break;
                     case 'lent':
                         // 設定載入狀態並打開 modal
