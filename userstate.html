@@ -9021,6 +9021,7 @@
             const [isLoadingTransferOverview, setIsLoadingTransferOverview] = useState(false);
             const [transferOverviewLoaded, setTransferOverviewLoaded] = useState(false);
             const pendingApprovalAutoOpenRef = useRef(false);
+            const transferOverviewRequestRef = useRef(0);
 
             // 轉移中（我申請的轉移）相關 state
             const [transferringCount, setTransferringCount] = useState(0);
@@ -9657,9 +9658,17 @@
 
             const loadTransferOverview = useCallback((forceUserScope, options = {}) => {
                 const { onComplete } = options || {};
+                transferOverviewRequestRef.current += 1;
+                const requestId = transferOverviewRequestRef.current;
                 setIsLoadingTransferOverview(true);
                 google.script.run
                     .withSuccessHandler(response => {
+                        if (transferOverviewRequestRef.current !== requestId) {
+                            if (typeof onComplete === 'function') {
+                                onComplete(new Error('已切換視角'));
+                            }
+                            return;
+                        }
                         setIsLoadingTransferOverview(false);
                         setTransferOverviewLoaded(true);
                         if (!response || response.error) {
@@ -9691,6 +9700,12 @@
                         }
                     })
                     .withFailureHandler(error => {
+                        if (transferOverviewRequestRef.current !== requestId) {
+                            if (typeof onComplete === 'function') {
+                                onComplete(new Error('已切換視角'));
+                            }
+                            return;
+                        }
                         setIsLoadingTransferOverview(false);
                         setTransferOverviewLoaded(true);
                         console.warn('載入轉移總覽失敗：', error?.message || error);
@@ -10062,6 +10077,7 @@
                 setTransferStatusDetailMap({});
                 setTransferOverviewLoaded(false);
                 setIsLoadingTransferOverview(false);
+                transferOverviewRequestRef.current += 1;
                 loadData(mode);
             };
 
