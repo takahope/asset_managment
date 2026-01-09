@@ -9082,6 +9082,10 @@
             const viewModeInitializedRef = useRef(false);
             const inventoryToastTimerRef = useRef(null);
             const pendingInventoryLoadRef = useRef(null);
+            const pendingInventoryCacheRef = useRef(new Map());
+            const pendingInventoryRequestMapRef = useRef(new Map());
+            const pendingInventoryInFlightRef = useRef(new Map());
+            const PENDING_INVENTORY_CACHE_TTL = 10000;
             const advancedSubmitRef = useRef(false);
             const scrapPendingLoadRef = useRef(null);
             const scrapPendingRequestRef = useRef(0);
@@ -9596,59 +9600,148 @@
                 return map;
             }, []);
 
-            const loadPendingInventoryAssignments = useCallback((forceUserScope, options = {}) => {
-              const { onComplete } = options;
-              setIsLoadingPendingInventory(true);
-              setPendingInventoryError('');
-              google.script.run
-                .withSuccessHandler((response) => {
-                  if (!response) {
-                    setInventoryPendingByAsset({});
-                    setPendingInventoryItems([]);
-                    setInventoryStatusByAsset({});
-                    setIsLoadingPendingInventory(false);
-                    setPendingInventoryError('沒有回應');
-                    if (typeof onComplete === 'function') {
-                      onComplete(new Error('沒有回應'));
-                    }
-                    return;
-                  }
-                  if (response.error) {
-                    console.warn('載入盤點待辦失敗：', response.error);
-                    setInventoryPendingByAsset({});
-                    setPendingInventoryItems([]);
-                    setInventoryStatusByAsset({});
-                    setIsLoadingPendingInventory(false);
-                    setPendingInventoryError(response.error);
-                    if (typeof onComplete === 'function') {
-                      onComplete(new Error(response.error));
-                    }
-                    return;
-                  }
-                  const pendingItems = response.pendingItems || [];
-                  const map = buildInventoryPendingByAsset(pendingItems);
-                  setInventoryPendingByAsset(map);
-                  setPendingInventoryItems(pendingItems);
-                  setInventoryStatusByAsset(response.inventoryStatusByAsset || {});
-                  setIsLoadingPendingInventory(false);
-                  setPendingInventoryError('');
-                  if (typeof onComplete === 'function') {
-                    onComplete(null, response);
-                  }
-                })
-                .withFailureHandler((error) => {
-                  console.error('載入盤點待辦失敗:', error);
-                  setInventoryPendingByAsset({});
-                  setPendingInventoryItems([]);
-                  setInventoryStatusByAsset({});
-                  setIsLoadingPendingInventory(false);
-                  setPendingInventoryError(error.message || '載入失敗');
-                  if (typeof onComplete === 'function') {
-                    onComplete(error);
-                  }
-                })
-                .getPendingInventoryAssignments(forceUserScope);
+            const getPendingInventoryCacheKey = useCallback((forceUserScope, options = {}) => {
+                const scopeKey = forceUserScope ? 'user' : 'admin';
+                const sessionKey = options.sessionId
+                    ? String(options.sessionId)
+                    : (currentInventorySessionId ? String(currentInventorySessionId) : 'all');
+                return `${scopeKey}:${sessionKey}`;
+            }, [currentInventorySessionId]);
+
+            const applyPendingInventorySuccess = useCallback((response) => {
+                const pendingItems = response?.pendingItems || [];
+                const map = buildInventoryPendingByAsset(pendingItems);
+                setInventoryPendingByAsset(map);
+                setPendingInventoryItems(pendingItems);
+                setInventoryStatusByAsset(response?.inventoryStatusByAsset || {});
+                setIsLoadingPendingInventory(false);
+                setPendingInventoryError('');
             }, [buildInventoryPendingByAsset]);
+
+            const applyPendingInventoryFailure = useCallback((message) => {
+                setInventoryPendingByAsset({});
+                setPendingInventoryItems([]);
+                setInventoryStatusByAsset({});
+                setIsLoadingPendingInventory(false);
+                setPendingInventoryError(message || '載入失敗');
+            }, []);
+
+            const updateCurrentInventorySessionId = useCallback((nextSessionId) => {
+                setCurrentInventorySessionId((prev) => {
+                    if (prev !== nextSessionId) {
+                        pendingInventoryCacheRef.current.clear();
+                        pendingInventoryRequestMapRef.current.clear();
+                        pendingInventoryInFlightRef.current.clear();
+                    }
+                    return nextSessionId;
+                });
+            }, []);
+
+            const fetchPendingInventoryAssignments = useCallback((forceUserScope, options = {}) => {
+                const {
+                    onCached,
+                    force = false,
+                    allowStale = true,
+                    silent = false,
+                    sessionId
+                } = options;
+                const cacheKey = getPendingInventoryCacheKey(forceUserScope, { sessionId });
+                const cachedEntry = pendingInventoryCacheRef.current.get(cacheKey);
+                const hasCache = Boolean(cachedEntry);
+                const isFresh = hasCache && Date.now() - cachedEntry.timestamp <= PENDING_INVENTORY_CACHE_TTL;
+
+                if (hasCache && (isFresh || allowStale)) {
+                    applyPendingInventorySuccess(cachedEntry.data);
+                    if (typeof onCached === 'function') {
+                        onCached(cachedEntry.data);
+                    }
+                    if (isFresh && !force) {
+                        return Promise.resolve({ response: cachedEntry.data, cacheKey: cacheKey, fromCache: true });
+                    }
+                }
+
+                const inFlight = pendingInventoryInFlightRef.current.get(cacheKey);
+                if (inFlight) {
+                    if (!hasCache) {
+                        setIsLoadingPendingInventory(true);
+                    }
+                    return inFlight;
+                }
+
+                if (!hasCache) {
+                    setIsLoadingPendingInventory(true);
+                }
+                setPendingInventoryError('');
+
+                const requestId = (pendingInventoryRequestMapRef.current.get(cacheKey) || 0) + 1;
+                pendingInventoryRequestMapRef.current.set(cacheKey, requestId);
+
+                const requestPromise = new Promise((resolve, reject) => {
+                    google.script.run
+                        .withSuccessHandler(response => resolve(response))
+                        .withFailureHandler(error => reject(error))
+                        .getPendingInventoryAssignments(forceUserScope);
+                });
+
+                const wrappedPromise = requestPromise
+                    .then((response) => {
+                        const latestId = pendingInventoryRequestMapRef.current.get(cacheKey);
+                        if (latestId !== requestId) {
+                            return { response: response, cacheKey: cacheKey, skipped: true };
+                        }
+                        if (!response || response.error) {
+                            const message = response?.error || '沒有回應';
+                            throw new Error(message);
+                        }
+                        applyPendingInventorySuccess(response);
+                        pendingInventoryCacheRef.current.set(cacheKey, {
+                            timestamp: Date.now(),
+                            data: response
+                        });
+                        return { response: response, cacheKey: cacheKey };
+                    })
+                    .catch((error) => {
+                        const latestId = pendingInventoryRequestMapRef.current.get(cacheKey);
+                        if (latestId !== requestId) {
+                            return { cacheKey: cacheKey, skipped: true };
+                        }
+                        if (!silent) {
+                            console.error('載入盤點待辦失敗:', error);
+                        }
+                        const message = error?.message || String(error || '載入失敗');
+                        applyPendingInventoryFailure(message);
+                        throw error;
+                    })
+                    .finally(() => {
+                        const activePromise = pendingInventoryInFlightRef.current.get(cacheKey);
+                        if (activePromise === wrappedPromise) {
+                            pendingInventoryInFlightRef.current.delete(cacheKey);
+                        }
+                    });
+
+                pendingInventoryInFlightRef.current.set(cacheKey, wrappedPromise);
+                return wrappedPromise;
+            }, [
+                PENDING_INVENTORY_CACHE_TTL,
+                applyPendingInventoryFailure,
+                applyPendingInventorySuccess,
+                getPendingInventoryCacheKey
+            ]);
+
+            const loadPendingInventoryAssignments = useCallback((forceUserScope, options = {}) => {
+                const { onComplete } = options;
+                fetchPendingInventoryAssignments(forceUserScope, options)
+                    .then((payload) => {
+                        if (typeof onComplete === 'function') {
+                            onComplete(null, payload?.response || null, payload);
+                        }
+                    })
+                    .catch((error) => {
+                        if (typeof onComplete === 'function') {
+                            onComplete(error);
+                        }
+                    });
+            }, [fetchPendingInventoryAssignments]);
 
             const schedulePendingInventoryLoad = useCallback((forceUserScope) => {
                 if (pendingInventoryLoadRef.current) {
@@ -10135,10 +10228,9 @@
                                             setCurrentUserGroup(inventoryResponse.currentUserGroup || '');
 
                                             // 如有進行中會話，載入詳情以獲取待盤點資產
-                                            if (inventoryResponse.activeSessions && inventoryResponse.activeSessions.length > 0) {
-                                                const sessionId = inventoryResponse.activeSessions[0].inventoryId;
-                                                setCurrentInventorySessionId(sessionId);
-                                            }
+                                            const activeSessions = inventoryResponse.activeSessions || [];
+                                            const sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
+                                            updateCurrentInventorySessionId(sessionId);
                                         }
                                         schedulePendingInventoryLoad(forceUserScope);
                                         inventoryLoaded = true;
@@ -10255,12 +10347,7 @@
                                 .withFailureHandler(reject)
                                 .getTransferableItemsCount(forceUserScope);
                         }),
-                        new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler(resolve)
-                                .withFailureHandler(reject)
-                                .getPendingInventoryAssignments(forceUserScope);
-                        }),
+                        fetchPendingInventoryAssignments(forceUserScope, { force: true, allowStale: false }),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
@@ -10292,6 +10379,9 @@
                     }
                     if (inventoryResponse.status === 'fulfilled' && inventoryResponse.value) {
                         setInventorySessions(inventoryResponse.value);
+                        const activeSessions = inventoryResponse.value.activeSessions || [];
+                        const sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
+                        updateCurrentInventorySessionId(sessionId);
                     }
                     if (assetsResponse.status === 'fulfilled' && assetsResponse.value?.assets) {
                         // ✨ 方案 B：預處理搜尋文字
@@ -10308,30 +10398,6 @@
                     }
                     if (transferCountResponse.status === 'fulfilled' && typeof transferCountResponse.value === 'number') {
                         setTransferPendingCount(transferCountResponse.value);
-                    }
-                    let pendingInventoryLoadError = '';
-                    if (pendingInventoryResponse.status === 'fulfilled') {
-                      const response = pendingInventoryResponse.value;
-                      if (response && !response.error) {
-                        const pendingItems = response.pendingItems || [];
-                        const map = buildInventoryPendingByAsset(pendingItems);
-                        setInventoryPendingByAsset(map);
-                        setPendingInventoryItems(pendingItems);
-                        setInventoryStatusByAsset(response.inventoryStatusByAsset || {});
-                      } else {
-                        setInventoryPendingByAsset({});
-                        setPendingInventoryItems([]);
-                        setInventoryStatusByAsset({});
-                        pendingInventoryLoadError = response?.error || '載入失敗';
-                      }
-                    } else {
-                      setInventoryPendingByAsset({});
-                      setPendingInventoryItems([]);
-                      setInventoryStatusByAsset({});
-                      pendingInventoryLoadError = pendingInventoryResponse.reason?.message || '載入失敗';
-                    }
-                    if (pendingInventoryLoadError) {
-                      setPendingInventoryError(pendingInventoryLoadError);
                     }
                     if (lentResponse.status === 'fulfilled') {
                         const response = lentResponse.value;
@@ -10366,7 +10432,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [buildInventoryPendingByAsset, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, viewMode]);
+            }, [fetchPendingInventoryAssignments, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -10392,6 +10458,19 @@
                 scrapPendingRequestRef.current += 1;
                 transferPendingRequestRef.current += 1;
                 addAssetDropdownRequestRef.current += 1;
+                updateCurrentInventorySessionId(null);
+                pendingInventoryCacheRef.current.clear();
+                pendingInventoryRequestMapRef.current.clear();
+                pendingInventoryInFlightRef.current.clear();
+                if (pendingInventoryLoadRef.current) {
+                    const { type, id } = pendingInventoryLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    pendingInventoryLoadRef.current = null;
+                }
                 if (scrapPendingLoadRef.current) {
                     const { type, id } = scrapPendingLoadRef.current;
                     if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
@@ -10521,6 +10600,9 @@
                         }
                         addAssetDropdownLoadRef.current = null;
                     }
+                    pendingInventoryCacheRef.current.clear();
+                    pendingInventoryRequestMapRef.current.clear();
+                    pendingInventoryInFlightRef.current.clear();
                 };
             }, []);
 
