@@ -4422,6 +4422,111 @@ function getTransferringAssets(forceUserScope) {
 }
 
 /**
+ * [供 userstate.html 呼叫] 批次取得轉移中/待接收資產的最新狀態詳情
+ * @param {string[]} assetIds 資產編號清單
+ * @param {boolean} forceUserScope 是否強制使用者視角
+ * @returns {Object} { details: { [assetId]: { type, detail, assetName, status } }, error? }
+ */
+function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
+  try {
+    const normalizedIds = (Array.isArray(assetIds) ? assetIds : [])
+      .map(id => String(id || '').trim())
+      .filter(id => id);
+    if (normalizedIds.length === 0) {
+      return { details: {} };
+    }
+
+    const uniqueIds = Array.from(new Set(normalizedIds));
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
+    const allAssets = getAllAssets();
+    const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
+
+    let targetIds = uniqueIds;
+    if (!useAdminScope) {
+      const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase());
+      const groupEmailSet = new Set(groupEmails);
+      targetIds = uniqueIds.filter(assetId => {
+        const asset = assetMap.get(assetId);
+        if (!asset) return false;
+        const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
+        const userEmail = String(asset.userEmail || '').toLowerCase();
+        return groupEmailSet.has(leaderEmail) || (userEmail && groupEmailSet.has(userEmail));
+      });
+    }
+
+    if (targetIds.length === 0) {
+      return { details: {} };
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    if (!appLogSheet || appLogSheet.getLastRow() < 2) {
+      return { details: {} };
+    }
+
+    const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
+    const targetSet = new Set(targetIds);
+    const latestRowByAsset = {};
+    const latestTimeByAsset = {};
+
+    appLogData.forEach(row => {
+      const assetId = String(row[AL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      if (!targetSet.has(assetId)) return;
+      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      if (status !== '待接收' && status !== '轉移中') return;
+
+      const rawTime = row[AL_APP_TIME_COLUMN_INDEX - 1];
+      const timeValue = rawTime ? new Date(rawTime).getTime() : 0;
+      const normalizedTime = Number.isNaN(timeValue) ? 0 : timeValue;
+      if (!latestRowByAsset[assetId] || normalizedTime >= (latestTimeByAsset[assetId] || 0)) {
+        latestRowByAsset[assetId] = row;
+        latestTimeByAsset[assetId] = normalizedTime;
+      }
+    });
+
+    const formatDateValue = (value, pattern) => {
+      if (!value) return '';
+      try {
+        return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+      } catch (e) {
+        return String(value);
+      }
+    };
+
+    const details = {};
+    Object.keys(latestRowByAsset).forEach(assetId => {
+      const row = latestRowByAsset[assetId];
+      const asset = assetMap.get(assetId);
+      details[assetId] = {
+        assetId: assetId,
+        assetName: asset ? String(asset.assetName || '') : '',
+        status: String(asset?.assetStatus || row[AL_STATUS_COLUMN_INDEX - 1] || '').trim(),
+        type: 'transfer',
+        detail: {
+          workflowStatus: row[AL_STATUS_COLUMN_INDEX - 1] || '',
+          applicationTime: formatDateValue(row[AL_APP_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd HH:mm'),
+          transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
+          oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1] || '',
+          newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1] || '',
+          oldUser: row[AL_OLD_USER_COLUMN_INDEX - 1] || '',
+          newUser: row[AL_NEW_USER_COLUMN_INDEX - 1] || '',
+          oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1] || '',
+          newLocation: row[AL_NEW_LOCATION_COLUMN_INDEX - 1] || '',
+          applicantEmail: row[AL_APPLICANT_EMAIL_COLUMN_INDEX - 1] || ''
+        }
+      };
+    });
+
+    return { details: details };
+  } catch (e) {
+    Logger.log(`getTransferStatusDetailsByAssets 失敗: ${e.message} at ${e.stack}`);
+    return { details: {}, error: e.message };
+  }
+}
+
+/**
  * [供 userstate.html 呼叫] 取得單一資產狀態詳情
  * @param {string} assetId 資產編號
  * @param {boolean} forceUserScope 是否強制使用者視角
