@@ -9070,6 +9070,8 @@
             const inventoryToastTimerRef = useRef(null);
             const pendingInventoryLoadRef = useRef(null);
             const advancedSubmitRef = useRef(false);
+            const scrapPendingLoadRef = useRef(null);
+            const scrapPendingRequestRef = useRef(0);
             const [cartSnapshot, setCartSnapshot] = useState(() => (
                 window.AssetCartStore ? window.AssetCartStore.getSnapshot() : { mode: 'STANDARD', items: [], pendingAssetId: null }
             ));
@@ -9741,6 +9743,113 @@
                 }
             }, [loadTransferOverview]);
 
+            const loadScrapPendingDetails = useCallback((forceUserScope, options = {}) => {
+                const { silent = false, onComplete } = options || {};
+                scrapPendingRequestRef.current += 1;
+                const requestId = scrapPendingRequestRef.current;
+
+                if (!silent) {
+                    setIsLoadingScrapDetails(true);
+                }
+
+                Promise.allSettled([
+                    new Promise((resolve, reject) => {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getAllScrappableItems('財產', forceUserScope);
+                    }),
+                    new Promise((resolve, reject) => {
+                        google.script.run
+                            .withSuccessHandler(resolve)
+                            .withFailureHandler(reject)
+                            .getAllScrappableItems('物品', forceUserScope);
+                    })
+                ]).then(([propertyResult, itemResult]) => {
+                    if (scrapPendingRequestRef.current !== requestId) {
+                        if (typeof onComplete === 'function') {
+                            onComplete(new Error('已切換視角'));
+                        }
+                        return;
+                    }
+
+                    const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
+                    const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
+                    const hasInvalidData = (propertyResult.status === 'fulfilled' && !Array.isArray(propertyAssets)) ||
+                        (itemResult.status === 'fulfilled' && !Array.isArray(itemAssets));
+                    if (hasInvalidData) {
+                        console.error('收到的報廢資料格式錯誤，可能是後端序列化失敗', {
+                            propertyAssets,
+                            itemAssets
+                        });
+                        if (!silent) {
+                            alert('載入失敗：資料格式錯誤');
+                            setActiveModal(null);
+                        }
+                        if (!silent) {
+                            setIsLoadingScrapDetails(false);
+                        }
+                        if (typeof onComplete === 'function') {
+                            onComplete(new Error('資料格式錯誤'));
+                        }
+                        return;
+                    }
+
+                    setScrapPendingDetails({
+                        property: propertyAssets,
+                        items: itemAssets,
+                        total: (propertyAssets?.length || 0) + (itemAssets?.length || 0)
+                    });
+                    if (!silent) {
+                        setIsLoadingScrapDetails(false);
+                    }
+                    if (typeof onComplete === 'function') {
+                        onComplete(null);
+                    }
+                }).catch(error => {
+                    if (scrapPendingRequestRef.current !== requestId) {
+                        if (typeof onComplete === 'function') {
+                            onComplete(new Error('已切換視角'));
+                        }
+                        return;
+                    }
+                    console.error('載入報廢詳情失敗：', error);
+                    if (!silent) {
+                        alert('載入報廢詳情失敗：' + (error.message || error));
+                        setActiveModal(null);
+                        setIsLoadingScrapDetails(false);
+                    }
+                    if (typeof onComplete === 'function') {
+                        onComplete(error);
+                    }
+                });
+            }, []);
+
+            const scheduleScrapPendingPreload = useCallback((forceUserScope) => {
+                if (scrapPendingLoadRef.current) {
+                    const { type, id } = scrapPendingLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    scrapPendingLoadRef.current = null;
+                }
+
+                const runLoad = () => {
+                    scrapPendingLoadRef.current = null;
+                    loadScrapPendingDetails(forceUserScope, { silent: true });
+                };
+
+                if (typeof window.requestIdleCallback === 'function') {
+                    const id = window.requestIdleCallback(runLoad, { timeout: 1500 });
+                    scrapPendingLoadRef.current = { type: 'idle', id: id };
+                } else {
+                    const id = setTimeout(runLoad, 250);
+                    scrapPendingLoadRef.current = { type: 'timeout', id: id };
+                }
+            }, [loadScrapPendingDetails]);
+
             const getAssetPendingSessions = useCallback((assetId) => {
                 const entry = inventoryPendingByAsset[assetId];
                 return entry ? entry.sessions || [] : [];
@@ -9822,6 +9931,7 @@
                                 scheduleTransferOverviewLoad(forceUserScope);
                                 transferLoaded = true;
                                 finishCardLoading();
+                                scheduleScrapPendingPreload(forceUserScope);
 
                                 // 載入盤點資料
                                 google.script.run
@@ -9920,6 +10030,7 @@
                 setPendingInventoryError('');
                 const startTime = Date.now();
                 const forceUserScope = viewMode === 'user';
+                scheduleScrapPendingPreload(forceUserScope);
 
                 try {
                     // 並行載入多個 API
@@ -10059,7 +10170,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [buildInventoryPendingByAsset, viewMode]);
+            }, [buildInventoryPendingByAsset, scheduleScrapPendingPreload, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -10075,9 +10186,21 @@
                 setPendingApprovalsData([]);
                 setTransferringCount(0);
                 setTransferStatusDetailMap({});
+                setScrapPendingDetails(null);
+                setIsLoadingScrapDetails(false);
                 setTransferOverviewLoaded(false);
                 setIsLoadingTransferOverview(false);
                 transferOverviewRequestRef.current += 1;
+                scrapPendingRequestRef.current += 1;
+                if (scrapPendingLoadRef.current) {
+                    const { type, id } = scrapPendingLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    scrapPendingLoadRef.current = null;
+                }
                 loadData(mode);
             };
 
@@ -10152,6 +10275,15 @@
                             clearTimeout(id);
                         }
                         transferStatusDetailLoadRef.current = null;
+                    }
+                    if (scrapPendingLoadRef.current) {
+                        const { type, id } = scrapPendingLoadRef.current;
+                        if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                            window.cancelIdleCallback(id);
+                        } else if (type === 'timeout') {
+                            clearTimeout(id);
+                        }
+                        scrapPendingLoadRef.current = null;
                     }
                 };
             }, []);
@@ -10566,51 +10698,14 @@
                             .getLentOutAssets(viewMode === 'user');
                         break;
                     case 'scrapPending':
-                        setIsLoadingScrapDetails(true);
                         setActiveModal('scrapPrint');
 
-                        // 並行載入財產和物品兩個類別
-                        Promise.allSettled([
-                            new Promise((resolve, reject) => {
-                                google.script.run
-                                    .withSuccessHandler(resolve)
-                                    .withFailureHandler(reject)
-                                    .getAllScrappableItems('財產', viewMode === 'user');
-                            }),
-                            new Promise((resolve, reject) => {
-                                google.script.run
-                                    .withSuccessHandler(resolve)
-                                    .withFailureHandler(reject)
-                                    .getAllScrappableItems('物品', viewMode === 'user');
-                            })
-                        ]).then(([propertyResult, itemResult]) => {
-                            const propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
-                            const itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
-                            const hasInvalidData = (propertyResult.status === 'fulfilled' && !Array.isArray(propertyAssets)) ||
-                                (itemResult.status === 'fulfilled' && !Array.isArray(itemAssets));
-                            if (hasInvalidData) {
-                                console.error('收到的報廢資料格式錯誤，可能是後端序列化失敗', {
-                                    propertyAssets,
-                                    itemAssets
-                                });
-                                alert('載入失敗：資料格式錯誤');
-                                setActiveModal(null);
-                                setIsLoadingScrapDetails(false);
-                                return;
-                            }
+                        if (scrapPendingDetails !== null) {
+                            setIsLoadingScrapDetails(false);
+                            return;
+                        }
 
-                            setScrapPendingDetails({
-                                property: propertyAssets,
-                                items: itemAssets,
-                                total: (propertyAssets?.length || 0) + (itemAssets?.length || 0)
-                            });
-                            setIsLoadingScrapDetails(false);
-                        }).catch(error => {
-                            console.error('載入報廢詳情失敗：', error);
-                            alert('載入報廢詳情失敗：' + (error.message || error));
-                            setActiveModal(null);
-                            setIsLoadingScrapDetails(false);
-                        });
+                        loadScrapPendingDetails(viewMode === 'user');
                         break;
                     case 'transferPending':
                         setIsLoadingTransferDetails(true);
@@ -10854,7 +10949,7 @@
                         }
                     })
                     .getAssetStatusDetail(asset.assetId, viewMode === 'user');
-            }, [buildCachedStatusDetail, viewMode]);
+            }, [buildCachedStatusDetail, loadScrapPendingDetails, scrapPendingDetails, viewMode]);
 
             const handleCloseStatusDetail = useCallback(() => {
                 setStatusDetailState(null);
