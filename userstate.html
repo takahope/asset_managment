@@ -9016,6 +9016,8 @@
             const [isLoadingTransferDetails, setIsLoadingTransferDetails] = useState(false);
             const [statusDetailState, setStatusDetailState] = useState(null);
             const statusDetailRequestRef = useRef(0);
+            const [transferStatusDetailMap, setTransferStatusDetailMap] = useState({});
+            const transferStatusDetailLoadRef = useRef(null);
 
             // 轉移中（我申請的轉移）相關 state
             const [transferringCount, setTransferringCount] = useState(0);
@@ -9650,6 +9652,57 @@
                 }
             }, [loadPendingInventoryAssignments]);
 
+            const loadTransferStatusDetails = useCallback((assets, forceUserScope) => {
+                const assetIds = (Array.isArray(assets) ? assets : [])
+                    .filter(asset => asset && (asset.status === '轉移中' || asset.status === '待接收'))
+                    .map(asset => String(asset.assetId || '').trim())
+                    .filter(assetId => assetId);
+                const uniqueAssetIds = Array.from(new Set(assetIds));
+
+                if (uniqueAssetIds.length === 0) {
+                    setTransferStatusDetailMap({});
+                    return;
+                }
+
+                google.script.run
+                    .withSuccessHandler(response => {
+                        if (!response || response.error) {
+                            console.warn('載入轉移狀態詳情失敗：', response?.error || '沒有回應');
+                            return;
+                        }
+                        setTransferStatusDetailMap(response.details || {});
+                    })
+                    .withFailureHandler(error => {
+                        console.warn('載入轉移狀態詳情失敗：', error?.message || error);
+                    })
+                    .getTransferStatusDetailsByAssets(uniqueAssetIds, forceUserScope);
+            }, []);
+
+            const scheduleTransferStatusDetailPreload = useCallback((assets, forceUserScope) => {
+                if (transferStatusDetailLoadRef.current) {
+                    const { type, id } = transferStatusDetailLoadRef.current;
+                    if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                        window.cancelIdleCallback(id);
+                    } else if (type === 'timeout') {
+                        clearTimeout(id);
+                    }
+                    transferStatusDetailLoadRef.current = null;
+                }
+
+                const runLoad = () => {
+                    transferStatusDetailLoadRef.current = null;
+                    loadTransferStatusDetails(assets, forceUserScope);
+                };
+
+                if (typeof window.requestIdleCallback === 'function') {
+                    const id = window.requestIdleCallback(runLoad, { timeout: 1200 });
+                    transferStatusDetailLoadRef.current = { type: 'idle', id: id };
+                } else {
+                    const id = setTimeout(runLoad, 200);
+                    transferStatusDetailLoadRef.current = { type: 'timeout', id: id };
+                }
+            }, [loadTransferStatusDetails]);
+
             const getAssetPendingSessions = useCallback((assetId) => {
                 const entry = inventoryPendingByAsset[assetId];
                 return entry ? entry.sessions || [] : [];
@@ -9715,6 +9768,7 @@
                                     ].filter(Boolean).join(' ').toLowerCase()
                                 }));
                                 setAllAssets(processedAssets);
+                                scheduleTransferStatusDetailPreload(processedAssets, forceUserScope);
                                 if (!viewModeInitializedRef.current) {
                                     setViewMode(response.isAdmin ? 'admin' : 'user');
                                     viewModeInitializedRef.current = true;
@@ -9923,6 +9977,7 @@
                             ].filter(Boolean).join(' ').toLowerCase()
                         }));
                         setAllAssets(processedAssets);
+                        scheduleTransferStatusDetailPreload(processedAssets, forceUserScope);
                     }
                     if (transferCountResponse.status === 'fulfilled' && typeof transferCountResponse.value === 'number') {
                         setTransferPendingCount(transferCountResponse.value);
@@ -9988,7 +10043,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [buildInventoryPendingByAsset, viewMode]);
+            }, [buildInventoryPendingByAsset, scheduleTransferStatusDetailPreload, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -10001,6 +10056,7 @@
                 setViewMode(mode);
                 setTransferringAssets(null);
                 setLentAssetsDetails(null);
+                setTransferStatusDetailMap({});
                 loadData(mode);
             };
 
@@ -10066,6 +10122,15 @@
                             clearTimeout(id);
                         }
                         pendingInventoryLoadRef.current = null;
+                    }
+                    if (transferStatusDetailLoadRef.current) {
+                        const { type, id } = transferStatusDetailLoadRef.current;
+                        if (type === 'idle' && typeof window.cancelIdleCallback === 'function') {
+                            window.cancelIdleCallback(id);
+                        } else if (type === 'timeout') {
+                            clearTimeout(id);
+                        }
+                        transferStatusDetailLoadRef.current = null;
                     }
                 };
             }, []);
@@ -10638,6 +10703,14 @@
                 const assetId = String(asset.assetId || '').trim();
                 if (!assetId) return null;
 
+                if (detailType === 'transfer' && transferStatusDetailMap && transferStatusDetailMap[assetId]) {
+                    const cached = transferStatusDetailMap[assetId];
+                    return {
+                        type: cached.type || 'transfer',
+                        detail: cached.detail || null
+                    };
+                }
+
                 if (detailType === 'transfer' && Array.isArray(transferringAssets)) {
                     const match = transferringAssets.find(item => String(item?.assetId || '').trim() === assetId);
                     if (match) {
@@ -10699,7 +10772,7 @@
                 }
 
                 return null;
-            }, [lentAssetsDetails, pendingApprovalsData, transferringAssets]);
+            }, [lentAssetsDetails, pendingApprovalsData, transferStatusDetailMap, transferringAssets]);
 
             const handleOpenStatusDetail = useCallback((asset) => {
                 if (!asset) return;
@@ -10762,7 +10835,7 @@
                         }
                     })
                     .getAssetStatusDetail(asset.assetId, viewMode === 'user');
-            }, [viewMode]);
+            }, [buildCachedStatusDetail, viewMode]);
 
             const handleCloseStatusDetail = useCallback(() => {
                 setStatusDetailState(null);
