@@ -10631,13 +10631,64 @@
                 loadData();
             };
 
+            const buildCachedStatusDetail = useCallback((asset) => {
+                if (!asset) return null;
+                const detailType = STATUS_DETAIL_TYPES[asset.status];
+                if (!detailType) return null;
+                const assetId = String(asset.assetId || '').trim();
+                if (!assetId) return null;
+
+                if (detailType === 'transfer' && Array.isArray(transferringAssets)) {
+                    const match = transferringAssets.find(item => String(item?.assetId || '').trim() === assetId);
+                    if (match) {
+                        return {
+                            type: 'transfer',
+                            detail: {
+                                workflowStatus: match.status || asset.status || '',
+                                applicationTime: match.applicationTime || '',
+                                transferType: match.transferType || '',
+                                oldKeeper: match.oldKeeper || '',
+                                newKeeper: match.newKeeper || '',
+                                oldUser: match.oldUser || '',
+                                newUser: match.newUser || '',
+                                oldLocation: match.oldLocation || '',
+                                newLocation: match.newLocation || '',
+                                applicantEmail: match.applicantEmail || ''
+                            }
+                        };
+                    }
+                }
+
+                if (detailType === 'lending' && Array.isArray(lentAssetsDetails)) {
+                    const match = lentAssetsDetails.find(item => String(item?.assetId || '').trim() === assetId);
+                    if (match) {
+                        return {
+                            type: 'lending',
+                            detail: {
+                                lenderName: match.lenderName || '',
+                                borrower: match.borrower || '',
+                                applyTime: match.applyTime || '',
+                                expectedReturnDate: match.expectedReturnDate || '',
+                                originalLocation: match.originalLocation || '',
+                                lendingLocation: match.lendingLocation || '',
+                                reason: match.reason || ''
+                            }
+                        };
+                    }
+                }
+
+                return null;
+            }, [lentAssetsDetails, transferringAssets]);
+
             const handleOpenStatusDetail = useCallback((asset) => {
                 if (!asset) return;
                 const detailType = STATUS_DETAIL_TYPES[asset.status];
                 if (!detailType) return;
 
+                const cached = buildCachedStatusDetail(asset);
                 statusDetailRequestRef.current += 1;
                 const requestId = statusDetailRequestRef.current;
+                const hasCached = Boolean(cached);
 
                 setStatusDetailState({
                     asset: {
@@ -10645,9 +10696,9 @@
                         assetName: asset.assetName,
                         status: asset.status
                     },
-                    type: detailType,
-                    detail: null,
-                    isLoading: true,
+                    type: cached?.type || detailType,
+                    detail: cached?.detail || null,
+                    isLoading: !hasCached,
                     error: ''
                 });
 
@@ -10656,7 +10707,11 @@
                         if (statusDetailRequestRef.current !== requestId) return;
                         if (!response || response.error) {
                             const message = response?.error || '載入失敗';
-                            setStatusDetailState(prev => prev ? { ...prev, isLoading: false, error: message } : prev);
+                            if (!hasCached) {
+                                setStatusDetailState(prev => prev ? { ...prev, isLoading: false, error: message } : prev);
+                            } else {
+                                console.warn('狀態詳情背景更新失敗：', message);
+                            }
                             return;
                         }
                         setStatusDetailState(prev => {
@@ -10670,7 +10725,7 @@
                                 ...prev,
                                 asset: updatedAsset,
                                 type: response.type || prev.type,
-                                detail: response.detail || null,
+                                detail: response.detail || prev.detail,
                                 isLoading: false,
                                 error: ''
                             };
@@ -10679,7 +10734,11 @@
                     .withFailureHandler(error => {
                         if (statusDetailRequestRef.current !== requestId) return;
                         const message = error?.message || '載入失敗';
-                        setStatusDetailState(prev => prev ? { ...prev, isLoading: false, error: message } : prev);
+                        if (!hasCached) {
+                            setStatusDetailState(prev => prev ? { ...prev, isLoading: false, error: message } : prev);
+                        } else {
+                            console.warn('狀態詳情背景更新失敗：', message);
+                        }
                     })
                     .getAssetStatusDetail(asset.assetId, viewMode === 'user');
             }, [viewMode]);
