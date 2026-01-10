@@ -5117,6 +5117,228 @@ function addNewAsset(form) {
   return "成功新增 " + (form.assetType === 'property' ? "財產" : "物品") + "：" + form.assetId;
 }
 
+/**
+ * [供 userstate.html 呼叫] 批次新增財產/物品
+ * @param {Object} payload 批次匯入資料
+ * @returns {Object} 匯入結果統計
+ */
+function addNewAssetsBatch(payload) {
+  try {
+    const propertyRows = Array.isArray(payload?.propertyRows) ? payload.propertyRows : [];
+    const itemRows = Array.isArray(payload?.itemRows) ? payload.itemRows : [];
+    const propertyCategory = String(payload?.propertyCategory || '').trim();
+
+    if (propertyRows.length === 0 && itemRows.length === 0) {
+      return { successCount: 0, failureCount: 0, failures: [] };
+    }
+
+    if (propertyRows.length > 0) {
+      const allowedCategories = { '財產': true, '非消耗品': true };
+      if (!propertyCategory || !allowedCategories[propertyCategory]) {
+        return { error: '請選擇正確的財產類別' };
+      }
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const existingAssets = getAllAssets();
+    const existingIdSet = new Set(existingAssets.map(asset => String(asset.assetId || '').trim()).filter(id => id));
+    const incomingIdSet = new Set();
+
+    const keeperSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    if (!keeperSheet || keeperSheet.getLastRow() <= 1) {
+      return { error: '找不到保管人名單，無法匯入' };
+    }
+    const keeperData = keeperSheet.getRange(2, 1, keeperSheet.getLastRow() - 1, 2).getValues();
+    const nameToEmail = {};
+    const duplicateNames = new Set();
+    keeperData.forEach(row => {
+      const name = String(row[0] || '').trim();
+      const email = String(row[1] || '').trim().toLowerCase();
+      if (!name || !email) return;
+      if (nameToEmail[name] && nameToEmail[name] !== email) {
+        duplicateNames.add(name);
+        return;
+      }
+      nameToEmail[name] = email;
+    });
+
+    const normalizeText = (value) => String(value || '').trim();
+    const parseDateValue = (value) => {
+      if (!value) return '';
+      if (value instanceof Date) return value;
+      const normalized = normalizeText(value).replace(/-/g, '/');
+      if (!normalized) return '';
+      const parsed = new Date(normalized);
+      if (Number.isNaN(parsed.getTime())) {
+        return normalized;
+      }
+      return parsed;
+    };
+    const resolveNameEmail = (name, label, errors) => {
+      const normalizedName = normalizeText(name);
+      if (!normalizedName) {
+        errors.push(`${label}必填`);
+        return '';
+      }
+      if (normalizedName.includes('@')) {
+        errors.push(`${label}請填姓名`);
+        return '';
+      }
+      if (duplicateNames.has(normalizedName)) {
+        errors.push(`${label}姓名重複，請改用唯一姓名`);
+        return '';
+      }
+      const email = nameToEmail[normalizedName];
+      if (!email) {
+        errors.push(`${label}不在名單中`);
+        return '';
+      }
+      return email;
+    };
+
+    const failures = [];
+    const propertyValues = [];
+    const itemValues = [];
+
+    const addFailure = (row, assetType, reason) => {
+      failures.push({
+        rowIndex: row?.rowIndex || 0,
+        assetId: row?.assetId || '',
+        assetType: assetType,
+        reason: reason
+      });
+    };
+
+    const appendPropertyRow = (row) => {
+      const errors = [];
+      const assetId = normalizeText(row.assetId);
+      const assetName = normalizeText(row.assetName);
+      const location = normalizeText(row.location);
+      if (!assetId) errors.push('編號必填');
+      if (!assetName) errors.push('名稱必填');
+      if (!location) errors.push('保管地點必填');
+      const keeperEmail = resolveNameEmail(row.keeperName, '保管人', errors);
+      const userName = normalizeText(row.userName) || normalizeText(row.keeperName);
+      let userEmail = '';
+      if (userName) {
+        userEmail = resolveNameEmail(userName, '使用人', errors);
+      } else {
+        errors.push('使用人必填');
+      }
+
+      if (errors.length > 0) {
+        addFailure(row, '財產', errors.join('、'));
+        return;
+      }
+      if (existingIdSet.has(assetId)) {
+        addFailure(row, '財產', '編號已存在');
+        return;
+      }
+      if (incomingIdSet.has(assetId)) {
+        addFailure(row, '財產', '匯入清單內編號重複');
+        return;
+      }
+      incomingIdSet.add(assetId);
+
+      const maxIndex = Math.max(...Object.values(PROPERTY_COLUMN_INDICES));
+      const values = new Array(maxIndex).fill('');
+      values[PROPERTY_COLUMN_INDICES.ASSET_ID - 1] = assetId;
+      values[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1] = assetName;
+      values[PROPERTY_COLUMN_INDICES.ASSET_ALIAS - 1] = normalizeText(row.assetAlias);
+      values[PROPERTY_COLUMN_INDICES.MODEL_BRAND - 1] = normalizeText(row.modelBrand);
+      values[PROPERTY_COLUMN_INDICES.UNIT - 1] = normalizeText(row.unit);
+      values[PROPERTY_COLUMN_INDICES.PURCHASE_DATE - 1] = parseDateValue(row.purchaseDate);
+      values[PROPERTY_COLUMN_INDICES.USE_LIFE - 1] = normalizeText(row.useLife);
+      values[PROPERTY_COLUMN_INDICES.LOCATION - 1] = location;
+      values[PROPERTY_COLUMN_INDICES.ACCESSORY - 1] = normalizeText(row.accessory);
+      values[PROPERTY_COLUMN_INDICES.LEADER_NAME - 1] = normalizeText(row.keeperName);
+      values[PROPERTY_COLUMN_INDICES.LEADER_EMAIL - 1] = keeperEmail;
+      values[PROPERTY_COLUMN_INDICES.USER_NAME - 1] = userName;
+      if (PROPERTY_COLUMN_INDICES.USER_EMAIL) {
+        values[PROPERTY_COLUMN_INDICES.USER_EMAIL - 1] = userEmail;
+      }
+      values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = propertyCategory;
+      values[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
+
+      propertyValues.push(values);
+    };
+
+    const appendItemRow = (row) => {
+      const errors = [];
+      const assetId = normalizeText(row.assetId);
+      const assetName = normalizeText(row.assetName);
+      const location = normalizeText(row.location);
+      if (!assetId) errors.push('編號必填');
+      if (!assetName) errors.push('名稱必填');
+      if (!location) errors.push('保管地點必填');
+      const keeperEmail = resolveNameEmail(row.keeperName, '保管人', errors);
+
+      if (errors.length > 0) {
+        addFailure(row, '物品', errors.join('、'));
+        return;
+      }
+      if (existingIdSet.has(assetId)) {
+        addFailure(row, '物品', '編號已存在');
+        return;
+      }
+      if (incomingIdSet.has(assetId)) {
+        addFailure(row, '物品', '匯入清單內編號重複');
+        return;
+      }
+      incomingIdSet.add(assetId);
+
+      const maxIndex = Math.max(...Object.values(ITEM_COLUMN_INDICES));
+      const values = new Array(maxIndex).fill('');
+      values[ITEM_COLUMN_INDICES.ASSET_ID - 1] = assetId;
+      values[ITEM_COLUMN_INDICES.ASSET_NAME - 1] = assetName;
+      values[ITEM_COLUMN_INDICES.PRODUCT_SERIAL - 1] = normalizeText(row.productSerial);
+      values[ITEM_COLUMN_INDICES.MODEL_BRAND - 1] = normalizeText(row.modelBrand);
+      values[ITEM_COLUMN_INDICES.PURCHASE_DATE - 1] = parseDateValue(row.purchaseDate);
+      values[ITEM_COLUMN_INDICES.USE_LIFE - 1] = normalizeText(row.useLife);
+      values[ITEM_COLUMN_INDICES.UNIT - 1] = normalizeText(row.unit);
+      values[ITEM_COLUMN_INDICES.AMOUNT_TWD - 1] = normalizeText(row.amountTwd);
+      values[ITEM_COLUMN_INDICES.PURCHASE_ORDER - 1] = normalizeText(row.purchaseOrder);
+      values[ITEM_COLUMN_INDICES.ASSET_CATEGORY - 1] = normalizeText(row.assetCategory);
+      values[ITEM_COLUMN_INDICES.LEADER_NAME - 1] = normalizeText(row.keeperName);
+      values[ITEM_COLUMN_INDICES.LEADER_EMAIL - 1] = keeperEmail;
+      values[ITEM_COLUMN_INDICES.LOCATION - 1] = location;
+      values[ITEM_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
+
+      itemValues.push(values);
+    };
+
+    propertyRows.forEach(row => appendPropertyRow(row));
+    itemRows.forEach(row => appendItemRow(row));
+
+    if (propertyValues.length > 0) {
+      const propertySheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+      if (!propertySheet) {
+        return { error: '找不到財產總表，無法匯入' };
+      }
+      const startRow = propertySheet.getLastRow() + 1;
+      propertySheet.getRange(startRow, 1, propertyValues.length, propertyValues[0].length).setValues(propertyValues);
+    }
+
+    if (itemValues.length > 0) {
+      const itemSheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
+      if (!itemSheet) {
+        return { error: '找不到物品總表，無法匯入' };
+      }
+      const startRow = itemSheet.getLastRow() + 1;
+      itemSheet.getRange(startRow, 1, itemValues.length, itemValues[0].length).setValues(itemValues);
+    }
+
+    return {
+      successCount: propertyValues.length + itemValues.length,
+      failureCount: failures.length,
+      failures: failures
+    };
+  } catch (e) {
+    Logger.log(`addNewAssetsBatch 失敗: ${e.message}`);
+    return { successCount: 0, failureCount: 0, failures: [], error: e.message };
+  }
+}
+
 
 /**
  * ✨ 更新單一資產的基本資訊（僅限管理員）
