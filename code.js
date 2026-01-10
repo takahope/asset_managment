@@ -787,7 +787,8 @@ function getUserStateExportDataByTargets(targets, forceUserScope) {
       '保管地點',
       '附屬設備',
       '保管人',
-      '使用人'
+      '使用人',
+      '財產類別'
     ];
 
     const itemHeaders = [
@@ -821,7 +822,8 @@ function getUserStateExportDataByTargets(targets, forceUserScope) {
           formatCell(asset.location),
           formatCell(asset.accessory),
           formatCell(asset.leaderName),
-          formatCell(asset.userName)
+          formatCell(asset.userName),
+          formatCell(asset.assetCategory)
         ]);
       } else if (asset.sourceSheet === ITEM_MASTER_SHEET_NAME) {
         itemRows.push([
