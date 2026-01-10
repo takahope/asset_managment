@@ -5259,6 +5259,14 @@ function addNewAssetsBatch(payload) {
       }
       values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = propertyCategory;
       values[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
+      if (assetName.includes('電腦')) {
+        if (PROPERTY_COLUMN_INDICES.IS_IT_ASSET) {
+          values[PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
+        }
+        if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) {
+          values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
+        }
+      }
 
       propertyValues.push(values);
     };
