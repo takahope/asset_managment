@@ -145,6 +145,10 @@ const LL_STATUS_COLUMN_INDEX = 9;
 const LL_RETURN_DATE_COLUMN_INDEX = 7;
 const LL_REASON_COLUMN_INDEX = 8;
 const LL_LENDING_LOCATION_COLUMN_INDEX = 10;
+const LL_BORROWER_TYPE_COLUMN_INDEX = 11; // ✨ 借用類型（內部/外部）
+const LL_CONTACT_PHONE_COLUMN_INDEX = 12; // ✨ 聯絡電話
+const LL_DOC_URL_COLUMN_INDEX = 13; // ✨ 出借申請單文件連結
+const LL_PRINT_TIME_COLUMN_INDEX = 14; // ✨ 列印時間
 
 const PROPERTY_MASTER_SHEET_NAME = "財產總表"; // ✨ **拆分後：財產總表**
 const ITEM_MASTER_SHEET_NAME = "物品總表";   // ✨ **拆分後：物品總表**
@@ -2392,9 +2396,19 @@ function getLendingData() {
  */
 function processBatchLending(formData) {
   try {
-    const { assetIds, borrowerName, returnDate, reason, lendingLocation } = formData;
-    if (!assetIds || assetIds.length === 0 || !borrowerName || !returnDate || !lendingLocation) {
+    const { assetIds, borrowerName, returnDate, reason, lendingLocation, borrowerType, contactPhone } = formData;
+    const normalizedBorrowerType = borrowerType === 'external' ? 'external' : 'internal';
+    const trimmedBorrowerName = String(borrowerName || '').trim();
+    const trimmedReturnDate = String(returnDate || '').trim();
+    const trimmedReason = String(reason || '').trim();
+    const trimmedLocation = String(lendingLocation || '').trim();
+    const trimmedContactPhone = String(contactPhone || '').trim();
+
+    if (!assetIds || assetIds.length === 0 || !trimmedBorrowerName || !trimmedReturnDate || !trimmedLocation) {
       throw new Error("資料不完整，請填寫所有必填欄位。");
+    }
+    if (normalizedBorrowerType === 'external' && (!trimmedReason || !trimmedContactPhone)) {
+      throw new Error("外部借用需填寫借用人、聯絡電話、借出後地點、出借事由與預計歸還日期。");
     }
 
     // 🛡️ 安全性修復：取得當前使用者身分
@@ -2437,8 +2451,9 @@ function processBatchLending(formData) {
           // ✨ **核心修改：D 欄改為記錄出借人 Email（而非保管人名稱）**
           lendingLogSheet.appendRow([
             lendId, now, asset.assetId, currentUserEmail, // ✨ 改為出借人 Email
-            borrowerName, new Date(returnDate), "", // 實際歸還日期留空
-            reason, "出借中", lendingLocation // 寫入新的 J 欄
+            trimmedBorrowerName, new Date(trimmedReturnDate), "", // 實際歸還日期留空
+            trimmedReason, "出借中", trimmedLocation, // J 欄
+            normalizedBorrowerType, trimmedContactPhone, "", "" // K~N 欄
           ]);
           successCount++;
         } else {
@@ -2488,7 +2503,17 @@ function getLentOutAssets(forceUserScope) {
             return { assets: [] };
         }
 
-        const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, 10).getValues(); // ✨ 讀取到 J 欄
+        const dataColumnCount = Math.max(LL_PRINT_TIME_COLUMN_INDEX, lendingLogSheet.getLastColumn());
+        const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, dataColumnCount).getValues();
+
+        const formatDateValue = (value, pattern) => {
+            if (!value) return '';
+            try {
+                return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+            } catch (e) {
+                return String(value);
+            }
+        };
 
         const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
         const emailToNameMap = new Map();
@@ -2543,9 +2568,14 @@ function getLentOutAssets(forceUserScope) {
                 const assetInfo = assetIdToInfoMap.get(assetId) || {};
                 const lenderEmail = (row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toString().toLowerCase();
                 const lenderName = emailToNameMap.get(lenderEmail) || lenderEmail || '';
+                const borrowerTypeRaw = row[LL_BORROWER_TYPE_COLUMN_INDEX - 1];
+                const borrowerType = borrowerTypeRaw === 'external' ? 'external' : 'internal';
+                const contactPhone = row[LL_CONTACT_PHONE_COLUMN_INDEX - 1] || '';
+                const docUrl = row[LL_DOC_URL_COLUMN_INDEX - 1] || '';
+                const printTime = formatDateValue(row[LL_PRINT_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd');
                 return {
                     lendId: row[LL_LEND_ID_COLUMN_INDEX - 1],
-                    applyTime: new Date(row[LL_LEND_TIME_COLUMN_INDEX - 1]).toLocaleDateString('zh-TW'),
+                    applyTime: formatDateValue(row[LL_LEND_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd'),
                     assetId: assetId,
                     assetName: assetInfo.assetName || '',
                     modelBrand: assetInfo.modelBrand || '',
@@ -2554,9 +2584,13 @@ function getLentOutAssets(forceUserScope) {
                     originalLocation: assetInfo.location || '',
                     lenderName: lenderName,
                     borrower: row[LL_BORROWER_NAME_COLUMN_INDEX - 1],
-                    expectedReturnDate: new Date(row[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1]).toLocaleDateString('zh-TW'),
+                    expectedReturnDate: formatDateValue(row[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1], 'yyyy/MM/dd'),
                     reason: row[LL_REASON_COLUMN_INDEX - 1],
-                    lendingLocation: row[LL_LENDING_LOCATION_COLUMN_INDEX - 1] || '' // ✨ 讀取出借後地點
+                    lendingLocation: row[LL_LENDING_LOCATION_COLUMN_INDEX - 1] || '',
+                    borrowerType: borrowerType,
+                    contactPhone: contactPhone,
+                    docUrl: docUrl,
+                    printTime: printTime
                 };
             });
 
@@ -2638,6 +2672,367 @@ function processBatchReturn(lendIds) {
         Logger.log("批次歸還失敗: " + e.message);
         return "歸還作業失敗：" + e.message;
     }
+}
+
+/**
+ * [供 userstate.html 呼叫] 取得外部借用待列印清單（按借用人資訊分組）
+ */
+function getExternalLendingPrintGroups(forceUserScope) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const isAdmin = checkAdminPermissions();
+    const useAdminScope = isAdmin && !forceUserScope;
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
+    if (!lendingLogSheet || lendingLogSheet.getLastRow() < 2) {
+      return { groups: [] };
+    }
+
+    const dataColumnCount = Math.max(LL_PRINT_TIME_COLUMN_INDEX, lendingLogSheet.getLastColumn());
+    const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, dataColumnCount).getValues();
+    const allAssets = getAllAssets();
+    const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
+    const groups = new Map();
+
+    const formatDateValue = (value, pattern) => {
+      if (!value) return '';
+      try {
+        return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+      } catch (e) {
+        return String(value);
+      }
+    };
+
+    lendingData.forEach(row => {
+      const status = row[LL_STATUS_COLUMN_INDEX - 1];
+      if (status !== '出借中') return;
+      const borrowerType = row[LL_BORROWER_TYPE_COLUMN_INDEX - 1];
+      if (borrowerType !== 'external') return;
+      const docUrl = row[LL_DOC_URL_COLUMN_INDEX - 1];
+      if (docUrl) return;
+
+      const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      if (!assetId) return;
+      const lenderEmail = String(row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
+      const assetInfo = assetMap.get(assetId) || {};
+      const leaderEmail = String(assetInfo.leaderEmail || '').toLowerCase();
+      const userEmail = String(assetInfo.userEmail || '').toLowerCase();
+      if (!useAdminScope) {
+        if (lenderEmail !== currentUserEmail && leaderEmail !== currentUserEmail && userEmail !== currentUserEmail) return;
+      }
+
+      const borrowerName = row[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '';
+      const contactPhone = row[LL_CONTACT_PHONE_COLUMN_INDEX - 1] || '';
+      const reason = row[LL_REASON_COLUMN_INDEX - 1] || '';
+      const expectedReturnDate = formatDateValue(row[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1], 'yyyy/MM/dd');
+      const lendingLocation = row[LL_LENDING_LOCATION_COLUMN_INDEX - 1] || '';
+      const serialNumber = assetInfo.sourceSheet === PROPERTY_MASTER_SHEET_NAME
+        ? (assetInfo.modelBrand || '')
+        : (assetInfo.productSerial || '');
+      const serialAndId = serialNumber ? `${serialNumber}/${assetId}` : assetId;
+      const groupKey = [borrowerName, contactPhone, reason, expectedReturnDate].map(value => String(value || '').trim()).join('||');
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          groupKey: groupKey,
+          borrowerName: borrowerName,
+          contactPhone: contactPhone,
+          reason: reason,
+          expectedReturnDate: expectedReturnDate,
+          assets: []
+        });
+      }
+      groups.get(groupKey).assets.push({
+        lendId: row[LL_LEND_ID_COLUMN_INDEX - 1],
+        assetId: assetId,
+        assetName: assetInfo.assetName || '',
+        serialNumber: serialAndId,
+        lendingLocation: lendingLocation
+      });
+    });
+
+    const result = Array.from(groups.values()).map(group => ({
+      ...group,
+      assetCount: group.assets.length
+    }));
+
+    return { groups: result };
+  } catch (e) {
+    Logger.log(`getExternalLendingPrintGroups 失敗: ${e.message}`);
+    return { error: `讀取資料時發生錯誤：${e.message}` };
+  }
+}
+
+/**
+ * [供 userstate.html 呼叫] 建立外部借用出借申請單
+ */
+function createLendingDoc(lendIds) {
+  try {
+    if (!lendIds || lendIds.length === 0) {
+      throw new Error('請至少選取一筆外部借用記錄。');
+    }
+    const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const isAdmin = checkAdminPermissions();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
+    const dataColumnCount = Math.max(LL_PRINT_TIME_COLUMN_INDEX, lendingLogSheet.getLastColumn());
+    const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, dataColumnCount).getValues();
+    const lendingMap = new Map(lendingData.map((row, index) => [
+      row[LL_LEND_ID_COLUMN_INDEX - 1],
+      { row, index: index + 2 }
+    ]));
+
+    const allAssets = getAllAssets();
+    const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
+    const selected = [];
+    const unauthorized = [];
+    let groupMeta = null;
+
+    const formatDateValue = (value, pattern) => {
+      if (!value) return '';
+      try {
+        return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+      } catch (e) {
+        return String(value);
+      }
+    };
+
+    lendIds.forEach(lendId => {
+      const entry = lendingMap.get(lendId);
+      if (!entry) return;
+      const row = entry.row;
+      if (row[LL_STATUS_COLUMN_INDEX - 1] !== '出借中') return;
+      if (row[LL_BORROWER_TYPE_COLUMN_INDEX - 1] !== 'external') return;
+
+      const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      if (!assetId) return;
+      const lenderEmail = String(row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
+      const assetInfo = assetMap.get(assetId) || {};
+      const leaderEmail = String(assetInfo.leaderEmail || '').toLowerCase();
+      const userEmail = String(assetInfo.userEmail || '').toLowerCase();
+      if (!isAdmin && lenderEmail !== currentUserEmail && leaderEmail !== currentUserEmail && userEmail !== currentUserEmail) {
+        unauthorized.push(lendId);
+        return;
+      }
+
+      const borrowerName = String(row[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '').trim();
+      const contactPhone = String(row[LL_CONTACT_PHONE_COLUMN_INDEX - 1] || '').trim();
+      const reason = String(row[LL_REASON_COLUMN_INDEX - 1] || '').trim();
+      const expectedReturnDate = formatDateValue(row[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1], 'yyyy/MM/dd');
+      if (!borrowerName || !contactPhone || !reason || !expectedReturnDate) return;
+
+      if (!groupMeta) {
+        groupMeta = { borrowerName, contactPhone, reason, expectedReturnDate };
+      } else if (
+        groupMeta.borrowerName !== borrowerName ||
+        groupMeta.contactPhone !== contactPhone ||
+        groupMeta.reason !== reason ||
+        groupMeta.expectedReturnDate !== expectedReturnDate
+      ) {
+        throw new Error('選取的外部借用資料條件不一致，請分開列印。');
+      }
+
+      const serialNumber = assetInfo.sourceSheet === PROPERTY_MASTER_SHEET_NAME
+        ? (assetInfo.modelBrand || '')
+        : (assetInfo.productSerial || '');
+      const serialAndId = serialNumber ? `${serialNumber}/${assetId}` : assetId;
+      selected.push({
+        lendId: lendId,
+        rowIndex: entry.index,
+        assetId: assetId,
+        assetName: assetInfo.assetName || '',
+        serialNumber: serialAndId,
+        lendingLocation: row[LL_LENDING_LOCATION_COLUMN_INDEX - 1] || ''
+      });
+    });
+
+    if (unauthorized.length > 0 && selected.length === 0) {
+      throw new Error('權限不足：您不是這些外部借用記錄的出借人，無法列印。');
+    }
+    if (!groupMeta || selected.length === 0) {
+      throw new Error('找不到可列印的外部借用記錄。');
+    }
+
+    const now = new Date();
+    const docName = `儀器設備出借單_${groupMeta.borrowerName}_${Utilities.formatDate(now, "GMT+8", "yyyyMMdd")}`;
+    const templateFile = DriveApp.getFileById(LENDING_TEMPLATE_DOC_ID);
+    const outputFolder = DriveApp.getFolderById(LENDING_OUTPUT_FOLDER_ID);
+    const newFile = templateFile.makeCopy(docName, outputFolder);
+    const newDoc = DocumentApp.openById(newFile.getId());
+    const body = newDoc.getBody();
+
+    body.replaceText("{{申請日期}}", Utilities.formatDate(now, "GMT+8", "yyyy/MM/dd"));
+    body.replaceText("{{借用人}}", groupMeta.borrowerName);
+    body.replaceText("{{聯絡電話}}", groupMeta.contactPhone);
+    body.replaceText("{{出借事由}}", groupMeta.reason);
+    body.replaceText("{{預計歸還日期}}", groupMeta.expectedReturnDate);
+
+    const tables = body.getTables();
+    if (tables.length === 0) {
+      throw new Error('錯誤：在模板文件中找不到表格！');
+    }
+    const targetTable = tables[0];
+    let templateRowIndex = -1;
+    for (let i = 0; i < targetTable.getNumRows(); i++) {
+      const firstCell = targetTable.getRow(i).getCell(0);
+      if (firstCell.getText().includes('{{TEMPLATE_ROW}}')) {
+        templateRowIndex = i;
+        break;
+      }
+    }
+    if (templateRowIndex === -1) {
+      throw new Error('錯誤：在表格中找不到 {{TEMPLATE_ROW}} 範本行！');
+    }
+
+    const borderStyle = {};
+    borderStyle[DocumentApp.Attribute.BORDER_WIDTH] = 1.5;
+    borderStyle[DocumentApp.Attribute.BORDER_COLOR] = '#000000';
+
+    const templateRow = targetTable.getRow(templateRowIndex);
+    const templateCellCount = templateRow.getNumCells();
+    if (templateCellCount !== 4) {
+      throw new Error(`範本行儲存格數量錯誤！預期 4 個，實際 ${templateCellCount} 個。`);
+    }
+
+    selected.forEach((item, index) => {
+      const cellData = [
+        (index + 1).toString(),
+        item.assetName || '',
+        item.serialNumber || '',
+        item.lendingLocation || ''
+      ];
+
+      const insertPosition = templateRowIndex + index + 1;
+      const newRow = targetTable.insertTableRow(insertPosition);
+      for (let i = 0; i < cellData.length; i++) {
+        const templateCell = templateRow.getCell(i);
+        const newCell = templateCell.copy();
+        if (newCell.getNumChildren() > 0 &&
+            newCell.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH) {
+          newCell.getChild(0).asParagraph().setText(cellData[i]);
+          while (newCell.getNumChildren() > 1) {
+            newCell.removeChild(newCell.getChild(1));
+          }
+        } else {
+          newCell.setText(cellData[i]);
+        }
+        try {
+          newCell.setAttributes(borderStyle);
+        } catch (borderError) {
+          Logger.log(`⚠️ 儲存格 ${i} 設定邊框失敗: ${borderError.message}`);
+        }
+        newRow.appendTableCell(newCell);
+      }
+    });
+
+    targetTable.removeRow(templateRowIndex);
+    newDoc.saveAndClose();
+    const fileUrl = newFile.getUrl();
+
+    selected.forEach(item => {
+      lendingLogSheet.getRange(item.rowIndex, LL_DOC_URL_COLUMN_INDEX).setValue(fileUrl);
+      lendingLogSheet.getRange(item.rowIndex, LL_PRINT_TIME_COLUMN_INDEX).setValue(now);
+    });
+
+    return {
+      fileUrl: fileUrl,
+      lendIds: selected.map(item => item.lendId)
+    };
+  } catch (e) {
+    Logger.log(`createLendingDoc 失敗: ${e.message} at ${e.stack}`);
+    throw new Error('產生出借申請單時發生錯誤：' + e.message);
+  }
+}
+
+/**
+ * [供 userstate.html 呼叫] 取得外部借用列印歷史
+ */
+function getLendingDocHistory(forceUserScope) {
+  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const isAdmin = checkAdminPermissions();
+  const useAdminScope = isAdmin && !forceUserScope;
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
+    if (!lendingLogSheet || lendingLogSheet.getLastRow() < 2) {
+      return [];
+    }
+    const dataColumnCount = Math.max(LL_PRINT_TIME_COLUMN_INDEX, lendingLogSheet.getLastColumn());
+    const lendingData = lendingLogSheet.getRange(2, 1, lendingLogSheet.getLastRow() - 1, dataColumnCount).getValues();
+    const allAssets = getAllAssets();
+    const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
+
+    const formatDateValue = (value, pattern) => {
+      if (!value) return '';
+      try {
+        return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+      } catch (e) {
+        return String(value);
+      }
+    };
+
+    const records = [];
+    lendingData.forEach(row => {
+      const docUrl = row[LL_DOC_URL_COLUMN_INDEX - 1];
+      if (!docUrl) return;
+      if (row[LL_BORROWER_TYPE_COLUMN_INDEX - 1] !== 'external') return;
+
+      const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      const lenderEmail = String(row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
+      const assetInfo = assetMap.get(assetId) || {};
+      const leaderEmail = String(assetInfo.leaderEmail || '').toLowerCase();
+      const userEmail = String(assetInfo.userEmail || '').toLowerCase();
+      if (!useAdminScope) {
+        if (lenderEmail !== currentUserEmail && leaderEmail !== currentUserEmail && userEmail !== currentUserEmail) return;
+      }
+
+      const borrowerName = row[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '';
+      const contactPhone = row[LL_CONTACT_PHONE_COLUMN_INDEX - 1] || '';
+      const printTime = formatDateValue(row[LL_PRINT_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd');
+      const fallbackTime = formatDateValue(row[LL_LEND_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd');
+      records.push({
+        url: docUrl,
+        borrowerName: borrowerName,
+        contactPhone: contactPhone,
+        date: printTime || fallbackTime
+      });
+    });
+
+    const docMap = new Map();
+    records.forEach(record => {
+      const url = record.url;
+      if (!docMap.has(url)) {
+        docMap.set(url, {
+          url: url,
+          borrowerName: record.borrowerName,
+          contactPhone: record.contactPhone,
+          date: record.date,
+          count: 0
+        });
+      }
+      docMap.get(url).count++;
+    });
+
+    const history = Array.from(docMap.values()).map(item => ({
+      url: item.url,
+      borrowerName: item.borrowerName,
+      contactPhone: item.contactPhone,
+      date: item.date,
+      count: item.count
+    }));
+
+    history.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB - dateA;
+    });
+
+    return history;
+  } catch (e) {
+    Logger.log(`getLendingDocHistory 失敗: ${e.message}`);
+    throw new Error("取得歷史紀錄時發生錯誤: " + e.message);
+  }
 }
 
 /**
@@ -4854,6 +5249,8 @@ function getAssetStatusDetail(assetId, forceUserScope) {
           applyTime: formatDateValue(latestRow[LL_LEND_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd'),
           lenderName: lenderName,
           borrower: latestRow[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '',
+          borrowerType: latestRow[LL_BORROWER_TYPE_COLUMN_INDEX - 1] === 'external' ? 'external' : 'internal',
+          contactPhone: latestRow[LL_CONTACT_PHONE_COLUMN_INDEX - 1] || '',
           expectedReturnDate: formatDateValue(latestRow[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1], 'yyyy/MM/dd'),
           reason: latestRow[LL_REASON_COLUMN_INDEX - 1] || '',
           lendingLocation: latestRow[LL_LENDING_LOCATION_COLUMN_INDEX - 1] || '',
