@@ -6013,8 +6013,6 @@ function updateAssetBasicInfo(assetId, updates) {
  */
 function getInventoryData(forceUserScope) {
   try {
-    // 確保盤點明細欄位已完成遷移
-    createInventorySheets();
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const allAssets = getAllAssets();
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -6342,9 +6340,8 @@ function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
 
-    // 如果工作表不存在，建立它
     if (!inventoryLogSheet) {
-      createInventorySheets();
+      Logger.log('找不到盤點紀錄工作表，請先執行 deployAllSheets。');
       return [];
     }
 
@@ -6481,45 +6478,6 @@ function checkInventorySessionOwner(inventoryId) {
 }
 
 /**
- * 建立盤點工作表 (更新版：包含第 12 欄標題)
- */
-function createInventorySheets() {
-  try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-    // 建立盤點紀錄工作表
-    let inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
-    if (!inventoryLogSheet) {
-      inventoryLogSheet = ss.insertSheet(INVENTORY_LOG_SHEET_NAME);
-      inventoryLogSheet.appendRow(['盤點ID', '盤點日期', '盤點人', '盤點人Email', '盤點範圍', '已盤點數量', '總數量', '狀態', '完成時間']);
-      inventoryLogSheet.getRange(1, 1, 1, 9).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
-    }
-
-    // 建立盤點明細工作表 (Updated Schema)
-    let inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
-    const detailHeaders = ['盤點ID', '財產編號', '財產名稱', '保管人', '使用人', '地點', '原狀態', '盤點結果', '備註', '盤點時間', '盤點人', '指派人員'];
-    if (!inventoryDetailSheet) {
-      inventoryDetailSheet = ss.insertSheet(INVENTORY_DETAIL_SHEET_NAME);
-      inventoryDetailSheet.appendRow(detailHeaders);
-      inventoryDetailSheet.getRange(1, 1, 1, detailHeaders.length).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
-    } else {
-      const headerRange = inventoryDetailSheet.getRange(1, 1, 1, inventoryDetailSheet.getLastColumn());
-      const headers = headerRange.getValues()[0].map(value => String(value || '').trim());
-      if (!headers.includes('使用人')) {
-        inventoryDetailSheet.insertColumnAfter(4); // 在保管人後插入「使用人」
-      }
-      inventoryDetailSheet.getRange(1, 1, 1, detailHeaders.length).setValues([detailHeaders]);
-      inventoryDetailSheet.getRange(1, 1, 1, detailHeaders.length).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
-    }
-
-    return true;
-  } catch (e) {
-    Logger.log(`建立盤點工作表失敗: ${e.message}`);
-    throw e;
-  }
-}
-
-/**
  * 開始新的盤點會話 (包含自動分發邏輯)
  * @param {object} options - 盤點選項 { filterType, filterValue, assetIds }
  * @returns {object} 包含 inventoryId 和訊息
@@ -6530,11 +6488,11 @@ function startInventorySession(options) {
     const currentUserName = Session.getActiveUser().getEmail().split('@')[0];
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // 確保工作表存在
-    createInventorySheets();
-
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
     const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+    if (!inventoryLogSheet || !inventoryDetailSheet) {
+      throw new Error('找不到盤點工作表，請先執行 deployAllSheets 進行初始化。');
+    }
 
     // 產生唯一的盤點ID
     const inventoryId = 'INV' + new Date().getTime();
