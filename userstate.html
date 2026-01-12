@@ -5961,12 +5961,12 @@
                                         <input
                                             type="radio"
                                             name="scrapCategory"
-                                            value="物品"
-                                            checked={selectedCategory === '物品'}
+                                            value="非消耗品"
+                                            checked={selectedCategory === '非消耗品'}
                                             onChange={(e) => setSelectedCategory(e.target.value)}
                                             className="mr-2"
                                         />
-                                        <span>物品</span>
+                                        <span>非消耗品</span>
                                     </label>
                                 </div>
 
@@ -6121,12 +6121,12 @@
                                         <input
                                             type="radio"
                                             name="scrapCategoryByDate"
-                                            value="物品"
-                                            checked={selectedCategory === '物品'}
+                                            value="非消耗品"
+                                            checked={selectedCategory === '非消耗品'}
                                             onChange={(e) => setSelectedCategory(e.target.value)}
                                             className="mr-2"
                                         />
-                                        <span>物品</span>
+                                        <span>非消耗品</span>
                                     </label>
                                 </div>
 
@@ -10769,7 +10769,7 @@
                         google.script.run
                             .withSuccessHandler(resolve)
                             .withFailureHandler(reject)
-                            .getAllScrappableItems('物品', forceUserScope);
+                            .getAllScrappableItems('非消耗品', forceUserScope);
                     })
                 ]).then(([propertyResult, itemResult]) => {
                     if (scrapPendingRequestRef.current !== requestId) {
