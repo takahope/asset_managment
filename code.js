@@ -12,6 +12,7 @@ const APPLICATION_LOG_SHEET_NAME = "轉移申請紀錄";
 const KEEPER_EMAIL_MAP_SHEET_NAME = "保管人/信箱";
 const KEEPER_LOCATION_MAP_SHEET_NAME = "存置地點列表";
 const LENDING_LOG_SHEET_NAME = "出借紀錄"; // ✨ **新增：出借紀錄工作表**
+const SCRAP_LOG_SHEET_NAME = "報廢紀錄"; // ✨ **新增：報廢紀錄工作表**
 const ADMIN_LIST_SHEET_NAME = "管理員名單"; // ✨ **新增：管理員權限列表**
 const INVENTORY_LOG_SHEET_NAME = "盤點紀錄"; // ✨ **新增：資產盤點紀錄工作表**
 const INVENTORY_DETAIL_SHEET_NAME = "盤點明細"; // ✨ **新增：資產盤點明細工作表**
@@ -149,6 +150,24 @@ const LL_BORROWER_TYPE_COLUMN_INDEX = 11; // ✨ 借用類型（內部/外部）
 const LL_CONTACT_PHONE_COLUMN_INDEX = 12; // ✨ 聯絡電話
 const LL_DOC_URL_COLUMN_INDEX = 13; // ✨ 出借申請單文件連結
 const LL_PRINT_TIME_COLUMN_INDEX = 14; // ✨ 列印時間
+
+// --- ✨ **新增：「報廢紀錄」工作表中的欄位索引** ---
+const SL_SCRAP_ID_COLUMN_INDEX = 1;
+const SL_APPLY_TIME_COLUMN_INDEX = 2;
+const SL_ASSET_ID_COLUMN_INDEX = 3;
+const SL_APPLICANT_EMAIL_COLUMN_INDEX = 4;
+const SL_KEEPER_NAME_COLUMN_INDEX = 5;
+const SL_USER_NAME_COLUMN_INDEX = 6;
+const SL_LOCATION_COLUMN_INDEX = 7;
+const SL_ASSET_CATEGORY_COLUMN_INDEX = 8;
+const SL_ASSET_NAME_COLUMN_INDEX = 9;
+const SL_MODEL_BRAND_COLUMN_INDEX = 10;
+const SL_SCRAP_REASON_COLUMN_INDEX = 11;
+const SL_STATUS_COLUMN_INDEX = 12;
+const SL_UPDATE_TIME_COLUMN_INDEX = 13;
+const SL_APPROVER_EMAIL_COLUMN_INDEX = 14;
+const SL_DOC_URL_COLUMN_INDEX = 15;
+const SL_PRINT_TIME_COLUMN_INDEX = 16;
 
 const PROPERTY_MASTER_SHEET_NAME = "財產總表"; // ✨ **拆分後：財產總表**
 const ITEM_MASTER_SHEET_NAME = "物品總表";   // ✨ **拆分後：物品總表**
@@ -3070,6 +3089,41 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+function getScrapLogSheet(ss) {
+  const spreadsheet = ss || SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = spreadsheet.getSheetByName(SCRAP_LOG_SHEET_NAME);
+  if (!sheet) {
+    throw new Error(`找不到工作表「${SCRAP_LOG_SHEET_NAME}」，請先建立報廢紀錄表。`);
+  }
+  return sheet;
+}
+
+function getScrapLogEffectiveTime(row) {
+  const rawUpdate = row[SL_UPDATE_TIME_COLUMN_INDEX - 1];
+  const rawApply = row[SL_APPLY_TIME_COLUMN_INDEX - 1];
+  const raw = rawUpdate || rawApply;
+  const timeValue = raw ? new Date(raw).getTime() : 0;
+  return Number.isNaN(timeValue) ? 0 : timeValue;
+}
+
+function buildLatestScrapLogIndex(scrapLogData, statusFilterSet) {
+  const latestByAsset = {};
+  const latestTimeByAsset = {};
+  scrapLogData.forEach((row, index) => {
+    const assetId = String(row[SL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+    if (!assetId) return;
+    const status = row[SL_STATUS_COLUMN_INDEX - 1];
+    if (statusFilterSet && !statusFilterSet.has(status)) return;
+
+    const timeValue = getScrapLogEffectiveTime(row);
+    if (!latestByAsset[assetId] || timeValue >= (latestTimeByAsset[assetId] || 0)) {
+      latestByAsset[assetId] = { row: row, rowIndex: index + 2 };
+      latestTimeByAsset[assetId] = timeValue;
+    }
+  });
+  return latestByAsset;
+}
+
 // =================================================================
 // --- ✨ 全新功能模組：財產報廢 --- ✨
 // =================================================================
@@ -3130,6 +3184,8 @@ function processBatchScrapping(formData) {
     const isAdmin = checkAdminPermissions();
     const unauthorizedAssets = []; // 🛡️ 收集無權限的資產
 
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [asset.assetId, asset]));
 
@@ -3137,6 +3193,8 @@ function processBatchScrapping(formData) {
     let successCount = 0;
     const scrappedAssets = []; // 收集報廢財產資訊供郵件通知使用
     const fullReason = reason === '其他' ? `其他: ${remarks}` : `${reason} ${remarks}`;
+    const scrapLogRows = [];
+    let logSequence = 0;
 
     assetIds.forEach(assetId => {
       const asset = assetMap.get(assetId);
@@ -3170,6 +3228,27 @@ function processBatchScrapping(formData) {
             category: asset.assetCategory  // 修正：使用正確的屬性名稱 assetCategory
           });
 
+          const scrapId = `SCRAP-${now.getTime()}-${logSequence}`;
+          logSequence += 1;
+          scrapLogRows.push([
+            scrapId,
+            now,
+            asset.assetId,
+            currentUserEmail,
+            asset.leaderName || '',
+            asset.userName || '無',
+            asset.location || '',
+            asset.assetCategory || '',
+            asset.assetName || '',
+            asset.modelBrand || '',
+            fullReason,
+            '報廢中',
+            '',
+            '',
+            '',
+            ''
+          ]);
+
           successCount++;
         } else {
           Logger.log(`processBatchScrapping: 找不到資產 ${assetId}，跳過。`);
@@ -3186,6 +3265,11 @@ function processBatchScrapping(formData) {
 
     if (successCount === 0) {
       throw new Error("處理失敗，勾選的財產可能已在報廢流程中或狀態已變更。");
+    }
+
+    if (scrapLogRows.length > 0) {
+      scrapLogSheet.getRange(scrapLogSheet.getLastRow() + 1, 1, scrapLogRows.length, scrapLogRows[0].length)
+        .setValues(scrapLogRows);
     }
 
     // 📧 發送郵件通知給所有管理員
@@ -3246,6 +3330,15 @@ function processScrapConfirmation(assetIds) {
   }
 
   try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
+    const scrapLogLastRow = scrapLogSheet.getLastRow();
+    const scrapLogData = scrapLogLastRow > 1
+      ? scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues()
+      : [];
+    const pendingLogMap = buildLatestScrapLogIndex(scrapLogData, new Set(['報廢中']));
+    const approverEmail = Session.getActiveUser().getEmail();
+
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [asset.assetId, asset]));
 
@@ -3263,6 +3356,13 @@ function processScrapConfirmation(assetIds) {
           location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue(originalReason.replace('[報廢申請]', '[報廢完成]'));
           location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue(now);
           successCount++;
+
+          const logEntry = pendingLogMap[String(assetId || '').trim()];
+          if (logEntry) {
+            scrapLogSheet.getRange(logEntry.rowIndex, SL_STATUS_COLUMN_INDEX).setValue('已報廢');
+            scrapLogSheet.getRange(logEntry.rowIndex, SL_UPDATE_TIME_COLUMN_INDEX).setValue(now);
+            scrapLogSheet.getRange(logEntry.rowIndex, SL_APPROVER_EMAIL_COLUMN_INDEX).setValue(approverEmail);
+          }
         }
       }
     });
@@ -3292,36 +3392,43 @@ function getScrapHistoryData() {
       };
     }
 
-    const allAssets = getAllAssets();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
+    const scrapLogLastRow = scrapLogSheet.getLastRow();
+    if (scrapLogLastRow < 2) {
+      return { assets: [], isAdmin: true };
+    }
 
-    // 篩選所有已報廢的資產
-    const scrappedAssets = allAssets.filter(asset => asset.assetStatus === '已報廢');
+    const scrapLogData = scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues();
+    const latestLogMap = buildLatestScrapLogIndex(scrapLogData, null);
 
-    // 轉換為前端可用的純物件格式（避免 Date 序列化問題）
-    const results = scrappedAssets.map(asset => {
-      // 處理報廢日期格式化
-      let scrapDateStr = '';
-      if (asset.lastModified) {
-        try {
-          scrapDateStr = Utilities.formatDate(new Date(asset.lastModified), Session.getScriptTimeZone(), "yyyy/MM/dd");
-        } catch (e) {
-          scrapDateStr = '';
-        }
+    const formatDateValue = (value, pattern) => {
+      if (!value) return '';
+      try {
+        return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+      } catch (e) {
+        return '';
       }
+    };
 
-      return {
-        assetId: String(asset.assetId || ''),
-        assetName: String(asset.assetName || ''),
-        modelBrand: String(asset.modelBrand || ''),
-        assetCategory: String(asset.assetCategory || ''),
-        leaderName: String(asset.leaderName || ''),
-        userName: String(asset.userName || ''),
-        location: String(asset.location || ''),
-        scrapDate: scrapDateStr,
-        scrapReason: String(asset.remarks || ''),
-        sourceSheet: String(asset.sourceSheet || '')
-      };
-    });
+    const results = Object.keys(latestLogMap)
+      .map(assetId => latestLogMap[assetId].row)
+      .filter(row => row[SL_STATUS_COLUMN_INDEX - 1] === '已報廢')
+      .map(row => {
+        const rawDate = row[SL_UPDATE_TIME_COLUMN_INDEX - 1] || row[SL_APPLY_TIME_COLUMN_INDEX - 1];
+        return {
+          assetId: String(row[SL_ASSET_ID_COLUMN_INDEX - 1] || ''),
+          assetName: String(row[SL_ASSET_NAME_COLUMN_INDEX - 1] || ''),
+          modelBrand: String(row[SL_MODEL_BRAND_COLUMN_INDEX - 1] || ''),
+          assetCategory: String(row[SL_ASSET_CATEGORY_COLUMN_INDEX - 1] || ''),
+          leaderName: String(row[SL_KEEPER_NAME_COLUMN_INDEX - 1] || ''),
+          userName: String(row[SL_USER_NAME_COLUMN_INDEX - 1] || ''),
+          location: String(row[SL_LOCATION_COLUMN_INDEX - 1] || ''),
+          scrapDate: formatDateValue(rawDate, 'yyyy/MM/dd'),
+          scrapReason: String(row[SL_SCRAP_REASON_COLUMN_INDEX - 1] || ''),
+          sourceSheet: ''
+        };
+      });
 
     // 按報廢日期降序排列（最新的在前面）
     results.sort((a, b) => {
@@ -3378,61 +3485,54 @@ function getScrapAssetsByDateRange(startDate, endDate, assetCategory) {
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 
-    // 獲取所有資產
-    const allAssets = getAllAssets();
-    Logger.log(`📦 總資產數量: ${allAssets.length}`);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
+    const scrapLogLastRow = scrapLogSheet.getLastRow();
+    if (scrapLogLastRow < 2) {
+      return [];
+    }
 
-    // 篩選條件：
-    // 1. 狀態為「已報廢」
-    // 2. 報廢日期在指定範圍內
-    // 3. 符合資產類別
-    const filteredAssets = allAssets.filter(asset => {
-      // 檢查狀態
-      if (asset.assetStatus !== '已報廢') return false;
+    const scrapLogData = scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues();
+    const latestLogMap = buildLatestScrapLogIndex(scrapLogData, null);
+    const latestRows = Object.keys(latestLogMap).map(assetId => latestLogMap[assetId].row);
 
-      // 檢查類別
-      if (assetCategory === '財產' && asset.sourceSheet !== PROPERTY_MASTER_SHEET_NAME) return false;
-      if (assetCategory === '非消耗品' && asset.sourceSheet !== ITEM_MASTER_SHEET_NAME) return false;
-
-      // 檢查日期（使用 lastModified 欄位）
-      if (!asset.lastModified) return false;
-
+    const filteredRows = latestRows.filter(row => {
+      const status = row[SL_STATUS_COLUMN_INDEX - 1];
+      if (status !== '已報廢') return false;
+      if (assetCategory && row[SL_ASSET_CATEGORY_COLUMN_INDEX - 1] !== assetCategory) return false;
+      const rawDate = row[SL_UPDATE_TIME_COLUMN_INDEX - 1] || row[SL_APPLY_TIME_COLUMN_INDEX - 1];
+      if (!rawDate) return false;
       try {
-        const assetDate = new Date(asset.lastModified);
+        const assetDate = new Date(rawDate);
         return assetDate >= start && assetDate <= end;
       } catch (e) {
-        Logger.log(`⚠️  資產 ${asset.assetId} 的日期解析失敗: ${e.message}`);
+        Logger.log(`⚠️  資產 ${row[SL_ASSET_ID_COLUMN_INDEX - 1]} 的日期解析失敗: ${e.message}`);
         return false;
       }
     });
 
-    Logger.log(`✅ 找到 ${filteredAssets.length} 筆符合條件的資產`);
+    Logger.log(`✅ 找到 ${filteredRows.length} 筆符合條件的資產`);
 
-    // 轉換為安全的 DTO 格式（防止 Date 序列化問題）
-    const results = filteredAssets.map(asset => {
-      let scrapDateStr = '';
-      if (asset.lastModified) {
-        try {
-          scrapDateStr = Utilities.formatDate(
-            new Date(asset.lastModified),
-            Session.getScriptTimeZone(),
-            "yyyy/MM/dd"
-          );
-        } catch (e) {
-          Logger.log(`⚠️  資產 ${asset.assetId} 的日期格式化失敗: ${e.message}`);
-          scrapDateStr = '';
-        }
+    const formatDateValue = (value, pattern) => {
+      if (!value) return '';
+      try {
+        return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), pattern);
+      } catch (e) {
+        return '';
       }
+    };
 
+    const results = filteredRows.map(row => {
+      const rawDate = row[SL_UPDATE_TIME_COLUMN_INDEX - 1] || row[SL_APPLY_TIME_COLUMN_INDEX - 1];
       return {
-        assetId: String(asset.assetId || ''),
-        assetName: String(asset.assetName || ''),
-        modelBrand: String(asset.modelBrand || ''),
-        leaderName: String(asset.leaderName || ''),
-        userName: String(asset.userName || ''),
-        location: String(asset.location || ''),
-        scrapDate: scrapDateStr,
-        scrapReason: String(asset.remarks || '')
+        assetId: String(row[SL_ASSET_ID_COLUMN_INDEX - 1] || ''),
+        assetName: String(row[SL_ASSET_NAME_COLUMN_INDEX - 1] || ''),
+        modelBrand: String(row[SL_MODEL_BRAND_COLUMN_INDEX - 1] || ''),
+        leaderName: String(row[SL_KEEPER_NAME_COLUMN_INDEX - 1] || ''),
+        userName: String(row[SL_USER_NAME_COLUMN_INDEX - 1] || ''),
+        location: String(row[SL_LOCATION_COLUMN_INDEX - 1] || ''),
+        scrapDate: formatDateValue(rawDate, 'yyyy/MM/dd'),
+        scrapReason: String(row[SL_SCRAP_REASON_COLUMN_INDEX - 1] || '')
       };
     });
 
@@ -3470,12 +3570,21 @@ function restoreFromScrap(assetIds) {
   }
 
   try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
+    const scrapLogLastRow = scrapLogSheet.getLastRow();
+    const scrapLogData = scrapLogLastRow > 1
+      ? scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues()
+      : [];
+    const completedLogMap = buildLatestScrapLogIndex(scrapLogData, new Set(['已報廢']));
+
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [asset.assetId, asset]));
 
     const now = new Date();
     let successCount = 0;
     const failedIds = [];
+    const currentUserEmail = Session.getActiveUser().getEmail();
 
     assetIds.forEach(assetId => {
       const asset = assetMap.get(assetId);
@@ -3494,6 +3603,13 @@ function restoreFromScrap(assetIds) {
 
           // 更新最後修改日期
           location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue(now);
+
+          const logEntry = completedLogMap[String(assetId || '').trim()];
+          if (logEntry) {
+            scrapLogSheet.getRange(logEntry.rowIndex, SL_STATUS_COLUMN_INDEX).setValue('已回溯');
+            scrapLogSheet.getRange(logEntry.rowIndex, SL_UPDATE_TIME_COLUMN_INDEX).setValue(now);
+            scrapLogSheet.getRange(logEntry.rowIndex, SL_APPROVER_EMAIL_COLUMN_INDEX).setValue(currentUserEmail);
+          }
 
           successCount++;
         } else {
@@ -3756,6 +3872,14 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
   // 或者更嚴格地，我們在篩選資產時再次過濾。
   
   try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
+    const scrapLogLastRow = scrapLogSheet.getLastRow();
+    const scrapLogData = scrapLogLastRow > 1
+      ? scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues()
+      : [];
+    const printableLogMap = buildLatestScrapLogIndex(scrapLogData, new Set(['報廢中', '已報廢']));
+
     const allAssets = getAllAssets();
     const assetsToScrap = [];
 
@@ -4019,6 +4143,14 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
       if (location) {
         const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
         location.sheet.getRange(location.rowIndex, indices.DOC_URL).setValue(fileUrl);
+      }
+    });
+
+    assetsToScrap.forEach(asset => {
+      const logEntry = printableLogMap[String(asset.assetId || '').trim()];
+      if (logEntry) {
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_DOC_URL_COLUMN_INDEX).setValue(fileUrl);
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_PRINT_TIME_COLUMN_INDEX).setValue(now);
       }
     });
     
@@ -4727,6 +4859,21 @@ function cancelTransferOrScrap(assetId) {
       location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue('');
       location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue('');
 
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const scrapLogSheet = getScrapLogSheet(ss);
+      const scrapLogLastRow = scrapLogSheet.getLastRow();
+      const scrapLogData = scrapLogLastRow > 1
+        ? scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues()
+        : [];
+      const pendingLogMap = buildLatestScrapLogIndex(scrapLogData, new Set(['報廢中']));
+      const logEntry = pendingLogMap[String(assetId || '').trim()];
+      if (logEntry) {
+        const now = new Date();
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_STATUS_COLUMN_INDEX).setValue('已取消');
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_UPDATE_TIME_COLUMN_INDEX).setValue(now);
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_APPROVER_EMAIL_COLUMN_INDEX).setValue(currentUserEmail);
+      }
+
     } else {
       throw new Error(`此財產的狀態 (${originalStatus}) 無法被取消。`);
     }
@@ -5262,6 +5409,41 @@ function getAssetStatusDetail(assetId, forceUserScope) {
     }
 
     if (status === '報廢中') {
+      const scrapLogSheet = getScrapLogSheet(ss);
+      const scrapLogLastRow = scrapLogSheet.getLastRow();
+      if (scrapLogLastRow > 1) {
+        const scrapLogData = scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues();
+        let latestRow = null;
+        let latestTime = 0;
+
+        scrapLogData.forEach(row => {
+          const logAssetId = String(row[SL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+          const logStatus = row[SL_STATUS_COLUMN_INDEX - 1];
+          if (logAssetId !== normalizedAssetId) return;
+          if (logStatus !== '報廢中') return;
+          const timeValue = getScrapLogEffectiveTime(row);
+          if (!latestRow || timeValue >= latestTime) {
+            latestRow = row;
+            latestTime = timeValue;
+          }
+        });
+
+        if (latestRow) {
+          const rawDate = latestRow[SL_UPDATE_TIME_COLUMN_INDEX - 1] || latestRow[SL_APPLY_TIME_COLUMN_INDEX - 1];
+          return {
+            ...baseResult,
+            type: 'scrap',
+            detail: {
+              scrapDate: formatDateValue(rawDate, 'yyyy/MM/dd'),
+              scrapReason: String(latestRow[SL_SCRAP_REASON_COLUMN_INDEX - 1] || ''),
+              originalKeeper: String(latestRow[SL_KEEPER_NAME_COLUMN_INDEX - 1] || ''),
+              originalUser: String(latestRow[SL_USER_NAME_COLUMN_INDEX - 1] || ''),
+              location: String(latestRow[SL_LOCATION_COLUMN_INDEX - 1] || '')
+            }
+          };
+        }
+      }
+
       return {
         ...baseResult,
         type: 'scrap',
