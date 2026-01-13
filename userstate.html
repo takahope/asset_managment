@@ -10001,6 +10001,7 @@
                 asset: null,
                 displayMode: 'modal'
             });
+            const closeActionPanelRef = useRef(null);
 
             const isAdminView = isAdmin && viewMode === 'admin';
             const isAdvancedMode = cartSnapshot.mode === 'ADVANCED';
@@ -10471,11 +10472,17 @@
             }, [closeActionPanel, openActionPanel]);
 
             useEffect(() => {
+                closeActionPanelRef.current = closeActionPanel;
+            }, [closeActionPanel]);
+
+            useEffect(() => {
                 if (!isAdvancedMode) {
                     setIsScannerOpen(false);
-                    closeActionPanel({ skipScannerStatus: true });
+                    if (closeActionPanelRef.current) {
+                        closeActionPanelRef.current({ skipScannerStatus: true });
+                    }
                 }
-            }, [isAdvancedMode, closeActionPanel]);
+            }, [isAdvancedMode]);
 
             // ========== 盤點功能輔助函數 ==========
 
