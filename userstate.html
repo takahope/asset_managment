@@ -2216,6 +2216,8 @@
                         if (typeof window.AdvancedMode_toggleScanner === 'function') {
                             return window.AdvancedMode_toggleScanner();
                         }
+                    } else if (typeof window.App_toggleScanner === 'function') {
+                        return window.App_toggleScanner();
                     }
                     return window.Scanner_toggle_base();
                 };
@@ -10432,7 +10434,8 @@
                         window.Scanner_playSound();
                     }
                 };
-                window.AdvancedMode_toggleScanner = () => {
+                const toggleScannerShell = (options = {}) => {
+                    const { onClose } = options;
                     const zone = document.getElementById('Scanner_zone');
                     if (!zone) return;
                     const isOpen = zone && zone.style.display && zone.style.display !== 'none';
@@ -10444,7 +10447,9 @@
                             zone.style.display = 'none';
                         }
                         setIsScannerOpen(false);
-                        closeActionPanel({ skipScannerStatus: true });
+                        if (typeof onClose === 'function') {
+                            onClose();
+                        }
                         return;
                     }
                     if (typeof window.Scanner_toggle_base === 'function') {
@@ -10454,6 +10459,14 @@
                         window.Scanner_start();
                     }
                     setIsScannerOpen(true);
+                };
+                window.AdvancedMode_toggleScanner = () => {
+                    toggleScannerShell({
+                        onClose: () => closeActionPanel({ skipScannerStatus: true })
+                    });
+                };
+                window.App_toggleScanner = () => {
+                    toggleScannerShell();
                 };
             }, [closeActionPanel, openActionPanel]);
 
@@ -12732,13 +12745,13 @@
                     />
 
                     {/* 掃描區域 - 供 Scanner 模組使用 */}
-                    {isAdvancedMode && isScannerOpen && (
+                    {isScannerOpen && (
                         <div
                             className="advanced-scanner-overlay"
-                            onClick={() => window.AdvancedMode_toggleScanner && window.AdvancedMode_toggleScanner()}
+                            onClick={() => window.Scanner_toggle && window.Scanner_toggle()}
                         ></div>
                     )}
-                    <div className={`advanced-scanner-shell ${isAdvancedMode && isScannerOpen ? 'advanced-scanner-shell--open' : ''}`}>
+                    <div className={`advanced-scanner-shell ${isScannerOpen ? 'advanced-scanner-shell--open' : ''}`}>
                         <div id="Scanner_zone" className="scanner-zone mb-6" style={{ display: 'none' }}></div>
                         {isAdvancedMode && isScannerOpen && (
                             <ActionPanel
