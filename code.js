@@ -373,17 +373,6 @@ function openPortal() {
 }
 
 /**
- * 處理「電腦狀態回報」：在試算表中顯示對話方塊
- */
-function openReportPage() {
-    // 注意：電腦回報頁面 (Index.html) 也使用了樣板語法，所以需要 .evaluate()
-    const html = HtmlService.createTemplateFromFile('Index').evaluate()
-        .setWidth(600)
-        .setHeight(700); // 您可以根據需求調整對話方塊大小
-    SpreadsheetApp.getUi().showModalDialog(html, '電腦狀態回報');
-}
-
-/**
  * 處理「申請財產轉移」：在試算表中顯示對話方塊
  */
 function openApplyPage() {
@@ -441,7 +430,7 @@ function openReviewDashboard() {
 
 /**
  * 取得系統存取白名單（含快取）
- * 來源：保管人信箱 + 資產管理員 + 回報管理員
+ * 來源：保管人信箱 + 資產管理員
  * @returns {string[]} 允許存取的 Email 陣列（已小寫化）
  */
 function getAllowedEmails() {
@@ -473,12 +462,11 @@ function getAllowedEmails() {
     Logger.log("讀取保管人信箱時發生錯誤：" + e.message);
   }
 
-  // 來源 2 & 3：管理員名單（防呆機制）
+  // 來源 2：管理員名單（防呆機制）
   const adminEmails = getAdminEmails().map(e => String(e).toLowerCase().trim());
-  const reportAdmins = getReportAdmins().map(e => String(e).toLowerCase().trim());
 
   // 合併並去重複
-  const allEmails = [...new Set([...keeperEmails, ...adminEmails, ...reportAdmins])];
+  const allEmails = [...new Set([...keeperEmails, ...adminEmails])];
 
   // 存入快取（10 分鐘）
   if (allEmails.length > 0) {
@@ -575,12 +563,6 @@ function createAccessDeniedPage(userEmail) {
 /**
  * 當使用者打開網頁應用程式的網址時執行
  */
-//function doGet() {
-//  const html = HtmlService.createTemplateFromFile('Index').evaluate();
-//  html.setTitle("電腦狀態回報表單");
-//  return html;
-//
-//}
 function doGet(e) {
   // ===== 全域存取控制 =====
   const currentUserEmail = Session.getActiveUser().getEmail();
@@ -597,10 +579,6 @@ function doGet(e) {
   let title;
 
   switch (page) {
-    case 'report':
-      template = HtmlService.createTemplateFromFile('Index');
-      title = "電腦狀態回報";
-      break;
     case 'dashboard':
       template = HtmlService.createTemplateFromFile('dashboard');
       title = "系統儀表板";
@@ -814,115 +792,6 @@ function getAppUrl() {
 /**
  * [供 Index.html 呼叫] 獲取駐站與電腦的二級下拉選單資料 (修正並清理版)
  */
-function getSelectData() {
-  const data = getAllAssets();
-  
-  const dataMap = {};
-
-  data.forEach(asset => {
-    if (asset.isComputer === '是' && asset.assetStatus !== '已報廢') {
-      const group = asset.location;
-      const computer = asset.assetId;
-      if (group && computer) {
-          if (!dataMap[group]) dataMap[group] = [];
-          dataMap[group].push(computer);
-      }
-    }
-  });
-  return dataMap;
-}
-
-/**
- * 從「軟體版本清單」工作表讀取 7-Zip 版本清單
- */
-function getSevenZipVersions() {
-  try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SOFTWARE_VERSIONS_SHEET_NAME);
-    const lastRow = sheet.getLastRow();
-    
-    if (lastRow < 2) {
-      Logger.log("軟體版本清單工作表中沒有資料");
-      return [];
-    }
-    
-    // 讀取 A 欄的所有資料 (從第2行開始，跳過標題)
-    const data = sheet.getRange(2, SV_SEVENZIP_COLUMN_INDEX, lastRow - 1, 1).getValues();
-    
-    // 過濾空白值並轉換為一維陣列
-    const versions = data
-      .map(row => row[0])
-      .filter(version => version && version.toString().trim() !== "")
-      .map(version => version.toString().trim());
-    
-    Logger.log("讀取到的 7-Zip 版本：", versions);
-    return versions;
-  } catch (e) {
-    Logger.log("讀取 7-Zip 版本時發生錯誤: " + e.message);
-    return [];
-  }
-}
-
-/**
- * 處理從 Web App 前端提交過來的表單資料，並寫入 Google Sheet
- * @param {object} formObject - 從前端傳來的表單物件
- * @returns {string} - 回傳給使用者的成功或失敗訊息
- */
-function processFormData(formObject) {
-  try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(RESPONSE_SHEET_NAME);
-    const timestamp = new Date();
-    
-    // 調試：記錄接收到的完整表單資料
-    Logger.log("接收到的表單資料：");
-    Logger.log(JSON.stringify(formObject, null, 2));
-    
-    // 調試：檢查勾選狀態
-    Logger.log("winUpdated 值：" + formObject.winUpdated + " (類型：" + typeof formObject.winUpdated + ")");
-    Logger.log("chromeUpdated 值：" + formObject.chromeUpdated + " (類型：" + typeof formObject.chromeUpdated + ")");
-    Logger.log("antivirusUpdated 值：" + formObject.antivirusUpdated + " (類型：" + typeof formObject.antivirusUpdated + ")");
-    
-    // 將勾選框狀態轉換為文字（處理字串和布林值）
-    let winStatus = "否";
-    let chromeStatus = "否";
-    let antivirusStatus = "否";
-    
-    // 更嚴格的判斷條件
-    if (formObject.winUpdated === true || formObject.winUpdated === "true" || formObject.winUpdated === "on") {
-      winStatus = "是";
-    }
-    if (formObject.chromeUpdated === true || formObject.chromeUpdated === "true" || formObject.chromeUpdated === "on") {
-      chromeStatus = "是";
-    }
-    if (formObject.antivirusUpdated === true || formObject.antivirusUpdated === "true" || formObject.antivirusUpdated === "on") {
-      antivirusStatus = "是";
-    }
-    
-    Logger.log("最終狀態 - Windows：" + winStatus + ", Chrome：" + chromeStatus + ", 防毒軟體：" + antivirusStatus);
-    
-    const newRow = [
-      timestamp, 
-      formObject.group, 
-      formObject.computer, 
-      formObject.notes,
-      winStatus,           // Windows 更新狀態
-      chromeStatus,        // Chrome 更新狀態
-      antivirusStatus,     // 防毒軟體更新狀態
-      formObject.sevenZipVersion, // 7-Zip 版本 (合併後的單一欄位)
-    ];
-
-    // 調試：記錄要寫入的完整行資料
-    Logger.log("要寫入的行資料：");
-    Logger.log(newRow);
-
-    sheet.appendRow(newRow);
-    return "回報成功！感謝您的填寫。";
-  } catch (e) {
-    Logger.log("寫入錯誤: " + e.message);
-    Logger.log("錯誤堆疊: " + e.stack);
-    return "錯誤：無法寫入資料。請聯繫管理員。原因：" + e.message;
-  }
-}
-
 // =================================================================
 // --- 財產轉移申請與審核功能 (後端) ---
 // (請將此區塊完整替換)
@@ -2182,84 +2051,6 @@ function processUploadConfirmation(assetIds) {
 }
 
 
-
-// =================================================================
-// --- 每月自動提醒功能 (背景排程執行) ---
-// (此部分無需任何修改)
-// =================================================================
-
-/**
- * 每月定時觸發，檢查電腦回報狀態並發送通知 (過濾版)
- */
-function checkComputerReportsAndNotify() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const responseSheet = ss.getSheetByName(RESPONSE_SHEET_NAME);
-
-  const allAssets = getAllAssets();
-  
-  const requiredComputers = allAssets.filter(asset => asset.isComputer === '是');
-
-  const responseData = responseSheet.getRange(2, 1, responseSheet.getLastRow() - 1, 3).getValues();
-  const submittedComputers = new Set();
-  
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-
-  for (const row of responseData) {
-    const timestamp = new Date(row[0]);
-    if (timestamp.getFullYear() === currentYear && timestamp.getMonth() === currentMonth) {
-      const computerName = row[2];
-      if (computerName) {
-        submittedComputers.add(String(computerName).trim());
-      }
-    }
-  }
-
-  const remindersForLeaders = {};  
-  const allMissingForAdmin = [];  
-
-  for (const asset of requiredComputers) {
-    if (asset.assetId) {
-      const computerNameStr = String(asset.assetId).trim();
-      if (computerNameStr && !submittedComputers.has(computerNameStr)) {
-        const missingInfo = ` - 駐站: ${asset.location}, 電腦: ${computerNameStr}`;
-        allMissingForAdmin.push(missingInfo);
-        if (asset.leaderEmail) {
-          if (!remindersForLeaders[asset.leaderEmail]) {
-            remindersForLeaders[asset.leaderEmail] = [];
-          }
-          remindersForLeaders[asset.leaderEmail].push(missingInfo);
-        }
-      }
-    }
-  }
-
-  const subjectDate = `${currentYear}年${currentMonth + 1}月`;
-  for (const leaderEmail in remindersForLeaders) {
-    if (remindersForLeaders[leaderEmail].length > 0) {
-      const subject = `[自動通知] ${subjectDate} 駐站有電腦尚未回報狀態`;
-      let body = `您好，\n\n截至目前，駐站尚有以下電腦未透過表單回報本月份狀態：\n` + remindersForLeaders[leaderEmail].join("\n") + `\n\n請協助處理。\n\n此為系統自動發送郵件。`;
-      MailApp.sendEmail(leaderEmail, subject, body);
-    }
-  }
-
-  if (allMissingForAdmin.length > 0) {
-    const reportAdmins = getReportAdmins();
-    
-    if (reportAdmins && reportAdmins.length > 0) {
-      const subject = `[自動通知] ${subjectDate} 未回報電腦總清單`;
-      let body = `您好，\n\n截至目前，本月份尚有以下所有電腦未回報狀態：\n\n` + allMissingForAdmin.join("\n") + `\n\n系統已同步寄送通知給相關駐管。\n\n此為系統自動發送郵件。`;
-      
-      MailApp.sendEmail(reportAdmins.join(','), subject, body);
-      Logger.log(`已發送總清單通知給 ${reportAdmins.length} 位「電腦回報」管理員。`);
-    } else {
-      Logger.log("警告：在「管理員名單」中找不到任何有效的「電腦回報」管理員Email，無法寄送總清單。");
-    }
-  } else {
-    Logger.log("所有應回報的電腦皆已完成本月份的回報。");
-  }
-}
 
 // =================================================================
 // --- ✨ 全新功能模組：財產出借與歸還 ✨ ---
@@ -3628,44 +3419,6 @@ function isAdminEmailEnabled() {
   }
 
   return isEnabled;
-}
-
-/**
- * 從 "管理員名單" 工作表的 B 欄獲取「電腦回報」總管理員 Email 列表，並使用快取。
- * @returns {string[]} 一個包含所有回報總管理員 Email 的陣列。
- */
-function getReportAdmins() {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'report_admins_list';
-  
-  // 步驟 1: 嘗試從快取中讀取
-  const cachedAdmins = cache.get(cacheKey);
-  if (cachedAdmins) {
-    Logger.log("從快取中成功讀取「電腦回報」管理員名單。");
-    return JSON.parse(cachedAdmins);
-  }
-
-  // 步驟 2: 如果快取中沒有，則從試算表讀取
-  Logger.log("快取未命中，從 Google Sheet 讀取「電腦回報」管理員名單。");
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ADMIN_LIST_SHEET_NAME);
-  if (!sheet) {
-    Logger.log(`錯誤：找不到名為 "${ADMIN_LIST_SHEET_NAME}" 的工作表。`);
-    return []; 
-  }
-  
-  // ✨ **核心修改點：讀取 B 欄 (欄位索引為 2)**
-  const range = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1); 
-  const emails = range.getValues()
-                      .map(row => row[0])
-                      .filter(email => email && email.includes('@'));
-  
-  // 步驟 3: 將結果存入快取
-  if (emails.length > 0) {
-    cache.put(cacheKey, JSON.stringify(emails), 600); // 快取 10 分鐘
-    Logger.log(`已將 ${emails.length} 筆「電腦回報」管理員 Email 存入快取。`);
-  }
-
-  return emails;
 }
 
 function checkAdminPermissions() {
