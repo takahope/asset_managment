@@ -11138,7 +11138,7 @@
                                 finishCardLoading();
                                 scheduleScrapPendingPreload(forceUserScope);
                                 scheduleTransferPendingPreload(forceUserScope);
-                                if (response.isAdmin) {
+                                if (response.isAdmin && !forceUserScope) {
                                     scheduleAddAssetDropdownPreload();
                                 }
 
@@ -11240,7 +11240,7 @@
                 const forceUserScope = viewMode === 'user';
                 scheduleScrapPendingPreload(forceUserScope);
                 scheduleTransferPendingPreload(forceUserScope);
-                if (isAdmin) {
+                if (isAdmin && !forceUserScope) {
                     scheduleAddAssetDropdownPreload();
                 }
 
@@ -11366,6 +11366,10 @@
             const handleViewModeChange = (mode) => {
                 if (!isAdmin) return;
                 if (mode === viewMode) return;
+                if (mode === 'user') {
+                    setShowAddAssetModal(false);
+                    setAddAssetDropdownData(null);
+                }
                 setViewMode(mode);
                 setTransferringAssets(null);
                 setLentAssetsDetails(null);
@@ -11429,7 +11433,10 @@
                 if (!isAdminView && showInventoryMgmtModal) {
                     setShowInventoryMgmtModal(false);
                 }
-            }, [isAdminView, showInventoryMgmtModal]);
+                if (!isAdminView && showAddAssetModal) {
+                    setShowAddAssetModal(false);
+                }
+            }, [isAdminView, showInventoryMgmtModal, showAddAssetModal]);
 
             useEffect(() => {
                 loadData();
@@ -12697,7 +12704,7 @@
                                 )}
 
                                 {/* 新增資產按鈕 */}
-                                {isAdmin && (
+                                {isAdminView && (
                                     <button
                                         onClick={() => setShowAddAssetModal(true)}
                                         className="hero-btn hero-btn--primary"
@@ -12997,7 +13004,7 @@
                     )}
 
                     {/* 新增資產 Modal */}
-                    {showAddAssetModal && isAdmin && (
+                    {showAddAssetModal && isAdminView && (
                         <AddAssetModal
                             onClose={() => setShowAddAssetModal(false)}
                             onSuccess={handleAddAssetSuccess}
