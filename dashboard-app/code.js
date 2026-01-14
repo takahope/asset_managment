@@ -2,7 +2,7 @@
 // --- 全域設定 (Global Settings) ---
 // =================================================================
 
-const RESPONSE_SHEET_NAME = "表單回應 1";
+const RESPONSE_SHEET_NAME = "駐站回報清單";
 const APPLICATION_LOG_SHEET_NAME = "轉移申請紀錄";
 const KEEPER_EMAIL_MAP_SHEET_NAME = "保管人/信箱";
 const ADMIN_LIST_SHEET_NAME = "管理員名單";

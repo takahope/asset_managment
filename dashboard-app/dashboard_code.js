@@ -302,7 +302,16 @@ function getIntegratedDashboardData() {
  * @returns {Set<string>} - 已回報的電腦ID集合
  */
 function getSubmittedComputersForMonth(responseSheet, year, month) {
-  const responseData = responseSheet.getRange(2, 1, Math.max(1, responseSheet.getLastRow() - 1), 3).getValues();
+  if (!responseSheet) {
+    return new Set();
+  }
+
+  const lastRow = responseSheet.getLastRow();
+  if (lastRow <= 1) {
+    return new Set();
+  }
+
+  const responseData = responseSheet.getRange(2, 1, lastRow - 1, 3).getValues();
   const submittedComputers = new Set();
 
   for (const row of responseData) {
@@ -329,6 +338,9 @@ function getComputerReportStats() {
     const reportSs = SpreadsheetApp.openById(REPORT_SPREADSHEET_ID);
     const responseSheet = reportSs.getSheetByName(RESPONSE_SHEET_NAME);
     const allAssets = getAllAssets();
+    if (!responseSheet) {
+      Logger.log(`警告：找不到工作表 "${RESPONSE_SHEET_NAME}"，電腦回報統計將以空白回報處理。`);
+    }
 
     // 1. 獲取所有需要回報的駐站電腦
     const requiredComputers = allAssets.filter(asset => asset.isComputer === '是');
