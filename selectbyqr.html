@@ -1,0 +1,513 @@
+<!-- Quagga2 條碼掃描庫 -->
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+<style>
+/* ========== 掃描區域樣式 ========== */
+.scanner-zone {
+  background: #f8f9fa;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.scanner-header h6 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.scanner-header i {
+  margin-right: 8px;
+  color: #4a90e2;
+}
+
+.btn-close-scanner {
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.btn-close-scanner:hover {
+  color: #e74c3c;
+}
+
+/* 掃描器容器 */
+.scanner-reader-container {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 15px auto;
+}
+
+#Scanner_reader {
+  width: 100%;
+  height: 300px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+#Scanner_reader video,
+#Scanner_reader canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 掃描框線覆蓋層 */
+.scanner-frame-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid #4a90e2;
+  border-radius: 8px;
+  margin: 30px;
+  opacity: 0.6;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+}
+
+/* 水平掃描線 */
+.scanner-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #e74c3c;
+  opacity: 0.8;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: scanLine 2s ease-in-out infinite;
+}
+
+@keyframes scanLine {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+#Scanner_scanStatus {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.scan-status-success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.scan-status-error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* ========== RWD 適配 ========== */
+@media (max-width: 768px) {
+  #Scanner_reader {
+    height: 250px;
+  }
+}
+</style>
+
+<!-- ========== 掃描區模板 ========== -->
+<template id="Scanner_template">
+  <div class="scanner-header">
+    <h6><i class="fa-solid fa-camera"></i> 條碼掃描</h6>
+    <button class="btn-close-scanner" onclick="Scanner_toggle()">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <div class="scanner-reader-container">
+    <div id="Scanner_reader"></div>
+    <!-- 掃描框線 -->
+    <div class="scanner-frame-overlay"></div>
+    <!-- 水平掃描線 -->
+    <div class="scanner-line"></div>
+  </div>
+
+  <div id="Scanner_scanStatus"></div>
+</template>
+
+<!-- ========== JavaScript 邏輯區 ========== -->
+<script>
+(function() {
+  'use strict';
+
+  // ========== 模組依賴檢查 ==========
+  if (typeof window.BatchList_addItem !== 'function') {
+    console.warn('[Scanner] ⚠️ BatchList 模組尚未載入，部分功能可能無法使用');
+    console.warn('[Scanner] 請確保在 apply.html 中先引入 batch_processing_list.html');
+  }
+
+  // ========== 全局變數 ==========
+  let Scanner_active = false;
+  let Scanner_lastScanned = '';
+  let Scanner_cooldown = false;
+  let Scanner_currentStream = null;
+  let Scanner_initialized = false;
+
+  // ========== 音效 Base64 (嗶聲) ==========
+  const BEEP_SOUND = 'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAAESAAzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMz////////////////////////////////////////////////////////////AAABLAMAAIEQAABgAAACRAAAAAAAAARIAAAAAAAAAAAAAAAAAAAAAA==';
+  const Scanner_audioPlayer = new Audio(BEEP_SOUND);
+  Scanner_audioPlayer.volume = 0.5;
+
+  // ========== 初始化函數 ==========
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(Scanner_init, 600); // 稍晚於 BatchList 初始化
+  });
+
+  window.Scanner_init = function() {
+    if (Scanner_initialized) return;
+    Scanner_initialized = true;
+
+    console.log('[Scanner] 初始化掃描模組...');
+
+    // 檢查 BatchList 模組
+    if (typeof window.BatchList_addItem !== 'function') {
+      console.error('[Scanner] ❌ BatchList 模組未載入，掃描功能將無法正常運作');
+      return;
+    }
+
+    // 增強搜尋框（支援 Enter 鍵智能掃描）
+    Scanner_enhanceSearchBox();
+
+    // 插入掃描區 HTML 模板
+    const template = document.getElementById('Scanner_template');
+    if (template) {
+      const zone = document.getElementById('Scanner_zone');
+      if (zone) {
+        zone.appendChild(template.content.cloneNode(true));
+        console.log('[Scanner] 掃描區模板已插入');
+      }
+    }
+
+    console.log('[Scanner] ✓ 掃描模組初始化完成');
+  };
+
+  // ========== 增強搜尋框：支援 Enter 鍵智能掃描 ==========
+  /**
+   * 增強搜尋框，支援 Enter 鍵智能掃描
+   * 參考 qr_code_template.html 的 Enter 鍵處理邏輯
+   *
+   * 核心設計：
+   * - 監聽搜尋框的 Enter 鍵事件
+   * - 嘗試將輸入內容格式化為條碼
+   * - 查找對應資產（使用 BatchList 模組的資產索引）
+   * - 找到資產 → 掃描模式：加入清單 + 清空輸入框 + Toast 提示
+   * - 找不到資產 → 搜尋模式：保持原搜尋功能（input 事件已觸發即時搜尋）
+   */
+  let Scanner_searchBoxEnhanced = false;  // ✨ 防止重複綁定
+
+  function Scanner_enhanceSearchBox() {
+    const searchBox = document.getElementById('search-box');
+    if (!searchBox) {
+      console.warn('[Scanner] 找不到 search-box 元素，跳過增強');
+      return;
+    }
+
+    // ✨ 防止重複綁定事件監聽器
+    if (Scanner_searchBoxEnhanced && searchBox._scannerEnhanced) {
+      console.log('[Scanner] 搜尋框已增強，跳過重複綁定');
+      return;
+    }
+
+    // ✨ 標記此搜尋框已被增強
+    searchBox._scannerEnhanced = true;
+    Scanner_searchBoxEnhanced = true;
+
+    // 監聯 Enter 鍵
+    searchBox.addEventListener('keypress', function(e) {
+      if (e.key !== 'Enter') return;
+
+      const inputValue = searchBox.value.trim();
+      if (!inputValue) return;
+
+      // 嘗試作為條碼處理
+      const formattedCode = Scanner_formatBarcode(inputValue);
+
+      // ✨ 修改查找順序：優先使用 window.allAssets，再檢查全域 allAssets
+      const asset = (typeof window.allAssets !== 'undefined' && window.allAssets ?
+                      window.allAssets.find(a => a.id === formattedCode || a.id === inputValue) : null) ||
+                    (typeof allAssets !== 'undefined' && allAssets ?
+                      allAssets.find(a => a.id === formattedCode || a.id === inputValue) : null) ||
+                    BatchList_findAsset(formattedCode) ||
+                    BatchList_findAsset(inputValue);
+
+      if (asset) {
+        // 找到資產 → 掃描模式
+        e.preventDefault(); // 阻止預設行為
+        BatchList_addItem(asset.id);
+        BatchList_showToast(`已加入：${asset.assetName}`, 'success');
+
+        // ✨ 清空輸入框（優先使用 React 方式）
+        if (typeof window.clearSearchBox === 'function') {
+          // React 環境：調用全域函數更新 state（這會正確清空 controlled input）
+          window.clearSearchBox();
+          console.log('[Scanner] Enter 鍵掃描成功（React 清空）:', asset.id);
+        } else {
+          // 非 React 環境：直接操作 DOM + 觸發 input 事件
+          searchBox.value = '';
+          searchBox.dispatchEvent(new Event('input', { bubbles: true }));
+          console.log('[Scanner] Enter 鍵掃描成功（DOM 清空）:', asset.id);
+        }
+      }
+      // 找不到資產 → 保持搜尋狀態，不做任何處理
+    });
+
+    console.log('[Scanner] ✓ 已增強搜尋框，支援 Enter 鍵掃描');
+  }
+  window.Scanner_enhanceSearchBox = Scanner_enhanceSearchBox;
+
+  // ========== 確保模板已插入（支援 React 動態渲染環境）==========
+  function Scanner_ensureTemplate() {
+    const zone = document.getElementById('Scanner_zone');
+    if (!zone) {
+      console.error('[Scanner] 找不到 Scanner_zone 元素');
+      return false;
+    }
+
+    // 檢查 Scanner_reader 是否已存在
+    if (document.getElementById('Scanner_reader')) {
+      return true; // 模板已插入
+    }
+
+    // 嘗試插入模板
+    const template = document.getElementById('Scanner_template');
+    if (!template) {
+      console.error('[Scanner] 找不到 Scanner_template 元素');
+      return false;
+    }
+
+    zone.appendChild(template.content.cloneNode(true));
+    console.log('[Scanner] ✓ 掃描區模板已動態插入（React 環境）');
+    return true;
+  }
+  window.Scanner_ensureTemplate = Scanner_ensureTemplate;
+
+  // ========== 掃描控制函數 ==========
+  window.Scanner_toggle = function() {
+    const zone = document.getElementById('Scanner_zone');
+    if (!zone) {
+      console.error('[Scanner] Scanner_zone 不存在');
+      return;
+    }
+
+    if (zone.style.display === 'none' || !zone.style.display) {
+      // 開啟掃描器前，確保模板已插入
+      if (!Scanner_ensureTemplate()) {
+        alert('掃描器初始化失敗，請重新整理頁面');
+        return;
+      }
+      // 開啟掃描器
+      zone.style.display = 'block';
+      Scanner_start();
+    } else {
+      // 關閉掃描器
+      zone.style.display = 'none';
+      Scanner_stop();
+    }
+  };
+
+  function Scanner_start() {
+    if (Scanner_active) return;
+
+    if (typeof Quagga === 'undefined') {
+      alert('Quagga2 庫未載入，請檢查網路連線');
+      return;
+    }
+
+    const readerEl = document.getElementById('Scanner_reader');
+    if (!readerEl) {
+      console.error('[Scanner] 找不到掃描區元素');
+      return;
+    }
+
+    Quagga.init({
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: readerEl,
+        constraints: {
+          width: { min: 640 },
+          height: { min: 480 },
+          aspectRatio: { min: 1, max: 2 },
+          facingMode: "environment"
+        }
+      },
+      decoder: {
+        readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
+      },
+      locate: true,
+      numOfWorkers: 2
+    }, (err) => {
+      if (err) {
+        console.error('[Scanner] 無法啟動相機:', err);
+        alert('無法啟動相機：' + err.message);
+        Scanner_updateStatus('相機啟動失敗：' + err.message, 'error');
+        return;
+      }
+
+      Quagga.start();
+      Scanner_active = true;
+      Quagga.onDetected(Scanner_onDetected);
+
+      // 儲存當前串流
+      setTimeout(() => {
+        const video = document.querySelector('#Scanner_reader video');
+        if (video && video.srcObject) {
+          Scanner_currentStream = video.srcObject;
+        }
+      }, 500);
+
+      console.log('[Scanner] 掃描器已啟動');
+      Scanner_updateStatus('掃描器運作中...', 'success');
+    });
+  }
+  window.Scanner_start = Scanner_start;
+
+  function Scanner_stop() {
+    if (!Scanner_active) return;
+
+    Quagga.offDetected(Scanner_onDetected);
+    Quagga.stop();
+
+    // 停止所有媒體串流
+    if (Scanner_currentStream) {
+      Scanner_currentStream.getTracks().forEach(track => track.stop());
+      Scanner_currentStream = null;
+    }
+
+    // 清空 DOM
+    const reader = document.getElementById('Scanner_reader');
+    if (reader) {
+      while (reader.firstChild) reader.removeChild(reader.firstChild);
+    }
+
+    Scanner_active = false;
+    console.log('[Scanner] 掃描器已停止');
+    Scanner_updateStatus('', '');
+  }
+  window.Scanner_stop = Scanner_stop;
+
+  function Scanner_onDetected(data) {
+    const rawCode = data.codeResult.code;
+
+    // 防重複機制（2 秒冷卻）
+    if (rawCode === Scanner_lastScanned && Scanner_cooldown) {
+      console.log('[Scanner] 重複掃描已忽略:', rawCode);
+      return;
+    }
+
+    Scanner_lastScanned = rawCode;
+    Scanner_cooldown = true;
+    setTimeout(() => {
+      Scanner_cooldown = false;
+      Scanner_lastScanned = '';
+    }, 2000);
+
+    console.log('[Scanner] 掃描到條碼:', rawCode);
+    Scanner_processBarcode(rawCode);
+  }
+
+  function Scanner_processBarcode(rawCode) {
+    // 格式化條碼
+    const formattedCode = Scanner_formatBarcode(rawCode);
+    console.log('[Scanner] 格式化條碼:', rawCode, '->', formattedCode);
+
+    // 使用 BatchList 模組查找資產
+    const asset = BatchList_findAsset(formattedCode) ||
+                  BatchList_findAsset(rawCode) ||
+                  (typeof allAssets !== 'undefined' ?
+                    allAssets.find(a => a.id === formattedCode || a.id === rawCode) : null);
+
+    if (asset) {
+      BatchList_addItem(asset.id);
+      BatchList_showToast(`已加入：${asset.assetName}`, 'success');
+      Scanner_updateStatus(`✓ 已加入：${asset.assetName}`, 'success');
+
+      // 播放飛行動畫（從掃描區飛向清單按鈕）
+      const scannerEl = document.getElementById('Scanner_reader');
+      if (scannerEl) {
+        BatchList_animateFlyToCart(scannerEl);
+      }
+
+      Scanner_playSound();
+    } else {
+      BatchList_showToast(`未找到資產：${formattedCode}`, 'error');
+      Scanner_updateStatus(`✗ 未找到資產：${formattedCode}`, 'error');
+    }
+  }
+  window.Scanner_processBarcode = Scanner_processBarcode;
+
+  // ========== 輔助函數 ==========
+  function Scanner_formatBarcode(barcode) {
+    if (!barcode) return '';
+    const cleanCode = barcode.toString().trim();
+
+    // 20 碼去前 2 位，其他保留
+    let processed = cleanCode.length === 20 ? cleanCode.substring(2) : cleanCode;
+
+    if (processed.length < 11) return processed;
+
+    // 格式化為 XXXXXXX-XXXX-XXXXXXX
+    return processed.substring(0, 7) + '-' +
+           processed.substring(7, 11) + '-' +
+           processed.substring(11);
+  }
+  window.Scanner_formatBarcode = Scanner_formatBarcode;
+
+  function Scanner_updateStatus(message, type) {
+    const statusEl = document.getElementById('Scanner_scanStatus');
+    if (!statusEl) return;
+
+    if (!message) {
+      statusEl.textContent = '';
+      statusEl.className = '';
+      return;
+    }
+
+    statusEl.textContent = message;
+    statusEl.className = type === 'success' ? 'scan-status-success' : 'scan-status-error';
+  }
+  window.Scanner_updateStatus = Scanner_updateStatus;
+
+  function Scanner_playSound() {
+    Scanner_audioPlayer.currentTime = 0;
+    Scanner_audioPlayer.play().catch(e => console.log('[Scanner] 音效播放被阻擋:', e));
+  }
+  window.Scanner_playSound = Scanner_playSound;
+
+  console.log('[Scanner] 掃描模組已載入，等待初始化...');
+})();
+</script>
