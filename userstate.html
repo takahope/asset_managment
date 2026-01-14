@@ -11138,7 +11138,9 @@
                                 finishCardLoading();
                                 scheduleScrapPendingPreload(forceUserScope);
                                 scheduleTransferPendingPreload(forceUserScope);
-                                scheduleAddAssetDropdownPreload();
+                                if (response.isAdmin) {
+                                    scheduleAddAssetDropdownPreload();
+                                }
 
                                 // 載入盤點資料
                                 google.script.run
@@ -11238,7 +11240,9 @@
                 const forceUserScope = viewMode === 'user';
                 scheduleScrapPendingPreload(forceUserScope);
                 scheduleTransferPendingPreload(forceUserScope);
-                scheduleAddAssetDropdownPreload();
+                if (isAdmin) {
+                    scheduleAddAssetDropdownPreload();
+                }
 
                 try {
                     // 並行載入多個 API
@@ -11352,7 +11356,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [fetchPendingInventoryAssignments, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
+            }, [fetchPendingInventoryAssignments, isAdmin, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -12693,14 +12697,16 @@
                                 )}
 
                                 {/* 新增資產按鈕 */}
-                                <button
-                                    onClick={() => setShowAddAssetModal(true)}
-                                    className="hero-btn hero-btn--primary"
-                                    title="新增財產/物品"
-                                >
-                                    <i className="fas fa-plus"></i>
-                                    <span className="hidden sm:inline">新增資產</span>
-                                </button>
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => setShowAddAssetModal(true)}
+                                        className="hero-btn hero-btn--primary"
+                                        title="新增財產/物品"
+                                    >
+                                        <i className="fas fa-plus"></i>
+                                        <span className="hidden sm:inline">新增資產</span>
+                                    </button>
+                                )}
 
                                 {/* 重新整理按鈕 */}
                                 <button
@@ -12991,7 +12997,7 @@
                     )}
 
                     {/* 新增資產 Modal */}
-                    {showAddAssetModal && (
+                    {showAddAssetModal && isAdmin && (
                         <AddAssetModal
                             onClose={() => setShowAddAssetModal(false)}
                             onSuccess={handleAddAssetSuccess}

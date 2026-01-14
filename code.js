@@ -5537,6 +5537,9 @@ function getDropdownData() {
  */
 function addNewAsset(form) {
   Logger.log("開始新增資產: " + JSON.stringify(form));
+  if (!checkAdminPermissions()) {
+    throw new Error("您沒有權限執行此操作");
+  }
   
   // 1. 檢查必填與唯一性
   if (!form.assetId || !form.assetName) throw new Error("編號與名稱為必填項目");
@@ -5630,6 +5633,10 @@ function addNewAsset(form) {
  */
 function addNewAssetsBatch(payload) {
   try {
+    if (!checkAdminPermissions()) {
+      return { error: '您沒有權限執行此操作' };
+    }
+
     const propertyRows = Array.isArray(payload?.propertyRows) ? payload.propertyRows : [];
     const itemRows = Array.isArray(payload?.itemRows) ? payload.itemRows : [];
     const propertyCategory = String(payload?.propertyCategory || '').trim();
