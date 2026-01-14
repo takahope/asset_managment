@@ -579,10 +579,6 @@ function doGet(e) {
   let title;
 
   switch (page) {
-    case 'dashboard':
-      template = HtmlService.createTemplateFromFile('dashboard');
-      title = "系統儀表板";
-      break;
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('userstate');
