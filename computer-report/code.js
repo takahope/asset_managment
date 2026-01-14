@@ -478,3 +478,82 @@ function checkComputerReportsAndNotify() {
     Logger.log("所有應回報的電腦皆已完成本月份的回報。");
   }
 }
+
+/**
+ * 測試電腦回報通知：只輸出預計寄送內容到執行紀錄
+ */
+function testComputerReportsAndNotify() {
+  const ss = SpreadsheetApp.openById(REPORT_SPREADSHEET_ID);
+  const responseSheet = ss.getSheetByName(RESPONSE_SHEET_NAME);
+  if (!responseSheet) {
+    Logger.log(`找不到工作表 "${RESPONSE_SHEET_NAME}"，無法測試通知。`);
+    return;
+  }
+
+  const allAssets = getAllAssets();
+  const requiredComputers = allAssets.filter(asset => asset.isComputer === '是' && asset.assetStatus !== '已報廢');
+
+  const responseLastRow = responseSheet.getLastRow();
+  const responseData = responseLastRow > 1
+    ? responseSheet.getRange(2, 1, responseLastRow - 1, 3).getValues()
+    : [];
+
+  const submittedComputers = new Set();
+
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+
+  for (const row of responseData) {
+    if (!row[0]) continue;
+    const timestamp = new Date(row[0]);
+    if (timestamp.getFullYear() === currentYear && timestamp.getMonth() === currentMonth) {
+      const computerName = row[2];
+      if (computerName) {
+        submittedComputers.add(String(computerName).trim());
+      }
+    }
+  }
+
+  const remindersForLeaders = {};
+  const allMissingForAdmin = [];
+
+  for (const asset of requiredComputers) {
+    if (!asset.assetId) continue;
+    const computerNameStr = String(asset.assetId).trim();
+    if (computerNameStr && !submittedComputers.has(computerNameStr)) {
+      const missingInfo = ` - 駐站: ${asset.location}, 電腦: ${computerNameStr}`;
+      allMissingForAdmin.push(missingInfo);
+      if (asset.leaderEmail) {
+        if (!remindersForLeaders[asset.leaderEmail]) {
+          remindersForLeaders[asset.leaderEmail] = [];
+        }
+        remindersForLeaders[asset.leaderEmail].push(missingInfo);
+      }
+      Logger.log(`[預計通知項目] ${missingInfo} -> 駐管Email: ${asset.leaderEmail || '未填'}`);
+    }
+  }
+
+  Logger.log(`統計：應回報 ${requiredComputers.length} 台，已回報 ${submittedComputers.size} 台，未回報 ${allMissingForAdmin.length} 台。`);
+
+  const subjectDate = `${currentYear}年${currentMonth + 1}月`;
+  for (const leaderEmail in remindersForLeaders) {
+    if (remindersForLeaders[leaderEmail].length === 0) continue;
+    const subject = `[自動通知] ${subjectDate} 駐站有電腦尚未回報狀態`;
+    const body = `您好，\n\n截至目前，駐站尚有以下電腦未透過表單回報本月份狀態：\n` + remindersForLeaders[leaderEmail].join("\n") + `\n\n請協助處理。\n\n此為系統自動發送郵件。`;
+    Logger.log(`\n[預計寄送給駐管] ${leaderEmail}\n主旨：${subject}\n內容：\n${body}\n`);
+  }
+
+  if (allMissingForAdmin.length > 0) {
+    const reportAdmins = getReportAdmins();
+    if (reportAdmins && reportAdmins.length > 0) {
+      const subject = `[自動通知] ${subjectDate} 未回報電腦總清單`;
+      const body = `您好，\n\n截至目前，本月份尚有以下所有電腦未回報狀態：\n\n` + allMissingForAdmin.join("\n") + `\n\n系統已同步寄送通知給相關駐管。\n\n此為系統自動發送郵件。`;
+      Logger.log(`\n[預計寄送給回報管理員] ${reportAdmins.join(',')}\n主旨：${subject}\n內容：\n${body}\n`);
+    } else {
+      Logger.log("警告：在「管理員名單」中找不到任何有效的「電腦回報」管理員Email，無法寄送總清單。");
+    }
+  } else {
+    Logger.log("所有應回報的電腦皆已完成本月份的回報。");
+  }
+}
