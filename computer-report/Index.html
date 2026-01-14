@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Roboto", "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif;
+        background-color: #f0ebf8;
+        margin: 0;
+        padding: 0;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 760px;
+        margin: 0 auto;
+        width: 100%;
+        padding: 16px;
+      }
+
+      /* 標題卡片 */
+      .header-card {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      .header-banner {
+        height: 12px;
+        background: linear-gradient(90deg, #673ab7 0%, #512da8 100%);
+      }
+
+      .header-content {
+        padding: 32px 24px;
+      }
+
+      h1 {
+        color: #202124;
+        font-size: 32px;
+        margin: 0;
+        font-weight: 400;
+        line-height: 1.25;
+        letter-spacing: 0;
+      }
+
+      /* 問題卡片 */
+      .question-card {
+        background: white;
+        border-radius: 8px;
+        padding: 28px 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      .question-card h2 {
+        color: #202124;
+        font-size: 17px;
+        font-weight: 400;
+        margin: 0 0 24px 0;
+        padding: 0;
+        border: none;
+        line-height: 1.4;
+      }
+
+      .required-indicator {
+        color: #d93025;
+        margin-left: 4px;
+      }
+
+      form {
+        background: transparent;
+        border-radius: 0;
+        padding: 0;
+        box-shadow: none;
+        margin: 0;
+      }
+
+      /* 表單輸入欄位 */
+      select, textarea {
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 4px;
+        border: 1px solid #dadce0;
+        font-size: 17px;
+        font-family: inherit;
+        transition: border-color 0.2s;
+        background-color: #fff;
+        color: #202124;
+        line-height: 1.5;
+      }
+
+      select:hover, textarea:hover {
+        border-color: #80868b;
+      }
+
+      select:focus, textarea:focus {
+        outline: none;
+        border-color: #673ab7;
+        border-width: 2px;
+        padding: 13px 15px;
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 120px;
+        line-height: 1.6;
+      }
+
+      /* 勾選框區域 */
+      .checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 0;
+        cursor: pointer;
+        min-height: 48px;
+      }
+
+      .checkbox-item input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        flex-shrink: 0;
+        accent-color: #673ab7;
+        margin: 0;
+      }
+
+      .checkbox-item label {
+        font-size: 17px;
+        color: #202124;
+        cursor: pointer;
+        line-height: 1.5;
+        margin: 0;
+        font-weight: 400;
+      }
+
+      /* 提交按鈕 */
+      .submit-card {
+        background: white;
+        border-radius: 8px;
+        padding: 28px 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      input[type="submit"] {
+        background: #673ab7;
+        color: white;
+        padding: 12px 28px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 15px;
+        font-weight: 500;
+        transition: background 0.2s, box-shadow 0.2s;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        min-height: 48px;
+        width: auto;
+      }
+
+      input[type="submit"]:hover {
+        background: #5e35b1;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.15);
+      }
+
+      input[type="submit"]:active {
+        background: #512da8;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      }
+
+      #status {
+        margin-top: 20px;
+        padding: 14px;
+        border-radius: 4px;
+        font-size: 15px;
+        text-align: center;
+        background-color: #e8f5e9;
+        color: #2e7d32;
+        display: none;
+        line-height: 1.5;
+      }
+
+      #status.show {
+        display: block;
+      }
+
+      /* 移動版響應式 (≤768px) */
+      @media screen and (max-width: 768px) {
+        body {
+          padding: 12px;
+        }
+
+        .container {
+          padding: 0;
+        }
+
+        .header-banner {
+          height: 10px;
+        }
+
+        .header-content {
+          padding: 28px 20px;
+        }
+
+        h1 {
+          font-size: 26px;
+        }
+
+        .question-card {
+          padding: 24px 20px;
+        }
+
+        .question-card h2 {
+          font-size: 16px;
+          margin-bottom: 20px;
+        }
+
+        .checkbox-item {
+          padding: 16px 0;
+          min-height: 56px;
+          gap: 20px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+          width: 22px;
+          height: 22px;
+        }
+
+        .checkbox-item label {
+          font-size: 16px;
+        }
+
+        select, textarea {
+          font-size: 16px;
+          padding: 13px 15px;
+        }
+
+        select:focus, textarea:focus {
+          padding: 12px 14px;
+        }
+
+        .submit-card {
+          padding: 24px 20px;
+        }
+
+        input[type="submit"] {
+          width: 100%;
+          padding: 13px 28px;
+          font-size: 15px;
+          min-height: 56px;
+        }
+
+        #status {
+          font-size: 14px;
+          padding: 12px;
+        }
+      }
+
+      /* 小螢幕響應式 (≤400px) */
+      @media screen and (max-width: 400px) {
+        body {
+          padding: 8px;
+        }
+
+        .header-content {
+          padding: 24px 16px;
+        }
+
+        h1 {
+          font-size: 22px;
+        }
+
+        .question-card {
+          padding: 20px 16px;
+        }
+
+        .question-card h2 {
+          font-size: 15px;
+          margin-bottom: 16px;
+        }
+
+        .checkbox-item {
+          padding: 14px 0;
+          min-height: 52px;
+          gap: 16px;
+        }
+
+        .checkbox-item label {
+          font-size: 15px;
+        }
+
+        select, textarea {
+          font-size: 15px;
+          padding: 12px 14px;
+        }
+
+        select:focus, textarea:focus {
+          padding: 11px 13px;
+        }
+
+        .submit-card {
+          padding: 20px 16px;
+        }
+
+        input[type="submit"] {
+          padding: 12px 24px;
+          min-height: 52px;
+        }
+
+        #status {
+          font-size: 13px;
+          padding: 10px;
+        }
+      }
+
+      /* ==================== 進度條樣式 ==================== */
+
+      /* 遮罩層 */
+      .loader-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.75);
+        z-index: 9999;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+      }
+
+      /* 進度條容器 */
+      .progress-bar-container {
+        width: 80%;
+        max-width: 400px;
+        background-color: #555;
+        border-radius: 10px;
+        border: 1px solid #777;
+        overflow: hidden;
+      }
+
+      /* 進度條本身 */
+      .progress-bar {
+        width: 0%;
+        height: 20px;
+        background-color: #673ab7;
+        text-align: center;
+        line-height: 20px;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        transition: width 0.3s ease-in-out;
+      }
+
+      /* 提示文字 */
+      .loading-text {
+        margin-top: 15px;
+        font-size: 18px;
+        letter-spacing: 1px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- 標題卡片 -->
+      <div class="header-card">
+        <div class="header-banner"></div>
+        <div class="header-content">
+          <h1>電腦軟體更新狀態回報表單</h1>
+        </div>
+      </div>
+
+      <form id="myForm">
+        <!-- 問題1: 駐站 -->
+        <div class="question-card">
+          <h2>請選擇您的駐站<span class="required-indicator">*</span></h2>
+          <select id="groupSelect" name="group" onchange="updateComputerOptions(this.value)" required>
+            <option value="">載入中...</option>
+          </select>
+        </div>
+
+        <!-- 問題2: 電腦產編 -->
+        <div class="question-card">
+          <h2>請選擇電腦產編<span class="required-indicator">*</span></h2>
+          <select id="computerSelect" name="computer" required>
+            <option value="">載入中...</option>
+          </select>
+        </div>
+
+        <!-- 問題3: 軟體資訊回報 -->
+        <div class="question-card">
+          <h2>軟體資訊回報<span class="required-indicator">*</span></h2>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="winUpdateCheck" required>
+              <label for="winUpdateCheck">Windows 是否更新至最新版本</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="chromeUpdateCheck" required>
+              <label for="chromeUpdateCheck">Chrome 是否新增至最新版本</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="antivirusDefCheck" required>
+              <label for="antivirusDefCheck">防毒軟體病毒碼是否為最新版本</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 問題4: 7-Zip 版本 -->
+        <div class="question-card">
+          <h2>7-Zip 版本<span class="required-indicator">*</span></h2>
+          <select id="sevenZipVersion" name="sevenZipVersion" required>
+            <option value="">載入中...</option>
+          </select>
+        </div>
+
+        <!-- 問題5: 備註 -->
+        <div class="question-card">
+          <h2>備註</h2>
+          <textarea id="notes" name="notes" placeholder="如有其他需要說明的事項，請在此填寫..."></textarea>
+        </div>
+
+        <!-- 提交按鈕 -->
+        <div class="submit-card">
+          <input type="submit" value="提交">
+          <div id="status"></div>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      let dataMap = {};
+      let sevenZipVersions = [];
+
+      // ==================== 進度條控制變數 ====================
+      let _loaderIntervalId;
+      let _dataLoadStatus = {
+        selectData: false,
+        sevenZipData: false
+      };
+
+      /**
+       * 顯示進度條載入動畫
+       * @param {string} text - 顯示的載入訊息（選填，預設為「頁面載入中...」）
+       */
+      function showLoader(text = '頁面載入中...') {
+        const _loaderOverlay = document.getElementById('loaderOverlay');
+        const _progressBar = document.getElementById('progressBar');
+        const _loadingText = document.getElementById('loadingText');
+
+        let progress = 0;
+        _progressBar.style.width = '0%';
+        _progressBar.textContent = '0%';
+        _loadingText.textContent = text;
+        _loaderOverlay.style.display = 'flex';
+
+        // 模擬一個平滑的進度條，直到 90%
+        _loaderIntervalId = setInterval(() => {
+          if (progress < 90) {
+            progress += Math.floor(Math.random() * 5) + 1;
+            if (progress > 90) progress = 90;
+            _progressBar.style.width = progress + '%';
+            _progressBar.textContent = progress + '%';
+          }
+        }, 200);
+      }
+
+      /**
+       * 隱藏進度條載入動畫
+       * @param {string} text - 顯示的完成訊息（選填，預設為「載入完成！」）
+       */
+      function hideLoader(text = '載入完成！') {
+        const _loaderOverlay = document.getElementById('loaderOverlay');
+        const _progressBar = document.getElementById('progressBar');
+        const _loadingText = document.getElementById('loadingText');
+
+        clearInterval(_loaderIntervalId); // 停止模擬進度
+
+        _progressBar.style.width = '100%';
+        _progressBar.textContent = '100%';
+        _loadingText.textContent = text;
+
+        setTimeout(() => {
+          _loaderOverlay.style.display = 'none';
+        }, 500);
+      }
+
+      /**
+       * 檢查所有資料是否載入完成
+       */
+      function checkDataLoadComplete() {
+        if (_dataLoadStatus.selectData && _dataLoadStatus.sevenZipData) {
+          hideLoader('載入完成！');
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", function() {
+        // 立即顯示進度條
+        showLoader('正在載入表單資料...');
+        // 同時載入組別資料和 7-Zip 版本清單
+        google.script.run.withSuccessHandler(populateGroupSelect).getSelectData();
+        google.script.run.withSuccessHandler(populateSevenZipVersions).getSevenZipVersions();
+      });
+      
+      function populateGroupSelect(data) {
+        dataMap = data;
+        const groupSelect = document.getElementById("groupSelect");
+
+        // 清空載入中的選項
+        groupSelect.innerHTML = '';
+
+        // 添加預設選項
+        groupSelect.add(new Option("請選擇...", ""));
+
+        // 添加組別選項
+        const groups = Object.keys(dataMap).sort();
+        groups.forEach(group => {
+          const option = new Option(group, group);
+          groupSelect.add(option);
+        });
+
+        // 更新電腦選單為初始狀態
+        const computerSelect = document.getElementById("computerSelect");
+        computerSelect.innerHTML = '';
+        computerSelect.add(new Option("--請先選擇駐站--", ""));
+
+        // 標記此資料已載入完成
+        _dataLoadStatus.selectData = true;
+        checkDataLoadComplete();
+      }
+
+      function populateSevenZipVersions(versions) {
+        sevenZipVersions = versions;
+        const sevenZipSelect = document.getElementById("sevenZipVersion");
+
+        // 清空載入中的選項
+        sevenZipSelect.innerHTML = '';
+
+        // 添加預設選項
+        sevenZipSelect.add(new Option("請選擇版本...", ""));
+        sevenZipSelect.add(new Option("無安裝", "無"));
+
+        // 添加版本選項
+        versions.forEach(version => {
+          const option = new Option(version, version);
+          sevenZipSelect.add(option);
+        });
+
+        // 標記此資料已載入完成
+        _dataLoadStatus.sevenZipData = true;
+        checkDataLoadComplete();
+      }
+
+      function updateComputerOptions(selectedGroup) {
+        const computerSelect = document.getElementById("computerSelect");
+        computerSelect.innerHTML = '';
+        
+        if (selectedGroup && dataMap[selectedGroup]) {
+          // 有選擇組別時，先添加預設選項再添加電腦清單
+          computerSelect.add(new Option("請選擇...", ""));
+          const computers = dataMap[selectedGroup].sort();
+          computers.forEach(computer => {
+            const option = new Option(computer, computer);
+            computerSelect.add(option);
+          });
+        } else {
+          // 沒有選擇組別時，顯示提示訊息
+          computerSelect.add(new Option("--請先選擇組別--", ""));
+        }
+      }
+
+      // 改良版表單提交處理
+      document.getElementById("myForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+
+        // 手動建立表單物件，確保勾選狀態正確傳送
+        const formObject = {
+          group: document.getElementById("groupSelect").value,
+          computer: document.getElementById("computerSelect").value,
+          notes: document.getElementById("notes").value,
+          sevenZipVersion: document.getElementById("sevenZipVersion").value,
+          // 明確設定勾選狀態
+          winUpdated: document.getElementById("winUpdateCheck").checked,
+          chromeUpdated: document.getElementById("chromeUpdateCheck").checked,
+          antivirusUpdated: document.getElementById("antivirusDefCheck").checked
+        };
+
+        // 調試：在瀏覽器控制台顯示要送出的資料
+        console.log("準備送出的表單資料：", formObject);
+        console.log("Windows 勾選狀態：", formObject.winUpdated);
+        console.log("Chrome 勾選狀態：", formObject.chromeUpdated);
+        console.log("防毒軟體勾選狀態：", formObject.antivirusUpdated);
+        console.log("7-Zip 版本：", formObject.sevenZipVersion);
+
+        // 顯示進度條
+        showLoader('正在提交表單...');
+        document.getElementById("status").textContent = "提交中...";
+
+        google.script.run
+          .withSuccessHandler(function(response) {
+            // 隱藏進度條
+            hideLoader('提交完成！');
+
+            const statusEl = document.getElementById("status");
+            statusEl.textContent = response;
+            statusEl.className = response.startsWith("回報成功") ? "show success" : "show";
+            if (response.startsWith("回報成功")) {
+              document.getElementById("myForm").reset();
+              updateComputerOptions('');
+              // 3秒後隱藏成功訊息
+              setTimeout(function() {
+                statusEl.className = "";
+              }, 3000);
+            }
+          })
+          .withFailureHandler(function(error) {
+            // 隱藏進度條
+            hideLoader('提交失敗！');
+
+            const statusEl = document.getElementById("status");
+            statusEl.textContent = "提交失敗：" + error.message;
+            statusEl.className = "show error";
+            statusEl.style.backgroundColor = "#ffebee";
+            statusEl.style.color = "#c62828";
+            console.error("提交錯誤：", error);
+          })
+          .processFormData(formObject);
+      });
+    </script>
+
+    <!-- ==================== 進度條 HTML 結構 ==================== -->
+    <div class="loader-overlay" id="loaderOverlay">
+      <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar">0%</div>
+      </div>
+      <div class="loading-text" id="loadingText">頁面載入中...</div>
+    </div>
+  </body>
+</html>

@@ -326,8 +326,8 @@ function getSubmittedComputersForMonth(responseSheet, year, month) {
  */
 function getComputerReportStats() {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const responseSheet = ss.getSheetByName(RESPONSE_SHEET_NAME);
+    const reportSs = SpreadsheetApp.openById(REPORT_SPREADSHEET_ID);
+    const responseSheet = reportSs.getSheetByName(RESPONSE_SHEET_NAME);
     const allAssets = getAllAssets();
 
     // 1. 獲取所有需要回報的駐站電腦

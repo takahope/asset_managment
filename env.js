@@ -1,4 +1,5 @@
 const SPREADSHEET_ID = "1ChjQbozyd8ROoGDo"; // 在試算表網址中可以找到
+const REPORT_SPREADSHEET_ID = SPREADSHEET_ID; // 駐站電腦狀態回報試算表ID（請改成「駐站電腦狀態回報」）
 
 // --- ✨ **新增**：報廢列印功能相關設定 ---
 const SCRAP_TEMPLATE_DOC_ID = "1Dta5j4M8QaUM4y9Y"; // ⚠️ 請務必替換成您的範本ID
