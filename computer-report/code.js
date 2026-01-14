@@ -2,7 +2,7 @@
 // --- 全域設定 (Global Settings) ---
 // =================================================================
 
-const RESPONSE_SHEET_NAME = "表單回應 1"; // Web App 回報結果寫入的工作表
+const RESPONSE_SHEET_NAME = "駐站回報清單"; // Web App 回報結果寫入的工作表
 const SOFTWARE_VERSIONS_SHEET_NAME = "軟體版本清單"; // 軟體版本清單工作表
 const KEEPER_EMAIL_MAP_SHEET_NAME = "保管人/信箱";
 const ADMIN_LIST_SHEET_NAME = "管理員名單";

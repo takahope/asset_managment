@@ -5429,6 +5429,12 @@ function addNewAssetsBatch(payload) {
     });
 
     const normalizeText = (value) => String(value || '').trim();
+    // ✨ 讀取存置地點列表（B 欄：是否為駐站）
+    const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+    const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 2).getValues();
+    const locationIsStationMap = new Map(
+      locationData.map(row => [normalizeText(row[0]), normalizeText(row[1]) === '是'])
+    );
     const parseDateValue = (value) => {
       if (!value) return '';
       if (value instanceof Date) return value;
@@ -5531,6 +5537,10 @@ function addNewAssetsBatch(payload) {
         }
         if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) {
           values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
+        }
+        const isStation = locationIsStationMap.get(location);
+        if (isStation && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
+          values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
         }
       }
 
