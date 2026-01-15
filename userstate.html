@@ -1163,6 +1163,27 @@
                         <input type="radio" id="assignment-mode-person" name="assignmentMode" class="custom-control-input" value="person">
                         <label class="custom-control-label" for="assignment-mode-person">依照人名分派</label>
                     </div>
+                    <div class="custom-control custom-radio mt-2">
+                        <input type="radio" id="assignment-mode-custom" name="assignmentMode" class="custom-control-input" value="custom">
+                        <label class="custom-control-label" for="assignment-mode-custom">指定對象分派</label>
+                    </div>
+                    <div id="assignment-custom-fields" class="mt-3 d-none">
+                        <div class="form-group">
+                            <label for="assignment-target-type">分派對象類型</label>
+                            <select id="assignment-target-type" class="form-control form-control-sm">
+                                <option value="user">使用者</option>
+                                <option value="group">組別</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label for="assignment-target-value">指定對象</label>
+                            <select id="assignment-target-value" class="form-control form-control-sm">
+                                <option value="">-- 請選擇 --</option>
+                            </select>
+                            <small class="form-text text-muted">使用者以 Email 為準</small>
+                        </div>
+                        <div id="assignment-custom-error" class="text-danger mt-2" style="display: none;"></div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">取消</button>
@@ -1225,6 +1246,104 @@
             loading: false,
             error: ''
         };
+        window.inventoryAssignmentOptions = { users: [], groups: [] };
+
+        function setAssignmentCustomError(message) {
+            const errorEl = document.getElementById('assignment-custom-error');
+            if (!errorEl) return;
+            if (message) {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+            } else {
+                errorEl.textContent = '';
+                errorEl.style.display = 'none';
+            }
+        }
+
+        function toggleAssignmentCustomFields(isCustom) {
+            const container = document.getElementById('assignment-custom-fields');
+            if (!container) return;
+            if (isCustom) {
+                container.classList.remove('d-none');
+            } else {
+                container.classList.add('d-none');
+            }
+        }
+
+        function updateAssignmentTargetOptions(options = window.inventoryAssignmentOptions, keepSelection = true) {
+            const typeEl = document.getElementById('assignment-target-type');
+            const valueEl = document.getElementById('assignment-target-value');
+            if (!typeEl || !valueEl) return;
+
+            const targetType = typeEl.value || 'user';
+            const previousValue = keepSelection ? valueEl.value : '';
+            valueEl.innerHTML = '<option value="">-- 請選擇 --</option>';
+
+            if (targetType === 'group') {
+                const groups = Array.isArray(options.groups) ? options.groups : [];
+                groups.forEach(group => {
+                    const option = document.createElement('option');
+                    option.value = group;
+                    option.textContent = group;
+                    valueEl.appendChild(option);
+                });
+            } else {
+                const users = Array.isArray(options.users) ? options.users : [];
+                users.forEach(user => {
+                    const email = user?.email || '';
+                    if (!email) return;
+                    const name = user?.name || email.split('@')[0];
+                    const group = user?.group ? ` - ${user.group}` : '';
+                    const option = document.createElement('option');
+                    option.value = email;
+                    option.textContent = `${name} (${email})${group}`;
+                    valueEl.appendChild(option);
+                });
+            }
+
+            if (previousValue) {
+                const hasOption = Array.from(valueEl.options).some(option => option.value === previousValue);
+                if (hasOption) valueEl.value = previousValue;
+            }
+        }
+
+        window.updateAssignmentTargetOptions = updateAssignmentTargetOptions;
+        window.prepareAssignmentModeModal = () => {
+            const isCustom = !!document.getElementById('assignment-mode-custom')?.checked;
+            toggleAssignmentCustomFields(isCustom);
+            setAssignmentCustomError('');
+            updateAssignmentTargetOptions(window.inventoryAssignmentOptions, true);
+        };
+        window.setAssignmentCustomError = setAssignmentCustomError;
+
+        (function initAssignmentModeModal() {
+            const modal = document.getElementById('assignmentModeModal');
+            if (!modal || modal.dataset.initialized) return;
+            modal.dataset.initialized = 'true';
+
+            modal.querySelectorAll('input[name="assignmentMode"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const isCustom = !!document.getElementById('assignment-mode-custom')?.checked;
+                    toggleAssignmentCustomFields(isCustom);
+                    setAssignmentCustomError('');
+                });
+            });
+
+            const typeEl = document.getElementById('assignment-target-type');
+            if (typeEl) {
+                typeEl.addEventListener('change', () => {
+                    setAssignmentCustomError('');
+                    updateAssignmentTargetOptions(window.inventoryAssignmentOptions, false);
+                });
+            }
+
+            const valueEl = document.getElementById('assignment-target-value');
+            if (valueEl) {
+                valueEl.addEventListener('change', () => {
+                    setAssignmentCustomError('');
+                });
+            }
+        })();
 
         window.openPendingApprovalModal = () => {
             if (!Array.isArray(window.pendingApprovals)) {
@@ -2887,16 +3006,24 @@
 
                     let optionsErrorMessage = '';
                     if (optionsResult.status === 'fulfilled' && optionsResult.value) {
-                        setFilterOptions({
-                            locations: optionsResult.value.locations || [],
-                            keepers: optionsResult.value.keepers || [],
-                            users: optionsResult.value.users || [],
-                            groups: optionsResult.value.groups || []
-                        });
+                        const locations = optionsResult.value.locations || [];
+                        const keepers = optionsResult.value.keepers || [];
+                        const users = optionsResult.value.users || [];
+                        const groups = optionsResult.value.groups || [];
+                        const assigneeUsers = optionsResult.value.assigneeUsers || [];
+                        setFilterOptions({ locations, keepers, users, groups });
+                        window.inventoryAssignmentOptions = { users: assigneeUsers, groups };
+                        if (window.updateAssignmentTargetOptions) {
+                            window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, true);
+                        }
                     } else {
                         const message = optionsResult.reason?.message || String(optionsResult.reason || '載入失敗');
                         optionsErrorMessage = `盤點範圍載入失敗：${message}`;
                         setFilterOptions({ locations: [], keepers: [], users: [], groups: [] });
+                        window.inventoryAssignmentOptions = { users: [], groups: [] };
+                        if (window.updateAssignmentTargetOptions) {
+                            window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, false);
+                        }
                     }
 
                     setOptionsError(optionsErrorMessage);
@@ -2973,9 +3100,43 @@
                 const selectedMode = document.querySelector('input[name="assignmentMode"]:checked');
                 const assignmentMode = selectedMode ? selectedMode.value : 'person';
                 const options = pendingStartOptionsRef.current;
+                if (!options) {
+                    hideAssignmentModal();
+                    return;
+                }
+                if (assignmentMode === 'custom') {
+                    const targetTypeEl = document.getElementById('assignment-target-type');
+                    const targetValueEl = document.getElementById('assignment-target-value');
+                    const assignmentTargetType = targetTypeEl ? targetTypeEl.value : 'user';
+                    const assignmentTargetValue = targetValueEl ? targetValueEl.value : '';
+                    if (!assignmentTargetValue) {
+                        if (window.setAssignmentCustomError) {
+                            window.setAssignmentCustomError('請選擇指定對象');
+                        } else {
+                            alert('請選擇指定對象');
+                        }
+                        return;
+                    }
+                    if (assignmentTargetType === 'user' && !assignmentTargetValue.includes('@')) {
+                        if (window.setAssignmentCustomError) {
+                            window.setAssignmentCustomError('使用者 Email 不正確');
+                        } else {
+                            alert('使用者 Email 不正確');
+                        }
+                        return;
+                    }
+                    pendingStartOptionsRef.current = null;
+                    hideAssignmentModal();
+                    submitStartSession({
+                        ...options,
+                        assignmentMode: assignmentMode,
+                        assignmentTargetType: assignmentTargetType,
+                        assignmentTargetValue: assignmentTargetValue
+                    });
+                    return;
+                }
                 pendingStartOptionsRef.current = null;
                 hideAssignmentModal();
-                if (!options) return;
                 submitStartSession({
                     ...options,
                     assignmentMode: assignmentMode
@@ -2984,6 +3145,9 @@
 
             const handleAssignmentModeCancel = useCallback(() => {
                 pendingStartOptionsRef.current = null;
+                if (window.setAssignmentCustomError) {
+                    window.setAssignmentCustomError('');
+                }
                 hideAssignmentModal();
             }, [hideAssignmentModal]);
 
@@ -3068,6 +3232,9 @@
                 if (isAdminView) {
                     pendingStartOptionsRef.current = options;
                     if (window.$ && typeof window.$.fn?.modal === 'function') {
+                        if (window.prepareAssignmentModeModal) {
+                            window.prepareAssignmentModeModal();
+                        }
                         window.$('#assignmentModeModal').modal('show');
                     } else {
                         submitStartSession({ ...options, assignmentMode: 'person' });

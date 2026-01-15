@@ -5729,6 +5729,7 @@ function getInventoryData(forceUserScope) {
     // 建立 Email -> 姓名 / 組別 對照表（用於前端顯示指派人員與分派判斷）
     const emailToNameMap = {};
     const emailToGroupMap = {};
+    const assigneeUserMap = {};
     const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
     if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
       const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
@@ -5738,15 +5739,31 @@ function getInventoryData(forceUserScope) {
         const groupName = row[6];
         if (email) {
           const normalizedEmail = String(email).toLowerCase();
-          emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
-          if (groupName) {
-            emailToGroupMap[normalizedEmail] = String(groupName).trim();
+          const displayName = name ? String(name).trim() : String(email).split('@')[0];
+          emailToNameMap[normalizedEmail] = displayName;
+          const normalizedGroup = groupName ? String(groupName).trim() : '';
+          if (normalizedGroup) {
+            emailToGroupMap[normalizedEmail] = normalizedGroup;
+          }
+          if (!assigneeUserMap[normalizedEmail]) {
+            assigneeUserMap[normalizedEmail] = {
+              name: displayName,
+              email: normalizedEmail,
+              group: normalizedGroup
+            };
+          } else if (normalizedGroup && !assigneeUserMap[normalizedEmail].group) {
+            assigneeUserMap[normalizedEmail].group = normalizedGroup;
           }
         }
       });
     }
     const currentUserGroup = emailToGroupMap[currentUserEmail] || '未分組';
     const groups = Array.from(new Set(Object.values(emailToGroupMap).filter(Boolean))).sort();
+    const assigneeUsers = Object.values(assigneeUserMap).sort((a, b) => {
+      const left = a.name || a.email || '';
+      const right = b.name || b.email || '';
+      return left.localeCompare(right, 'zh-Hant');
+    });
 
     // 取得進行中盤點會話（管理員可以看到所有會話）
     const activeSessions = getActiveInventorySessions(currentUserEmail, useAdminScope, currentUserGroup);
@@ -5795,6 +5812,7 @@ function getInventoryData(forceUserScope) {
       keepers: keepers,
       users: users,
       groups: groups,
+      assigneeUsers: assigneeUsers,
       activeSessions: activeSessions,
       emailToNameMap: emailToNameMap,
       currentUserGroup: currentUserGroup,
@@ -6180,6 +6198,7 @@ function startInventorySession(options) {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const currentUserName = Session.getActiveUser().getEmail().split('@')[0];
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const isAdmin = checkAdminPermissions();
 
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
     const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
@@ -6216,19 +6235,56 @@ function startInventorySession(options) {
     const userFilterSet = new Set(userFilterValues);
     const groupFilterSet = new Set(groupFilterValues);
 
-    // 建立 Email -> 組別 對照表（組別篩選/分派時使用）
+    const assignmentModeRaw = String(options.assignmentMode || '').trim().toLowerCase();
+    const assignmentMode = assignmentModeRaw === 'group'
+      ? 'group'
+      : assignmentModeRaw === 'custom' ? 'custom' : 'person';
+    const assignmentTargetType = String(options.assignmentTargetType || '').trim().toLowerCase() === 'group'
+      ? 'group'
+      : 'user';
+    const assignmentTargetValue = String(options.assignmentTargetValue || '').trim();
+
+    // 建立 Email -> 組別/姓名 對照表（組別篩選/分派時使用）
     const emailToGroupMap = {};
-    if (options.assignmentMode === 'group' || groupFilterSet.size > 0) {
+    const emailToNameMap = {};
+    if (assignmentMode === 'group' || assignmentMode === 'custom' || groupFilterSet.size > 0) {
       const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
       if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
         const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
         keeperData.forEach(row => {
+          const name = row[0];
           const email = row[1];
           const groupName = row[6];
           if (email) {
-            emailToGroupMap[String(email).toLowerCase()] = groupName ? String(groupName).trim() : '';
+            const normalizedEmail = String(email).toLowerCase();
+            const displayName = name ? String(name).trim() : String(email).split('@')[0];
+            emailToGroupMap[normalizedEmail] = groupName ? String(groupName).trim() : '';
+            emailToNameMap[normalizedEmail] = displayName;
           }
         });
+      }
+    }
+
+    let customAssignedUser = '';
+    let assignmentTargetLabel = '';
+    if (assignmentMode === 'custom') {
+      if (!isAdmin) {
+        throw new Error('權限不足：只有管理員可以指定分派對象');
+      }
+      if (!assignmentTargetValue) {
+        throw new Error('請指定分派對象');
+      }
+      if (assignmentTargetType === 'user') {
+        if (!assignmentTargetValue.includes('@')) {
+          throw new Error('指定的使用者 Email 不正確');
+        }
+        const normalizedEmail = assignmentTargetValue.toLowerCase();
+        customAssignedUser = normalizedEmail;
+        const displayName = emailToNameMap[normalizedEmail] || normalizedEmail.split('@')[0];
+        assignmentTargetLabel = displayName ? `${displayName} (${normalizedEmail})` : normalizedEmail;
+      } else {
+        customAssignedUser = assignmentTargetValue;
+        assignmentTargetLabel = assignmentTargetValue;
       }
     }
 
@@ -6280,32 +6336,34 @@ function startInventorySession(options) {
       '' // 完成時間
     ]);
 
-    const assignmentMode = options.assignmentMode === 'group' ? 'group' : 'person';
-
     // ✨ 核心邏輯：準備寫入明細表，並自動分發任務
     const detailRows = assetsToInventory.map(asset => {
       // 自動分發：
       // - 財產總表 → 指派給使用人
       // - 物品總表 → 指派給保管人
       // 若缺少使用人或保管人 Email，則留空 (未指派)
-      let assignedEmail = '';
-      if (asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME) {
-        assignedEmail = asset.userEmail || asset.leaderEmail || '';
-      } else {
-        assignedEmail = asset.leaderEmail || '';
-      }
       let assignedUser = '';
-      if (assignmentMode === 'group') {
-        const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
-        if (defaultGroup) {
-          assignedUser = defaultGroup;
-        } else {
-          const normalizedEmail = assignedEmail ? assignedEmail.toLowerCase() : '';
-          const groupName = normalizedEmail ? emailToGroupMap[normalizedEmail] : '';
-          assignedUser = groupName || '未分組';
-        }
+      if (assignmentMode === 'custom') {
+        assignedUser = customAssignedUser;
       } else {
-        assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
+        let assignedEmail = '';
+        if (asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME) {
+          assignedEmail = asset.userEmail || asset.leaderEmail || '';
+        } else {
+          assignedEmail = asset.leaderEmail || '';
+        }
+        if (assignmentMode === 'group') {
+          const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
+          if (defaultGroup) {
+            assignedUser = defaultGroup;
+          } else {
+            const normalizedEmail = assignedEmail ? assignedEmail.toLowerCase() : '';
+            const groupName = normalizedEmail ? emailToGroupMap[normalizedEmail] : '';
+            assignedUser = groupName || '未分組';
+          }
+        } else {
+          assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
+        }
       }
 
       const userName = asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME ? (asset.userName || '') : '';
@@ -6331,13 +6389,16 @@ function startInventorySession(options) {
       inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 12).setValues(detailRows);
     }
 
-    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`);
+    const assignmentMessage = assignmentMode === 'custom'
+      ? `任務已指定分派給 ${assignmentTargetLabel}。`
+      : `任務已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`;
+    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，${assignmentMessage}`);
 
     return {
       success: true,
       inventoryId: inventoryId,
       totalCount: assetsToInventory.length,
-      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。任務已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`
+      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。${assignmentMessage}`
     };
 
   } catch (e) {
