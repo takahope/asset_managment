@@ -261,7 +261,7 @@ function createDraftForPersonA(warningName, matchedAsset, originalMessage, setti
   const body = `
     親愛的 A：
     
-    系統檢測到最新的資安警訊與我方資產 "${matchedAsset}" 相關。
+    系統檢測到最新的漏洞預警通報內容與資訊資產名稱 "${matchedAsset}" 有相關性。
     警訊名稱：${warningName}
     
     請儘速確認並評估影響範圍。
@@ -282,10 +282,10 @@ function createDraftReplyToSenderB(warningName, originalMessage, settings) {
   const replyBody = `
     您好，
     
-    系統已收到漏洞預警通知：
+    已收到漏洞預警通知：
     "${warningName}"
     
-    經自動比對資產清單，目前我方無相關軟硬體資產，無需處理。
+    經確認，無相關軟硬體資產，無需處理。
     感謝通知。
   `;
   
