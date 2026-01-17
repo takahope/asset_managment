@@ -235,15 +235,16 @@
             <tr>
               <!-- [修改] 新增 # 編號欄位 -->
               <th width="5%">#</th>
-              <th width="15%">時間</th>
+              <th width="10%">時間</th>
+              <th width="15%">信件時間</th>
               <th width="10%">狀態</th>
-              <th width="40%">警訊名稱</th>
-              <th width="30%">命中資產 / 處理結果</th>
+              <th width="35%">警訊名稱</th>
+              <th width="25%">命中資產 / 處理結果</th>
             </tr>
           </thead>
           <tbody id="data-body">
-            <!-- [修改] colspan 改為 5 -->
-            <tr><td colspan="5" style="text-align:center; padding:20px;">資料載入中...</td></tr>
+            <!-- [修改] colspan 改為 6 -->
+            <tr><td colspan="6" style="text-align:center; padding:20px;">資料載入中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -290,14 +291,14 @@
         tbody.innerHTML = '';
 
         if (!data || data.length === 0) {
-          // [修改] colspan 改為 5
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">目前尚無紀錄</td></tr>';
+          // [修改] colspan 改為 6
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">目前尚無紀錄</td></tr>';
           return;
         }
 
         // [修改] 加入 index 參數
         data.forEach((row, index) => {
-          const [time, status, warningName, asset, action] = row;
+          const [time, status, warningName, asset, action, emailDate] = row;
           
           let tagClass = 'tag-safe';
           let statusText = '安全';
@@ -308,6 +309,7 @@
           tr.innerHTML = `
             <td>${index + 1}</td> <!-- [修改] 顯示項目編號 -->
             <td>${time}</td>
+            <td>${emailDate || '-'}</td> <!-- [修改] 顯示信件時間 -->
             <td><span class="tag ${tagClass}">${statusText}</span></td>
             <td>${warningName}</td>
             <td><strong>${asset}</strong><br><small style="color:#666">${action}</small></td>

@@ -48,9 +48,9 @@ function getDashboardData() {
     const startRow = Math.max(2, lastRow - 99);
     const numRows = lastRow - startRow + 1;
     
-    // 讀取前 5 欄用於儀表板顯示 (Timestamp, Status, WarningName, MatchedAsset, Action)
-    // Email Date 和 Message ID 在後面，目前儀表板暫不顯示，若需顯示可擴大讀取範圍
-    const values = sheet.getRange(startRow, 1, numRows, 5).getDisplayValues();
+    // 讀取前 6 欄用於儀表板顯示 (Timestamp, Status, WarningName, MatchedAsset, Action, Email Date)
+    // Message ID 在後面
+    const values = sheet.getRange(startRow, 1, numRows, 6).getDisplayValues();
     return values.reverse(); 
   } catch (e) {
     console.error("獲取儀表板資料失敗: " + e.message);
