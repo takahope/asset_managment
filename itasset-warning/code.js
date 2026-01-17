@@ -44,7 +44,8 @@ function getDashboardData() {
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) return [];
     
-    const startRow = Math.max(2, lastRow - 19);
+    // 預設顯示最後 100 筆紀錄
+    const startRow = Math.max(2, lastRow - 99);
     const numRows = lastRow - startRow + 1;
     
     // 讀取前 5 欄用於儀表板顯示 (Timestamp, Status, WarningName, MatchedAsset, Action)
