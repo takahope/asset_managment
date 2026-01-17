@@ -47,6 +47,8 @@ function getDashboardData() {
     const startRow = Math.max(2, lastRow - 19);
     const numRows = lastRow - startRow + 1;
     
+    // 讀取前 5 欄用於儀表板顯示 (Timestamp, Status, WarningName, MatchedAsset, Action)
+    // Email Date 和 Message ID 在後面，目前儀表板暫不顯示，若需顯示可擴大讀取範圍
     const values = sheet.getRange(startRow, 1, numRows, 5).getDisplayValues();
     return values.reverse(); 
   } catch (e) {
@@ -109,9 +111,12 @@ function processSingleMessage(message, assetList, settings) {
   const warningName = extractWarningName(body);
   const msgId = message.getId();
   
+  // [新增] 提取信件收到時間並格式化
+  const emailDate = Utilities.formatDate(message.getDate(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  
   if (!warningName) {
     const errorMsg = `無法提取警訊名稱`;
-    logExecutionResult('ERROR', '解析失敗', 'N/A', errorMsg, msgId);
+    logExecutionResult('ERROR', '解析失敗', 'N/A', errorMsg, msgId, emailDate);
     if (settings.chatNotify) sendToChat(`⚠️ 錯誤報告：${errorMsg}`);
     return; 
   }
@@ -128,14 +133,14 @@ function processSingleMessage(message, assetList, settings) {
     } else if (settings.chatNotify) {
        sendToChat(`🚨 **[資產命中] (草稿功能未啟用)**\n偵測資產：${matchedAsset}\n警訊名稱：${warningName}`);
     }
-    logExecutionResult('ALERT', warningName, matchedAsset, actionLog, msgId);
+    logExecutionResult('ALERT', warningName, matchedAsset, actionLog, msgId, emailDate);
   } else {
     let actionLog = '僅紀錄 (自動草稿已關閉)';
     if (settings.autoDraft) {
       createDraftReplyToSenderB(warningName, message, settings);
       actionLog = '已建立回覆草稿';
     }
-    logExecutionResult('SAFE', warningName, '無相關資產', actionLog, msgId);
+    logExecutionResult('SAFE', warningName, '無相關資產', actionLog, msgId, emailDate);
   }
 }
 
@@ -179,8 +184,8 @@ function fetchProcessedMessageIds() {
     if (!sheet) return ids;
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) return ids;
-    // Message ID 在第 6 欄
-    const data = sheet.getRange(2, 6, lastRow - 1, 1).getValues();
+    // [修改] Message ID 現在位於第 7 欄 (G欄)，因為第 6 欄變成了 Email Date
+    const data = sheet.getRange(2, 7, lastRow - 1, 1).getValues();
     data.flat().forEach(id => { if(id) ids.add(String(id)); });
   } catch (e) {
     console.error("讀取 Processed IDs 失敗: " + e.message);
@@ -203,17 +208,19 @@ function ensureLogSheetExists() {
   let sheet = ss.getSheetByName(CONFIG.LOG_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(CONFIG.LOG_SHEET_NAME);
-    sheet.appendRow(['Timestamp', 'Status', 'Warning Name', 'Matched Asset', 'Action', 'Message ID']);
+    // [修改] 新增 'Email Date' 標題
+    sheet.appendRow(['Timestamp', 'Status', 'Warning Name', 'Matched Asset', 'Action', 'Email Date', 'Message ID']);
     sheet.setFrozenRows(1);
   }
 }
 
-function logExecutionResult(status, warningName, asset, action, msgId) {
+function logExecutionResult(status, warningName, asset, action, msgId, emailDate) {
   try {
     const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.LOG_SHEET_NAME);
     if (sheet) {
       const time = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-      sheet.appendRow([time, status, warningName, asset, action, msgId]);
+      // [修改] 寫入順序加入 emailDate
+      sheet.appendRow([time, status, warningName, asset, action, emailDate, msgId]);
     }
   } catch (e) {
     console.error("寫入 Log 失敗: " + e.message);
