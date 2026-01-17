@@ -51,7 +51,15 @@ function getDashboardData() {
     // 讀取前 6 欄用於儀表板顯示 (Timestamp, Status, WarningName, MatchedAsset, Action, Email Date)
     // Message ID 在後面
     const values = sheet.getRange(startRow, 1, numRows, 6).getDisplayValues();
-    return values.reverse(); 
+    
+    // [修改] 依照 Email Date (index 5) 降序排列 (由近到遠)
+    values.sort((a, b) => {
+      const dateA = a[5] ? new Date(a[5]).getTime() : 0;
+      const dateB = b[5] ? new Date(b[5]).getTime() : 0;
+      return dateB - dateA; // 降序
+    });
+    
+    return values;
   } catch (e) {
     console.error("獲取儀表板資料失敗: " + e.message);
     return [];
