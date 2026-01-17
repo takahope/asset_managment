@@ -117,14 +117,14 @@ function processIncomingEmails() {
 
 function processSingleMessage(message, assetList, settings) {
   const body = message.getPlainBody();
-  const warningName = extractWarningName(body);
+  const warningName = extractWarningInfo(body);
   const msgId = message.getId();
   
   // [新增] 提取信件收到時間並格式化
   const emailDate = Utilities.formatDate(message.getDate(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
   
   if (!warningName) {
-    const errorMsg = `無法提取警訊名稱`;
+    const errorMsg = `無法提取警訊名稱或漏洞說明`;
     logExecutionResult('ERROR', '解析失敗', 'N/A', errorMsg, msgId, emailDate);
     if (settings.chatNotify) sendToChat(`⚠️ 錯誤報告：${errorMsg}`);
     return; 
@@ -140,7 +140,7 @@ function processSingleMessage(message, assetList, settings) {
       createDraftForPersonA(warningName, matchedAsset, message, settings);
       actionLog = '已建立通知草稿';
     } else if (settings.chatNotify) {
-       sendToChat(`🚨 **[資產命中] (草稿功能未啟用)**\n偵測資產：${matchedAsset}\n警訊名稱：${warningName}`);
+       sendToChat(`🚨 **[資產命中] (草稿功能未啟用)**\n偵測資產：${matchedAsset}\n警訊資訊：${warningName}`);
     }
     logExecutionResult('ALERT', warningName, matchedAsset, actionLog, msgId, emailDate);
   } else {
@@ -157,10 +157,25 @@ function processSingleMessage(message, assetList, settings) {
 // 4. 資料提取與資料庫服務
 // ==========================================
 
-function extractWarningName(text) {
-  const regex = /警訊名稱[：:]\s*(.+)/i;
-  const match = text.match(regex);
-  return (match && match[1]) ? match[1].trim() : null; 
+function extractWarningInfo(text) {
+  const nameRegex = /警訊名稱[：:]\s*(.+)/i;
+  const descRegex = /漏洞說明[：:]\s*(.+)/i;
+  
+  const nameMatch = text.match(nameRegex);
+  const descMatch = text.match(descRegex);
+  
+  const name = (nameMatch && nameMatch[1]) ? nameMatch[1].trim() : null;
+  const desc = (descMatch && descMatch[1]) ? descMatch[1].trim() : null;
+  
+  if (name && desc) {
+    return `${name} (說明: ${desc})`;
+  } else if (name) {
+    return name;
+  } else if (desc) {
+    return desc;
+  }
+  
+  return null;
 }
 
 /**
