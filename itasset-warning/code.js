@@ -14,13 +14,9 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/**
- * [前端專用] 獲取目前的所有設定狀態
- */
 function getSystemSettings() {
   ensureSettingsSheetExists();
   const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SETTINGS_SHEET_NAME);
-  // 讀取 A2:C2
   const values = sheet.getRange("A2:C2").getDisplayValues()[0];
   return {
     scanRead: values[0] === "是",
@@ -29,11 +25,6 @@ function getSystemSettings() {
   };
 }
 
-/**
- * [前端專用] 更新設定
- * @param {string} key - 'scanRead' | 'autoDraft' | 'chatNotify'
- * @param {boolean} isEnabled 
- */
 function updateSystemSetting(key, isEnabled) {
   const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SETTINGS_SHEET_NAME);
   const val = isEnabled ? "是" : "否";
@@ -45,9 +36,6 @@ function updateSystemSetting(key, isEnabled) {
   return { success: true };
 }
 
-/**
- * [前端專用] 獲取儀表板紀錄
- */
 function getDashboardData() {
   try {
     const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.LOG_SHEET_NAME);
@@ -59,8 +47,6 @@ function getDashboardData() {
     const startRow = Math.max(2, lastRow - 19);
     const numRows = lastRow - startRow + 1;
     
-    // 讀取 5 欄: [Timestamp, Status, WarningName, MatchedAsset, Action]
-    // 注意：原本是 4 欄，但下方我們新增了 Message ID 欄位 (在第6欄)，儀表板暫時只需前 5 欄顯示
     const values = sheet.getRange(startRow, 1, numRows, 5).getDisplayValues();
     return values.reverse(); 
   } catch (e) {
@@ -80,7 +66,7 @@ function processIncomingEmails() {
   // 2. 構建搜尋語法
   let query = `from:${CONFIG.SENDER_B_EMAIL} subject:"${CONFIG.SUBJECT_KEYWORD}"`;
   
-  // 如果設定 A2="是" (掃描已讀)，則不加 "is:unread"；否則預設只抓未讀
+  // 如果設定 A2="否" (預設)，則只抓未讀；若 A2="是"，則不加限制(會掃描所有信，靠 MessageID 去重)
   if (!settings.scanRead) {
     query += ` is:unread`;
   }
@@ -88,37 +74,34 @@ function processIncomingEmails() {
   const threads = GmailApp.search(query);
   if (threads.length === 0) {
     console.log("目前沒有符合條件的信件。");
-    return;
+    // 回傳結果給前端顯示 (可選)
+    return "無符合條件信件";
   }
 
   ensureLogSheetExists();
   const assetList = fetchComparisonData();
-  
-  // 3. 獲取已處理過的 Message IDs (防止 Scan Read 開啟時無限迴圈)
   const processedMessageIds = fetchProcessedMessageIds();
+  let processCount = 0;
 
   threads.forEach(thread => {
     const messages = thread.getMessages();
-    // 針對每一封信進行檢查 (因為 Thread 可能包含多封，若開啟 Scan Read，需精確判斷)
     messages.forEach(message => {
-      // 檢查去重：如果 Message ID 已經在 Log 裡，絕對不處理
-      if (processedMessageIds.has(message.getId())) {
-        return;
-      }
+      // 去重檢查
+      if (processedMessageIds.has(message.getId())) return;
       
-      // 如果設定只需未讀，但該信已讀 (雙重防護)，則跳過
-      if (!settings.scanRead && !message.isUnread()) {
-        return;
-      }
+      // 雙重防護：如果設定只掃未讀，但信已讀，則跳過
+      if (!settings.scanRead && !message.isUnread()) return;
 
       processSingleMessage(message, assetList, settings);
+      processCount++;
       
-      // 標記為已讀 (雖然有 ID 去重，但保持良好的信箱衛生習慣)
       if (message.isUnread()) {
         GmailApp.markMessageRead(message);
       }
     });
   });
+  
+  return `掃描完成，處理了 ${processCount} 封新信件`;
 }
 
 function processSingleMessage(message, assetList, settings) {
@@ -128,13 +111,10 @@ function processSingleMessage(message, assetList, settings) {
   
   if (!warningName) {
     const errorMsg = `無法提取警訊名稱`;
-    console.warn(`${errorMsg} (ID: ${msgId})`);
     logExecutionResult('ERROR', '解析失敗', 'N/A', errorMsg, msgId);
     if (settings.chatNotify) sendToChat(`⚠️ 錯誤報告：${errorMsg}`);
     return; 
   }
-
-  console.log(`提取到的警訊名稱: ${warningName}`);
 
   const matchedAsset = assetList.find(asset => 
     warningName.toLowerCase().includes(asset.toLowerCase())
@@ -142,25 +122,19 @@ function processSingleMessage(message, assetList, settings) {
 
   if (matchedAsset) {
     let actionLog = '僅紀錄 (自動草稿已關閉)';
-    // B2 檢查：自動草稿
     if (settings.autoDraft) {
-      createDraftForPersonA(warningName, matchedAsset, message, settings); // 傳入 settings 以檢查 chat
+      createDraftForPersonA(warningName, matchedAsset, message, settings);
       actionLog = '已建立通知草稿';
     } else if (settings.chatNotify) {
-       // 即使不建立草稿，若命中資產且 Chat 開啟，還是通知一下比較好
        sendToChat(`🚨 **[資產命中] (草稿功能未啟用)**\n偵測資產：${matchedAsset}\n警訊名稱：${warningName}`);
     }
-    
     logExecutionResult('ALERT', warningName, matchedAsset, actionLog, msgId);
-    
   } else {
     let actionLog = '僅紀錄 (自動草稿已關閉)';
-    // B2 檢查：自動草稿
     if (settings.autoDraft) {
       createDraftReplyToSenderB(warningName, message, settings);
       actionLog = '已建立回覆草稿';
     }
-    
     logExecutionResult('SAFE', warningName, '無相關資產', actionLog, msgId);
   }
 }
@@ -175,23 +149,29 @@ function extractWarningName(text) {
   return (match && match[1]) ? match[1].trim() : null; 
 }
 
+/**
+ * [修改] 從 Google Sheet 獲取資產清單 (擴大為 A, B, C 三欄)
+ */
 function fetchComparisonData() {
   try {
     const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEET_NAME);
     if (!sheet) throw new Error("找不到資產清單工作表");
     const lastRow = sheet.getLastRow();
     if (lastRow === 0) return [];
-    return sheet.getRange(1, CONFIG.DATA_COLUMN_INDEX + 1, lastRow, 1)
-      .getValues().flat().map(String).map(s => s.trim()).filter(s => s.length > 0);
+    
+    // 修改處：讀取 3 欄 (A, B, C)，從第 1 欄開始，讀 3 欄寬度
+    return sheet.getRange(1, 1, lastRow, 3)
+      .getValues()
+      .flat() // 將 [[A1,B1,C1], [A2,B2,C2]] 攤平成 [A1,B1,C1,A2...]
+      .map(String)
+      .map(s => s.trim())
+      .filter(s => s.length > 0); // 過濾空字串
   } catch (e) {
     console.error("讀取試算表失敗: " + e.message);
     return [];
   }
 }
 
-/**
- * [新增] 讀取所有已處理過的 Message ID
- */
 function fetchProcessedMessageIds() {
   const ids = new Set();
   try {
@@ -199,8 +179,7 @@ function fetchProcessedMessageIds() {
     if (!sheet) return ids;
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) return ids;
-    
-    // 假設 Message ID 在第 6 欄 (F欄)
+    // Message ID 在第 6 欄
     const data = sheet.getRange(2, 6, lastRow - 1, 1).getValues();
     data.flat().forEach(id => { if(id) ids.add(String(id)); });
   } catch (e) {
@@ -209,19 +188,13 @@ function fetchProcessedMessageIds() {
   return ids;
 }
 
-/**
- * 確保 Log Sheet 和 Settings Sheet 存在
- */
 function ensureSettingsSheetExists() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  
-  // 檢查 Settings
   let settingSheet = ss.getSheetByName(CONFIG.SETTINGS_SHEET_NAME);
   if (!settingSheet) {
     settingSheet = ss.insertSheet(CONFIG.SETTINGS_SHEET_NAME);
     settingSheet.appendRow(['掃描已讀信件 (A2)', '開啟自動草稿 (B2)', '開啟Chat通知 (C2)']);
-    settingSheet.appendRow(['否', '是', '是']); // 預設值
-    console.log("已建立 Settings 工作表");
+    settingSheet.appendRow(['否', '是', '是']);
   }
 }
 
@@ -230,15 +203,11 @@ function ensureLogSheetExists() {
   let sheet = ss.getSheetByName(CONFIG.LOG_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(CONFIG.LOG_SHEET_NAME);
-    // 新增 Message ID 欄位
     sheet.appendRow(['Timestamp', 'Status', 'Warning Name', 'Matched Asset', 'Action', 'Message ID']);
     sheet.setFrozenRows(1);
   }
 }
 
-/**
- * 寫入紀錄 (包含 Message ID)
- */
 function logExecutionResult(status, warningName, asset, action, msgId) {
   try {
     const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.LOG_SHEET_NAME);
@@ -257,6 +226,7 @@ function logExecutionResult(status, warningName, asset, action, msgId) {
 
 function createDraftForPersonA(warningName, matchedAsset, originalMessage, settings) {
   const subject = `[資產風險警示] 發現內部資產 ${matchedAsset} 相關漏洞`;
+  // [修復] 恢復完整的信件內容
   const body = `
     親愛的 A：
     
@@ -271,17 +241,13 @@ function createDraftForPersonA(warningName, matchedAsset, originalMessage, setti
   
   GmailApp.createDraft(CONFIG.PERSON_A_EMAIL, subject, body);
   
-  // C2 檢查：Chat 通知
   if (settings.chatNotify) {
-    sendToChat(
-      `🚨 **[資產命中] 已建立通知草稿**\n` +
-      `偵測資產：${matchedAsset}\n` +
-      `警訊名稱：${warningName}`
-    );
+    sendToChat(`🚨 **[資產命中] 已建立通知草稿**\n偵測資產：${matchedAsset}\n警訊名稱：${warningName}`);
   }
 }
 
 function createDraftReplyToSenderB(warningName, originalMessage, settings) {
+  // [修復] 恢復完整的信件內容
   const replyBody = `
     您好，
     
@@ -294,12 +260,8 @@ function createDraftReplyToSenderB(warningName, originalMessage, settings) {
   
   originalMessage.getThread().createDraftReply(replyBody);
   
-  // C2 檢查：Chat 通知
   if (settings.chatNotify) {
-    sendToChat(
-      `✅ **[無相關資產] 已建立回覆草稿**\n` +
-      `警訊名稱：${warningName}`
-    );
+    sendToChat(`✅ **[無相關資產] 已建立回覆草稿**\n警訊名稱：${warningName}`);
   }
 }
 
