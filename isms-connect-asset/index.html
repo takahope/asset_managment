@@ -609,7 +609,11 @@
         .withSuccessHandler(function(result) {
           if (result.success) {
             allIsmsAssets = result.assets;
-            renderIsmsTable(allIsmsAssets);
+            // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
+            const filteredAssets = allIsmsAssets.filter(function(a) {
+              return a.category === 'HW' || a.category === 'EV';
+            });
+            renderIsmsTable(filteredAssets);
             populateIsmsSelect();
           } else {
             showToast(result.error, 'error');
@@ -713,7 +717,12 @@
       const select = document.getElementById('ismsAssetSelect');
       const reportSelect = document.getElementById('reportIsmsSelect');
 
-      const options = allIsmsAssets.map(function(asset) {
+      // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
+      const filteredAssets = allIsmsAssets.filter(function(asset) {
+        return asset.category === 'HW' || asset.category === 'EV';
+      });
+
+      const options = filteredAssets.map(function(asset) {
         return `<option value="${escapeHtml(asset.ismsAssetId)}">${escapeHtml(asset.ismsAssetId)} - ${escapeHtml(asset.name)}</option>`;
       }).join('');
 
@@ -790,10 +799,12 @@
       const keyword = document.getElementById('ismsSearch').value.toLowerCase();
       const select = document.getElementById('ismsAssetSelect');
 
+      // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
       const filtered = allIsmsAssets.filter(function(a) {
-        return a.ismsAssetId.toLowerCase().includes(keyword) ||
-               a.name.toLowerCase().includes(keyword) ||
-               a.category.toLowerCase().includes(keyword);
+        return (a.category === 'HW' || a.category === 'EV') && (
+          a.ismsAssetId.toLowerCase().includes(keyword) ||
+          a.name.toLowerCase().includes(keyword)
+        );
       });
 
       select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' +
@@ -805,11 +816,13 @@
     function filterIsmsTable() {
       const keyword = document.getElementById('ismsListSearch').value.toLowerCase();
 
+      // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
       const filtered = allIsmsAssets.filter(function(a) {
-        return a.ismsAssetId.toLowerCase().includes(keyword) ||
-               a.name.toLowerCase().includes(keyword) ||
-               a.category.toLowerCase().includes(keyword) ||
-               a.responsibleUnit.toLowerCase().includes(keyword);
+        return (a.category === 'HW' || a.category === 'EV') && (
+          a.ismsAssetId.toLowerCase().includes(keyword) ||
+          a.name.toLowerCase().includes(keyword) ||
+          a.responsibleUnit.toLowerCase().includes(keyword)
+        );
       });
 
       renderIsmsTable(filtered);
