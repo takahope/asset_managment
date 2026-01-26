@@ -6,9 +6,11 @@
  * Web App 入口點
  */
 function doGet(e) {
-  return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('資產與資訊資產對照管理')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  const html = HtmlService.createHtmlOutputFromFile('index');
+  html.setTitle('資產與資訊資產對照管理');
+  html.addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+  html.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return html;
 }
 
 // ==========================================

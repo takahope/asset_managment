@@ -23,6 +23,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
 
   <style>
     :root {
@@ -261,6 +262,104 @@
       outline: none;
       border-color: #2563eb;
     }
+
+    /* 條碼掃描器樣式 */
+    .scanner-zone {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      display: none;
+    }
+
+    .scanner-zone.active {
+      display: block;
+    }
+
+    #scanner-reader {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    #scanner-reader video {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    #scanner-reader canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .scanner-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      max-width: 400px;
+      height: 60%;
+      border: 2px solid rgba(37, 99, 235, 0.8);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    .scanner-overlay::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: rgba(37, 99, 235, 0.8);
+      animation: scanPulse 2s ease-in-out infinite;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
+    }
+
+    @keyframes scanPulse {
+      0%, 100% { top: 10%; opacity: 0.3; }
+      50% { top: 90%; opacity: 1; }
+    }
+
+    .scanner-status {
+      text-align: center;
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+
+    .scanner-status.scanning {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .scanner-status.success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .scanner-status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* 移動版顯示掃描按鈕，桌面版隱藏 */
+    @media (min-width: 769px) {
+      .btn-scan-barcode {
+        display: none !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -298,6 +397,24 @@
         </div>
       </div>
 
+      <!-- 條碼掃描區 -->
+      <div id="scannerZone" class="scanner-zone">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-gray-900">
+            <i class="fas fa-camera mr-2 text-blue-600"></i>條碼掃描器
+          </h3>
+          <button class="text-gray-500 hover:text-gray-700" onclick="toggleScanner()">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div id="scanner-reader">
+          <div class="scanner-overlay"></div>
+        </div>
+        <div id="scannerStatus" class="scanner-status scanning">
+          <i class="fas fa-spinner fa-spin mr-2"></i>準備掃描器...
+        </div>
+      </div>
+
       <!-- Tab 導航 -->
       <div class="card mb-6">
         <div class="flex border-b">
@@ -321,6 +438,9 @@
           <div id="tab-assets" class="tab-content">
             <div class="flex flex-wrap items-center gap-4 mb-6">
               <input type="text" id="assetSearch" class="search-input" placeholder="搜尋資產編號、名稱、保管人...">
+              <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
+                <i class="fas fa-camera mr-2"></i>掃描條碼
+              </button>
               <select id="groupFilter" class="select-input">
                 <option value="">全部組別</option>
               </select>
@@ -1147,6 +1267,249 @@
         }, 300);
       }, 3000);
     }
+
+    // ==========================================
+    // 條碼掃描功能
+    // ==========================================
+    (function() {
+      let isScanning = false;
+      let lastScannedCode = null;
+      let lastScannedTime = 0;
+      const SCAN_COOLDOWN = 2000; // 2 秒冷卻時間
+
+      // 格式化條碼（參考主應用程式規則）
+      function formatBarcode(barcode) {
+        const cleanCode = barcode.toString().trim();
+        // 20 碼去前 2 位
+        let processed = cleanCode.length === 20 ? cleanCode.substring(2) : cleanCode;
+
+        if (processed.length < 11) return processed;
+
+        // 格式化為 XXXXXXX-XXXX-XXXXXXX (7-4-7)
+        return processed.substring(0, 7) + '-' +
+               processed.substring(7, 11) + '-' +
+               processed.substring(11);
+      }
+
+      // 切換掃描器顯示/隱藏
+      window.toggleScanner = function() {
+        const zone = document.getElementById('scannerZone');
+        if (zone.classList.contains('active')) {
+          stopScanner();
+        } else {
+          zone.classList.add('active');
+          startScanner();
+        }
+      };
+
+      // 啟動掃描器
+      function startScanner() {
+        if (typeof Quagga === 'undefined') {
+          updateScannerStatus('error', '無法載入掃描器函式庫，請使用搜尋功能');
+          setTimeout(() => {
+            document.getElementById('scannerZone').classList.remove('active');
+            document.getElementById('assetSearch').focus();
+          }, 2000);
+          return;
+        }
+
+        updateScannerStatus('scanning', '準備相機中...');
+
+        Quagga.init({
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#scanner-reader'),
+            constraints: {
+              width: 640,
+              height: 480,
+              facingMode: "environment"
+            }
+          },
+          decoder: {
+            readers: [
+              "code_128_reader",
+              "ean_reader",
+              "ean_8_reader",
+              "code_39_reader",
+              "code_39_vin_reader",
+              "codabar_reader",
+              "upc_reader",
+              "upc_e_reader",
+              "i2of5_reader"
+            ]
+          },
+          locate: true,
+          locator: {
+            patchSize: "medium",
+            halfSample: true
+          }
+        }, function(err) {
+          if (err) {
+            console.error('Quagga 初始化失敗:', err);
+            updateScannerStatus('error', '相機啟動失敗：' + err.message);
+            setTimeout(() => {
+              stopScanner();
+              document.getElementById('assetSearch').focus();
+            }, 2000);
+            return;
+          }
+
+          Quagga.start();
+          isScanning = true;
+          updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
+        });
+
+        Quagga.onDetected(onBarcodeDetected);
+      }
+
+      // 停止掃描器
+      function stopScanner() {
+        if (isScanning) {
+          Quagga.stop();
+          isScanning = false;
+        }
+
+        // 釋放相機資源
+        const videoElement = document.querySelector('#scanner-reader video');
+        if (videoElement && videoElement.srcObject) {
+          videoElement.srcObject.getTracks().forEach(track => track.stop());
+        }
+
+        // 清空 DOM
+        const reader = document.getElementById('scanner-reader');
+        while (reader.children.length > 1) {
+          reader.removeChild(reader.lastChild);
+        }
+
+        document.getElementById('scannerZone').classList.remove('active');
+      }
+
+      // 條碼檢測回調
+      function onBarcodeDetected(result) {
+        if (!result || !result.codeResult) return;
+
+        const code = result.codeResult.code;
+        const now = Date.now();
+
+        // 防重複掃描（2 秒冷卻）
+        if (code === lastScannedCode && (now - lastScannedTime) < SCAN_COOLDOWN) {
+          return;
+        }
+
+        lastScannedCode = code;
+        lastScannedTime = now;
+
+        // 播放提示音
+        try {
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZjjkIF2i37+ybUQwNUKvm77NkHQc4kNbx0H0vBSh+zPLdlEIKE160+O2rVxQKSJ/g8sJwIwUsgs/y2Y86CBdouO/sm1IMDVCr5fCyZB0HOJDV8dGAMAUpf8zy3ZNCChNesvjsrVgUCkqf4fHEcSQFLoLP8tqQOggXaLjw7JpRDA1Qq+bwsWQeBziP1vHSgjEFK3/L8t2UQwoTXrL47K1YFApKn+HxxHImBS+Dz/LbkjwIF2m78O2aUQwNUKvl8LFkHgc4jtXy0oQyBSyCy/LdlkMKFF+y+e2uWRQLSqDi8sVyJwUwg8/y25M8CBdpu/DumVEMDFGr5fCxZB8HOI3U8dOFMwUsgsvy3ZZDChVfsfrur1oVC06g4vLGcykFMYTQ8tyUPQgYarvw75pSDAxRquXwsmQfBziM0/HUhjQFLIHL8t6WRQoVYLL576BalBdVoOLzyHUpBTOE0fLdlT4IGGu88O+aUQwMUarl77JlIAc4i9Lx1Yc1BSyCyvLdl0UKFWO07PGvW5UXVp/i88p3KgU1htLy3ZY/CBhsvPDwm1EMDFGq5e+yZSAHN4rR8daINgUrgsvy3phGChRjte3ysVuWF1af4fPLeCsFNoXS8t6XQAYYZ73x8ZtSDAxRquXvsmYhBzeJ0fDXiTYGLIHL8t+ZRwoUZLbu8rJcmBdXoOLzzXorBjeF0vLelz8HGWi98fCbUwwNUank7rJmIQc4idHv14k2BiyBy/LemkcKFGS37vKyXJgXWKDi881xOwc5htLy3phACBloue/wmFMMDVGp5O6yZiEHN4jQ79aJNwYtgcvy3phFChRltu/ysl2ZF1mg4/PNcDsHOIfT8d6YQQgZaLjv8JdTDA1RqeTtsmYiBziH0O/ViTcGLoLL8d6ZSAoTZrbu87NemRhaoOLzznA7BzqH0vHfmUIIGWi48O+WUwwNUKjj77JnIwc4h8/u1Yk4By6CyvHemkgLE2W27vOzXpkYW6Hj889wPAc7iNLx35lDCBhotvDvllMMDk+n4+6wZiMHOYbP7tOJOQcvgsrx35tICxJktu7ztGCaGFyh4/PQcT0HOonS8eCaSggZaLXw75VSDk5Po+LusWckBzmFz+7TiDoIL4LJ8eCbSgwSZLfu9LRgmhhdouPz0HE+Bzus0vHgmkwIGWq17e+UUQ5PTaHg7bBnJQc6hc/u04g6CC+Cx/Hgm0wMEWO37vW1YZoYXaHj89BwPwc8rtLx4JpNCBlpsuzukU8OT0yf3+yvaCgHPIXP79OIPQkugMTw4JxPDBBhsez1t2KbGF+i5PTRcUAHPbHU8eCbTwkaal/pIAA=');
+          audio.volume = 0.3;
+          audio.play().catch(() => {});
+        } catch (e) {}
+
+        processBarcode(code);
+      }
+
+      // 處理條碼
+      function processBarcode(rawCode) {
+        const formattedCode = formatBarcode(rawCode);
+
+        updateScannerStatus('scanning', `掃描到條碼: ${formattedCode}，查找中...`);
+
+        // 在 allAssets 中查找（支援原始碼 + 格式化碼匹配）
+        const asset = allAssets.find(a => {
+          const assetId = a.assetId;
+          const assetIdNoDash = assetId.replace(/-/g, '');
+          const formattedNoDash = formattedCode.replace(/-/g, '');
+          const rawNoDash = rawCode.replace(/-/g, '');
+
+          return assetId === rawCode ||
+                 assetId === formattedCode ||
+                 assetIdNoDash === rawNoDash ||
+                 assetIdNoDash === formattedNoDash;
+        });
+
+        if (asset) {
+          // 找到資產，自動勾選
+          selectedAssetIds.add(asset.assetId);
+          updateSelectionUI();
+
+          updateScannerStatus('success', `✓ 已加入資產: ${asset.assetName}`);
+          showToast(`已加入資產: ${asset.assetName}`, 'success');
+
+          // 2 秒後恢復掃描狀態
+          setTimeout(() => {
+            if (isScanning) {
+              updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
+            }
+          }, 2000);
+        } else {
+          updateScannerStatus('error', `✗ 未找到資產編號: ${formattedCode}`);
+          console.log('無法匹配的條碼:', { raw: rawCode, formatted: formattedCode });
+
+          setTimeout(() => {
+            if (isScanning) {
+              updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
+            }
+          }, 2000);
+        }
+      }
+
+      // 更新掃描器狀態顯示
+      function updateScannerStatus(type, message) {
+        const status = document.getElementById('scannerStatus');
+        status.className = 'scanner-status ' + type;
+
+        let icon = '';
+        if (type === 'scanning') icon = '<i class="fas fa-spinner fa-spin mr-2"></i>';
+        else if (type === 'success') icon = '<i class="fas fa-check-circle mr-2"></i>';
+        else if (type === 'error') icon = '<i class="fas fa-exclamation-circle mr-2"></i>';
+
+        status.innerHTML = icon + message;
+      }
+
+      // 增強搜尋框功能：Enter 鍵快速掃描
+      function enhanceSearchBox() {
+        const searchInput = document.getElementById('assetSearch');
+        searchInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const code = this.value.trim();
+            if (code) {
+              const formattedCode = formatBarcode(code);
+
+              // 查找資產
+              const asset = allAssets.find(a => {
+                const assetId = a.assetId;
+                const assetIdNoDash = assetId.replace(/-/g, '');
+                const formattedNoDash = formattedCode.replace(/-/g, '');
+                const codeNoDash = code.replace(/-/g, '');
+
+                return assetId === code ||
+                       assetId === formattedCode ||
+                       assetIdNoDash === codeNoDash ||
+                       assetIdNoDash === formattedNoDash;
+              });
+
+              if (asset) {
+                selectedAssetIds.add(asset.assetId);
+                updateSelectionUI();
+                showToast(`已加入資產: ${asset.assetName}`, 'success');
+                this.value = ''; // 清空搜尋框
+              } else {
+                // 找不到，保持搜尋模式
+                filterAssets();
+              }
+            }
+          }
+        });
+      }
+
+      // 初始化增強功能
+      document.addEventListener('DOMContentLoaded', function() {
+        enhanceSearchBox();
+      });
+    })();
   </script>
 </body>
 </html>
