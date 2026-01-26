@@ -49,6 +49,60 @@ function checkIsAdmin_(email) {
 }
 
 /**
+ * 建立 Email -> 組別對照表（從「保管人/信箱」工作表的G欄）
+ */
+function getEmailToGroupMap_() {
+  const emailToGroupMap = {};
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.ASSET_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('保管人/信箱');
+
+    if (!sheet || sheet.getLastRow() <= 1) {
+      return emailToGroupMap;
+    }
+
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const email = row[1]; // B欄：Email
+      const groupName = row[6]; // G欄：組別
+
+      if (email && groupName) {
+        const normalizedEmail = String(email).toLowerCase().trim();
+        emailToGroupMap[normalizedEmail] = String(groupName).trim();
+      }
+    }
+  } catch (e) {
+    console.error('讀取保管人/信箱工作表失敗:', e);
+  }
+
+  return emailToGroupMap;
+}
+
+/**
+ * 取得資產的組別（優先使用 DEFAULT_GROUP，其次查詢 email 對照表）
+ */
+function getAssetGroup_(asset, emailToGroupMap) {
+  // 第一優先：使用資產的 DEFAULT_GROUP
+  if (asset.defaultGroup) {
+    return String(asset.defaultGroup).trim();
+  }
+
+  // 第二優先：根據保管人 email 查詢組別
+  if (asset.leaderEmail) {
+    const normalizedEmail = String(asset.leaderEmail).toLowerCase().trim();
+    const groupName = emailToGroupMap[normalizedEmail];
+    if (groupName) {
+      return groupName;
+    }
+  }
+
+  // 預設值
+  return '未分組';
+}
+
+/**
  * 取得對照表 Map（資產編號 -> 對照資料）
  */
 function getMappingMap_() {
@@ -88,6 +142,7 @@ function mapRowToAssetObject_(row, indices, sourceSheet) {
     modelBrand: row[indices.MODEL_BRAND - 1] ? row[indices.MODEL_BRAND - 1].toString() : '',
     location: row[indices.LOCATION - 1] ? row[indices.LOCATION - 1].toString() : '',
     leaderName: row[indices.LEADER_NAME - 1] ? row[indices.LEADER_NAME - 1].toString() : '',
+    leaderEmail: row[indices.LEADER_EMAIL - 1] ? row[indices.LEADER_EMAIL - 1].toString() : '',
     assetCategory: row[indices.ASSET_CATEGORY - 1] ? row[indices.ASSET_CATEGORY - 1].toString() : '',
     assetStatus: row[indices.ASSET_STATUS - 1] ? row[indices.ASSET_STATUS - 1].toString() : '',
     isItAsset: row[indices.IS_IT_ASSET - 1] ? row[indices.IS_IT_ASSET - 1].toString() : '',
@@ -141,6 +196,9 @@ function getAssetsWithMappingStatus(options = {}) {
     const ss = SpreadsheetApp.openById(CONFIG.ASSET_SPREADSHEET_ID);
     const assets = [];
 
+    // 建立 Email -> 組別對照表
+    const emailToGroupMap = getEmailToGroupMap_();
+
     // 讀取財產總表
     const propertySheet = ss.getSheetByName(CONFIG.PROPERTY_MASTER_SHEET_NAME);
     if (propertySheet) {
@@ -148,6 +206,8 @@ function getAssetsWithMappingStatus(options = {}) {
       for (let i = 1; i < propertyData.length; i++) {
         const asset = mapRowToAssetObject_(propertyData[i], PROPERTY_COLUMN_INDICES, '財產');
         if (asset.assetId && asset.assetStatus !== '已報廢') {
+          // 使用雙層分組邏輯計算組別
+          asset.group = getAssetGroup_(asset, emailToGroupMap);
           assets.push(asset);
         }
       }
@@ -160,6 +220,8 @@ function getAssetsWithMappingStatus(options = {}) {
       for (let i = 1; i < itemData.length; i++) {
         const asset = mapRowToAssetObject_(itemData[i], ITEM_COLUMN_INDICES, '物品');
         if (asset.assetId && asset.assetStatus !== '已報廢') {
+          // 使用雙層分組邏輯計算組別
+          asset.group = getAssetGroup_(asset, emailToGroupMap);
           assets.push(asset);
         }
       }
@@ -197,7 +259,7 @@ function getAssetsWithMappingStatus(options = {}) {
     }
 
     if (options.filterGroup) {
-      filtered = filtered.filter(a => a.defaultGroup === options.filterGroup);
+      filtered = filtered.filter(a => a.group === options.filterGroup);
     }
 
     // 統計
@@ -230,7 +292,8 @@ function getGroupList() {
     const result = getAssetsWithMappingStatus();
     if (!result.success) return { success: false, error: result.error };
 
-    const groups = [...new Set(result.assets.map(a => a.defaultGroup).filter(g => g))];
+    // 使用計算後的 group 欄位（而非 defaultGroup）
+    const groups = [...new Set(result.assets.map(a => a.group).filter(g => g))];
     groups.sort();
 
     return { success: true, groups };
@@ -461,10 +524,10 @@ function getMappingStatistics() {
     const result = getAssetsWithMappingStatus();
     if (!result.success) return result;
 
-    // 依組別統計
+    // 依組別統計（使用計算後的 group 欄位）
     const groupStats = {};
     for (const asset of result.assets) {
-      const group = asset.defaultGroup || '未分組';
+      const group = asset.group || '未分組';
       if (!groupStats[group]) {
         groupStats[group] = { total: 0, mapped: 0 };
       }
@@ -543,7 +606,7 @@ function exportMappingReport() {
         asset.assetCategory,
         asset.leaderName,
         asset.location,
-        asset.defaultGroup,
+        asset.group,
         asset.isMapped ? '已對照' : '未對照',
         asset.mappedIsmsAssetId || '',
         isms.name || '',
