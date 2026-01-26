@@ -263,18 +263,102 @@
       border-color: #2563eb;
     }
 
-    /* 條碼掃描器樣式 */
+    /* 條碼掃描器樣式 - 參考主應用程式設計 */
+
+    /* 移動裝置大卡片按鈕 */
+    .mobile-scan-card {
+      display: none;
+      margin: 0 0 24px;
+    }
+
+    .mobile-scan-card__button {
+      width: 100%;
+      border: 0;
+      border-radius: 22px;
+      padding: 22px 18px;
+      background: linear-gradient(160deg, #2f6c7f 0%, #1aa39f 55%, #23b7a9 100%);
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+      box-shadow: 0 18px 38px rgba(26, 163, 159, 0.28);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      cursor: pointer;
+    }
+
+    .mobile-scan-card__button:active {
+      transform: translateY(1px);
+      box-shadow: 0 14px 30px rgba(26, 163, 159, 0.25);
+    }
+
+    .mobile-scan-card__button:focus-visible {
+      outline: 3px solid rgba(125, 211, 199, 0.7);
+      outline-offset: 3px;
+    }
+
+    .mobile-scan-card__icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    }
+
+    .mobile-scan-card__title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .mobile-scan-card__subtitle {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    @media (max-width: 768px) {
+      .mobile-scan-card {
+        display: block;
+      }
+    }
+
+    /* 掃描器背景遮罩 */
+    .scanner-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      z-index: 2000;
+      display: none;
+    }
+
+    .scanner-backdrop.active {
+      display: block;
+    }
+
+    /* 掃描器彈出窗口 */
     .scanner-zone {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 24px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
       display: none;
     }
 
     .scanner-zone.active {
       display: block;
+      position: fixed;
+      top: 6vh;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(760px, 94vw);
+      max-height: 88vh;
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 22px;
+      padding: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      z-index: 2001;
     }
 
     #scanner-reader {
@@ -283,7 +367,7 @@
       max-width: 640px;
       margin: 0 auto;
       background: #000;
-      border-radius: 8px;
+      border-radius: 12px;
       overflow: hidden;
     }
 
@@ -354,8 +438,14 @@
       color: #991b1b;
     }
 
-    /* 移動版顯示掃描按鈕，桌面版隱藏 */
-    @media (min-width: 769px) {
+    /* 桌面版搜尋框旁的掃描按鈕 */
+    .btn-scan-barcode {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    @media (max-width: 768px) {
       .btn-scan-barcode {
         display: none !important;
       }
@@ -397,7 +487,25 @@
         </div>
       </div>
 
-      <!-- 條碼掃描區 -->
+      <!-- 移動裝置掃描大卡片 -->
+      <div class="mobile-scan-card">
+        <button
+          class="mobile-scan-card__button"
+          onclick="toggleScanner()"
+          aria-label="開啟相機掃描"
+        >
+          <span class="mobile-scan-card__icon" aria-hidden="true">
+            <i class="fas fa-camera"></i>
+          </span>
+          <span class="mobile-scan-card__title">Tap to Scan Item</span>
+          <span class="mobile-scan-card__subtitle">開啟相機掃描資產條碼</span>
+        </button>
+      </div>
+
+      <!-- 掃描器背景遮罩 -->
+      <div id="scannerBackdrop" class="scanner-backdrop" onclick="toggleScanner()"></div>
+
+      <!-- 條碼掃描區（彈出窗口） -->
       <div id="scannerZone" class="scanner-zone">
         <div class="flex items-center justify-between mb-4">
           <h3 class="font-semibold text-gray-900">
@@ -1294,10 +1402,13 @@
       // 切換掃描器顯示/隱藏
       window.toggleScanner = function() {
         const zone = document.getElementById('scannerZone');
+        const backdrop = document.getElementById('scannerBackdrop');
+
         if (zone.classList.contains('active')) {
           stopScanner();
         } else {
           zone.classList.add('active');
+          backdrop.classList.add('active');
           startScanner();
         }
       };
@@ -1382,7 +1493,9 @@
           reader.removeChild(reader.lastChild);
         }
 
+        // 關閉彈出窗口和背景遮罩
         document.getElementById('scannerZone').classList.remove('active');
+        document.getElementById('scannerBackdrop').classList.remove('active');
       }
 
       // 條碼檢測回調
