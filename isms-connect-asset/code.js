@@ -89,9 +89,9 @@ function getAssetGroup_(asset, emailToGroupMap) {
     return String(asset.defaultGroup).trim();
   }
 
-  // 第二優先：根據保管人 email 查詢組別
-  if (asset.leaderEmail) {
-    const normalizedEmail = String(asset.leaderEmail).toLowerCase().trim();
+  // 第二優先：根據使用人 email 查詢組別
+  if (asset.userEmail) {
+    const normalizedEmail = String(asset.userEmail).toLowerCase().trim();
     const groupName = emailToGroupMap[normalizedEmail];
     if (groupName) {
       return groupName;
@@ -143,6 +143,8 @@ function mapRowToAssetObject_(row, indices, sourceSheet) {
     location: row[indices.LOCATION - 1] ? row[indices.LOCATION - 1].toString() : '',
     leaderName: row[indices.LEADER_NAME - 1] ? row[indices.LEADER_NAME - 1].toString() : '',
     leaderEmail: row[indices.LEADER_EMAIL - 1] ? row[indices.LEADER_EMAIL - 1].toString() : '',
+    userName: row[indices.USER_NAME - 1] ? row[indices.USER_NAME - 1].toString() : '',
+    userEmail: row[indices.USER_EMAIL - 1] ? row[indices.USER_EMAIL - 1].toString() : '',
     assetCategory: row[indices.ASSET_CATEGORY - 1] ? row[indices.ASSET_CATEGORY - 1].toString() : '',
     assetStatus: row[indices.ASSET_STATUS - 1] ? row[indices.ASSET_STATUS - 1].toString() : '',
     isItAsset: row[indices.IS_IT_ASSET - 1] ? row[indices.IS_IT_ASSET - 1].toString() : '',
