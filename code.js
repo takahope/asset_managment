@@ -861,13 +861,20 @@ function getAppUrl() {
  * [供 apply.html 呼叫] 獲取申請頁面所需的所有初始資料
  * (此函式與前一版相同，為求完整一併提供)
  */
-function getTransferData() {
+function getTransferData(forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const allAssets = getAllAssets(); // Keep this to get all users/keepers for dropdowns
   const allMyAssets = getAssetsForCurrentUser();
 
-  // ✨ 檢查同組代理功能狀態
-  const groupProxyEnabled = isGroupProxyTransferEnabled();
+  // ✨ 提前宣告 ss 變數，避免後續使用時未定義
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // ✨ 檢查權限和視圖模式
+  const isAdmin = checkAdminPermissions();
+  const useAdminScope = isAdmin && !forceUserScope;
+
+  // ✨ 檢查同組代理功能狀態（只在一般使用者視圖時生效）
+  const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
 
   // ✨ 取得同組成員 Email 列表（用於前端判斷）
   let groupMemberEmailsLower = [];
@@ -879,10 +886,10 @@ function getTransferData() {
 
     // 從「保管人/信箱」工作表讀取當前使用者的組別名稱
     const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+    const keeperDataForGroup = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
 
     const normalizedCurrentEmail = String(currentUserEmail).toLowerCase().trim();
-    keeperData.forEach(row => {
+    keeperDataForGroup.forEach(row => {
       const email = row[1];
       if (!email) return;
 
@@ -909,7 +916,6 @@ function getTransferData() {
     }));
 
   // 2. 從「保管人/信箱」工作表讀取保管人和使用人列表（改用固定列表）
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
 
   // 讀取保管人資料（A欄：姓名，B欄：Email，C欄：是否為駐管，D欄：資訊組保管人，E欄：資訊組使用人，F欄：收案組保管＆使用人）

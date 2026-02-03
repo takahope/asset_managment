@@ -11629,7 +11629,7 @@
                                     .withFailureHandler(error => {
                                         console.warn('載入轉移選項失敗：', error.message);
                                     })
-                                    .getTransferData();
+                                    .getTransferData(forceUserScope);
 
                                 // 載入出借選項資料（借用人、地點）
                                 google.script.run
