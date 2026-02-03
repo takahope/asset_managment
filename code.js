@@ -3852,7 +3852,7 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
 
         // 📊 準備儲存格數據
         const cellData = [
-          (index + 1).toString(),                                                          // 序號
+          assetInfo.modelBrand || '',                                                      // 型號/廠牌（表頭仍顯示「序號」）
           assetInfo.assetId.trim(),                                                        // 財產編號
           assetInfo.assetName,                                                             // 財產名稱
           purchaseDateFormatted,                                                           // 購置日期
