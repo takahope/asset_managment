@@ -668,14 +668,27 @@ function getUserStateData(forceUserScope) {
   if (useAdminScope) {
     filteredData = getAllAssets();
   } else {
-    const groupEmails = getGroupMemberEmails(currentUserEmail);
-    const groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
+    // ✨ 檢查是否啟用同組代理功能
+    const groupProxyEnabled = isGroupProxyTransferEnabled();
     const allAssets = getAllAssets();
-    filteredData = allAssets.filter(asset => {
-      const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
-      const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
-      return groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
-    });
+
+    if (groupProxyEnabled) {
+      // 功能啟用：顯示同組成員的資產
+      const groupEmails = getGroupMemberEmails(currentUserEmail);
+      const groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
+      filteredData = allAssets.filter(asset => {
+        const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
+        const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
+        return groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
+      });
+    } else {
+      // 功能關閉：只顯示自己的資產
+      filteredData = allAssets.filter(asset => {
+        const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
+        const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
+        return leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
+      });
+    }
   }
 
   const results = filteredData.map(asset => ({
