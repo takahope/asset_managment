@@ -3832,6 +3832,10 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
 
         if (purchaseDateStr.includes('GMT')) {
             purchaseDate = new Date(purchaseDateStr);
+            // 若年份 < 1912，視為民國年並補 +1911（處理試算表將 0109/12/25 解析成西元 109 年的情況）
+            if (purchaseDate.getFullYear() < 1912) {
+                purchaseDate.setFullYear(purchaseDate.getFullYear() + 1911);
+            }
         } else {
             // 處理民國年前面多餘的 0 (例如 0113/5/20 → 113/5/20, 0109/12/25 → 109/12/25)
             purchaseDateStr = purchaseDateStr.replace(/^0+/, '');
