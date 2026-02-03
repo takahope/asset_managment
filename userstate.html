@@ -10373,8 +10373,13 @@
                 if (!currentEmail) return false;
                 const leaderEmail = normalizeEmail(asset.leaderEmail);
                 const userEmail = normalizeEmail(asset.userEmail);
-                return leaderEmail !== currentEmail && userEmail !== currentEmail;
-            }, [isAdminView, currentUserEmail]);
+                const isOwner = leaderEmail === currentEmail || userEmail === currentEmail;
+                if (isOwner) return false;
+
+                // 非本人資產，只有在「有盤點任務」時才標註為 Task
+                const hasTask = !!inventoryStatusByAsset[asset.assetId];
+                return hasTask;
+            }, [isAdminView, currentUserEmail, inventoryStatusByAsset]);
             const assetIndex = useMemo(() => {
                 const map = new Map();
                 (allAssets || []).forEach(asset => {
