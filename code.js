@@ -3837,9 +3837,6 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
                 purchaseDate.setFullYear(purchaseDate.getFullYear() + 1911);
             }
         } else {
-            // 處理民國年前面多餘的 0 (例如 0113/5/20 → 113/5/20, 0109/12/25 → 109/12/25)
-            purchaseDateStr = purchaseDateStr.replace(/^0+/, '');
-
             const dateParts = purchaseDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
             if (dateParts) {
                 const minguoYear = parseInt(dateParts[1], 10);
