@@ -3962,6 +3962,9 @@
             const [leaderDropdownOpen, setLeaderDropdownOpen] = useState(false);
             const [userDropdownOpen, setUserDropdownOpen] = useState(false);
             const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
+            const [leaderSearch, setLeaderSearch] = useState('');
+            const [userSearch, setUserSearch] = useState('');
+            const [locationSearch, setLocationSearch] = useState('');
             const statusDropdownRef = useRef(null);
             const leaderDropdownRef = useRef(null);
             const userDropdownRef = useRef(null);
@@ -4040,6 +4043,30 @@
                 [...new Set(allAssets.map(a => a.location))].filter(Boolean).sort()
             , [allAssets]);
 
+            const filteredLeaderOptions = useMemo(() => {
+                const keyword = String(leaderSearch || '').trim().toLowerCase();
+                if (!keyword) return leaderOptions;
+                return leaderOptions.filter(option =>
+                    String(option || '').toLowerCase().includes(keyword)
+                );
+            }, [leaderOptions, leaderSearch]);
+
+            const filteredUserOptions = useMemo(() => {
+                const keyword = String(userSearch || '').trim().toLowerCase();
+                if (!keyword) return userOptions;
+                return userOptions.filter(option =>
+                    String(option || '').toLowerCase().includes(keyword)
+                );
+            }, [userOptions, userSearch]);
+
+            const filteredLocationOptions = useMemo(() => {
+                const keyword = String(locationSearch || '').trim().toLowerCase();
+                if (!keyword) return locationOptions;
+                return locationOptions.filter(option =>
+                    String(option || '').toLowerCase().includes(keyword)
+                );
+            }, [locationOptions, locationSearch]);
+
             useEffect(() => {
                 const handleClickOutside = (event) => {
                     if (statusDropdownRef.current && statusDropdownRef.current.contains(event.target)) return;
@@ -4054,6 +4081,25 @@
                 document.addEventListener('mousedown', handleClickOutside);
                 return () => document.removeEventListener('mousedown', handleClickOutside);
             }, []);
+
+            useEffect(() => {
+                if (!leaderDropdownOpen && leaderSearch) {
+                    setLeaderSearch('');
+                }
+                if (!userDropdownOpen && userSearch) {
+                    setUserSearch('');
+                }
+                if (!locationDropdownOpen && locationSearch) {
+                    setLocationSearch('');
+                }
+            }, [
+                leaderDropdownOpen,
+                leaderSearch,
+                userDropdownOpen,
+                userSearch,
+                locationDropdownOpen,
+                locationSearch
+            ]);
 
             const ensureArray = (value) => {
                 if (Array.isArray(value)) return value;
@@ -4097,7 +4143,11 @@
                     isOpen,
                     dropdownRef,
                     placeholder,
-                    emptyLabel
+                    emptyLabel,
+                    searchable = false,
+                    searchValue = '',
+                    onSearchChange = null,
+                    searchPlaceholder = '輸入關鍵字'
                 } = config;
 
                 return (
@@ -4135,6 +4185,7 @@
                                                     type="button"
                                                     onClick={() => selectAllFilterOptions(filterKey, options)}
                                                     className="text-blue-600 hover:text-blue-800 font-medium"
+                                                    disabled={options.length === 0}
                                                 >
                                                     全選
                                                 </button>
@@ -4147,6 +4198,20 @@
                                                 </button>
                                             </div>
                                         </div>
+                                        {searchable && (
+                                            <div className="p-2 border-b border-slate-100 bg-white">
+                                                <div className="relative">
+                                                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                                    <input
+                                                        type="text"
+                                                        value={searchValue}
+                                                        onChange={(event) => onSearchChange && onSearchChange(event.target.value)}
+                                                        placeholder={searchPlaceholder}
+                                                        className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="max-h-72 overflow-y-auto p-1">
                                             {options.length > 0 ? (
                                                 options.map(option => (
@@ -4277,34 +4342,46 @@
                         {renderMultiSelect({
                             filterKey: 'leader',
                             label: '依保管人篩選',
-                            options: leaderOptions,
+                            options: filteredLeaderOptions,
                             selectedValues: selectedLeaders,
                             isOpen: leaderDropdownOpen,
                             dropdownRef: leaderDropdownRef,
                             placeholder: '請選擇保管人...',
-                            emptyLabel: '找不到符合的保管人'
+                            emptyLabel: '找不到符合的保管人',
+                            searchable: true,
+                            searchValue: leaderSearch,
+                            onSearchChange: setLeaderSearch,
+                            searchPlaceholder: '搜尋保管人...'
                         })}
 
                         {renderMultiSelect({
                             filterKey: 'user',
                             label: '依使用人篩選',
-                            options: userOptions,
+                            options: filteredUserOptions,
                             selectedValues: selectedUsers,
                             isOpen: userDropdownOpen,
                             dropdownRef: userDropdownRef,
                             placeholder: '請選擇使用人...',
-                            emptyLabel: '找不到符合的使用人'
+                            emptyLabel: '找不到符合的使用人',
+                            searchable: true,
+                            searchValue: userSearch,
+                            onSearchChange: setUserSearch,
+                            searchPlaceholder: '搜尋使用人...'
                         })}
 
                         {renderMultiSelect({
                             filterKey: 'location',
                             label: '依保管位置篩選',
-                            options: locationOptions,
+                            options: filteredLocationOptions,
                             selectedValues: selectedLocations,
                             isOpen: locationDropdownOpen,
                             dropdownRef: locationDropdownRef,
                             placeholder: '請選擇保管位置...',
-                            emptyLabel: '找不到符合的保管位置'
+                            emptyLabel: '找不到符合的保管位置',
+                            searchable: true,
+                            searchValue: locationSearch,
+                            onSearchChange: setLocationSearch,
+                            searchPlaceholder: '搜尋保管位置...'
                         })}
 
                         <div className="md:col-span-2 lg:col-span-3 xl:col-span-5">
