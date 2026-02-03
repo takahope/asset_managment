@@ -4415,7 +4415,7 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
 
         // 準備 9 個欄位的數據
         const cellData = [
-          (index + 1).toString(),           // 序號
+          asset.modelBrand || '',           // 型號/廠牌（表頭仍顯示「序號」）
           asset.assetId,                    // 財產編號
           asset.assetName || '',            // 財產名稱
           '核心設施',                        // 移出單位（固定）
