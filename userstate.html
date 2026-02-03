@@ -4356,8 +4356,8 @@
         const ModeToggleCard = ({ isAdvancedMode, onToggle, compact = false }) => (
             <div className={`mode-toggle-card ${compact ? 'mode-toggle-card--compact' : ''}`}>
                 <div className="mode-toggle-text">
-                    <h3>進階批次處理模式</h3>
-                    <p>掃描時先選擇動作，並以離線暫存保護未送出清單。</p>
+                    <h3>批次處理清單記憶功能</h3>
+                    <p>掃描或勾選時先選擇，會暫存保護未送出清單。</p>
                 </div>
                 <label className="toggle-switch" title="切換進階批次模式">
                     <input
@@ -4575,7 +4575,7 @@
         };
 
         // AssetTable 組件
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll, groupProxyEnabled = false, groupMemberEmailsLower = [] }) => {
 
             // ✨ 分頁設定
             const ROWS_PER_PAGE = 500;
@@ -4699,9 +4699,7 @@
                                     const isSelectable = asset.status === '在庫';
                                     const isSelected = selectedAssetIds.includes(asset.assetId);
 
-                                    // ✨ 判斷是否為同組成員資產
-                                    const groupMemberEmailsLower = window.groupMemberEmailsLower || [];
-                                    const groupProxyEnabled = window.groupProxyEnabled || false;
+                                    // ✨ 判斷是否為同組成員資產（使用 props 而非 window）
                                     const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
                                     const isGroupMemberAsset = groupProxyEnabled &&
                                         assetLeaderEmail !== normalizedCurrentEmail &&
@@ -13320,6 +13318,8 @@
                         selectedAssetIds={selectedAssetIds}
                         onAssetSelect={handleAssetSelect}
                         onSelectAll={handleSelectAll}
+                        groupProxyEnabled={transferOptions?.groupProxyEnabled || false}
+                        groupMemberEmailsLower={transferOptions?.groupMemberEmailsLower || []}
                     />
 
                     {statusDetailState && (

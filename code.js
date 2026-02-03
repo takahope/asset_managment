@@ -1029,7 +1029,7 @@ function getTransferData(forceUserScope) {
     currentGroup: currentGroup,
     currentUserEmail: currentUserEmail,
     groupMemberEmailsLower: groupMemberEmailsLower,
-    isAdmin: isAdminUser(currentUserEmail)
+    isAdmin: isAdmin
   };
 }
 
