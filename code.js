@@ -253,20 +253,71 @@ function getAllAssets() {
 }
 
 /**
+ * ✨ [系統功能] 檢查是否啟用「同組代理轉移」功能
+ * 透過「管理員名單」工作表 D2 儲存格控制
+ * @returns {boolean} true = 啟用，false = 停用
+ */
+function isGroupProxyTransferEnabled() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
+
+    if (!adminSheet) {
+      Logger.log('找不到管理員名單工作表，預設關閉同組代理轉移功能');
+      return false;
+    }
+
+    // 讀取 D2 儲存格
+    const d2Value = adminSheet.getRange('D2').getValue();
+    const isEnabled = String(d2Value).trim() === '是';
+
+    Logger.log(`同組代理轉移功能狀態: ${isEnabled ? '啟用' : '停用'} (D2=${d2Value})`);
+    return isEnabled;
+
+  } catch (error) {
+    Logger.log(`isGroupProxyTransferEnabled 錯誤: ${error.message}`);
+    return false; // 發生錯誤時預設關閉
+  }
+}
+
+/**
  * ✨ NEW: 獲取當前使用者相關的所有資產 (無論是保管人或使用人)。
+ * 當 D2 = "是" 時，會自動包含同組所有成員的資產
  * @returns {Array<Object>} 包含所有相關資產物件的陣列。
  */
 function getAssetsForCurrentUser() {
   const currentUserEmail = Session.getActiveUser().getEmail();
+  const normalizedCurrentEmail = String(currentUserEmail).toLowerCase().trim();
+
+  // ✨ 檢查是否啟用同組代理功能
+  const groupProxyEnabled = isGroupProxyTransferEnabled();
+
+  let targetEmails = [normalizedCurrentEmail]; // 預設只查詢自己的資產
+
+  if (groupProxyEnabled) {
+    // ✨ 啟用同組代理：取得同組所有成員的 Email
+    const groupMemberEmails = getGroupMemberEmails(currentUserEmail);
+
+    if (groupMemberEmails && groupMemberEmails.length > 0) {
+      targetEmails = groupMemberEmails.map(email => String(email).toLowerCase().trim());
+      Logger.log(`同組代理模式啟用：包含 ${targetEmails.length} 位成員的資產`);
+    } else {
+      Logger.log('未找到同組成員，僅顯示自己的資產');
+    }
+  }
+
+  // 取得所有資產
   const allAssets = getAllAssets();
 
+  // 篩選：保管人或使用人是目標 Email 集合中的任一個
   const userAssets = allAssets.filter(asset => {
-    // 條件：登入者的 email 等於保管人 email 或 使用人 email
-    // 對於沒有 userEmail 欄位的物品總表，asset.userEmail 會是 null，不會造成錯誤
-    return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
+    const leaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+    const userEmail = String(asset.userEmail || '').toLowerCase().trim();
+
+    return targetEmails.includes(leaderEmail) || targetEmails.includes(userEmail);
   });
 
-  Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產。`);
+  Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產 (同組代理: ${groupProxyEnabled})`);
   return userAssets;
 }
 
@@ -802,6 +853,33 @@ function getTransferData() {
   const allAssets = getAllAssets(); // Keep this to get all users/keepers for dropdowns
   const allMyAssets = getAssetsForCurrentUser();
 
+  // ✨ 檢查同組代理功能狀態
+  const groupProxyEnabled = isGroupProxyTransferEnabled();
+
+  // ✨ 取得同組成員 Email 列表（用於前端判斷）
+  let groupMemberEmailsLower = [];
+  let currentGroup = null;
+
+  if (groupProxyEnabled) {
+    const groupMemberEmails = getGroupMemberEmails(currentUserEmail);
+    groupMemberEmailsLower = groupMemberEmails.map(e => String(e).toLowerCase().trim());
+
+    // 從「保管人/信箱」工作表讀取當前使用者的組別名稱
+    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
+
+    const normalizedCurrentEmail = String(currentUserEmail).toLowerCase().trim();
+    keeperData.forEach(row => {
+      const email = row[1];
+      if (!email) return;
+
+      const normalizedEmail = String(email).toLowerCase().trim();
+      if (normalizedEmail === normalizedCurrentEmail) {
+        currentGroup = row[6] ? String(row[6]).trim() : null;
+      }
+    });
+  }
+
   // 1. 從所有資產中，篩選出屬於當前使用者的、可轉移的資產
   const myAssets = allMyAssets
     .filter(asset => asset.assetStatus === '在庫')
@@ -813,6 +891,7 @@ function getTransferData() {
       category: asset.assetCategory,
       userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
       leaderName: asset.leaderName, // 保管人姓名
+      leaderEmail: asset.leaderEmail, // ✨ 新增：用於前端判斷是否為自己的資產
       sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
@@ -925,7 +1004,13 @@ function getTransferData() {
     infoComputerLocation: infoComputerLocationList.length > 0 ? infoComputerLocationList[0] : null, // ✨ 新增：電腦專用地點
     // ✨ 收案組相關資料
     intakeCustodian: intakeCustodianMap.size > 0 ? Object.fromEntries(intakeCustodianMap) : null,
-    intakeLocation: intakeLocationList.length > 0 ? intakeLocationList[0] : null
+    intakeLocation: intakeLocationList.length > 0 ? intakeLocationList[0] : null,
+    // ✨ 同組代理功能資訊
+    groupProxyEnabled: groupProxyEnabled,
+    currentGroup: currentGroup,
+    currentUserEmail: currentUserEmail,
+    groupMemberEmailsLower: groupMemberEmailsLower,
+    isAdmin: isAdminUser(currentUserEmail)
   };
 }
 
@@ -953,12 +1038,29 @@ function processBatchTransferApplication(formData) {
       // ✨ 新增：收案組模式
       isIntakeTransfer,   // 是否為「駐站回送中心收案組」
       intakeCustodianEmail, // 收案組保管人 Email（同時也是使用人）
-      intakeLocation      // 收案組地點
+      intakeLocation,      // 收案組地點
+      // ✨ 新增：代理轉移參數（前端傳入）
+      proxyTransfers      // 格式：[{ assetId, originalKeeperEmail, originalKeeperName }]
     } = formData;
-    
+
     // ✨ 改進：支援選擇性參數（可以只變更其中一項）
     if (!assetIds || assetIds.length === 0) {
         throw new Error("請至少勾選一筆財產。");
+    }
+
+    // ✨ 新增：取得同組代理轉移功能狀態（提前宣告，避免後續重複呼叫）
+    const groupProxyEnabled = isGroupProxyTransferEnabled();
+
+    // ✨ 建立代理轉移對照表（如果前端有傳入）
+    const proxyTransferMap = new Map();
+    if (proxyTransfers && Array.isArray(proxyTransfers)) {
+      proxyTransfers.forEach(pt => {
+        proxyTransferMap.set(pt.assetId, {
+          originalKeeperEmail: pt.originalKeeperEmail,
+          originalKeeperName: pt.originalKeeperName
+        });
+      });
+      Logger.log(`收到 ${proxyTransfers.length} 筆代理轉移資訊`);
     }
 
     // ✨ 新增：駐站轉移模式的參數處理
@@ -1116,10 +1218,49 @@ function processBatchTransferApplication(formData) {
           const isLocationChange = finalNewLocation && asset.location !== finalNewLocation;
           const isUserChange = (actualNewUserEmail && oldUserEmail !== actualNewUserEmail) || (newUserName && oldUserName !== newUserName);
 
+          // ✨ 判斷是否為代理轉移（保管人 ≠ 當前使用者）
+          const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+          const isProxyTransfer = assetLeaderEmail !== applicantEmailLower;
+          let proxyInfo = null;
+
+          if (isProxyTransfer) {
+            // 驗證代理轉移權限
+            if (isAdmin) {
+              // 管理員：可以轉移任何人的資產
+              proxyInfo = {
+                type: 'admin',
+                originalEmail: assetLeaderEmail,
+                originalName: asset.leaderName
+              };
+              Logger.log(`管理員代理轉移：${assetId} (原保管人：${asset.leaderName})`);
+            } else if (groupProxyEnabled) {
+              // 同組代理：驗證是否為同組成員
+              const groupMemberEmails = getGroupMemberEmails(applicantEmail);
+              const normalizedGroupEmails = groupMemberEmails.map(e => String(e).toLowerCase().trim());
+
+              if (normalizedGroupEmails.includes(assetLeaderEmail)) {
+                proxyInfo = {
+                  type: 'group',
+                  originalEmail: assetLeaderEmail,
+                  originalName: asset.leaderName
+                };
+                Logger.log(`同組代理轉移：${assetId} (原保管人：${asset.leaderName})`);
+              } else {
+                throw new Error(`權限不足：資產 ${assetId} 的保管人不是您的同組成員，無法代理轉移。`);
+              }
+            } else {
+              throw new Error(`權限不足：資產 ${assetId} 不屬於您，且同組代理功能未啟用。`);
+            }
+          }
+
           // ✨ 判斷轉移類型（優先使用駐站轉移標記，否則動態組合變更項目）
           let transferType = '';
           if (actualTransferType === '駐站轉移') {
             transferType = '駐站轉移'; // 駐站轉移有最高優先級
+          } else if (actualTransferType === '駐站回送資訊組') {
+            transferType = '駐站回送資訊組';
+          } else if (actualTransferType === '駐站回送收案組') {
+            transferType = '駐站回送收案組';
           } else {
             // 動態組合轉移類型
             const parts = [];
@@ -1132,6 +1273,16 @@ function processBatchTransferApplication(formData) {
             } else {
               // 沒有實際變更，跳過此資產
               return;
+            }
+          }
+
+          // ✨ 新增：代理轉移標記
+          if (proxyInfo) {
+            const originalName = proxyInfo.originalName || proxyInfo.originalEmail.split('@')[0];
+            if (proxyInfo.type === 'admin') {
+              transferType = `【管理員代理】${transferType}（原保管人：${originalName}）`;
+            } else if (proxyInfo.type === 'group') {
+              transferType = `【同組代理】${transferType}（原保管人：${originalName}）`;
             }
           }
           
