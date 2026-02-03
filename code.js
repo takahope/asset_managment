@@ -3833,7 +3833,10 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
         if (purchaseDateStr.includes('GMT')) {
             purchaseDate = new Date(purchaseDateStr);
         } else {
-            const dateParts = purchaseDateStr.match(/(0?\d+)\/(\d+)\/(\d+)/);
+            // 處理民國年前面多餘的 0 (例如 0113/5/20 → 113/5/20)
+            purchaseDateStr = purchaseDateStr.replace(/^0+(\d{2,3}\/)/, '$1');
+
+            const dateParts = purchaseDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
             if (dateParts) {
                 const minguoYear = parseInt(dateParts[1], 10);
                 const gregorianYear = minguoYear + 1911;
