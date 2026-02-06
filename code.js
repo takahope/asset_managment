@@ -1226,6 +1226,9 @@ function processBatchTransferApplication(formData) {
     const applicantEmail = Session.getActiveUser().getEmail(); // 申請操作人員 Email
     const applicantEmailLower = applicantEmail.toLowerCase(); // 🛡️ 安全性修復：統一小寫比對
     const isAdmin = checkAdminPermissions(); // 🛡️ 安全性修復：檢查是否為管理員
+    const groupEmailSet = groupProxyEnabled
+      ? new Set(getGroupMemberEmails(applicantEmail).map(e => String(e).toLowerCase().trim()))
+      : null;
     const newLogsToAdd = [];
     const createdApplications = [];
     const unauthorizedAssets = []; // 🛡️ 安全性修復：收集無權限的資產
@@ -1239,9 +1242,13 @@ function processBatchTransferApplication(formData) {
 
         // 🛡️ 安全性修復：驗證使用者是否有權操作此資產
         if (!isAdmin) {
-          const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
-          const assetUserEmail = (asset.userEmail || '').toLowerCase();
-          if (assetLeaderEmail !== applicantEmailLower && assetUserEmail !== applicantEmailLower) {
+          const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase();
+          const assetUserEmail = String(asset.userEmail || '').toLowerCase();
+          const isOwner = assetLeaderEmail === applicantEmailLower || assetUserEmail === applicantEmailLower;
+          const isGroupProxyAllowed = groupProxyEnabled && groupEmailSet
+            ? (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail)))
+            : false;
+          if (!isOwner && !isGroupProxyAllowed) {
             unauthorizedAssets.push(assetId);
             Logger.log(`🛡️ 權限拒絕：${applicantEmail} 無權轉移資產 ${assetId}`);
             return; // 跳過此資產
@@ -1286,6 +1293,7 @@ function processBatchTransferApplication(formData) {
 
           // ✨ 判斷是否為代理轉移（保管人 ≠ 當前使用者）
           const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+          const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
           const isProxyTransfer = assetLeaderEmail !== applicantEmailLower;
           let proxyInfo = null;
 
@@ -1301,10 +1309,11 @@ function processBatchTransferApplication(formData) {
               Logger.log(`管理員代理轉移：${assetId} (原保管人：${asset.leaderName})`);
             } else if (groupProxyEnabled) {
               // 同組代理：驗證是否為同組成員
-              const groupMemberEmails = getGroupMemberEmails(applicantEmail);
-              const normalizedGroupEmails = groupMemberEmails.map(e => String(e).toLowerCase().trim());
+              const normalizedGroupEmails = groupEmailSet
+                ? groupEmailSet
+                : new Set(getGroupMemberEmails(applicantEmail).map(e => String(e).toLowerCase().trim()));
 
-              if (normalizedGroupEmails.includes(assetLeaderEmail)) {
+              if (normalizedGroupEmails.has(assetLeaderEmail) || (assetUserEmail && normalizedGroupEmails.has(assetUserEmail))) {
                 proxyInfo = {
                   type: 'group',
                   originalEmail: assetLeaderEmail,
@@ -5027,15 +5036,27 @@ function getTransferOverviewForUserState(forceUserScope) {
     Object.keys(latestRowByAsset).forEach(assetId => {
       const asset = assetMap.get(assetId);
       if (!asset) return;
-      if (!useAdminScope && groupEmailSet) {
+
+      const row = latestRowByAsset[assetId];
+      if (!useAdminScope) {
         const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
         const userEmail = String(asset.userEmail || '').toLowerCase();
-        if (!groupEmailSet.has(leaderEmail) && (!userEmail || !groupEmailSet.has(userEmail))) {
+        const hasAssetAccess = groupEmailSet
+          ? (groupEmailSet.has(leaderEmail) || (userEmail && groupEmailSet.has(userEmail)))
+          : false;
+        const canApprove = canApproveTransfer_({
+          currentUserEmailLower,
+          newLeaderEmailLower: String(row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase(),
+          newUserEmailLower: String(row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase(),
+          transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
+          groupProxyEnabled: groupProxyEnabled,
+          groupEmailSet: groupEmailSet
+        });
+        if (!hasAssetAccess && !canApprove) {
           return;
         }
       }
 
-      const row = latestRowByAsset[assetId];
       transferDetailMap[assetId] = {
         assetId: assetId,
         assetName: String(asset.assetName || ''),
@@ -5089,23 +5110,18 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
 
     const uniqueIds = Array.from(new Set(normalizedIds));
     const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
+    const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+    const groupEmailSet = !useAdminScope
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase()))
+      : null;
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
 
     let targetIds = uniqueIds;
-    if (!useAdminScope) {
-      const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase());
-      const groupEmailSet = new Set(groupEmails);
-      targetIds = uniqueIds.filter(assetId => {
-        const asset = assetMap.get(assetId);
-        if (!asset) return false;
-        const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
-        const userEmail = String(asset.userEmail || '').toLowerCase();
-        return groupEmailSet.has(leaderEmail) || (userEmail && groupEmailSet.has(userEmail));
-      });
-    }
+    // 先保留所有 targetIds，後續再依權限與審核資格過濾
 
     if (targetIds.length === 0) {
       return { details: {} };
@@ -5150,6 +5166,25 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
     Object.keys(latestRowByAsset).forEach(assetId => {
       const row = latestRowByAsset[assetId];
       const asset = assetMap.get(assetId);
+      if (!asset) return;
+      if (!useAdminScope) {
+        const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
+        const userEmail = String(asset.userEmail || '').toLowerCase();
+        const hasAssetAccess = groupEmailSet
+          ? (groupEmailSet.has(leaderEmail) || (userEmail && groupEmailSet.has(userEmail)))
+          : false;
+        const canApprove = canApproveTransfer_({
+          currentUserEmailLower,
+          newLeaderEmailLower: String(row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase(),
+          newUserEmailLower: String(row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase(),
+          transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
+          groupProxyEnabled: groupProxyEnabled,
+          groupEmailSet: groupEmailSet
+        });
+        if (!hasAssetAccess && !canApprove) {
+          return;
+        }
+      }
       details[assetId] = {
         assetId: assetId,
         assetName: asset ? String(asset.assetName || '') : '',
