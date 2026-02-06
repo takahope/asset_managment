@@ -4993,7 +4993,10 @@ function getTransferOverviewForUserState(forceUserScope) {
         groupEmailSet: groupEmailSet
       });
 
-      if (useAdminScope || isMyApplication) {
+      // ✨ 同組協作：同組成員申請的轉移也應可見
+      const isGroupMemberApplication = groupProxyEnabled && groupEmailSet && groupEmailSet.has(applicantEmail);
+
+      if (useAdminScope || isMyApplication || isGroupMemberApplication) {
         const assetInfo = assetMap.get(assetId) || {};
         const rawTime = row[AL_APP_TIME_COLUMN_INDEX - 1];
         const applicationTime = rawTime
