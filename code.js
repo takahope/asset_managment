@@ -4744,8 +4744,9 @@ function testMyEmail() {
 function cancelTransferOrScrap(assetId) {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = String(currentUserEmail || '').toLowerCase().trim();
     const isAdmin = checkAdminPermissions();
-    
+
     const allAssets = getAllAssets();
     const asset = allAssets.find(a => a.assetId === assetId);
 
@@ -4753,9 +4754,28 @@ function cancelTransferOrScrap(assetId) {
       throw new Error(`找不到財產編號為 ${assetId} 的資料。`);
     }
 
-    // Security Check: Must be admin or the asset's owner (keeper or user)
-    if (!isAdmin && asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
-      throw new Error("權限不足，只有此財產的保管人、使用人或管理員才能執行此操作。");
+    // Security Check: Must be admin, asset owner, or group member (if group proxy enabled)
+    const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+    const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
+
+    let hasPermission = isAdmin ||
+                        assetLeaderEmail === currentUserEmailLower ||
+                        assetUserEmail === currentUserEmailLower;
+
+    // ✨ 同組協作權限檢查：同組成員可以取消同組資產的轉移/報廢
+    if (!hasPermission && !isAdmin) {
+      const groupProxyEnabled = isGroupProxyTransferEnabled();
+      if (groupProxyEnabled) {
+        const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim());
+        const groupEmailSet = new Set(groupEmails);
+        if (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail))) {
+          hasPermission = true;
+        }
+      }
+    }
+
+    if (!hasPermission) {
+      throw new Error("權限不足，只有此財產的保管人、使用人、同組成員或管理員才能執行此操作。");
     }
 
     const originalStatus = asset.assetStatus;
