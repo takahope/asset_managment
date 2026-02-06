@@ -4300,9 +4300,20 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
         // 🛡️ 權限過濾
         if (!useAdminScope) {
            // 一般使用者只能看到自己相關的（新保管人或新使用人）
-           const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
-                              (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
-           if (!isRelevant) return;
+           const newKeeperEmailLower = transfer.newKeeperEmail ? transfer.newKeeperEmail.toLowerCase() : '';
+           const newUserEmailLower = transfer.newUserEmail ? transfer.newUserEmail.toLowerCase() : '';
+           const isOwner = newKeeperEmailLower === currentUserEmail || newUserEmailLower === currentUserEmail;
+
+           // ✨ 同組協作：同組成員的轉移申請單也應可見
+           let isGroupMember = false;
+           const groupProxyEnabled = isGroupProxyTransferEnabled();
+           if (groupProxyEnabled) {
+             const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim());
+             const groupEmailSet = new Set(groupEmails);
+             isGroupMember = groupEmailSet.has(newKeeperEmailLower) || (newUserEmailLower && groupEmailSet.has(newUserEmailLower));
+           }
+
+           if (!isOwner && !isGroupMember) return;
         }
 
         items.push({

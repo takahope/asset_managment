@@ -12388,10 +12388,20 @@
                     if (isAdminView) {
                         return scrappingAssets.length;
                     } else {
-                        return scrappingAssets.filter(a =>
-                            a.leaderEmail?.toLowerCase() === currentUserEmail.toLowerCase() ||
-                            a.userEmail?.toLowerCase() === currentUserEmail.toLowerCase()
-                        ).length;
+                        // ✨ 同組協作：同組成員的報廢中資產也應可見
+                        const groupProxyEnabled = transferOptions?.groupProxyEnabled || false;
+                        const groupMemberEmailsLower = transferOptions?.groupMemberEmailsLower || [];
+                        const groupEmailSet = new Set(groupMemberEmailsLower);
+
+                        return scrappingAssets.filter(a => {
+                            const leaderEmail = a.leaderEmail?.toLowerCase() || '';
+                            const userEmail = a.userEmail?.toLowerCase() || '';
+                            const isOwner = leaderEmail === currentUserEmail.toLowerCase() ||
+                                           userEmail === currentUserEmail.toLowerCase();
+                            const isGroupMember = groupProxyEnabled &&
+                                                  (groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail));
+                            return isOwner || isGroupMember;
+                        }).length;
                     }
                 })();
 
