@@ -3691,21 +3691,38 @@ function checkAdminStatus() {
 function getAllScrappableItems(assetCategory, forceUserScope) {
   // 1. 取得當前使用者身分與權限
   const currentUserEmail = Session.getActiveUser().getEmail();
+  const currentUserEmailLower = String(currentUserEmail || '').toLowerCase().trim();
   const isAdmin = checkAdminPermissions();
   const useAdminScope = isAdmin && !forceUserScope;
 
+  // ✨ 同組協作：取得同組成員 Email 清單
+  const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+  const groupEmailSet = groupProxyEnabled
+    ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+    : null;
+
   const allAssets = getAllAssets();
-  
+
   // 2. 篩選符合條件的資產 (狀態 + 權限)
   const targetAssets = allAssets.filter(asset => {
     // 基本條件
     if (asset.assetStatus !== '報廢中' || asset.assetCategory !== assetCategory) {
       return false;
     }
-    
-    // 權限條件：管理員看全部，一般人看自己 (保管人或使用人)
+
+    // 權限條件：管理員看全部
     if (useAdminScope) return true;
-    return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
+
+    // 一般使用者：檢查是否為保管人或使用人
+    const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+    const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
+    const isOwner = assetLeaderEmail === currentUserEmailLower || assetUserEmail === currentUserEmailLower;
+
+    // ✨ 同組協作：同組成員的報廢中資產也應可見
+    const isGroupMember = groupProxyEnabled && groupEmailSet &&
+                          (groupEmailSet.has(assetLeaderEmail) || groupEmailSet.has(assetUserEmail));
+
+    return isOwner || isGroupMember;
   });
 
   // 3. 轉換為前端可用的純物件格式
