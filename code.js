@@ -281,6 +281,53 @@ function isGroupProxyTransferEnabled() {
 }
 
 /**
+ * 轉移類型正規化：移除代理標記與原保管人註記，方便權限判斷
+ * @param {string} transferType 原始轉移類型
+ * @returns {string} 正規化後的轉移類型
+ */
+function normalizeTransferType_(transferType) {
+  const raw = String(transferType || '').trim();
+  if (!raw) return '';
+  let normalized = raw.replace(/^【[^】]+】/, '');
+  normalized = normalized.replace(/（原保管人：.*?）/g, '');
+  return normalized.trim();
+}
+
+/**
+ * 判斷使用者是否可審核/接收某筆轉移（含同組代理）
+ * @param {Object} options
+ * @returns {boolean}
+ */
+function canApproveTransfer_(options) {
+  const currentUserEmailLower = String(options.currentUserEmailLower || '').toLowerCase();
+  const newLeaderEmailLower = String(options.newLeaderEmailLower || '').toLowerCase();
+  const newUserEmailLower = String(options.newUserEmailLower || '').toLowerCase();
+  const groupProxyEnabled = Boolean(options.groupProxyEnabled);
+  const groupEmailSet = options.groupEmailSet || null;
+  const normalizedTransferType = normalizeTransferType_(options.transferType);
+
+  let canApprove = false;
+  if (normalizedTransferType === '保管人+使用人') {
+    canApprove = currentUserEmailLower === newLeaderEmailLower || currentUserEmailLower === newUserEmailLower;
+  } else if (normalizedTransferType === '使用人') {
+    canApprove = currentUserEmailLower === newUserEmailLower;
+  } else {
+    canApprove = currentUserEmailLower === newLeaderEmailLower;
+  }
+
+  if (canApprove) return true;
+  if (!groupProxyEnabled || !groupEmailSet) return false;
+
+  if (normalizedTransferType === '保管人+使用人') {
+    return groupEmailSet.has(newLeaderEmailLower) || groupEmailSet.has(newUserEmailLower);
+  }
+  if (normalizedTransferType === '使用人') {
+    return groupEmailSet.has(newUserEmailLower);
+  }
+  return groupEmailSet.has(newLeaderEmailLower);
+}
+
+/**
  * ✨ NEW: 獲取當前使用者相關的所有資產 (無論是保管人或使用人)。
  * 當 D2 = "是" 時，會自動包含同組所有成員的資產
  * @returns {Array<Object>} 包含所有相關資產物件的陣列。
@@ -1643,8 +1690,13 @@ function getPendingApprovals(forceUserScope) {
 
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
+    const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+      : null;
     const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
     
     const allAssets = getAllAssets();
@@ -1673,14 +1725,14 @@ function getPendingApprovals(forceUserScope) {
           ? row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
           : '地點';
 
-        // ✨ 方案D：如果是「保管人+使用人」變更，兩者都可以審核
-        if (transferType === '保管人+使用人') {
-          return (newLeaderEmail === currentUserEmail || newUserEmail === currentUserEmail)
-                 && status === "待接收";
-        }
-
-        // 其他情況：只有新保管人可以審核
-        return newLeaderEmail === currentUserEmail && status === "待接收";
+        return canApproveTransfer_({
+          currentUserEmailLower,
+          newLeaderEmailLower: newLeaderEmail,
+          newUserEmailLower: newUserEmail,
+          transferType: transferType,
+          groupProxyEnabled: groupProxyEnabled,
+          groupEmailSet: groupEmailSet
+        });
       })
       .map(row => {
         const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
@@ -1752,6 +1804,10 @@ function processBatchApproval(appIds) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = currentUserEmail.toLowerCase();
     const isAdmin = checkAdminPermissions();
+    const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+      : null;
     const unauthorizedApps = []; // 🛡️ 收集無權限的申請
 
     appIds.forEach(appId => {
@@ -1762,19 +1818,20 @@ function processBatchApproval(appIds) {
         const newUserEmail = (appDetails.row.length > AL_NEW_USER_EMAIL_COLUMN_INDEX - 1
           ? appDetails.row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1]
           : '').toLowerCase();
-        const transferType = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
+        const transferTypeRaw = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
           ? appDetails.row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
           : '地點';
+        const normalizedTransferType = normalizeTransferType_(transferTypeRaw);
 
         if (!isAdmin) {
-          let canApprove = false;
-          if (transferType === '保管人+使用人') {
-            canApprove = newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
-          } else if (transferType === '使用人') {
-            canApprove = newUserEmail === currentUserEmailLower;
-          } else {
-            canApprove = newLeaderEmail === currentUserEmailLower;
-          }
+          const canApprove = canApproveTransfer_({
+            currentUserEmailLower,
+            newLeaderEmailLower: newLeaderEmail,
+            newUserEmailLower: newUserEmail,
+            transferType: transferTypeRaw,
+            groupProxyEnabled: groupProxyEnabled,
+            groupEmailSet: groupEmailSet
+          });
 
           if (!canApprove) {
             unauthorizedApps.push(appId);
@@ -1847,11 +1904,7 @@ function processBatchApproval(appIds) {
           location.sheet.getRange(location.rowIndex, indices.IS_COMPUTER).setValue(shouldBeMarked ? '是' : '');
 
           // ✨ 方案D：如果是「保管人+使用人」申請，通知另一方審核者
-          const transferType = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
-            ? appDetails.row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
-            : '';
-
-          if (transferType === '保管人+使用人') {
+          if (normalizedTransferType === '保管人+使用人') {
             const newKeeperEmail = appDetails.row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
             const newUserEmail = appDetails.row.length > AL_NEW_USER_EMAIL_COLUMN_INDEX - 1
               ? appDetails.row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1]
@@ -2015,6 +2068,10 @@ function processBatchRejection(appIds) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = currentUserEmail.toLowerCase();
     const isAdmin = checkAdminPermissions();
+    const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+      : null;
 
     appIds.forEach(appId => {
       const appDetails = appLogMap.get(appId);
@@ -2036,14 +2093,14 @@ function processBatchRejection(appIds) {
         : '地點';
 
       if (!isAdmin) {
-        let canReject = false;
-        if (transferType === '保管人+使用人') {
-          canReject = newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
-        } else if (transferType === '使用人') {
-          canReject = newUserEmail === currentUserEmailLower;
-        } else {
-          canReject = newLeaderEmail === currentUserEmailLower;
-        }
+        const canReject = canApproveTransfer_({
+          currentUserEmailLower,
+          newLeaderEmailLower: newLeaderEmail,
+          newUserEmailLower: newUserEmail,
+          transferType: transferType,
+          groupProxyEnabled: groupProxyEnabled,
+          groupEmailSet: groupEmailSet
+        });
 
         if (!canReject) {
           unauthorizedApps.push(appId);
@@ -2948,12 +3005,32 @@ function countPendingApprovals() {
     if (!currentUserEmail) {
       return 0;
     }
+    const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    const values = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, AL_NEW_LEADER_EMAIL_COLUMN_INDEX).getValues();
+    const lastRow = appLogSheet.getLastRow();
+    if (lastRow < 2) {
+      return 0;
+    }
+    const values = appLogSheet.getRange(2, 1, lastRow - 1, AL_TRANSFER_TYPE_COLUMN_INDEX).getValues();
+    const groupProxyEnabled = isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+      : null;
     
     let count = 0;
     for (const row of values) {
-      if (row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] === currentUserEmail && row[AL_STATUS_COLUMN_INDEX - 1] === "待接收") {
+      if (row[AL_STATUS_COLUMN_INDEX - 1] !== "待接收") continue;
+      const newLeaderEmail = row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
+      const newUserEmail = row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1];
+      const transferType = row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點';
+      if (canApproveTransfer_({
+        currentUserEmailLower,
+        newLeaderEmailLower: newLeaderEmail,
+        newUserEmailLower: newUserEmail,
+        transferType: transferType,
+        groupProxyEnabled: groupProxyEnabled,
+        groupEmailSet: groupEmailSet
+      })) {
         count++;
       }
     }
@@ -4826,6 +4903,7 @@ function getTransferOverviewForUserState(forceUserScope) {
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
+    const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
 
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
@@ -4877,12 +4955,14 @@ function getTransferOverviewForUserState(forceUserScope) {
         ? row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
         : '地點';
 
-      const isPendingForUser = (() => {
-        if (transferType === '保管人+使用人') {
-          return newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
-        }
-        return newLeaderEmail === currentUserEmailLower;
-      })();
+      const isPendingForUser = canApproveTransfer_({
+        currentUserEmailLower,
+        newLeaderEmailLower: newLeaderEmail,
+        newUserEmailLower: newUserEmail,
+        transferType: transferType,
+        groupProxyEnabled: groupProxyEnabled,
+        groupEmailSet: groupEmailSet
+      });
 
       if (useAdminScope || isMyApplication) {
         const assetInfo = assetMap.get(assetId) || {};
