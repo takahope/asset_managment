@@ -1163,8 +1163,6 @@
                         <input type="radio" id="assignment-mode-person" name="assignmentMode" class="custom-control-input" value="person">
                         <label class="custom-control-label" for="assignment-mode-person">依照人名分派</label>
                     </div>
-<<<<<<< HEAD
-=======
                     <div class="custom-control custom-radio mt-2">
                         <input type="radio" id="assignment-mode-custom" name="assignmentMode" class="custom-control-input" value="custom">
                         <label class="custom-control-label" for="assignment-mode-custom">指定對象分派</label>
@@ -1186,7 +1184,6 @@
                         </div>
                         <div id="assignment-custom-error" class="text-danger mt-2" style="display: none;"></div>
                     </div>
->>>>>>> bmain/main
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">取消</button>
@@ -1249,8 +1246,6 @@
             loading: false,
             error: ''
         };
-<<<<<<< HEAD
-=======
         window.inventoryAssignmentOptions = { users: [], groups: [] };
 
         function setAssignmentCustomError(message) {
@@ -1349,7 +1344,6 @@
                 });
             }
         })();
->>>>>>> bmain/main
 
         window.openPendingApprovalModal = () => {
             if (!Array.isArray(window.pendingApprovals)) {
@@ -3012,14 +3006,6 @@
 
                     let optionsErrorMessage = '';
                     if (optionsResult.status === 'fulfilled' && optionsResult.value) {
-<<<<<<< HEAD
-                        setFilterOptions({
-                            locations: optionsResult.value.locations || [],
-                            keepers: optionsResult.value.keepers || [],
-                            users: optionsResult.value.users || [],
-                            groups: optionsResult.value.groups || []
-                        });
-=======
                         const locations = optionsResult.value.locations || [];
                         const keepers = optionsResult.value.keepers || [];
                         const users = optionsResult.value.users || [];
@@ -3030,18 +3016,14 @@
                         if (window.updateAssignmentTargetOptions) {
                             window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, true);
                         }
->>>>>>> bmain/main
                     } else {
                         const message = optionsResult.reason?.message || String(optionsResult.reason || '載入失敗');
                         optionsErrorMessage = `盤點範圍載入失敗：${message}`;
                         setFilterOptions({ locations: [], keepers: [], users: [], groups: [] });
-<<<<<<< HEAD
-=======
                         window.inventoryAssignmentOptions = { users: [], groups: [] };
                         if (window.updateAssignmentTargetOptions) {
                             window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, false);
                         }
->>>>>>> bmain/main
                     }
 
                     setOptionsError(optionsErrorMessage);
@@ -3118,11 +3100,6 @@
                 const selectedMode = document.querySelector('input[name="assignmentMode"]:checked');
                 const assignmentMode = selectedMode ? selectedMode.value : 'person';
                 const options = pendingStartOptionsRef.current;
-<<<<<<< HEAD
-                pendingStartOptionsRef.current = null;
-                hideAssignmentModal();
-                if (!options) return;
-=======
                 if (!options) {
                     hideAssignmentModal();
                     return;
@@ -3160,7 +3137,6 @@
                 }
                 pendingStartOptionsRef.current = null;
                 hideAssignmentModal();
->>>>>>> bmain/main
                 submitStartSession({
                     ...options,
                     assignmentMode: assignmentMode
@@ -3169,12 +3145,9 @@
 
             const handleAssignmentModeCancel = useCallback(() => {
                 pendingStartOptionsRef.current = null;
-<<<<<<< HEAD
-=======
                 if (window.setAssignmentCustomError) {
                     window.setAssignmentCustomError('');
                 }
->>>>>>> bmain/main
                 hideAssignmentModal();
             }, [hideAssignmentModal]);
 
@@ -3259,12 +3232,9 @@
                 if (isAdminView) {
                     pendingStartOptionsRef.current = options;
                     if (window.$ && typeof window.$.fn?.modal === 'function') {
-<<<<<<< HEAD
-=======
                         if (window.prepareAssignmentModeModal) {
                             window.prepareAssignmentModeModal();
                         }
->>>>>>> bmain/main
                         window.$('#assignmentModeModal').modal('show');
                     } else {
                         submitStartSession({ ...options, assignmentMode: 'person' });
@@ -3992,12 +3962,9 @@
             const [leaderDropdownOpen, setLeaderDropdownOpen] = useState(false);
             const [userDropdownOpen, setUserDropdownOpen] = useState(false);
             const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
-<<<<<<< HEAD
-=======
             const [leaderSearch, setLeaderSearch] = useState('');
             const [userSearch, setUserSearch] = useState('');
             const [locationSearch, setLocationSearch] = useState('');
->>>>>>> bmain/main
             const statusDropdownRef = useRef(null);
             const leaderDropdownRef = useRef(null);
             const userDropdownRef = useRef(null);
@@ -4076,8 +4043,6 @@
                 [...new Set(allAssets.map(a => a.location))].filter(Boolean).sort()
             , [allAssets]);
 
-<<<<<<< HEAD
-=======
             const filteredLeaderOptions = useMemo(() => {
                 const keyword = String(leaderSearch || '').trim().toLowerCase();
                 if (!keyword) return leaderOptions;
@@ -4102,7 +4067,6 @@
                 );
             }, [locationOptions, locationSearch]);
 
->>>>>>> bmain/main
             useEffect(() => {
                 const handleClickOutside = (event) => {
                     if (statusDropdownRef.current && statusDropdownRef.current.contains(event.target)) return;
@@ -4118,8 +4082,6 @@
                 return () => document.removeEventListener('mousedown', handleClickOutside);
             }, []);
 
-<<<<<<< HEAD
-=======
             useEffect(() => {
                 if (!leaderDropdownOpen && leaderSearch) {
                     setLeaderSearch('');
@@ -4139,7 +4101,6 @@
                 locationSearch
             ]);
 
->>>>>>> bmain/main
             const ensureArray = (value) => {
                 if (Array.isArray(value)) return value;
                 return value ? [value] : [];
@@ -4182,15 +4143,11 @@
                     isOpen,
                     dropdownRef,
                     placeholder,
-<<<<<<< HEAD
-                    emptyLabel
-=======
                     emptyLabel,
                     searchable = false,
                     searchValue = '',
                     onSearchChange = null,
                     searchPlaceholder = '輸入關鍵字'
->>>>>>> bmain/main
                 } = config;
 
                 return (
@@ -4228,10 +4185,7 @@
                                                     type="button"
                                                     onClick={() => selectAllFilterOptions(filterKey, options)}
                                                     className="text-blue-600 hover:text-blue-800 font-medium"
-<<<<<<< HEAD
-=======
                                                     disabled={options.length === 0}
->>>>>>> bmain/main
                                                 >
                                                     全選
                                                 </button>
@@ -4244,8 +4198,6 @@
                                                 </button>
                                             </div>
                                         </div>
-<<<<<<< HEAD
-=======
                                         {searchable && (
                                             <div className="p-2 border-b border-slate-100 bg-white">
                                                 <div className="relative">
@@ -4260,7 +4212,6 @@
                                                 </div>
                                             </div>
                                         )}
->>>>>>> bmain/main
                                         <div className="max-h-72 overflow-y-auto p-1">
                                             {options.length > 0 ? (
                                                 options.map(option => (
@@ -4391,70 +4342,46 @@
                         {renderMultiSelect({
                             filterKey: 'leader',
                             label: '依保管人篩選',
-<<<<<<< HEAD
-                            options: leaderOptions,
-=======
                             options: filteredLeaderOptions,
->>>>>>> bmain/main
                             selectedValues: selectedLeaders,
                             isOpen: leaderDropdownOpen,
                             dropdownRef: leaderDropdownRef,
                             placeholder: '請選擇保管人...',
-<<<<<<< HEAD
-                            emptyLabel: '找不到符合的保管人'
-=======
                             emptyLabel: '找不到符合的保管人',
                             searchable: true,
                             searchValue: leaderSearch,
                             onSearchChange: setLeaderSearch,
                             searchPlaceholder: '搜尋保管人...'
->>>>>>> bmain/main
                         })}
 
                         {renderMultiSelect({
                             filterKey: 'user',
                             label: '依使用人篩選',
-<<<<<<< HEAD
-                            options: userOptions,
-=======
                             options: filteredUserOptions,
->>>>>>> bmain/main
                             selectedValues: selectedUsers,
                             isOpen: userDropdownOpen,
                             dropdownRef: userDropdownRef,
                             placeholder: '請選擇使用人...',
-<<<<<<< HEAD
-                            emptyLabel: '找不到符合的使用人'
-=======
                             emptyLabel: '找不到符合的使用人',
                             searchable: true,
                             searchValue: userSearch,
                             onSearchChange: setUserSearch,
                             searchPlaceholder: '搜尋使用人...'
->>>>>>> bmain/main
                         })}
 
                         {renderMultiSelect({
                             filterKey: 'location',
                             label: '依保管位置篩選',
-<<<<<<< HEAD
-                            options: locationOptions,
-=======
                             options: filteredLocationOptions,
->>>>>>> bmain/main
                             selectedValues: selectedLocations,
                             isOpen: locationDropdownOpen,
                             dropdownRef: locationDropdownRef,
                             placeholder: '請選擇保管位置...',
-<<<<<<< HEAD
-                            emptyLabel: '找不到符合的保管位置'
-=======
                             emptyLabel: '找不到符合的保管位置',
                             searchable: true,
                             searchValue: locationSearch,
                             onSearchChange: setLocationSearch,
                             searchPlaceholder: '搜尋保管位置...'
->>>>>>> bmain/main
                         })}
 
                         <div className="md:col-span-2 lg:col-span-3 xl:col-span-5">
@@ -4506,13 +4433,8 @@
         const ModeToggleCard = ({ isAdvancedMode, onToggle, compact = false }) => (
             <div className={`mode-toggle-card ${compact ? 'mode-toggle-card--compact' : ''}`}>
                 <div className="mode-toggle-text">
-<<<<<<< HEAD
-                    <h3>進階批次處理模式</h3>
-                    <p>掃描時先選擇動作，並以離線暫存保護未送出清單。</p>
-=======
                     <h3>批次處理清單記憶功能</h3>
                     <p>掃描或勾選時先選擇，會暫存保護未送出清單。</p>
->>>>>>> bmain/main
                 </div>
                 <label className="toggle-switch" title="切換進階批次模式">
                     <input
@@ -4730,11 +4652,7 @@
         };
 
         // AssetTable 組件
-<<<<<<< HEAD
-        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
-=======
         const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll, groupProxyEnabled = false, groupMemberEmailsLower = [] }) => {
->>>>>>> bmain/main
 
             // ✨ 分頁設定
             const ROWS_PER_PAGE = 500;
@@ -4857,10 +4775,6 @@
                                     const canCancel = !isTask && (isAdmin || isOwner);
                                     const isSelectable = asset.status === '在庫';
                                     const isSelected = selectedAssetIds.includes(asset.assetId);
-<<<<<<< HEAD
-                                    const rowHoverClass = isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50';
-                                    const rowBaseClass = isTask ? 'bg-teal-50' : '';
-=======
 
                                     // ✨ 判斷是否為同組成員資產（使用 props 而非 window）
                                     const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
@@ -4886,7 +4800,6 @@
                                     }
 
                                     const rowHoverClass = isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50';
->>>>>>> bmain/main
                                     const rowSelectedClass = isSelected ? 'ring-1 ring-blue-200 ring-inset' : '';
                                     const statusBadgeClass = STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200';
                                     const statusDetailType = STATUS_DETAIL_TYPES[asset.status];
@@ -4912,11 +4825,7 @@
                                     ) : null;
 
                                     return (
-<<<<<<< HEAD
-                                        <tr key={`${asset.assetId}-${index}`} className={`${rowHoverClass} transition-colors ${rowBaseClass} ${rowSelectedClass} ${!isTask && isSelected ? 'bg-blue-50' : ''}`}>
-=======
                                         <tr key={`${asset.assetId}-${index}`} className={`${rowHoverClass} transition-colors ${rowBaseClass} ${borderClass} ${rowSelectedClass} ${!isTask && isSelected ? 'bg-blue-50' : ''}`}>
->>>>>>> bmain/main
                                             {/* 勾選欄位 */}
                                             <td className="px-2 py-3 text-center align-top">
                                                 {isSelectable ? (
@@ -4935,8 +4844,6 @@
                                             <td className="px-2 py-3 font-mono text-slate-600 whitespace-nowrap align-top">{asset.assetId}</td>
                                             <td className="px-2 py-3 font-medium text-slate-800 align-top w-[160px] max-w-[160px]">
                                                 <div className="flex items-start gap-2">
-<<<<<<< HEAD
-=======
                                                     <div className="flex items-center gap-1 flex-shrink-0">
                                                         {/* ✨ 盤點任務圖示 */}
                                                         {isTask && (
@@ -4947,7 +4854,6 @@
                                                             <i className="fa-solid fa-users text-blue-500" title={`同組成員資產（保管人：${asset.leader}）`}></i>
                                                         )}
                                                     </div>
->>>>>>> bmain/main
                                                     <div className="line-clamp-2 min-w-0 flex-1" title={asset.assetName}>{asset.assetName}</div>
                                                     {isTask && (
                                                         <span className="inline-flex items-center rounded-full bg-teal-100 text-teal-700 text-xs font-semibold px-2 py-0.5 whitespace-nowrap">
@@ -6864,21 +6770,12 @@
                                         <input
                                             type="radio"
                                             name="transferCategory"
-<<<<<<< HEAD
-                                            value="物品"
-                                            checked={selectedCategory === '物品'}
-                                            onChange={(e) => setSelectedCategory(e.target.value)}
-                                            className="mr-2"
-                                        />
-                                        <span>物品</span>
-=======
                                             value="非消耗品"
                                             checked={selectedCategory === '非消耗品'}
                                             onChange={(e) => setSelectedCategory(e.target.value)}
                                             className="mr-2"
                                         />
                                         <span>非消耗品</span>
->>>>>>> bmain/main
                                     </label>
                                 </div>
 
@@ -8408,9 +8305,6 @@
                     }
                 }
 
-<<<<<<< HEAD
-                const confirmation = confirm(`確定要批次轉移 ${selectedAssetIds.length} 筆資產嗎？`);
-=======
                 // ✨ 自動偵測哪些資產是代理轉移
                 const currentUserEmail = window.currentUserEmail || '';
                 const normalizedCurrentEmail = currentUserEmail.toLowerCase().trim();
@@ -8455,7 +8349,6 @@
                 }
 
                 const confirmation = confirm(confirmMessage);
->>>>>>> bmain/main
                 if (!confirmation) return;
 
                 setIsSubmitting(true);
@@ -8469,13 +8362,9 @@
                     newUserEmail: changeUser ? newUserEmail : null,
                     isStationTransfer: transferMode === 'station',
                     isInfoTransfer: transferMode === 'info',
-<<<<<<< HEAD
-                    isIntakeTransfer: transferMode === 'intake'
-=======
                     isIntakeTransfer: transferMode === 'intake',
                     // ✨ 傳入代理轉移資訊
                     proxyTransfers: proxyTransfers.length > 0 ? proxyTransfers : null
->>>>>>> bmain/main
                 };
 
                 if (transferMode === 'station') {
@@ -9015,8 +8904,6 @@
             );
         };
 
-<<<<<<< HEAD
-=======
         const BatchImportGuideModal = ({ onClose }) => {
             return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -9190,17 +9077,13 @@
             );
         };
 
->>>>>>> bmain/main
         // ========== 新增資產 Modal ==========
         const AddAssetModal = ({ onClose, onSuccess, preloadedData }) => {
             // 載入與提交狀態
             const [isLoading, setIsLoading] = useState(true);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [dropdownData, setDropdownData] = useState(null);
-<<<<<<< HEAD
-=======
             const [showBatchImportGuide, setShowBatchImportGuide] = useState(false);
->>>>>>> bmain/main
 
             // 表單狀態
             const [assetType, setAssetType] = useState('property');
@@ -9665,10 +9548,7 @@
             };
 
             return (
-<<<<<<< HEAD
-=======
                 <>
->>>>>>> bmain/main
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
                         {/* Header */}
@@ -9693,10 +9573,6 @@
                                 <div className="space-y-6">
                                     {/* 批次匯入 */}
                                     <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-<<<<<<< HEAD
-                                        <div className="font-medium text-emerald-800 mb-2">
-                                            <i className="fas fa-file-import mr-2"></i>批次匯入
-=======
                                         <div className="flex items-center justify-between gap-3 mb-2">
                                             <div className="font-medium text-emerald-800">
                                                 <i className="fas fa-file-import mr-2"></i>批次匯入
@@ -9709,7 +9585,6 @@
                                                 <i className="fa-regular fa-circle-question mr-1"></i>
                                                 使用說明
                                             </button>
->>>>>>> bmain/main
                                         </div>
                                         <p className="text-sm text-slate-600 mb-4">
                                             支援 Excel/CSV，需使用匯出相同欄位順序。請依照新舊系統將工作表名稱改為“財產總表”或“物品總表”
@@ -9730,11 +9605,7 @@
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-slate-600 mb-1">
-<<<<<<< HEAD
-                                                    請選擇財產類別（套用至財產總表）
-=======
                                                     請選擇財產類別
->>>>>>> bmain/main
                                                 </label>
                                                 <select
                                                     value={propertyCategoryForImport}
@@ -9746,11 +9617,7 @@
                                                         <option key={option} value={option}>{option}</option>
                                                     ))}
                                                 </select>
-<<<<<<< HEAD
-                                                <p className="text-xs text-slate-500 mt-1">匯入時自動寫入 L 欄</p>
-=======
                                                 <p className="text-xs text-slate-500 mt-1">CSV，請在下方「資料類型」選擇財產或物品。</p>
->>>>>>> bmain/main
                                             </div>
                                             <div className="flex items-end">
                                                 <button
@@ -10017,13 +9884,10 @@
                         </div>
                     </div>
                 </div>
-<<<<<<< HEAD
-=======
                 {showBatchImportGuide && (
                     <BatchImportGuideModal onClose={() => setShowBatchImportGuide(false)} />
                 )}
                 </>
->>>>>>> bmain/main
             );
         };
 
@@ -10664,10 +10528,6 @@
                 if (!currentEmail) return false;
                 const leaderEmail = normalizeEmail(asset.leaderEmail);
                 const userEmail = normalizeEmail(asset.userEmail);
-<<<<<<< HEAD
-                return leaderEmail !== currentEmail && userEmail !== currentEmail;
-            }, [isAdminView, currentUserEmail]);
-=======
                 const isOwner = leaderEmail === currentEmail || userEmail === currentEmail;
                 if (isOwner) return false;
 
@@ -10675,7 +10535,6 @@
                 const hasTask = !!inventoryStatusByAsset[asset.assetId];
                 return hasTask;
             }, [isAdminView, currentUserEmail, inventoryStatusByAsset]);
->>>>>>> bmain/main
             const assetIndex = useMemo(() => {
                 const map = new Map();
                 (allAssets || []).forEach(asset => {
@@ -11795,13 +11654,9 @@
                                 finishCardLoading();
                                 scheduleScrapPendingPreload(forceUserScope);
                                 scheduleTransferPendingPreload(forceUserScope);
-<<<<<<< HEAD
-                                scheduleAddAssetDropdownPreload();
-=======
                                 if (response.isAdmin && !forceUserScope) {
                                     scheduleAddAssetDropdownPreload();
                                 }
->>>>>>> bmain/main
 
                                 // 載入盤點資料
                                 google.script.run
@@ -11849,11 +11704,7 @@
                                     .withFailureHandler(error => {
                                         console.warn('載入轉移選項失敗：', error.message);
                                     })
-<<<<<<< HEAD
-                                    .getTransferData();
-=======
                                     .getTransferData(forceUserScope);
->>>>>>> bmain/main
 
                                 // 載入出借選項資料（借用人、地點）
                                 google.script.run
@@ -11905,13 +11756,9 @@
                 const forceUserScope = viewMode === 'user';
                 scheduleScrapPendingPreload(forceUserScope);
                 scheduleTransferPendingPreload(forceUserScope);
-<<<<<<< HEAD
-                scheduleAddAssetDropdownPreload();
-=======
                 if (isAdmin && !forceUserScope) {
                     scheduleAddAssetDropdownPreload();
                 }
->>>>>>> bmain/main
 
                 try {
                     // 並行載入多個 API
@@ -12025,11 +11872,7 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-<<<<<<< HEAD
-            }, [fetchPendingInventoryAssignments, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
-=======
             }, [fetchPendingInventoryAssignments, isAdmin, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
->>>>>>> bmain/main
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -12039,13 +11882,10 @@
             const handleViewModeChange = (mode) => {
                 if (!isAdmin) return;
                 if (mode === viewMode) return;
-<<<<<<< HEAD
-=======
                 if (mode === 'user') {
                     setShowAddAssetModal(false);
                     setAddAssetDropdownData(null);
                 }
->>>>>>> bmain/main
                 setViewMode(mode);
                 setTransferringAssets(null);
                 setLentAssetsDetails(null);
@@ -12109,14 +11949,10 @@
                 if (!isAdminView && showInventoryMgmtModal) {
                     setShowInventoryMgmtModal(false);
                 }
-<<<<<<< HEAD
-            }, [isAdminView, showInventoryMgmtModal]);
-=======
                 if (!isAdminView && showAddAssetModal) {
                     setShowAddAssetModal(false);
                 }
             }, [isAdminView, showInventoryMgmtModal, showAddAssetModal]);
->>>>>>> bmain/main
 
             useEffect(() => {
                 loadData();
@@ -12132,8 +11968,6 @@
                 window.pendingApprovals = pendingApprovalsData;
             }, [pendingApprovalsData]);
 
-<<<<<<< HEAD
-=======
             // ✨ 同步代理轉移狀態到 window（供 AssetTable 和 BatchTransferModal 使用）
             useEffect(() => {
                 if (transferOptions) {
@@ -12144,7 +11978,6 @@
                 }
             }, [transferOptions]);
 
->>>>>>> bmain/main
             useEffect(() => {
                 if (!isReady) return;
 
@@ -12555,12 +12388,6 @@
                     if (isAdminView) {
                         return scrappingAssets.length;
                     } else {
-<<<<<<< HEAD
-                        return scrappingAssets.filter(a =>
-                            a.leaderEmail?.toLowerCase() === currentUserEmail.toLowerCase() ||
-                            a.userEmail?.toLowerCase() === currentUserEmail.toLowerCase()
-                        ).length;
-=======
                         // ✨ 同組協作：同組成員的報廢中資產也應可見
                         const groupProxyEnabled = transferOptions?.groupProxyEnabled || false;
                         const groupMemberEmailsLower = transferOptions?.groupMemberEmailsLower || [];
@@ -12575,7 +12402,6 @@
                                                   (groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail));
                             return isOwner || isGroupMember;
                         }).length;
->>>>>>> bmain/main
                     }
                 })();
 
@@ -13414,16 +13240,6 @@
                                 )}
 
                                 {/* 新增資產按鈕 */}
-<<<<<<< HEAD
-                                <button
-                                    onClick={() => setShowAddAssetModal(true)}
-                                    className="hero-btn hero-btn--primary"
-                                    title="新增財產/物品"
-                                >
-                                    <i className="fas fa-plus"></i>
-                                    <span className="hidden sm:inline">新增資產</span>
-                                </button>
-=======
                                 {isAdminView && (
                                     <button
                                         onClick={() => setShowAddAssetModal(true)}
@@ -13434,7 +13250,6 @@
                                         <span className="hidden sm:inline">新增資產</span>
                                     </button>
                                 )}
->>>>>>> bmain/main
 
                                 {/* 重新整理按鈕 */}
                                 <button
@@ -13511,8 +13326,6 @@
                         )}
                     </div>
 
-<<<<<<< HEAD
-=======
                     {/* ✨ 同組功能提示訊息 */}
                     {transferOptions?.groupProxyEnabled && transferOptions?.currentGroup && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
@@ -13541,7 +13354,6 @@
                         </div>
                     )}
 
->>>>>>> bmain/main
                     {/* 批次操作按鈕卡片 */}
                     <BatchActionButtons
                         onBatchTransfer={handleBatchTransfer}
@@ -13593,11 +13405,8 @@
                         selectedAssetIds={selectedAssetIds}
                         onAssetSelect={handleAssetSelect}
                         onSelectAll={handleSelectAll}
-<<<<<<< HEAD
-=======
                         groupProxyEnabled={transferOptions?.groupProxyEnabled || false}
                         groupMemberEmailsLower={transferOptions?.groupMemberEmailsLower || []}
->>>>>>> bmain/main
                     />
 
                     {statusDetailState && (
@@ -13761,11 +13570,7 @@
                     )}
 
                     {/* 新增資產 Modal */}
-<<<<<<< HEAD
-                    {showAddAssetModal && (
-=======
                     {showAddAssetModal && isAdminView && (
->>>>>>> bmain/main
                         <AddAssetModal
                             onClose={() => setShowAddAssetModal(false)}
                             onSuccess={handleAddAssetSuccess}
@@ -13828,8 +13633,4 @@
         ReactDOM.createRoot(document.getElementById('react-root')).render(<App />);
     </script>
 </body>
-<<<<<<< HEAD
 </html>
-=======
-</html>
->>>>>>> bmain/main

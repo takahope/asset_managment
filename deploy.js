@@ -225,11 +225,6 @@ function getDeploySheetDefinitions_() {
   return [
     { sheetName: PROPERTY_MASTER_SHEET_NAME, headers: PROPERTY_MASTER_HEADERS, styleHeaders: true },
     { sheetName: ITEM_MASTER_SHEET_NAME, headers: ITEM_MASTER_HEADERS, styleHeaders: true },
-<<<<<<< HEAD
-    { sheetName: RESPONSE_SHEET_NAME, headers: RESPONSE_SHEET_HEADERS, styleHeaders: true },
-    { sheetName: SOFTWARE_VERSIONS_SHEET_NAME, headers: SOFTWARE_VERSIONS_HEADERS, styleHeaders: true },
-=======
->>>>>>> bmain/main
     { sheetName: APPLICATION_LOG_SHEET_NAME, headers: APPLICATION_LOG_HEADERS, styleHeaders: true },
     { sheetName: LENDING_LOG_SHEET_NAME, headers: LENDING_LOG_HEADERS, styleHeaders: true },
     { sheetName: SCRAP_LOG_SHEET_NAME, headers: SCRAP_LOG_HEADERS, styleHeaders: true },

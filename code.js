@@ -253,9 +253,6 @@ function getAllAssets() {
 }
 
 /**
-<<<<<<< HEAD
- * ✨ NEW: 獲取當前使用者相關的所有資產 (無論是保管人或使用人)。
-=======
  * ✨ [系統功能] 檢查是否啟用「同組代理轉移」功能
  * 透過「管理員名單」工作表 D2 儲存格控制
  * @returns {boolean} true = 啟用，false = 停用
@@ -333,22 +330,10 @@ function canApproveTransfer_(options) {
 /**
  * ✨ NEW: 獲取當前使用者相關的所有資產 (無論是保管人或使用人)。
  * 當 D2 = "是" 時，會自動包含同組所有成員的資產
->>>>>>> bmain/main
  * @returns {Array<Object>} 包含所有相關資產物件的陣列。
  */
 function getAssetsForCurrentUser() {
   const currentUserEmail = Session.getActiveUser().getEmail();
-<<<<<<< HEAD
-  const allAssets = getAllAssets();
-
-  const userAssets = allAssets.filter(asset => {
-    // 條件：登入者的 email 等於保管人 email 或 使用人 email
-    // 對於沒有 userEmail 欄位的物品總表，asset.userEmail 會是 null，不會造成錯誤
-    return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
-  });
-
-  Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產。`);
-=======
   const normalizedCurrentEmail = String(currentUserEmail).toLowerCase().trim();
 
   // ✨ 檢查是否啟用同組代理功能
@@ -380,7 +365,6 @@ function getAssetsForCurrentUser() {
   });
 
   Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產 (同組代理: ${groupProxyEnabled})`);
->>>>>>> bmain/main
   return userAssets;
 }
 
@@ -465,30 +449,7 @@ function findAssetLocation(assetId) {
 // --- 試算表 UI 功能 (自訂選單) ---
 // =================================================================
 
-<<<<<<< HEAD
-/**
- * 當試算表檔案被開啟時，自動執行此函式來建立自訂選單
- */
-function onOpen() {
-  SpreadsheetApp.getUi()
-      .createMenu('財產管理系統')
-      .addItem('🔗 開啟系統入口網站', 'openPortal')
-      .addSeparator()
-      .addItem('➤ 電腦狀態回報', 'openReportPage')
-      .addItem('➤ 申請財產轉移', 'openApplyPage')
-      .addItem('➤ 審核待轉移財產', 'openReviewDashboard')
-      .addSeparator()
-      .addItem('➤ 申請財產出借', 'showLendingDialog')
-      .addItem('➤ 歸還作業管理', 'showReturnDialog')
-      .addSeparator()
-      .addItem('➤ 申請財產報廢', 'showScrapDialog') // ✨ **新增**
-      .addSeparator()
-      .addItem('➤ 更新已轉移財產', 'openUpdatePage')
-      .addToUi();
-}
-=======
 
->>>>>>> bmain/main
 /**
  * 處理「開啟系統入口網站」：在新分頁中打開 Web App 主頁
  */
@@ -510,20 +471,6 @@ function openPortal() {
 }
 
 /**
-<<<<<<< HEAD
- * 處理「電腦狀態回報」：在試算表中顯示對話方塊
- */
-function openReportPage() {
-    // 注意：電腦回報頁面 (Index.html) 也使用了樣板語法，所以需要 .evaluate()
-    const html = HtmlService.createTemplateFromFile('Index').evaluate()
-        .setWidth(600)
-        .setHeight(700); // 您可以根據需求調整對話方塊大小
-    SpreadsheetApp.getUi().showModalDialog(html, '電腦狀態回報');
-}
-
-/**
-=======
->>>>>>> bmain/main
  * 處理「申請財產轉移」：在試算表中顯示對話方塊
  */
 function openApplyPage() {
@@ -581,11 +528,7 @@ function openReviewDashboard() {
 
 /**
  * 取得系統存取白名單（含快取）
-<<<<<<< HEAD
- * 來源：保管人信箱 + 資產管理員 + 回報管理員
-=======
  * 來源：保管人信箱 + 資產管理員
->>>>>>> bmain/main
  * @returns {string[]} 允許存取的 Email 陣列（已小寫化）
  */
 function getAllowedEmails() {
@@ -617,20 +560,11 @@ function getAllowedEmails() {
     Logger.log("讀取保管人信箱時發生錯誤：" + e.message);
   }
 
-<<<<<<< HEAD
-  // 來源 2 & 3：管理員名單（防呆機制）
-  const adminEmails = getAdminEmails().map(e => String(e).toLowerCase().trim());
-  const reportAdmins = getReportAdmins().map(e => String(e).toLowerCase().trim());
-
-  // 合併並去重複
-  const allEmails = [...new Set([...keeperEmails, ...adminEmails, ...reportAdmins])];
-=======
   // 來源 2：管理員名單（防呆機制）
   const adminEmails = getAdminEmails().map(e => String(e).toLowerCase().trim());
 
   // 合併並去重複
   const allEmails = [...new Set([...keeperEmails, ...adminEmails])];
->>>>>>> bmain/main
 
   // 存入快取（10 分鐘）
   if (allEmails.length > 0) {
@@ -727,15 +661,6 @@ function createAccessDeniedPage(userEmail) {
 /**
  * 當使用者打開網頁應用程式的網址時執行
  */
-<<<<<<< HEAD
-//function doGet() {
-//  const html = HtmlService.createTemplateFromFile('Index').evaluate();
-//  html.setTitle("電腦狀態回報表單");
-//  return html;
-//
-//}
-=======
->>>>>>> bmain/main
 function doGet(e) {
   // ===== 全域存取控制 =====
   const currentUserEmail = Session.getActiveUser().getEmail();
@@ -752,79 +677,10 @@ function doGet(e) {
   let title;
 
   switch (page) {
-<<<<<<< HEAD
-    case 'report':
-      template = HtmlService.createTemplateFromFile('Index');
-      title = "電腦狀態回報";
-      break;
-    case 'apply':
-      template = HtmlService.createTemplateFromFile('apply');
-      title = "財產轉移申請";
-      break;
-    case 'update':
-      template = HtmlService.createTemplateFromFile('update');
-      title = "更新上傳狀態";
-      break;
-    case 'review':
-      template = HtmlService.createTemplateFromFile('review');
-      title = "財產轉移接收";
-      break;
-    // ✨ **新增的路由** ✨
-    case 'lending':
-      template = HtmlService.createTemplateFromFile('lending');
-      title = "申請財產出借";
-      break;
-    case 'return':
-      template = HtmlService.createTemplateFromFile('return');
-      title = "歸還作業管理";
-      break;
-    // ✨ **新增的路由** ✨
-    case 'scrap':
-      template = HtmlService.createTemplateFromFile('scrap');
-      title = "申請財產報廢";
-      break;
-    // ✨ 新增 case 'addnew'
-    case 'addnew':
-      template = HtmlService.createTemplateFromFile('addnew');
-      title = "新增財產/物品";
-      break;
-    // ✨ 新增 case 'printScrap'
-    case 'printScrap':
-      template = HtmlService.createTemplateFromFile('printScrap');
-      title = "列印報廢申請單";
-      break;
-    // ✨ 新增 case 'printTransfer'
-    case 'printTransfer':
-      template = HtmlService.createTemplateFromFile('printTransfer');
-      title = "列印轉移記錄";
-      break;
-    case 'userstate':
-      template = HtmlService.createTemplateFromFile('userstate');
-      title = "個人財產狀態查詢";
-      break;
-    case 'scrapHistory':
-      template = HtmlService.createTemplateFromFile('scrapHistory');
-      title = "已報廢資產管理";
-      break;
-     // ✨ **新增的路由：資產盤點** ✨
-    case 'inventory':
-      template = HtmlService.createTemplateFromFile('inventory');
-      title = "資產盤點管理";
-      break;
-    case 'dashboard':
-      template = HtmlService.createTemplateFromFile('dashboard');
-      title = "系統儀表板";
-      break;
-    default:
-      // 預設顯示入口網站
-      template = HtmlService.createTemplateFromFile('main');
-      title = "財產管理系統入口";
-=======
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('userstate');
       title = "財產管理";
->>>>>>> bmain/main
       break;
   }
 
@@ -859,16 +715,6 @@ function getUserStateData(forceUserScope) {
   if (useAdminScope) {
     filteredData = getAllAssets();
   } else {
-<<<<<<< HEAD
-    const groupEmails = getGroupMemberEmails(currentUserEmail);
-    const groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
-    const allAssets = getAllAssets();
-    filteredData = allAssets.filter(asset => {
-      const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
-      const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
-      return groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
-    });
-=======
     // ✨ 檢查是否啟用同組代理功能
     const groupProxyEnabled = isGroupProxyTransferEnabled();
     const allAssets = getAllAssets();
@@ -890,7 +736,6 @@ function getUserStateData(forceUserScope) {
         return leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
       });
     }
->>>>>>> bmain/main
   }
 
   const results = filteredData.map(asset => ({
@@ -1054,118 +899,6 @@ function getAppUrl() {
 /**
  * [供 Index.html 呼叫] 獲取駐站與電腦的二級下拉選單資料 (修正並清理版)
  */
-<<<<<<< HEAD
-function getSelectData() {
-  const data = getAllAssets();
-  
-  const dataMap = {};
-
-  data.forEach(asset => {
-    if (asset.isComputer === '是' && asset.assetStatus !== '已報廢') {
-      const group = asset.location;
-      const computer = asset.assetId;
-      if (group && computer) {
-          if (!dataMap[group]) dataMap[group] = [];
-          dataMap[group].push(computer);
-      }
-    }
-  });
-  return dataMap;
-}
-
-/**
- * 從「軟體版本清單」工作表讀取 7-Zip 版本清單
- */
-function getSevenZipVersions() {
-  try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SOFTWARE_VERSIONS_SHEET_NAME);
-    const lastRow = sheet.getLastRow();
-    
-    if (lastRow < 2) {
-      Logger.log("軟體版本清單工作表中沒有資料");
-      return [];
-    }
-    
-    // 讀取 A 欄的所有資料 (從第2行開始，跳過標題)
-    const data = sheet.getRange(2, SV_SEVENZIP_COLUMN_INDEX, lastRow - 1, 1).getValues();
-    
-    // 過濾空白值並轉換為一維陣列
-    const versions = data
-      .map(row => row[0])
-      .filter(version => version && version.toString().trim() !== "")
-      .map(version => version.toString().trim());
-    
-    Logger.log("讀取到的 7-Zip 版本：", versions);
-    return versions;
-  } catch (e) {
-    Logger.log("讀取 7-Zip 版本時發生錯誤: " + e.message);
-    return [];
-  }
-}
-
-/**
- * 處理從 Web App 前端提交過來的表單資料，並寫入 Google Sheet
- * @param {object} formObject - 從前端傳來的表單物件
- * @returns {string} - 回傳給使用者的成功或失敗訊息
- */
-function processFormData(formObject) {
-  try {
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(RESPONSE_SHEET_NAME);
-    const timestamp = new Date();
-    
-    // 調試：記錄接收到的完整表單資料
-    Logger.log("接收到的表單資料：");
-    Logger.log(JSON.stringify(formObject, null, 2));
-    
-    // 調試：檢查勾選狀態
-    Logger.log("winUpdated 值：" + formObject.winUpdated + " (類型：" + typeof formObject.winUpdated + ")");
-    Logger.log("chromeUpdated 值：" + formObject.chromeUpdated + " (類型：" + typeof formObject.chromeUpdated + ")");
-    Logger.log("antivirusUpdated 值：" + formObject.antivirusUpdated + " (類型：" + typeof formObject.antivirusUpdated + ")");
-    
-    // 將勾選框狀態轉換為文字（處理字串和布林值）
-    let winStatus = "否";
-    let chromeStatus = "否";
-    let antivirusStatus = "否";
-    
-    // 更嚴格的判斷條件
-    if (formObject.winUpdated === true || formObject.winUpdated === "true" || formObject.winUpdated === "on") {
-      winStatus = "是";
-    }
-    if (formObject.chromeUpdated === true || formObject.chromeUpdated === "true" || formObject.chromeUpdated === "on") {
-      chromeStatus = "是";
-    }
-    if (formObject.antivirusUpdated === true || formObject.antivirusUpdated === "true" || formObject.antivirusUpdated === "on") {
-      antivirusStatus = "是";
-    }
-    
-    Logger.log("最終狀態 - Windows：" + winStatus + ", Chrome：" + chromeStatus + ", 防毒軟體：" + antivirusStatus);
-    
-    const newRow = [
-      timestamp, 
-      formObject.group, 
-      formObject.computer, 
-      formObject.notes,
-      winStatus,           // Windows 更新狀態
-      chromeStatus,        // Chrome 更新狀態
-      antivirusStatus,     // 防毒軟體更新狀態
-      formObject.sevenZipVersion, // 7-Zip 版本 (合併後的單一欄位)
-    ];
-
-    // 調試：記錄要寫入的完整行資料
-    Logger.log("要寫入的行資料：");
-    Logger.log(newRow);
-
-    sheet.appendRow(newRow);
-    return "回報成功！感謝您的填寫。";
-  } catch (e) {
-    Logger.log("寫入錯誤: " + e.message);
-    Logger.log("錯誤堆疊: " + e.stack);
-    return "錯誤：無法寫入資料。請聯繫管理員。原因：" + e.message;
-  }
-}
-
-=======
->>>>>>> bmain/main
 // =================================================================
 // --- 財產轉移申請與審核功能 (後端) ---
 // (請將此區塊完整替換)
@@ -1175,17 +908,11 @@ function processFormData(formObject) {
  * [供 apply.html 呼叫] 獲取申請頁面所需的所有初始資料
  * (此函式與前一版相同，為求完整一併提供)
  */
-<<<<<<< HEAD
-function getTransferData() {
-=======
 function getTransferData(forceUserScope) {
->>>>>>> bmain/main
   const currentUserEmail = Session.getActiveUser().getEmail();
   const allAssets = getAllAssets(); // Keep this to get all users/keepers for dropdowns
   const allMyAssets = getAssetsForCurrentUser();
 
-<<<<<<< HEAD
-=======
   // ✨ 提前宣告 ss 變數，避免後續使用時未定義
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
@@ -1220,7 +947,6 @@ function getTransferData(forceUserScope) {
     });
   }
 
->>>>>>> bmain/main
   // 1. 從所有資產中，篩選出屬於當前使用者的、可轉移的資產
   const myAssets = allMyAssets
     .filter(asset => asset.assetStatus === '在庫')
@@ -1232,18 +958,11 @@ function getTransferData(forceUserScope) {
       category: asset.assetCategory,
       userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
       leaderName: asset.leaderName, // 保管人姓名
-<<<<<<< HEAD
-=======
       leaderEmail: asset.leaderEmail, // ✨ 新增：用於前端判斷是否為自己的資產
->>>>>>> bmain/main
       sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
   // 2. 從「保管人/信箱」工作表讀取保管人和使用人列表（改用固定列表）
-<<<<<<< HEAD
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-=======
->>>>>>> bmain/main
   const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
 
   // 讀取保管人資料（A欄：姓名，B欄：Email，C欄：是否為駐管，D欄：資訊組保管人，E欄：資訊組使用人，F欄：收案組保管＆使用人）
@@ -1351,9 +1070,6 @@ function getTransferData(forceUserScope) {
     infoComputerLocation: infoComputerLocationList.length > 0 ? infoComputerLocationList[0] : null, // ✨ 新增：電腦專用地點
     // ✨ 收案組相關資料
     intakeCustodian: intakeCustodianMap.size > 0 ? Object.fromEntries(intakeCustodianMap) : null,
-<<<<<<< HEAD
-    intakeLocation: intakeLocationList.length > 0 ? intakeLocationList[0] : null
-=======
     intakeLocation: intakeLocationList.length > 0 ? intakeLocationList[0] : null,
     // ✨ 同組代理功能資訊
     groupProxyEnabled: groupProxyEnabled,
@@ -1361,7 +1077,6 @@ function getTransferData(forceUserScope) {
     currentUserEmail: currentUserEmail,
     groupMemberEmailsLower: groupMemberEmailsLower,
     isAdmin: isAdmin
->>>>>>> bmain/main
   };
 }
 
@@ -1389,24 +1104,16 @@ function processBatchTransferApplication(formData) {
       // ✨ 新增：收案組模式
       isIntakeTransfer,   // 是否為「駐站回送中心收案組」
       intakeCustodianEmail, // 收案組保管人 Email（同時也是使用人）
-<<<<<<< HEAD
-      intakeLocation      // 收案組地點
-    } = formData;
-    
-=======
       intakeLocation,      // 收案組地點
       // ✨ 新增：代理轉移參數（前端傳入）
       proxyTransfers      // 格式：[{ assetId, originalKeeperEmail, originalKeeperName }]
     } = formData;
 
->>>>>>> bmain/main
     // ✨ 改進：支援選擇性參數（可以只變更其中一項）
     if (!assetIds || assetIds.length === 0) {
         throw new Error("請至少勾選一筆財產。");
     }
 
-<<<<<<< HEAD
-=======
     // ✨ 新增：取得同組代理轉移功能狀態（提前宣告，避免後續重複呼叫）
     const groupProxyEnabled = isGroupProxyTransferEnabled();
 
@@ -1422,7 +1129,6 @@ function processBatchTransferApplication(formData) {
       Logger.log(`收到 ${proxyTransfers.length} 筆代理轉移資訊`);
     }
 
->>>>>>> bmain/main
     // ✨ 新增：駐站轉移模式的參數處理
     let actualNewKeeperEmail = newKeeperEmail;
     let actualNewUserEmail = newUserEmail;
@@ -1520,12 +1226,9 @@ function processBatchTransferApplication(formData) {
     const applicantEmail = Session.getActiveUser().getEmail(); // 申請操作人員 Email
     const applicantEmailLower = applicantEmail.toLowerCase(); // 🛡️ 安全性修復：統一小寫比對
     const isAdmin = checkAdminPermissions(); // 🛡️ 安全性修復：檢查是否為管理員
-<<<<<<< HEAD
-=======
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(applicantEmail).map(e => String(e).toLowerCase().trim()))
       : null;
->>>>>>> bmain/main
     const newLogsToAdd = [];
     const createdApplications = [];
     const unauthorizedAssets = []; // 🛡️ 安全性修復：收集無權限的資產
@@ -1539,11 +1242,6 @@ function processBatchTransferApplication(formData) {
 
         // 🛡️ 安全性修復：驗證使用者是否有權操作此資產
         if (!isAdmin) {
-<<<<<<< HEAD
-          const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
-          const assetUserEmail = (asset.userEmail || '').toLowerCase();
-          if (assetLeaderEmail !== applicantEmailLower && assetUserEmail !== applicantEmailLower) {
-=======
           const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase();
           const assetUserEmail = String(asset.userEmail || '').toLowerCase();
           const isOwner = assetLeaderEmail === applicantEmailLower || assetUserEmail === applicantEmailLower;
@@ -1551,7 +1249,6 @@ function processBatchTransferApplication(formData) {
             ? (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail)))
             : false;
           if (!isOwner && !isGroupProxyAllowed) {
->>>>>>> bmain/main
             unauthorizedAssets.push(assetId);
             Logger.log(`🛡️ 權限拒絕：${applicantEmail} 無權轉移資產 ${assetId}`);
             return; // 跳過此資產
@@ -1594,8 +1291,6 @@ function processBatchTransferApplication(formData) {
           const isLocationChange = finalNewLocation && asset.location !== finalNewLocation;
           const isUserChange = (actualNewUserEmail && oldUserEmail !== actualNewUserEmail) || (newUserName && oldUserName !== newUserName);
 
-<<<<<<< HEAD
-=======
           // ✨ 判斷是否為代理轉移（保管人 ≠ 當前使用者）
           const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
           const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
@@ -1633,18 +1328,14 @@ function processBatchTransferApplication(formData) {
             }
           }
 
->>>>>>> bmain/main
           // ✨ 判斷轉移類型（優先使用駐站轉移標記，否則動態組合變更項目）
           let transferType = '';
           if (actualTransferType === '駐站轉移') {
             transferType = '駐站轉移'; // 駐站轉移有最高優先級
-<<<<<<< HEAD
-=======
           } else if (actualTransferType === '駐站回送資訊組') {
             transferType = '駐站回送資訊組';
           } else if (actualTransferType === '駐站回送收案組') {
             transferType = '駐站回送收案組';
->>>>>>> bmain/main
           } else {
             // 動態組合轉移類型
             const parts = [];
@@ -1659,8 +1350,6 @@ function processBatchTransferApplication(formData) {
               return;
             }
           }
-<<<<<<< HEAD
-=======
 
           // ✨ 新增：代理轉移標記
           if (proxyInfo) {
@@ -1671,7 +1360,6 @@ function processBatchTransferApplication(formData) {
               transferType = `【同組代理】${transferType}（原保管人：${originalName}）`;
             }
           }
->>>>>>> bmain/main
           
           // 只有變更保管人或使用人時才需要設為「待接收」狀態
           const needsApproval = isKeeperChange || isUserChange;
@@ -2011,10 +1699,6 @@ function getPendingApprovals(forceUserScope) {
 
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
-<<<<<<< HEAD
-    const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
-=======
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
@@ -2022,7 +1706,6 @@ function getPendingApprovals(forceUserScope) {
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
       : null;
->>>>>>> bmain/main
     const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
     
     const allAssets = getAllAssets();
@@ -2051,16 +1734,6 @@ function getPendingApprovals(forceUserScope) {
           ? row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
           : '地點';
 
-<<<<<<< HEAD
-        // ✨ 方案D：如果是「保管人+使用人」變更，兩者都可以審核
-        if (transferType === '保管人+使用人') {
-          return (newLeaderEmail === currentUserEmail || newUserEmail === currentUserEmail)
-                 && status === "待接收";
-        }
-
-        // 其他情況：只有新保管人可以審核
-        return newLeaderEmail === currentUserEmail && status === "待接收";
-=======
         return canApproveTransfer_({
           currentUserEmailLower,
           newLeaderEmailLower: newLeaderEmail,
@@ -2069,7 +1742,6 @@ function getPendingApprovals(forceUserScope) {
           groupProxyEnabled: groupProxyEnabled,
           groupEmailSet: groupEmailSet
         });
->>>>>>> bmain/main
       })
       .map(row => {
         const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
@@ -2141,13 +1813,10 @@ function processBatchApproval(appIds) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = currentUserEmail.toLowerCase();
     const isAdmin = checkAdminPermissions();
-<<<<<<< HEAD
-=======
     const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
       : null;
->>>>>>> bmain/main
     const unauthorizedApps = []; // 🛡️ 收集無權限的申請
 
     appIds.forEach(appId => {
@@ -2158,21 +1827,6 @@ function processBatchApproval(appIds) {
         const newUserEmail = (appDetails.row.length > AL_NEW_USER_EMAIL_COLUMN_INDEX - 1
           ? appDetails.row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1]
           : '').toLowerCase();
-<<<<<<< HEAD
-        const transferType = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
-          ? appDetails.row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
-          : '地點';
-
-        if (!isAdmin) {
-          let canApprove = false;
-          if (transferType === '保管人+使用人') {
-            canApprove = newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
-          } else if (transferType === '使用人') {
-            canApprove = newUserEmail === currentUserEmailLower;
-          } else {
-            canApprove = newLeaderEmail === currentUserEmailLower;
-          }
-=======
         const transferTypeRaw = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
           ? appDetails.row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
           : '地點';
@@ -2187,7 +1841,6 @@ function processBatchApproval(appIds) {
             groupProxyEnabled: groupProxyEnabled,
             groupEmailSet: groupEmailSet
           });
->>>>>>> bmain/main
 
           if (!canApprove) {
             unauthorizedApps.push(appId);
@@ -2260,15 +1913,7 @@ function processBatchApproval(appIds) {
           location.sheet.getRange(location.rowIndex, indices.IS_COMPUTER).setValue(shouldBeMarked ? '是' : '');
 
           // ✨ 方案D：如果是「保管人+使用人」申請，通知另一方審核者
-<<<<<<< HEAD
-          const transferType = appDetails.row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
-            ? appDetails.row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
-            : '';
-
-          if (transferType === '保管人+使用人') {
-=======
           if (normalizedTransferType === '保管人+使用人') {
->>>>>>> bmain/main
             const newKeeperEmail = appDetails.row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
             const newUserEmail = appDetails.row.length > AL_NEW_USER_EMAIL_COLUMN_INDEX - 1
               ? appDetails.row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1]
@@ -2432,13 +2077,10 @@ function processBatchRejection(appIds) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = currentUserEmail.toLowerCase();
     const isAdmin = checkAdminPermissions();
-<<<<<<< HEAD
-=======
     const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
       : null;
->>>>>>> bmain/main
 
     appIds.forEach(appId => {
       const appDetails = appLogMap.get(appId);
@@ -2460,16 +2102,6 @@ function processBatchRejection(appIds) {
         : '地點';
 
       if (!isAdmin) {
-<<<<<<< HEAD
-        let canReject = false;
-        if (transferType === '保管人+使用人') {
-          canReject = newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
-        } else if (transferType === '使用人') {
-          canReject = newUserEmail === currentUserEmailLower;
-        } else {
-          canReject = newLeaderEmail === currentUserEmailLower;
-        }
-=======
         const canReject = canApproveTransfer_({
           currentUserEmailLower,
           newLeaderEmailLower: newLeaderEmail,
@@ -2478,7 +2110,6 @@ function processBatchRejection(appIds) {
           groupProxyEnabled: groupProxyEnabled,
           groupEmailSet: groupEmailSet
         });
->>>>>>> bmain/main
 
         if (!canReject) {
           unauthorizedApps.push(appId);
@@ -2654,87 +2285,6 @@ function processUploadConfirmation(assetIds) {
 
 
 // =================================================================
-<<<<<<< HEAD
-// --- 每月自動提醒功能 (背景排程執行) ---
-// (此部分無需任何修改)
-// =================================================================
-
-/**
- * 每月定時觸發，檢查電腦回報狀態並發送通知 (過濾版)
- */
-function checkComputerReportsAndNotify() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const responseSheet = ss.getSheetByName(RESPONSE_SHEET_NAME);
-
-  const allAssets = getAllAssets();
-  
-  const requiredComputers = allAssets.filter(asset => asset.isComputer === '是');
-
-  const responseData = responseSheet.getRange(2, 1, responseSheet.getLastRow() - 1, 3).getValues();
-  const submittedComputers = new Set();
-  
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-
-  for (const row of responseData) {
-    const timestamp = new Date(row[0]);
-    if (timestamp.getFullYear() === currentYear && timestamp.getMonth() === currentMonth) {
-      const computerName = row[2];
-      if (computerName) {
-        submittedComputers.add(String(computerName).trim());
-      }
-    }
-  }
-
-  const remindersForLeaders = {};  
-  const allMissingForAdmin = [];  
-
-  for (const asset of requiredComputers) {
-    if (asset.assetId) {
-      const computerNameStr = String(asset.assetId).trim();
-      if (computerNameStr && !submittedComputers.has(computerNameStr)) {
-        const missingInfo = ` - 駐站: ${asset.location}, 電腦: ${computerNameStr}`;
-        allMissingForAdmin.push(missingInfo);
-        if (asset.leaderEmail) {
-          if (!remindersForLeaders[asset.leaderEmail]) {
-            remindersForLeaders[asset.leaderEmail] = [];
-          }
-          remindersForLeaders[asset.leaderEmail].push(missingInfo);
-        }
-      }
-    }
-  }
-
-  const subjectDate = `${currentYear}年${currentMonth + 1}月`;
-  for (const leaderEmail in remindersForLeaders) {
-    if (remindersForLeaders[leaderEmail].length > 0) {
-      const subject = `[自動通知] ${subjectDate} 駐站有電腦尚未回報狀態`;
-      let body = `您好，\n\n截至目前，駐站尚有以下電腦未透過表單回報本月份狀態：\n` + remindersForLeaders[leaderEmail].join("\n") + `\n\n請協助處理。\n\n此為系統自動發送郵件。`;
-      MailApp.sendEmail(leaderEmail, subject, body);
-    }
-  }
-
-  if (allMissingForAdmin.length > 0) {
-    const reportAdmins = getReportAdmins();
-    
-    if (reportAdmins && reportAdmins.length > 0) {
-      const subject = `[自動通知] ${subjectDate} 未回報電腦總清單`;
-      let body = `您好，\n\n截至目前，本月份尚有以下所有電腦未回報狀態：\n\n` + allMissingForAdmin.join("\n") + `\n\n系統已同步寄送通知給相關駐管。\n\n此為系統自動發送郵件。`;
-      
-      MailApp.sendEmail(reportAdmins.join(','), subject, body);
-      Logger.log(`已發送總清單通知給 ${reportAdmins.length} 位「電腦回報」管理員。`);
-    } else {
-      Logger.log("警告：在「管理員名單」中找不到任何有效的「電腦回報」管理員Email，無法寄送總清單。");
-    }
-  } else {
-    Logger.log("所有應回報的電腦皆已完成本月份的回報。");
-  }
-}
-
-// =================================================================
-=======
->>>>>>> bmain/main
 // --- ✨ 全新功能模組：財產出借與歸還 ✨ ---
 // =================================================================
 
@@ -3464,14 +3014,6 @@ function countPendingApprovals() {
     if (!currentUserEmail) {
       return 0;
     }
-<<<<<<< HEAD
-    const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    const values = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, AL_NEW_LEADER_EMAIL_COLUMN_INDEX).getValues();
-    
-    let count = 0;
-    for (const row of values) {
-      if (row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] === currentUserEmail && row[AL_STATUS_COLUMN_INDEX - 1] === "待接收") {
-=======
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const appLogSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(APPLICATION_LOG_SHEET_NAME);
     const lastRow = appLogSheet.getLastRow();
@@ -3498,7 +3040,6 @@ function countPendingApprovals() {
         groupProxyEnabled: groupProxyEnabled,
         groupEmailSet: groupEmailSet
       })) {
->>>>>>> bmain/main
         count++;
       }
     }
@@ -4132,47 +3673,6 @@ function isAdminEmailEnabled() {
   return isEnabled;
 }
 
-<<<<<<< HEAD
-/**
- * 從 "管理員名單" 工作表的 B 欄獲取「電腦回報」總管理員 Email 列表，並使用快取。
- * @returns {string[]} 一個包含所有回報總管理員 Email 的陣列。
- */
-function getReportAdmins() {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'report_admins_list';
-  
-  // 步驟 1: 嘗試從快取中讀取
-  const cachedAdmins = cache.get(cacheKey);
-  if (cachedAdmins) {
-    Logger.log("從快取中成功讀取「電腦回報」管理員名單。");
-    return JSON.parse(cachedAdmins);
-  }
-
-  // 步驟 2: 如果快取中沒有，則從試算表讀取
-  Logger.log("快取未命中，從 Google Sheet 讀取「電腦回報」管理員名單。");
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ADMIN_LIST_SHEET_NAME);
-  if (!sheet) {
-    Logger.log(`錯誤：找不到名為 "${ADMIN_LIST_SHEET_NAME}" 的工作表。`);
-    return []; 
-  }
-  
-  // ✨ **核心修改點：讀取 B 欄 (欄位索引為 2)**
-  const range = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1); 
-  const emails = range.getValues()
-                      .map(row => row[0])
-                      .filter(email => email && email.includes('@'));
-  
-  // 步驟 3: 將結果存入快取
-  if (emails.length > 0) {
-    cache.put(cacheKey, JSON.stringify(emails), 600); // 快取 10 分鐘
-    Logger.log(`已將 ${emails.length} 筆「電腦回報」管理員 Email 存入快取。`);
-  }
-
-  return emails;
-}
-
-=======
->>>>>>> bmain/main
 function checkAdminPermissions() {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
   const adminEmails = getAdminEmails().map(email => email.toLowerCase());
@@ -4191,13 +3691,6 @@ function checkAdminStatus() {
 function getAllScrappableItems(assetCategory, forceUserScope) {
   // 1. 取得當前使用者身分與權限
   const currentUserEmail = Session.getActiveUser().getEmail();
-<<<<<<< HEAD
-  const isAdmin = checkAdminPermissions();
-  const useAdminScope = isAdmin && !forceUserScope;
-
-  const allAssets = getAllAssets();
-  
-=======
   const currentUserEmailLower = String(currentUserEmail || '').toLowerCase().trim();
   const isAdmin = checkAdminPermissions();
   const useAdminScope = isAdmin && !forceUserScope;
@@ -4210,19 +3703,12 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
 
   const allAssets = getAllAssets();
 
->>>>>>> bmain/main
   // 2. 篩選符合條件的資產 (狀態 + 權限)
   const targetAssets = allAssets.filter(asset => {
     // 基本條件
     if (asset.assetStatus !== '報廢中' || asset.assetCategory !== assetCategory) {
       return false;
     }
-<<<<<<< HEAD
-    
-    // 權限條件：管理員看全部，一般人看自己 (保管人或使用人)
-    if (useAdminScope) return true;
-    return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
-=======
 
     // 權限條件：管理員看全部
     if (useAdminScope) return true;
@@ -4237,7 +3723,6 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
                           (groupEmailSet.has(assetLeaderEmail) || groupEmailSet.has(assetUserEmail));
 
     return isOwner || isGroupMember;
->>>>>>> bmain/main
   });
 
   // 3. 轉換為前端可用的純物件格式
@@ -4450,17 +3935,12 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
 
         if (purchaseDateStr.includes('GMT')) {
             purchaseDate = new Date(purchaseDateStr);
-<<<<<<< HEAD
-        } else {
-            const dateParts = purchaseDateStr.match(/(0?\d+)\/(\d+)\/(\d+)/);
-=======
             // 若年份 < 1912，視為民國年並補 +1911（處理試算表將 0109/12/25 解析成西元 109 年的情況）
             if (purchaseDate.getFullYear() < 1912) {
                 purchaseDate.setFullYear(purchaseDate.getFullYear() + 1911);
             }
         } else {
             const dateParts = purchaseDateStr.match(/(\d+)\/(\d+)\/(\d+)/);
->>>>>>> bmain/main
             if (dateParts) {
                 const minguoYear = parseInt(dateParts[1], 10);
                 const gregorianYear = minguoYear + 1911;
@@ -4479,11 +3959,7 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
 
         // 📊 準備儲存格數據
         const cellData = [
-<<<<<<< HEAD
-          (index + 1).toString(),                                                          // 序號
-=======
           assetInfo.modelBrand || '',                                                      // 型號/廠牌（表頭仍顯示「序號」）
->>>>>>> bmain/main
           assetInfo.assetId.trim(),                                                        // 財產編號
           assetInfo.assetName,                                                             // 財產名稱
           purchaseDateFormatted,                                                           // 購置日期
@@ -4841,11 +4317,6 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
         // 🛡️ 權限過濾
         if (!useAdminScope) {
            // 一般使用者只能看到自己相關的（新保管人或新使用人）
-<<<<<<< HEAD
-           const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
-                              (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
-           if (!isRelevant) return;
-=======
            const newKeeperEmailLower = transfer.newKeeperEmail ? transfer.newKeeperEmail.toLowerCase() : '';
            const newUserEmailLower = transfer.newUserEmail ? transfer.newUserEmail.toLowerCase() : '';
            const isOwner = newKeeperEmailLower === currentUserEmail || newUserEmailLower === currentUserEmail;
@@ -4860,7 +4331,6 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
            }
 
            if (!isOwner && !isGroupMember) return;
->>>>>>> bmain/main
         }
 
         items.push({
@@ -5063,11 +4533,7 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
 
         // 準備 9 個欄位的數據
         const cellData = [
-<<<<<<< HEAD
-          (index + 1).toString(),           // 序號
-=======
           asset.modelBrand || '',           // 型號/廠牌（表頭仍顯示「序號」）
->>>>>>> bmain/main
           asset.assetId,                    // 財產編號
           asset.assetName || '',            // 財產名稱
           '核心設施',                        // 移出單位（固定）
@@ -5306,14 +4772,9 @@ function testMyEmail() {
 function cancelTransferOrScrap(assetId) {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
-<<<<<<< HEAD
-    const isAdmin = checkAdminPermissions();
-    
-=======
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase().trim();
     const isAdmin = checkAdminPermissions();
 
->>>>>>> bmain/main
     const allAssets = getAllAssets();
     const asset = allAssets.find(a => a.assetId === assetId);
 
@@ -5321,11 +4782,6 @@ function cancelTransferOrScrap(assetId) {
       throw new Error(`找不到財產編號為 ${assetId} 的資料。`);
     }
 
-<<<<<<< HEAD
-    // Security Check: Must be admin or the asset's owner (keeper or user)
-    if (!isAdmin && asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
-      throw new Error("權限不足，只有此財產的保管人、使用人或管理員才能執行此操作。");
-=======
     // Security Check: Must be admin, asset owner, or group member (if group proxy enabled)
     const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
     const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
@@ -5348,7 +4804,6 @@ function cancelTransferOrScrap(assetId) {
 
     if (!hasPermission) {
       throw new Error("權限不足，只有此財產的保管人、使用人、同組成員或管理員才能執行此操作。");
->>>>>>> bmain/main
     }
 
     const originalStatus = asset.assetStatus;
@@ -5505,10 +4960,7 @@ function getTransferOverviewForUserState(forceUserScope) {
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
-<<<<<<< HEAD
-=======
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
->>>>>>> bmain/main
 
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
@@ -5560,16 +5012,6 @@ function getTransferOverviewForUserState(forceUserScope) {
         ? row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1]
         : '地點';
 
-<<<<<<< HEAD
-      const isPendingForUser = (() => {
-        if (transferType === '保管人+使用人') {
-          return newLeaderEmail === currentUserEmailLower || newUserEmail === currentUserEmailLower;
-        }
-        return newLeaderEmail === currentUserEmailLower;
-      })();
-
-      if (useAdminScope || isMyApplication) {
-=======
       const isPendingForUser = canApproveTransfer_({
         currentUserEmailLower,
         newLeaderEmailLower: newLeaderEmail,
@@ -5583,7 +5025,6 @@ function getTransferOverviewForUserState(forceUserScope) {
       const isGroupMemberApplication = groupProxyEnabled && groupEmailSet && groupEmailSet.has(applicantEmail);
 
       if (useAdminScope || isMyApplication || isGroupMemberApplication) {
->>>>>>> bmain/main
         const assetInfo = assetMap.get(assetId) || {};
         const rawTime = row[AL_APP_TIME_COLUMN_INDEX - 1];
         const applicationTime = rawTime
@@ -5646,12 +5087,6 @@ function getTransferOverviewForUserState(forceUserScope) {
     Object.keys(latestRowByAsset).forEach(assetId => {
       const asset = assetMap.get(assetId);
       if (!asset) return;
-<<<<<<< HEAD
-      if (!useAdminScope && groupEmailSet) {
-        const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
-        const userEmail = String(asset.userEmail || '').toLowerCase();
-        if (!groupEmailSet.has(leaderEmail) && (!userEmail || !groupEmailSet.has(userEmail))) {
-=======
 
       const row = latestRowByAsset[assetId];
       if (!useAdminScope) {
@@ -5669,15 +5104,10 @@ function getTransferOverviewForUserState(forceUserScope) {
           groupEmailSet: groupEmailSet
         });
         if (!hasAssetAccess && !canApprove) {
->>>>>>> bmain/main
           return;
         }
       }
 
-<<<<<<< HEAD
-      const row = latestRowByAsset[assetId];
-=======
->>>>>>> bmain/main
       transferDetailMap[assetId] = {
         assetId: assetId,
         assetName: String(asset.assetName || ''),
@@ -5731,10 +5161,6 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
 
     const uniqueIds = Array.from(new Set(normalizedIds));
     const currentUserEmail = Session.getActiveUser().getEmail();
-<<<<<<< HEAD
-    const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
-=======
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
@@ -5742,26 +5168,11 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
     const groupEmailSet = !useAdminScope
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase()))
       : null;
->>>>>>> bmain/main
     const allAssets = getAllAssets();
     const assetMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), asset]));
 
     let targetIds = uniqueIds;
-<<<<<<< HEAD
-    if (!useAdminScope) {
-      const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase());
-      const groupEmailSet = new Set(groupEmails);
-      targetIds = uniqueIds.filter(assetId => {
-        const asset = assetMap.get(assetId);
-        if (!asset) return false;
-        const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
-        const userEmail = String(asset.userEmail || '').toLowerCase();
-        return groupEmailSet.has(leaderEmail) || (userEmail && groupEmailSet.has(userEmail));
-      });
-    }
-=======
     // 先保留所有 targetIds，後續再依權限與審核資格過濾
->>>>>>> bmain/main
 
     if (targetIds.length === 0) {
       return { details: {} };
@@ -5806,8 +5217,6 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
     Object.keys(latestRowByAsset).forEach(assetId => {
       const row = latestRowByAsset[assetId];
       const asset = assetMap.get(assetId);
-<<<<<<< HEAD
-=======
       if (!asset) return;
       if (!useAdminScope) {
         const leaderEmail = String(asset.leaderEmail || '').toLowerCase();
@@ -5827,7 +5236,6 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
           return;
         }
       }
->>>>>>> bmain/main
       details[assetId] = {
         assetId: assetId,
         assetName: asset ? String(asset.assetName || '') : '',
@@ -6218,12 +5626,9 @@ function getDropdownData() {
  */
 function addNewAsset(form) {
   Logger.log("開始新增資產: " + JSON.stringify(form));
-<<<<<<< HEAD
-=======
   if (!checkAdminPermissions()) {
     throw new Error("您沒有權限執行此操作");
   }
->>>>>>> bmain/main
   
   // 1. 檢查必填與唯一性
   if (!form.assetId || !form.assetName) throw new Error("編號與名稱為必填項目");
@@ -6317,13 +5722,10 @@ function addNewAsset(form) {
  */
 function addNewAssetsBatch(payload) {
   try {
-<<<<<<< HEAD
-=======
     if (!checkAdminPermissions()) {
       return { error: '您沒有權限執行此操作' };
     }
 
->>>>>>> bmain/main
     const propertyRows = Array.isArray(payload?.propertyRows) ? payload.propertyRows : [];
     const itemRows = Array.isArray(payload?.itemRows) ? payload.itemRows : [];
     const propertyCategory = String(payload?.propertyCategory || '').trim();
@@ -6363,15 +5765,12 @@ function addNewAssetsBatch(payload) {
     });
 
     const normalizeText = (value) => String(value || '').trim();
-<<<<<<< HEAD
-=======
     // ✨ 讀取存置地點列表（B 欄：是否為駐站）
     const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
     const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 2).getValues();
     const locationIsStationMap = new Map(
       locationData.map(row => [normalizeText(row[0]), normalizeText(row[1]) === '是'])
     );
->>>>>>> bmain/main
     const parseDateValue = (value) => {
       if (!value) return '';
       if (value instanceof Date) return value;
@@ -6475,13 +5874,10 @@ function addNewAssetsBatch(payload) {
         if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) {
           values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
         }
-<<<<<<< HEAD
-=======
         const isStation = locationIsStationMap.get(location);
         if (isStation && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
           values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
         }
->>>>>>> bmain/main
       }
 
       propertyValues.push(values);
@@ -6673,10 +6069,7 @@ function getInventoryData(forceUserScope) {
     // 建立 Email -> 姓名 / 組別 對照表（用於前端顯示指派人員與分派判斷）
     const emailToNameMap = {};
     const emailToGroupMap = {};
-<<<<<<< HEAD
-=======
     const assigneeUserMap = {};
->>>>>>> bmain/main
     const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
     if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
       const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
@@ -6686,11 +6079,6 @@ function getInventoryData(forceUserScope) {
         const groupName = row[6];
         if (email) {
           const normalizedEmail = String(email).toLowerCase();
-<<<<<<< HEAD
-          emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
-          if (groupName) {
-            emailToGroupMap[normalizedEmail] = String(groupName).trim();
-=======
           const displayName = name ? String(name).trim() : String(email).split('@')[0];
           emailToNameMap[normalizedEmail] = displayName;
           const normalizedGroup = groupName ? String(groupName).trim() : '';
@@ -6705,21 +6093,17 @@ function getInventoryData(forceUserScope) {
             };
           } else if (normalizedGroup && !assigneeUserMap[normalizedEmail].group) {
             assigneeUserMap[normalizedEmail].group = normalizedGroup;
->>>>>>> bmain/main
           }
         }
       });
     }
     const currentUserGroup = emailToGroupMap[currentUserEmail] || '未分組';
     const groups = Array.from(new Set(Object.values(emailToGroupMap).filter(Boolean))).sort();
-<<<<<<< HEAD
-=======
     const assigneeUsers = Object.values(assigneeUserMap).sort((a, b) => {
       const left = a.name || a.email || '';
       const right = b.name || b.email || '';
       return left.localeCompare(right, 'zh-Hant');
     });
->>>>>>> bmain/main
 
     // 取得進行中盤點會話（管理員可以看到所有會話）
     const activeSessions = getActiveInventorySessions(currentUserEmail, useAdminScope, currentUserGroup);
@@ -6768,10 +6152,7 @@ function getInventoryData(forceUserScope) {
       keepers: keepers,
       users: users,
       groups: groups,
-<<<<<<< HEAD
-=======
       assigneeUsers: assigneeUsers,
->>>>>>> bmain/main
       activeSessions: activeSessions,
       emailToNameMap: emailToNameMap,
       currentUserGroup: currentUserGroup,
@@ -7157,10 +6538,7 @@ function startInventorySession(options) {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const currentUserName = Session.getActiveUser().getEmail().split('@')[0];
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-<<<<<<< HEAD
-=======
     const isAdmin = checkAdminPermissions();
->>>>>>> bmain/main
 
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
     const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
@@ -7197,11 +6575,6 @@ function startInventorySession(options) {
     const userFilterSet = new Set(userFilterValues);
     const groupFilterSet = new Set(groupFilterValues);
 
-<<<<<<< HEAD
-    // 建立 Email -> 組別 對照表（組別篩選/分派時使用）
-    const emailToGroupMap = {};
-    if (options.assignmentMode === 'group' || groupFilterSet.size > 0) {
-=======
     const assignmentModeRaw = String(options.assignmentMode || '').trim().toLowerCase();
     const assignmentMode = assignmentModeRaw === 'group'
       ? 'group'
@@ -7215,17 +6588,10 @@ function startInventorySession(options) {
     const emailToGroupMap = {};
     const emailToNameMap = {};
     if (assignmentMode === 'group' || assignmentMode === 'custom' || groupFilterSet.size > 0) {
->>>>>>> bmain/main
       const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
       if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
         const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
         keeperData.forEach(row => {
-<<<<<<< HEAD
-          const email = row[1];
-          const groupName = row[6];
-          if (email) {
-            emailToGroupMap[String(email).toLowerCase()] = groupName ? String(groupName).trim() : '';
-=======
           const name = row[0];
           const email = row[1];
           const groupName = row[6];
@@ -7234,14 +6600,11 @@ function startInventorySession(options) {
             const displayName = name ? String(name).trim() : String(email).split('@')[0];
             emailToGroupMap[normalizedEmail] = groupName ? String(groupName).trim() : '';
             emailToNameMap[normalizedEmail] = displayName;
->>>>>>> bmain/main
           }
         });
       }
     }
 
-<<<<<<< HEAD
-=======
     let customAssignedUser = '';
     let assignmentTargetLabel = '';
     if (assignmentMode === 'custom') {
@@ -7265,7 +6628,6 @@ function startInventorySession(options) {
       }
     }
 
->>>>>>> bmain/main
     const resolveAssetGroup = (asset) => {
       const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
       if (defaultGroup) return defaultGroup;
@@ -7314,37 +6676,12 @@ function startInventorySession(options) {
       '' // 完成時間
     ]);
 
-<<<<<<< HEAD
-    const assignmentMode = options.assignmentMode === 'group' ? 'group' : 'person';
-
-=======
->>>>>>> bmain/main
     // ✨ 核心邏輯：準備寫入明細表，並自動分發任務
     const detailRows = assetsToInventory.map(asset => {
       // 自動分發：
       // - 財產總表 → 指派給使用人
       // - 物品總表 → 指派給保管人
       // 若缺少使用人或保管人 Email，則留空 (未指派)
-<<<<<<< HEAD
-      let assignedEmail = '';
-      if (asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME) {
-        assignedEmail = asset.userEmail || asset.leaderEmail || '';
-      } else {
-        assignedEmail = asset.leaderEmail || '';
-      }
-      let assignedUser = '';
-      if (assignmentMode === 'group') {
-        const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
-        if (defaultGroup) {
-          assignedUser = defaultGroup;
-        } else {
-          const normalizedEmail = assignedEmail ? assignedEmail.toLowerCase() : '';
-          const groupName = normalizedEmail ? emailToGroupMap[normalizedEmail] : '';
-          assignedUser = groupName || '未分組';
-        }
-      } else {
-        assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
-=======
       let assignedUser = '';
       if (assignmentMode === 'custom') {
         assignedUser = customAssignedUser;
@@ -7367,7 +6704,6 @@ function startInventorySession(options) {
         } else {
           assignedUser = assignedEmail ? assignedEmail.toLowerCase() : '';
         }
->>>>>>> bmain/main
       }
 
       const userName = asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME ? (asset.userName || '') : '';
@@ -7393,24 +6729,16 @@ function startInventorySession(options) {
       inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 12).setValues(detailRows);
     }
 
-<<<<<<< HEAD
-    Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`);
-=======
     const assignmentMessage = assignmentMode === 'custom'
       ? `任務已指定分派給 ${assignmentTargetLabel}。`
       : `任務已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`;
     Logger.log(`成功開始盤點會話: ${inventoryId}，共 ${assetsToInventory.length} 筆資產，${assignmentMessage}`);
->>>>>>> bmain/main
 
     return {
       success: true,
       inventoryId: inventoryId,
       totalCount: assetsToInventory.length,
-<<<<<<< HEAD
-      message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。任務已依資產類型與${assignmentMode === 'group' ? '組別' : '人名'}自動分發。`
-=======
       message: `已成功開始盤點會話，共 ${assetsToInventory.length} 筆資產。${assignmentMessage}`
->>>>>>> bmain/main
     };
 
   } catch (e) {
