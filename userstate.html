@@ -1047,7 +1047,6 @@
     </style>
 </head>
 <body>
-    <?!= include('shared-nav'); ?>
     <?!= include('progress_bar_fly'); ?>
     <?!= include('toast_progress'); ?>
     <script>
@@ -1228,7 +1227,9 @@
         };
 
         window.openPendingApprovalModal = () => {
-            if (!window.pendingApprovals || window.pendingApprovals.length === 0) return;
+            if (!Array.isArray(window.pendingApprovals)) {
+                window.pendingApprovals = [];
+            }
 
             if (!document.getElementById('pendingApprovalModal').dataset.initialized) {
                 document.getElementById('pending-location-filter').addEventListener('change', filterPendingApprovals);
@@ -1310,11 +1311,12 @@
             listBody.innerHTML = '';
 
             if (window.filteredPendingApprovals.length === 0) {
+                const hasAnyPending = Array.isArray(window.pendingApprovals) && window.pendingApprovals.length > 0;
                 const row = document.createElement('tr');
                 const cell = document.createElement('td');
                 cell.colSpan = 9;
                 cell.className = 'text-center text-muted';
-                cell.textContent = '沒有符合條件的項目。';
+                cell.textContent = hasAnyPending ? '沒有符合條件的項目。' : '無待接收項目。';
                 row.appendChild(cell);
                 listBody.appendChild(row);
                 pagination.textContent = '';
@@ -1411,7 +1413,10 @@
             const totalPages = Math.ceil(window.filteredPendingApprovals.length / window.pendingRowsPerPage);
 
             if (window.filteredPendingApprovals.length === 0) {
-                pagination.innerHTML = '<span class="text-muted">沒有符合篩選條件的項目。</span>';
+                const hasAnyPending = Array.isArray(window.pendingApprovals) && window.pendingApprovals.length > 0;
+                pagination.innerHTML = hasAnyPending
+                    ? '<span class="text-muted">沒有符合篩選條件的項目。</span>'
+                    : '<span class="text-muted">無待接收項目。</span>';
                 return;
             }
             if (totalPages <= 1) {
@@ -9075,8 +9080,7 @@
                                             <i className="fas fa-file-import mr-2"></i>批次匯入
                                         </div>
                                         <p className="text-sm text-slate-600 mb-4">
-                                            支援 Excel/CSV，需使用匯出相同欄位順序。保管人/使用人請填姓名。
-                                            CSV 需依「資料類型」解析。
+                                            支援 Excel/CSV，需使用匯出相同欄位順序。請依照新舊系統將工作表名稱改為“財產總表”或“物品總表”
                                         </p>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div>
@@ -9094,7 +9098,7 @@
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-slate-600 mb-1">
-                                                    財產類別（套用至財產總表）
+                                                    請選擇財產類別（套用至財產總表）
                                                 </label>
                                                 <select
                                                     value={propertyCategoryForImport}
