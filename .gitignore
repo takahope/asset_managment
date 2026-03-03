@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .specstory/
 .cursorindexingignore
 .env
@@ -24,3 +25,7 @@ test/
 plan/
 .gemini/
 gha-creds-*.json
+=======
+.gemini/
+temp/
+>>>>>>> bmain/main

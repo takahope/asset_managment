@@ -1163,6 +1163,30 @@
                         <input type="radio" id="assignment-mode-person" name="assignmentMode" class="custom-control-input" value="person">
                         <label class="custom-control-label" for="assignment-mode-person">依照人名分派</label>
                     </div>
+<<<<<<< HEAD
+=======
+                    <div class="custom-control custom-radio mt-2">
+                        <input type="radio" id="assignment-mode-custom" name="assignmentMode" class="custom-control-input" value="custom">
+                        <label class="custom-control-label" for="assignment-mode-custom">指定對象分派</label>
+                    </div>
+                    <div id="assignment-custom-fields" class="mt-3 d-none">
+                        <div class="form-group">
+                            <label for="assignment-target-type">分派對象類型</label>
+                            <select id="assignment-target-type" class="form-control form-control-sm">
+                                <option value="user">使用者</option>
+                                <option value="group">組別</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label for="assignment-target-value">指定對象</label>
+                            <select id="assignment-target-value" class="form-control form-control-sm">
+                                <option value="">-- 請選擇 --</option>
+                            </select>
+                            <small class="form-text text-muted">使用者以 Email 為準</small>
+                        </div>
+                        <div id="assignment-custom-error" class="text-danger mt-2" style="display: none;"></div>
+                    </div>
+>>>>>>> bmain/main
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">取消</button>
@@ -1225,6 +1249,107 @@
             loading: false,
             error: ''
         };
+<<<<<<< HEAD
+=======
+        window.inventoryAssignmentOptions = { users: [], groups: [] };
+
+        function setAssignmentCustomError(message) {
+            const errorEl = document.getElementById('assignment-custom-error');
+            if (!errorEl) return;
+            if (message) {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+            } else {
+                errorEl.textContent = '';
+                errorEl.style.display = 'none';
+            }
+        }
+
+        function toggleAssignmentCustomFields(isCustom) {
+            const container = document.getElementById('assignment-custom-fields');
+            if (!container) return;
+            if (isCustom) {
+                container.classList.remove('d-none');
+            } else {
+                container.classList.add('d-none');
+            }
+        }
+
+        function updateAssignmentTargetOptions(options = window.inventoryAssignmentOptions, keepSelection = true) {
+            const typeEl = document.getElementById('assignment-target-type');
+            const valueEl = document.getElementById('assignment-target-value');
+            if (!typeEl || !valueEl) return;
+
+            const targetType = typeEl.value || 'user';
+            const previousValue = keepSelection ? valueEl.value : '';
+            valueEl.innerHTML = '<option value="">-- 請選擇 --</option>';
+
+            if (targetType === 'group') {
+                const groups = Array.isArray(options.groups) ? options.groups : [];
+                groups.forEach(group => {
+                    const option = document.createElement('option');
+                    option.value = group;
+                    option.textContent = group;
+                    valueEl.appendChild(option);
+                });
+            } else {
+                const users = Array.isArray(options.users) ? options.users : [];
+                users.forEach(user => {
+                    const email = user?.email || '';
+                    if (!email) return;
+                    const name = user?.name || email.split('@')[0];
+                    const group = user?.group ? ` - ${user.group}` : '';
+                    const option = document.createElement('option');
+                    option.value = email;
+                    option.textContent = `${name} (${email})${group}`;
+                    valueEl.appendChild(option);
+                });
+            }
+
+            if (previousValue) {
+                const hasOption = Array.from(valueEl.options).some(option => option.value === previousValue);
+                if (hasOption) valueEl.value = previousValue;
+            }
+        }
+
+        window.updateAssignmentTargetOptions = updateAssignmentTargetOptions;
+        window.prepareAssignmentModeModal = () => {
+            const isCustom = !!document.getElementById('assignment-mode-custom')?.checked;
+            toggleAssignmentCustomFields(isCustom);
+            setAssignmentCustomError('');
+            updateAssignmentTargetOptions(window.inventoryAssignmentOptions, true);
+        };
+        window.setAssignmentCustomError = setAssignmentCustomError;
+
+        (function initAssignmentModeModal() {
+            const modal = document.getElementById('assignmentModeModal');
+            if (!modal || modal.dataset.initialized) return;
+            modal.dataset.initialized = 'true';
+
+            modal.querySelectorAll('input[name="assignmentMode"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const isCustom = !!document.getElementById('assignment-mode-custom')?.checked;
+                    toggleAssignmentCustomFields(isCustom);
+                    setAssignmentCustomError('');
+                });
+            });
+
+            const typeEl = document.getElementById('assignment-target-type');
+            if (typeEl) {
+                typeEl.addEventListener('change', () => {
+                    setAssignmentCustomError('');
+                    updateAssignmentTargetOptions(window.inventoryAssignmentOptions, false);
+                });
+            }
+
+            const valueEl = document.getElementById('assignment-target-value');
+            if (valueEl) {
+                valueEl.addEventListener('change', () => {
+                    setAssignmentCustomError('');
+                });
+            }
+        })();
+>>>>>>> bmain/main
 
         window.openPendingApprovalModal = () => {
             if (!Array.isArray(window.pendingApprovals)) {
@@ -2887,16 +3012,36 @@
 
                     let optionsErrorMessage = '';
                     if (optionsResult.status === 'fulfilled' && optionsResult.value) {
+<<<<<<< HEAD
                         setFilterOptions({
                             locations: optionsResult.value.locations || [],
                             keepers: optionsResult.value.keepers || [],
                             users: optionsResult.value.users || [],
                             groups: optionsResult.value.groups || []
                         });
+=======
+                        const locations = optionsResult.value.locations || [];
+                        const keepers = optionsResult.value.keepers || [];
+                        const users = optionsResult.value.users || [];
+                        const groups = optionsResult.value.groups || [];
+                        const assigneeUsers = optionsResult.value.assigneeUsers || [];
+                        setFilterOptions({ locations, keepers, users, groups });
+                        window.inventoryAssignmentOptions = { users: assigneeUsers, groups };
+                        if (window.updateAssignmentTargetOptions) {
+                            window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, true);
+                        }
+>>>>>>> bmain/main
                     } else {
                         const message = optionsResult.reason?.message || String(optionsResult.reason || '載入失敗');
                         optionsErrorMessage = `盤點範圍載入失敗：${message}`;
                         setFilterOptions({ locations: [], keepers: [], users: [], groups: [] });
+<<<<<<< HEAD
+=======
+                        window.inventoryAssignmentOptions = { users: [], groups: [] };
+                        if (window.updateAssignmentTargetOptions) {
+                            window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, false);
+                        }
+>>>>>>> bmain/main
                     }
 
                     setOptionsError(optionsErrorMessage);
@@ -2973,9 +3118,49 @@
                 const selectedMode = document.querySelector('input[name="assignmentMode"]:checked');
                 const assignmentMode = selectedMode ? selectedMode.value : 'person';
                 const options = pendingStartOptionsRef.current;
+<<<<<<< HEAD
                 pendingStartOptionsRef.current = null;
                 hideAssignmentModal();
                 if (!options) return;
+=======
+                if (!options) {
+                    hideAssignmentModal();
+                    return;
+                }
+                if (assignmentMode === 'custom') {
+                    const targetTypeEl = document.getElementById('assignment-target-type');
+                    const targetValueEl = document.getElementById('assignment-target-value');
+                    const assignmentTargetType = targetTypeEl ? targetTypeEl.value : 'user';
+                    const assignmentTargetValue = targetValueEl ? targetValueEl.value : '';
+                    if (!assignmentTargetValue) {
+                        if (window.setAssignmentCustomError) {
+                            window.setAssignmentCustomError('請選擇指定對象');
+                        } else {
+                            alert('請選擇指定對象');
+                        }
+                        return;
+                    }
+                    if (assignmentTargetType === 'user' && !assignmentTargetValue.includes('@')) {
+                        if (window.setAssignmentCustomError) {
+                            window.setAssignmentCustomError('使用者 Email 不正確');
+                        } else {
+                            alert('使用者 Email 不正確');
+                        }
+                        return;
+                    }
+                    pendingStartOptionsRef.current = null;
+                    hideAssignmentModal();
+                    submitStartSession({
+                        ...options,
+                        assignmentMode: assignmentMode,
+                        assignmentTargetType: assignmentTargetType,
+                        assignmentTargetValue: assignmentTargetValue
+                    });
+                    return;
+                }
+                pendingStartOptionsRef.current = null;
+                hideAssignmentModal();
+>>>>>>> bmain/main
                 submitStartSession({
                     ...options,
                     assignmentMode: assignmentMode
@@ -2984,6 +3169,12 @@
 
             const handleAssignmentModeCancel = useCallback(() => {
                 pendingStartOptionsRef.current = null;
+<<<<<<< HEAD
+=======
+                if (window.setAssignmentCustomError) {
+                    window.setAssignmentCustomError('');
+                }
+>>>>>>> bmain/main
                 hideAssignmentModal();
             }, [hideAssignmentModal]);
 
@@ -3068,6 +3259,12 @@
                 if (isAdminView) {
                     pendingStartOptionsRef.current = options;
                     if (window.$ && typeof window.$.fn?.modal === 'function') {
+<<<<<<< HEAD
+=======
+                        if (window.prepareAssignmentModeModal) {
+                            window.prepareAssignmentModeModal();
+                        }
+>>>>>>> bmain/main
                         window.$('#assignmentModeModal').modal('show');
                     } else {
                         submitStartSession({ ...options, assignmentMode: 'person' });
@@ -3795,6 +3992,12 @@
             const [leaderDropdownOpen, setLeaderDropdownOpen] = useState(false);
             const [userDropdownOpen, setUserDropdownOpen] = useState(false);
             const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
+<<<<<<< HEAD
+=======
+            const [leaderSearch, setLeaderSearch] = useState('');
+            const [userSearch, setUserSearch] = useState('');
+            const [locationSearch, setLocationSearch] = useState('');
+>>>>>>> bmain/main
             const statusDropdownRef = useRef(null);
             const leaderDropdownRef = useRef(null);
             const userDropdownRef = useRef(null);
@@ -3873,6 +4076,33 @@
                 [...new Set(allAssets.map(a => a.location))].filter(Boolean).sort()
             , [allAssets]);
 
+<<<<<<< HEAD
+=======
+            const filteredLeaderOptions = useMemo(() => {
+                const keyword = String(leaderSearch || '').trim().toLowerCase();
+                if (!keyword) return leaderOptions;
+                return leaderOptions.filter(option =>
+                    String(option || '').toLowerCase().includes(keyword)
+                );
+            }, [leaderOptions, leaderSearch]);
+
+            const filteredUserOptions = useMemo(() => {
+                const keyword = String(userSearch || '').trim().toLowerCase();
+                if (!keyword) return userOptions;
+                return userOptions.filter(option =>
+                    String(option || '').toLowerCase().includes(keyword)
+                );
+            }, [userOptions, userSearch]);
+
+            const filteredLocationOptions = useMemo(() => {
+                const keyword = String(locationSearch || '').trim().toLowerCase();
+                if (!keyword) return locationOptions;
+                return locationOptions.filter(option =>
+                    String(option || '').toLowerCase().includes(keyword)
+                );
+            }, [locationOptions, locationSearch]);
+
+>>>>>>> bmain/main
             useEffect(() => {
                 const handleClickOutside = (event) => {
                     if (statusDropdownRef.current && statusDropdownRef.current.contains(event.target)) return;
@@ -3888,6 +4118,28 @@
                 return () => document.removeEventListener('mousedown', handleClickOutside);
             }, []);
 
+<<<<<<< HEAD
+=======
+            useEffect(() => {
+                if (!leaderDropdownOpen && leaderSearch) {
+                    setLeaderSearch('');
+                }
+                if (!userDropdownOpen && userSearch) {
+                    setUserSearch('');
+                }
+                if (!locationDropdownOpen && locationSearch) {
+                    setLocationSearch('');
+                }
+            }, [
+                leaderDropdownOpen,
+                leaderSearch,
+                userDropdownOpen,
+                userSearch,
+                locationDropdownOpen,
+                locationSearch
+            ]);
+
+>>>>>>> bmain/main
             const ensureArray = (value) => {
                 if (Array.isArray(value)) return value;
                 return value ? [value] : [];
@@ -3930,7 +4182,15 @@
                     isOpen,
                     dropdownRef,
                     placeholder,
+<<<<<<< HEAD
                     emptyLabel
+=======
+                    emptyLabel,
+                    searchable = false,
+                    searchValue = '',
+                    onSearchChange = null,
+                    searchPlaceholder = '輸入關鍵字'
+>>>>>>> bmain/main
                 } = config;
 
                 return (
@@ -3968,6 +4228,10 @@
                                                     type="button"
                                                     onClick={() => selectAllFilterOptions(filterKey, options)}
                                                     className="text-blue-600 hover:text-blue-800 font-medium"
+<<<<<<< HEAD
+=======
+                                                    disabled={options.length === 0}
+>>>>>>> bmain/main
                                                 >
                                                     全選
                                                 </button>
@@ -3980,6 +4244,23 @@
                                                 </button>
                                             </div>
                                         </div>
+<<<<<<< HEAD
+=======
+                                        {searchable && (
+                                            <div className="p-2 border-b border-slate-100 bg-white">
+                                                <div className="relative">
+                                                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                                    <input
+                                                        type="text"
+                                                        value={searchValue}
+                                                        onChange={(event) => onSearchChange && onSearchChange(event.target.value)}
+                                                        placeholder={searchPlaceholder}
+                                                        className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+>>>>>>> bmain/main
                                         <div className="max-h-72 overflow-y-auto p-1">
                                             {options.length > 0 ? (
                                                 options.map(option => (
@@ -4110,34 +4391,70 @@
                         {renderMultiSelect({
                             filterKey: 'leader',
                             label: '依保管人篩選',
+<<<<<<< HEAD
                             options: leaderOptions,
+=======
+                            options: filteredLeaderOptions,
+>>>>>>> bmain/main
                             selectedValues: selectedLeaders,
                             isOpen: leaderDropdownOpen,
                             dropdownRef: leaderDropdownRef,
                             placeholder: '請選擇保管人...',
+<<<<<<< HEAD
                             emptyLabel: '找不到符合的保管人'
+=======
+                            emptyLabel: '找不到符合的保管人',
+                            searchable: true,
+                            searchValue: leaderSearch,
+                            onSearchChange: setLeaderSearch,
+                            searchPlaceholder: '搜尋保管人...'
+>>>>>>> bmain/main
                         })}
 
                         {renderMultiSelect({
                             filterKey: 'user',
                             label: '依使用人篩選',
+<<<<<<< HEAD
                             options: userOptions,
+=======
+                            options: filteredUserOptions,
+>>>>>>> bmain/main
                             selectedValues: selectedUsers,
                             isOpen: userDropdownOpen,
                             dropdownRef: userDropdownRef,
                             placeholder: '請選擇使用人...',
+<<<<<<< HEAD
                             emptyLabel: '找不到符合的使用人'
+=======
+                            emptyLabel: '找不到符合的使用人',
+                            searchable: true,
+                            searchValue: userSearch,
+                            onSearchChange: setUserSearch,
+                            searchPlaceholder: '搜尋使用人...'
+>>>>>>> bmain/main
                         })}
 
                         {renderMultiSelect({
                             filterKey: 'location',
                             label: '依保管位置篩選',
+<<<<<<< HEAD
                             options: locationOptions,
+=======
+                            options: filteredLocationOptions,
+>>>>>>> bmain/main
                             selectedValues: selectedLocations,
                             isOpen: locationDropdownOpen,
                             dropdownRef: locationDropdownRef,
                             placeholder: '請選擇保管位置...',
+<<<<<<< HEAD
                             emptyLabel: '找不到符合的保管位置'
+=======
+                            emptyLabel: '找不到符合的保管位置',
+                            searchable: true,
+                            searchValue: locationSearch,
+                            onSearchChange: setLocationSearch,
+                            searchPlaceholder: '搜尋保管位置...'
+>>>>>>> bmain/main
                         })}
 
                         <div className="md:col-span-2 lg:col-span-3 xl:col-span-5">
@@ -4189,8 +4506,13 @@
         const ModeToggleCard = ({ isAdvancedMode, onToggle, compact = false }) => (
             <div className={`mode-toggle-card ${compact ? 'mode-toggle-card--compact' : ''}`}>
                 <div className="mode-toggle-text">
+<<<<<<< HEAD
                     <h3>進階批次處理模式</h3>
                     <p>掃描時先選擇動作，並以離線暫存保護未送出清單。</p>
+=======
+                    <h3>批次處理清單記憶功能</h3>
+                    <p>掃描或勾選時先選擇，會暫存保護未送出清單。</p>
+>>>>>>> bmain/main
                 </div>
                 <label className="toggle-switch" title="切換進階批次模式">
                     <input
@@ -4408,7 +4730,11 @@
         };
 
         // AssetTable 組件
+<<<<<<< HEAD
         const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll }) => {
+=======
+        const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll, groupProxyEnabled = false, groupMemberEmailsLower = [] }) => {
+>>>>>>> bmain/main
 
             // ✨ 分頁設定
             const ROWS_PER_PAGE = 500;
@@ -4531,8 +4857,36 @@
                                     const canCancel = !isTask && (isAdmin || isOwner);
                                     const isSelectable = asset.status === '在庫';
                                     const isSelected = selectedAssetIds.includes(asset.assetId);
+<<<<<<< HEAD
                                     const rowHoverClass = isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50';
                                     const rowBaseClass = isTask ? 'bg-teal-50' : '';
+=======
+
+                                    // ✨ 判斷是否為同組成員資產（使用 props 而非 window）
+                                    const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+                                    const isGroupMemberAsset = groupProxyEnabled &&
+                                        assetLeaderEmail !== normalizedCurrentEmail &&
+                                        groupMemberEmailsLower.includes(assetLeaderEmail);
+
+                                    // ✨ 複合背景色設計
+                                    let rowBaseClass = '';
+                                    let borderClass = '';
+
+                                    if (isTask && isGroupMemberAsset) {
+                                        // 同時滿足：青綠背景 + 藍色粗左邊框
+                                        rowBaseClass = 'bg-teal-50';
+                                        borderClass = 'border-l-4 border-l-blue-500';
+                                    } else if (isTask) {
+                                        // 僅盤點任務：青綠背景
+                                        rowBaseClass = 'bg-teal-50';
+                                    } else if (isGroupMemberAsset) {
+                                        // 僅同組資產：藍色背景 + 藍色左邊框
+                                        rowBaseClass = 'bg-blue-50';
+                                        borderClass = 'border-l-4 border-l-blue-400';
+                                    }
+
+                                    const rowHoverClass = isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50';
+>>>>>>> bmain/main
                                     const rowSelectedClass = isSelected ? 'ring-1 ring-blue-200 ring-inset' : '';
                                     const statusBadgeClass = STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200';
                                     const statusDetailType = STATUS_DETAIL_TYPES[asset.status];
@@ -4558,7 +4912,11 @@
                                     ) : null;
 
                                     return (
+<<<<<<< HEAD
                                         <tr key={`${asset.assetId}-${index}`} className={`${rowHoverClass} transition-colors ${rowBaseClass} ${rowSelectedClass} ${!isTask && isSelected ? 'bg-blue-50' : ''}`}>
+=======
+                                        <tr key={`${asset.assetId}-${index}`} className={`${rowHoverClass} transition-colors ${rowBaseClass} ${borderClass} ${rowSelectedClass} ${!isTask && isSelected ? 'bg-blue-50' : ''}`}>
+>>>>>>> bmain/main
                                             {/* 勾選欄位 */}
                                             <td className="px-2 py-3 text-center align-top">
                                                 {isSelectable ? (
@@ -4577,6 +4935,19 @@
                                             <td className="px-2 py-3 font-mono text-slate-600 whitespace-nowrap align-top">{asset.assetId}</td>
                                             <td className="px-2 py-3 font-medium text-slate-800 align-top w-[160px] max-w-[160px]">
                                                 <div className="flex items-start gap-2">
+<<<<<<< HEAD
+=======
+                                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                                        {/* ✨ 盤點任務圖示 */}
+                                                        {isTask && (
+                                                            <i className="fa-solid fa-clipboard-check text-teal-600" title="盤點任務"></i>
+                                                        )}
+                                                        {/* ✨ 同組資產圖示 */}
+                                                        {isGroupMemberAsset && (
+                                                            <i className="fa-solid fa-users text-blue-500" title={`同組成員資產（保管人：${asset.leader}）`}></i>
+                                                        )}
+                                                    </div>
+>>>>>>> bmain/main
                                                     <div className="line-clamp-2 min-w-0 flex-1" title={asset.assetName}>{asset.assetName}</div>
                                                     {isTask && (
                                                         <span className="inline-flex items-center rounded-full bg-teal-100 text-teal-700 text-xs font-semibold px-2 py-0.5 whitespace-nowrap">
@@ -6493,12 +6864,21 @@
                                         <input
                                             type="radio"
                                             name="transferCategory"
+<<<<<<< HEAD
                                             value="物品"
                                             checked={selectedCategory === '物品'}
                                             onChange={(e) => setSelectedCategory(e.target.value)}
                                             className="mr-2"
                                         />
                                         <span>物品</span>
+=======
+                                            value="非消耗品"
+                                            checked={selectedCategory === '非消耗品'}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            className="mr-2"
+                                        />
+                                        <span>非消耗品</span>
+>>>>>>> bmain/main
                                     </label>
                                 </div>
 
@@ -8028,7 +8408,54 @@
                     }
                 }
 
+<<<<<<< HEAD
                 const confirmation = confirm(`確定要批次轉移 ${selectedAssetIds.length} 筆資產嗎？`);
+=======
+                // ✨ 自動偵測哪些資產是代理轉移
+                const currentUserEmail = window.currentUserEmail || '';
+                const normalizedCurrentEmail = currentUserEmail.toLowerCase().trim();
+
+                const proxyTransfers = [];
+                selectedAssetIds.forEach(assetId => {
+                    const asset = allAssets.find(a => a.assetId === assetId);
+                    if (!asset) return;
+
+                    const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase().trim();
+                    if (assetLeaderEmail !== normalizedCurrentEmail) {
+                        // 這是代理轉移
+                        proxyTransfers.push({
+                            assetId: assetId,
+                            originalKeeperEmail: asset.leaderEmail,
+                            originalKeeperName: asset.leader
+                        });
+                    }
+                });
+
+                // ✨ 如果包含代理轉移，顯示詳細提示
+                let confirmMessage = `確定要批次轉移 ${selectedAssetIds.length} 筆資產嗎？`;
+
+                if (proxyTransfers.length > 0) {
+                    const proxyCount = proxyTransfers.length;
+                    const ownCount = selectedAssetIds.length - proxyCount;
+
+                    const proxyList = proxyTransfers
+                        .map(pt => `  - ${pt.originalKeeperName} (${pt.originalKeeperEmail})`)
+                        .slice(0, 5)
+                        .join('\n');
+
+                    confirmMessage =
+                        `⚠️ 代理轉移確認\n\n` +
+                        `您選取的資產中包含：\n` +
+                        `  • 自己的資產：${ownCount} 筆\n` +
+                        `  • 同組成員的資產：${proxyCount} 筆\n\n` +
+                        `代理轉移的原保管人：\n${proxyList}` +
+                        `${proxyTransfers.length > 5 ? '\n  ... 等其他成員' : ''}\n\n` +
+                        `此操作將被記錄為「同組代理轉移」。\n\n` +
+                        `是否確定繼續？`;
+                }
+
+                const confirmation = confirm(confirmMessage);
+>>>>>>> bmain/main
                 if (!confirmation) return;
 
                 setIsSubmitting(true);
@@ -8042,7 +8469,13 @@
                     newUserEmail: changeUser ? newUserEmail : null,
                     isStationTransfer: transferMode === 'station',
                     isInfoTransfer: transferMode === 'info',
+<<<<<<< HEAD
                     isIntakeTransfer: transferMode === 'intake'
+=======
+                    isIntakeTransfer: transferMode === 'intake',
+                    // ✨ 傳入代理轉移資訊
+                    proxyTransfers: proxyTransfers.length > 0 ? proxyTransfers : null
+>>>>>>> bmain/main
                 };
 
                 if (transferMode === 'station') {
@@ -8582,12 +9015,192 @@
             );
         };
 
+<<<<<<< HEAD
+=======
+        const BatchImportGuideModal = ({ onClose }) => {
+            return (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+                        <div className="px-6 py-4 border-b bg-emerald-50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-emerald-800">
+                                <i className="fa-regular fa-circle-question mr-2"></i>
+                                批次匯入操作手冊
+                            </h3>
+                            <button onClick={onClose} className="text-emerald-600 hover:text-emerald-800 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)] text-sm text-slate-700 space-y-6">
+                            <p className="text-slate-600">
+                                本手冊說明「新增資產」中的批次匯入操作方式與檔案格式規範，請依實作邏輯準備檔案並依步驟操作。
+                            </p>
+
+                            <div>
+                                <div className="text-base font-semibold text-slate-800 mb-2">支援檔案格式</div>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li>Excel：`.xlsx`</li>
+                                    <li>CSV：`.csv`</li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <div className="text-base font-semibold text-slate-800 mb-2">匯入檔案準備規則</div>
+                                <div className="space-y-3">
+                                    <div>
+                                        <div className="font-medium text-slate-700">1) Excel（.xlsx）</div>
+                                        <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                                            <li>工作表名稱必須為 `財產總表` 或 `物品總表`（可同時存在兩個工作表）。</li>
+                                            <li>欄位順序需與匯出格式一致（第一列為欄位名稱，資料從第 2 列開始）。</li>
+                                            <li>若兩個工作表都有資料，系統會一次匯入財產與物品。</li>
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <div className="font-medium text-slate-700">2) CSV（.csv）</div>
+                                        <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                                            <li>僅能匯入單一類型（財產或物品）。</li>
+                                            <li>匯入前請先在視窗下方「資料類型」區塊選擇「財產」或「物品」。</li>
+                                            <li>第一列為欄位名稱，資料從第 2 列開始。</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-base font-semibold text-slate-800 mb-2">欄位順序與必填規則</div>
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="font-medium text-slate-700 mb-2">財產（財產總表 / 財產 CSV）</div>
+                                        <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                                            <table className="min-w-[520px] w-full text-sm">
+                                                <thead className="bg-slate-50 text-slate-600">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left border-b border-slate-200">欄位</th>
+                                                        <th className="px-3 py-2 text-left border-b border-slate-200">說明</th>
+                                                        <th className="px-3 py-2 text-left border-b border-slate-200">必填</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="text-slate-700">
+                                                    {[
+                                                        ['A', '財產編號', '是'],
+                                                        ['B', '財產名稱', '是'],
+                                                        ['C', '財產別名', '否'],
+                                                        ['D', '型號/廠牌', '否'],
+                                                        ['E', '單位', '否'],
+                                                        ['F', '取得日期', '否'],
+                                                        ['G', '使用年限', '否'],
+                                                        ['H', '保管地點', '是'],
+                                                        ['I', '附屬設備', '否'],
+                                                        ['J', '保管人（姓名）', '是'],
+                                                        ['K', '使用人（姓名）', '否（空白會自動帶入保管人）'],
+                                                        ['L', '財產類別', '否（實際以匯入時選擇為準）']
+                                                    ].map(([col, desc, required]) => (
+                                                        <tr key={`property-${col}`} className="border-b border-slate-100">
+                                                            <td className="px-3 py-2 font-mono text-slate-500">{col}</td>
+                                                            <td className="px-3 py-2">{desc}</td>
+                                                            <td className="px-3 py-2">{required}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="font-medium text-slate-700 mb-2">物品（物品總表 / 物品 CSV）</div>
+                                        <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                                            <table className="min-w-[520px] w-full text-sm">
+                                                <thead className="bg-slate-50 text-slate-600">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-left border-b border-slate-200">欄位</th>
+                                                        <th className="px-3 py-2 text-left border-b border-slate-200">說明</th>
+                                                        <th className="px-3 py-2 text-left border-b border-slate-200">必填</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="text-slate-700">
+                                                    {[
+                                                        ['A', '物品編號', '是'],
+                                                        ['B', '物品名稱', '是'],
+                                                        ['C', '產品序號', '否'],
+                                                        ['D', '型號/廠牌', '否'],
+                                                        ['E', '取得日期', '否'],
+                                                        ['F', '使用年限', '否'],
+                                                        ['G', '單位', '否'],
+                                                        ['H', '台幣金額', '否'],
+                                                        ['I', '申購單號', '否'],
+                                                        ['J', '財產類別', '否'],
+                                                        ['K', '保管人（姓名）', '是'],
+                                                        ['L', '保管地點', '是']
+                                                    ].map(([col, desc, required]) => (
+                                                        <tr key={`item-${col}`} className="border-b border-slate-100">
+                                                            <td className="px-3 py-2 font-mono text-slate-500">{col}</td>
+                                                            <td className="px-3 py-2">{desc}</td>
+                                                            <td className="px-3 py-2">{required}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="text-base font-semibold text-slate-800 mb-2">操作步驟</div>
+                                <ol className="list-decimal pl-5 space-y-1 text-slate-600">
+                                    <li>點擊「新增資產」開啟視窗。</li>
+                                    <li>在「批次匯入」區塊選擇 `.xlsx` 或 `.csv` 檔案。</li>
+                                    <li>選擇「財產類別」（財產 / 非消耗品）。僅在匯入財產資料時生效，會寫入財產總表 L 欄。</li>
+                                    <li>若為 CSV，請在下方「資料類型」選擇財產或物品。</li>
+                                    <li>點擊「開始批次匯入」。</li>
+                                    <li>匯入完成後畫面會顯示成功/失敗筆數與失敗清單。</li>
+                                </ol>
+                            </div>
+
+                            <div>
+                                <div className="text-base font-semibold text-slate-800 mb-2">系統檢核與常見失敗原因</div>
+                                <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                                    <li>必填欄位缺漏（編號、名稱、保管地點、保管人）。</li>
+                                    <li>保管人/使用人不是名單中的姓名（請填姓名而非 Email）。</li>
+                                    <li>名單中有重複姓名（系統要求姓名唯一）。</li>
+                                    <li>編號已存在於系統中。</li>
+                                    <li>同一匯入檔案內編號重複。</li>
+                                    <li>Excel 沒有 `財產總表` 或 `物品總表` 工作表。</li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <div className="text-base font-semibold text-slate-800 mb-2">匯入結果說明</div>
+                                <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                                    <li>成功筆數：實際新增到表格的筆數。</li>
+                                    <li>失敗筆數：驗證未通過的筆數。</li>
+                                    <li>失敗清單欄位：類型、列號、編號、原因、來源（Excel/CSV/工作表名稱）。</li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <div className="text-base font-semibold text-slate-800 mb-2">注意事項</div>
+                                <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                                    <li>財產/物品編號需全系統唯一（跨兩張表）。</li>
+                                    <li>日期可用 Excel 日期或 `YYYY/MM/DD`，系統會自動轉換。</li>
+                                    <li>財產名稱包含「電腦」時，系統會自動標記資訊資產與電腦欄位。</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+>>>>>>> bmain/main
         // ========== 新增資產 Modal ==========
         const AddAssetModal = ({ onClose, onSuccess, preloadedData }) => {
             // 載入與提交狀態
             const [isLoading, setIsLoading] = useState(true);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [dropdownData, setDropdownData] = useState(null);
+<<<<<<< HEAD
+=======
+            const [showBatchImportGuide, setShowBatchImportGuide] = useState(false);
+>>>>>>> bmain/main
 
             // 表單狀態
             const [assetType, setAssetType] = useState('property');
@@ -9052,6 +9665,10 @@
             };
 
             return (
+<<<<<<< HEAD
+=======
+                <>
+>>>>>>> bmain/main
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
                         {/* Header */}
@@ -9076,8 +9693,23 @@
                                 <div className="space-y-6">
                                     {/* 批次匯入 */}
                                     <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+<<<<<<< HEAD
                                         <div className="font-medium text-emerald-800 mb-2">
                                             <i className="fas fa-file-import mr-2"></i>批次匯入
+=======
+                                        <div className="flex items-center justify-between gap-3 mb-2">
+                                            <div className="font-medium text-emerald-800">
+                                                <i className="fas fa-file-import mr-2"></i>批次匯入
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowBatchImportGuide(true)}
+                                                className="text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors"
+                                            >
+                                                <i className="fa-regular fa-circle-question mr-1"></i>
+                                                使用說明
+                                            </button>
+>>>>>>> bmain/main
                                         </div>
                                         <p className="text-sm text-slate-600 mb-4">
                                             支援 Excel/CSV，需使用匯出相同欄位順序。請依照新舊系統將工作表名稱改為“財產總表”或“物品總表”
@@ -9098,7 +9730,11 @@
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-medium text-slate-600 mb-1">
+<<<<<<< HEAD
                                                     請選擇財產類別（套用至財產總表）
+=======
+                                                    請選擇財產類別
+>>>>>>> bmain/main
                                                 </label>
                                                 <select
                                                     value={propertyCategoryForImport}
@@ -9110,7 +9746,11 @@
                                                         <option key={option} value={option}>{option}</option>
                                                     ))}
                                                 </select>
+<<<<<<< HEAD
                                                 <p className="text-xs text-slate-500 mt-1">匯入時自動寫入 L 欄</p>
+=======
+                                                <p className="text-xs text-slate-500 mt-1">CSV，請在下方「資料類型」選擇財產或物品。</p>
+>>>>>>> bmain/main
                                             </div>
                                             <div className="flex items-end">
                                                 <button
@@ -9377,6 +10017,13 @@
                         </div>
                     </div>
                 </div>
+<<<<<<< HEAD
+=======
+                {showBatchImportGuide && (
+                    <BatchImportGuideModal onClose={() => setShowBatchImportGuide(false)} />
+                )}
+                </>
+>>>>>>> bmain/main
             );
         };
 
@@ -10017,8 +10664,18 @@
                 if (!currentEmail) return false;
                 const leaderEmail = normalizeEmail(asset.leaderEmail);
                 const userEmail = normalizeEmail(asset.userEmail);
+<<<<<<< HEAD
                 return leaderEmail !== currentEmail && userEmail !== currentEmail;
             }, [isAdminView, currentUserEmail]);
+=======
+                const isOwner = leaderEmail === currentEmail || userEmail === currentEmail;
+                if (isOwner) return false;
+
+                // 非本人資產，只有在「有盤點任務」時才標註為 Task
+                const hasTask = !!inventoryStatusByAsset[asset.assetId];
+                return hasTask;
+            }, [isAdminView, currentUserEmail, inventoryStatusByAsset]);
+>>>>>>> bmain/main
             const assetIndex = useMemo(() => {
                 const map = new Map();
                 (allAssets || []).forEach(asset => {
@@ -11138,7 +11795,13 @@
                                 finishCardLoading();
                                 scheduleScrapPendingPreload(forceUserScope);
                                 scheduleTransferPendingPreload(forceUserScope);
+<<<<<<< HEAD
                                 scheduleAddAssetDropdownPreload();
+=======
+                                if (response.isAdmin && !forceUserScope) {
+                                    scheduleAddAssetDropdownPreload();
+                                }
+>>>>>>> bmain/main
 
                                 // 載入盤點資料
                                 google.script.run
@@ -11186,7 +11849,11 @@
                                     .withFailureHandler(error => {
                                         console.warn('載入轉移選項失敗：', error.message);
                                     })
+<<<<<<< HEAD
                                     .getTransferData();
+=======
+                                    .getTransferData(forceUserScope);
+>>>>>>> bmain/main
 
                                 // 載入出借選項資料（借用人、地點）
                                 google.script.run
@@ -11238,7 +11905,13 @@
                 const forceUserScope = viewMode === 'user';
                 scheduleScrapPendingPreload(forceUserScope);
                 scheduleTransferPendingPreload(forceUserScope);
+<<<<<<< HEAD
                 scheduleAddAssetDropdownPreload();
+=======
+                if (isAdmin && !forceUserScope) {
+                    scheduleAddAssetDropdownPreload();
+                }
+>>>>>>> bmain/main
 
                 try {
                     // 並行載入多個 API
@@ -11352,7 +12025,11 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
+<<<<<<< HEAD
             }, [fetchPendingInventoryAssignments, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
+=======
+            }, [fetchPendingInventoryAssignments, isAdmin, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
+>>>>>>> bmain/main
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
@@ -11362,6 +12039,13 @@
             const handleViewModeChange = (mode) => {
                 if (!isAdmin) return;
                 if (mode === viewMode) return;
+<<<<<<< HEAD
+=======
+                if (mode === 'user') {
+                    setShowAddAssetModal(false);
+                    setAddAssetDropdownData(null);
+                }
+>>>>>>> bmain/main
                 setViewMode(mode);
                 setTransferringAssets(null);
                 setLentAssetsDetails(null);
@@ -11425,7 +12109,14 @@
                 if (!isAdminView && showInventoryMgmtModal) {
                     setShowInventoryMgmtModal(false);
                 }
+<<<<<<< HEAD
             }, [isAdminView, showInventoryMgmtModal]);
+=======
+                if (!isAdminView && showAddAssetModal) {
+                    setShowAddAssetModal(false);
+                }
+            }, [isAdminView, showInventoryMgmtModal, showAddAssetModal]);
+>>>>>>> bmain/main
 
             useEffect(() => {
                 loadData();
@@ -11441,6 +12132,19 @@
                 window.pendingApprovals = pendingApprovalsData;
             }, [pendingApprovalsData]);
 
+<<<<<<< HEAD
+=======
+            // ✨ 同步代理轉移狀態到 window（供 AssetTable 和 BatchTransferModal 使用）
+            useEffect(() => {
+                if (transferOptions) {
+                    window.currentUserEmail = transferOptions.currentUserEmail || '';
+                    window.groupProxyEnabled = transferOptions.groupProxyEnabled || false;
+                    window.groupMemberEmailsLower = transferOptions.groupMemberEmailsLower || [];
+                    window.currentGroup = transferOptions.currentGroup || null;
+                }
+            }, [transferOptions]);
+
+>>>>>>> bmain/main
             useEffect(() => {
                 if (!isReady) return;
 
@@ -11851,10 +12555,27 @@
                     if (isAdminView) {
                         return scrappingAssets.length;
                     } else {
+<<<<<<< HEAD
                         return scrappingAssets.filter(a =>
                             a.leaderEmail?.toLowerCase() === currentUserEmail.toLowerCase() ||
                             a.userEmail?.toLowerCase() === currentUserEmail.toLowerCase()
                         ).length;
+=======
+                        // ✨ 同組協作：同組成員的報廢中資產也應可見
+                        const groupProxyEnabled = transferOptions?.groupProxyEnabled || false;
+                        const groupMemberEmailsLower = transferOptions?.groupMemberEmailsLower || [];
+                        const groupEmailSet = new Set(groupMemberEmailsLower);
+
+                        return scrappingAssets.filter(a => {
+                            const leaderEmail = a.leaderEmail?.toLowerCase() || '';
+                            const userEmail = a.userEmail?.toLowerCase() || '';
+                            const isOwner = leaderEmail === currentUserEmail.toLowerCase() ||
+                                           userEmail === currentUserEmail.toLowerCase();
+                            const isGroupMember = groupProxyEnabled &&
+                                                  (groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail));
+                            return isOwner || isGroupMember;
+                        }).length;
+>>>>>>> bmain/main
                     }
                 })();
 
@@ -12693,6 +13414,7 @@
                                 )}
 
                                 {/* 新增資產按鈕 */}
+<<<<<<< HEAD
                                 <button
                                     onClick={() => setShowAddAssetModal(true)}
                                     className="hero-btn hero-btn--primary"
@@ -12701,6 +13423,18 @@
                                     <i className="fas fa-plus"></i>
                                     <span className="hidden sm:inline">新增資產</span>
                                 </button>
+=======
+                                {isAdminView && (
+                                    <button
+                                        onClick={() => setShowAddAssetModal(true)}
+                                        className="hero-btn hero-btn--primary"
+                                        title="新增財產/物品"
+                                    >
+                                        <i className="fas fa-plus"></i>
+                                        <span className="hidden sm:inline">新增資產</span>
+                                    </button>
+                                )}
+>>>>>>> bmain/main
 
                                 {/* 重新整理按鈕 */}
                                 <button
@@ -12777,6 +13511,37 @@
                         )}
                     </div>
 
+<<<<<<< HEAD
+=======
+                    {/* ✨ 同組功能提示訊息 */}
+                    {transferOptions?.groupProxyEnabled && transferOptions?.currentGroup && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                            <div className="flex items-start gap-2">
+                                <i className="fa-solid fa-info-circle text-blue-600 mt-0.5"></i>
+                                <div className="flex-1">
+                                    <p className="text-sm text-blue-800">
+                                        <strong>同組協助功能已啟用</strong>（{transferOptions.currentGroup}）
+                                        - 表格中包含同組成員的資產，您可以協助轉移。
+                                    </p>
+                                    <p className="text-xs text-blue-700 mt-1">
+                                        💡 提示：
+                                        <span className="inline-flex items-center gap-1 ml-2">
+                                            <span className="inline-block w-3 h-3 bg-blue-50 border-2 border-blue-400 rounded"></span>
+                                            藍色背景 = 同組成員資產
+                                        </span>
+                                        {hasActiveInventory && (
+                                            <span className="inline-flex items-center gap-1 ml-3">
+                                                <span className="inline-block w-3 h-3 bg-teal-50 rounded"></span>
+                                                青綠色背景 = 盤點任務
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+>>>>>>> bmain/main
                     {/* 批次操作按鈕卡片 */}
                     <BatchActionButtons
                         onBatchTransfer={handleBatchTransfer}
@@ -12828,6 +13593,11 @@
                         selectedAssetIds={selectedAssetIds}
                         onAssetSelect={handleAssetSelect}
                         onSelectAll={handleSelectAll}
+<<<<<<< HEAD
+=======
+                        groupProxyEnabled={transferOptions?.groupProxyEnabled || false}
+                        groupMemberEmailsLower={transferOptions?.groupMemberEmailsLower || []}
+>>>>>>> bmain/main
                     />
 
                     {statusDetailState && (
@@ -12991,7 +13761,11 @@
                     )}
 
                     {/* 新增資產 Modal */}
+<<<<<<< HEAD
                     {showAddAssetModal && (
+=======
+                    {showAddAssetModal && isAdminView && (
+>>>>>>> bmain/main
                         <AddAssetModal
                             onClose={() => setShowAddAssetModal(false)}
                             onSuccess={handleAddAssetSuccess}
@@ -13054,4 +13828,8 @@
         ReactDOM.createRoot(document.getElementById('react-root')).render(<App />);
     </script>
 </body>
+<<<<<<< HEAD
 </html>
+=======
+</html>
+>>>>>>> bmain/main

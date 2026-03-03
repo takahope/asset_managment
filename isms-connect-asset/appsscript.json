@@ -4,11 +4,7 @@
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "webapp": {
-<<<<<<< HEAD
-    "executeAs": "USER_ACCESSING",
-=======
     "executeAs": "USER_DEPLOYING",
->>>>>>> bmain/main
     "access": "DOMAIN"
   }
 }

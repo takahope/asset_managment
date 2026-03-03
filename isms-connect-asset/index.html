@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資產與資訊資產對照管理</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- 過濾 Tailwind CDN 警告 -->
+  <script>
+    (function() {
+      const originalWarn = console.warn;
+      console.warn = function(...args) {
+        if (typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+        originalWarn.apply(console, args);
+      };
+    })();
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+  <style>
+    :root {
+      --ink-900: #0f172a;
+      --ink-700: #334155;
+      --ink-500: #64748b;
+      --surface: #ffffff;
+      --accent-500: #2563eb;
+      --accent-600: #1d4ed8;
+    }
+
+    body {
+      font-family: "Noto Sans TC", sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      min-height: 100vh;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #334155;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .tab-btn {
+      padding: 12px 24px;
+      font-weight: 500;
+      color: #64748b;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: #334155;
+    }
+
+    .tab-btn.active {
+      color: #2563eb;
+      border-bottom-color: #2563eb;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table th {
+      background: #f8fafc;
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: #334155;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .data-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .data-table tr:hover {
+      background: #f8fafc;
+    }
+
+    .data-table tr.selected {
+      background: #eff6ff;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .badge-warning {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 16px 24px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
+    }
+
+    .toast-success { background: #22c55e; }
+    .toast-error { background: #ef4444; }
+    .toast-info { background: #3b82f6; }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .loading-spinner {
+      border: 3px solid #e2e8f0;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .checkbox-wrapper input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .search-input {
+      padding: 10px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .select-input {
+      padding: 10px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+      min-width: 200px;
+    }
+
+    .select-input:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+
+    /* 條碼掃描器樣式 - 參考主應用程式設計 */
+
+    /* 移動裝置大卡片按鈕 */
+    .mobile-scan-card {
+      display: none;
+      margin: 0 0 24px;
+    }
+
+    .mobile-scan-card__button {
+      width: 100%;
+      border: 0;
+      border-radius: 22px;
+      padding: 22px 18px;
+      background: linear-gradient(160deg, #2f6c7f 0%, #1aa39f 55%, #23b7a9 100%);
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+      box-shadow: 0 18px 38px rgba(26, 163, 159, 0.28);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      cursor: pointer;
+    }
+
+    .mobile-scan-card__button:active {
+      transform: translateY(1px);
+      box-shadow: 0 14px 30px rgba(26, 163, 159, 0.25);
+    }
+
+    .mobile-scan-card__button:focus-visible {
+      outline: 3px solid rgba(125, 211, 199, 0.7);
+      outline-offset: 3px;
+    }
+
+    .mobile-scan-card__icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    }
+
+    .mobile-scan-card__title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .mobile-scan-card__subtitle {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    @media (max-width: 768px) {
+      .mobile-scan-card {
+        display: block;
+      }
+    }
+
+    /* 掃描器背景遮罩 */
+    .scanner-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      z-index: 2000;
+      display: none;
+    }
+
+    .scanner-backdrop.active {
+      display: block;
+    }
+
+    /* 掃描器彈出窗口 */
+    .scanner-zone {
+      display: none;
+    }
+
+    .scanner-zone.active {
+      display: block;
+      position: fixed;
+      top: 6vh;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(760px, 94vw);
+      max-height: 88vh;
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 22px;
+      padding: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      z-index: 2001;
+    }
+
+    #scanner-reader {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    #scanner-reader video {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    #scanner-reader canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .scanner-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      max-width: 400px;
+      height: 60%;
+      border: 2px solid rgba(37, 99, 235, 0.8);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    .scanner-overlay::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: rgba(37, 99, 235, 0.8);
+      animation: scanPulse 2s ease-in-out infinite;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
+    }
+
+    @keyframes scanPulse {
+      0%, 100% { top: 10%; opacity: 0.3; }
+      50% { top: 90%; opacity: 1; }
+    }
+
+    .scanner-status {
+      text-align: center;
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+
+    .scanner-status.scanning {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .scanner-status.success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .scanner-status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* 桌面版搜尋框旁的掃描按鈕 */
+    .btn-scan-barcode {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .btn-scan-barcode {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="min-h-screen">
+    <!-- 導覽列 -->
+    <nav class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <i class="fas fa-link text-blue-600 text-xl"></i>
+          <h1 class="text-xl font-bold text-gray-900">資產與資訊資產對照管理</h1>
+        </div>
+        <div id="userInfo" class="text-sm text-gray-500"></div>
+      </div>
+    </nav>
+
+    <!-- 主內容區 -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+      <!-- 統計卡片 -->
+      <div id="statsSection" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotal">-</div>
+          <div class="stat-label">總資產數</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-green-600" id="statMapped">-</div>
+          <div class="stat-label">已對照</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-amber-600" id="statUnmapped">-</div>
+          <div class="stat-label">未對照</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-blue-600" id="statRate">-</div>
+          <div class="stat-label">對照率</div>
+        </div>
+      </div>
+
+      <!-- 移動裝置掃描大卡片 -->
+      <div class="mobile-scan-card">
+        <button
+          class="mobile-scan-card__button"
+          onclick="toggleScanner()"
+          aria-label="開啟相機掃描"
+        >
+          <span class="mobile-scan-card__icon" aria-hidden="true">
+            <i class="fas fa-camera"></i>
+          </span>
+          <span class="mobile-scan-card__title">Tap to Scan Item</span>
+          <span class="mobile-scan-card__subtitle">開啟相機掃描資產條碼</span>
+        </button>
+      </div>
+
+      <!-- 掃描器背景遮罩 -->
+      <div id="scannerBackdrop" class="scanner-backdrop" onclick="toggleScanner()"></div>
+
+      <!-- 條碼掃描區（彈出窗口） -->
+      <div id="scannerZone" class="scanner-zone">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-gray-900">
+            <i class="fas fa-camera mr-2 text-blue-600"></i>條碼掃描器
+          </h3>
+          <button class="text-gray-500 hover:text-gray-700" onclick="toggleScanner()">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div id="scanner-reader">
+          <div class="scanner-overlay"></div>
+        </div>
+        <div id="scannerStatus" class="scanner-status scanning">
+          <i class="fas fa-spinner fa-spin mr-2"></i>準備掃描器...
+        </div>
+      </div>
+
+      <!-- Tab 導航 -->
+      <div class="card mb-6">
+        <div class="flex border-b">
+          <button class="tab-btn active" data-tab="assets" onclick="switchTab('assets')">
+            <i class="fas fa-list mr-2"></i>資產清單
+          </button>
+          <button class="tab-btn" data-tab="mapping" onclick="switchTab('mapping')">
+            <i class="fas fa-link mr-2"></i>對照作業
+          </button>
+          <button class="tab-btn" data-tab="isms" onclick="switchTab('isms')">
+            <i class="fas fa-shield-alt mr-2"></i>資訊資產
+          </button>
+          <button class="tab-btn" data-tab="report" onclick="switchTab('report')">
+            <i class="fas fa-chart-bar mr-2"></i>報表查詢
+          </button>
+        </div>
+
+        <!-- Tab 內容 -->
+        <div class="p-6">
+          <!-- 資產清單 Tab -->
+          <div id="tab-assets" class="tab-content">
+            <div class="flex flex-wrap items-center gap-4 mb-6">
+              <input type="text" id="assetSearch" class="search-input" placeholder="搜尋資產編號、名稱、保管人...">
+              <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
+                <i class="fas fa-camera mr-2"></i>掃描條碼
+              </button>
+              <select id="groupFilter" class="select-input">
+                <option value="">全部組別</option>
+              </select>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" id="unmappedOnly" class="w-4 h-4">
+                <span>僅顯示未對照</span>
+              </label>
+              <button class="btn-secondary" onclick="loadAssets()">
+                <i class="fas fa-sync-alt mr-2"></i>重新整理
+              </button>
+            </div>
+
+            <div class="mb-4 flex items-center justify-between">
+              <div class="text-sm text-gray-500">
+                已選擇 <span id="selectedCount" class="font-semibold text-blue-600">0</span> 筆資產
+              </div>
+              <button id="goToMappingBtn" class="btn-primary" onclick="goToMapping()" disabled>
+                <i class="fas fa-arrow-right mr-2"></i>前往對照
+              </button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="data-table" id="assetTable">
+                <thead>
+                  <tr>
+                    <th class="w-12">
+                      <input type="checkbox" id="selectAllAssets" onchange="toggleSelectAll()">
+                    </th>
+                    <th>資產編號</th>
+                    <th>資產名稱</th>
+                    <th>廠牌型號</th>
+                    <th>保管人</th>
+                    <th>使用人</th>
+                    <th>地點</th>
+                    <th>組別</th>
+                    <th>對照狀態</th>
+                    <th>資訊資產編號</th>
+                  </tr>
+                </thead>
+                <tbody id="assetTableBody">
+                  <tr>
+                    <td colspan="8" class="text-center py-8 text-gray-500">
+                      <div class="loading-spinner mx-auto mb-2"></div>
+                      載入中...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 對照作業 Tab -->
+          <div id="tab-mapping" class="tab-content hidden">
+            <div class="grid md:grid-cols-2 gap-6">
+              <!-- 左側：已選資產 -->
+              <div class="border rounded-lg p-4">
+                <h3 class="font-semibold text-gray-900 mb-4">
+                  <i class="fas fa-box mr-2 text-blue-600"></i>待對照資產
+                  <span id="mappingAssetCount" class="text-sm text-gray-500 ml-2">(0 筆)</span>
+                </h3>
+                <div id="selectedAssetsList" class="space-y-2 max-h-80 overflow-y-auto">
+                  <p class="text-gray-400 text-sm">請先在「資產清單」選擇資產</p>
+                </div>
+              </div>
+
+              <!-- 右側：選擇資訊資產 -->
+              <div class="border rounded-lg p-4">
+                <h3 class="font-semibold text-gray-900 mb-4">
+                  <i class="fas fa-shield-alt mr-2 text-green-600"></i>選擇資訊資產
+                </h3>
+                <input type="text" id="ismsSearch" class="search-input w-full mb-4" placeholder="搜尋資訊資產...">
+                <select id="ismsAssetSelect" class="select-input w-full mb-4" size="8">
+                  <option value="">-- 請選擇資訊資產 --</option>
+                </select>
+
+                <div class="mb-4">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">備註</label>
+                  <textarea id="mappingRemarks" class="w-full p-3 border rounded-lg" rows="2" placeholder="選填"></textarea>
+                </div>
+
+                <button id="createMappingBtn" class="btn-primary w-full" onclick="createMapping()" disabled>
+                  <i class="fas fa-link mr-2"></i>建立對照
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 資訊資產 Tab -->
+          <div id="tab-isms" class="tab-content hidden">
+            <div class="flex items-center gap-4 mb-6">
+              <input type="text" id="ismsListSearch" class="search-input" placeholder="搜尋資訊資產...">
+              <button class="btn-secondary" onclick="loadIsmsAssets()">
+                <i class="fas fa-sync-alt mr-2"></i>重新整理
+              </button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="data-table" id="ismsTable">
+                <thead>
+                  <tr>
+                    <th>資訊資產編號</th>
+                    <th>名稱</th>
+                    <th>類別</th>
+                    <th>權責單位</th>
+                    <th>地點</th>
+                    <th>狀態</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="ismsTableBody">
+                  <tr>
+                    <td colspan="7" class="text-center py-8 text-gray-500">
+                      <div class="loading-spinner mx-auto mb-2"></div>
+                      載入中...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 報表查詢 Tab -->
+          <div id="tab-report" class="tab-content hidden">
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+              <!-- 依資訊資產查詢 -->
+              <div class="border rounded-lg p-4">
+                <h3 class="font-semibold text-gray-900 mb-4">
+                  <i class="fas fa-search mr-2 text-blue-600"></i>依資訊資產查詢
+                </h3>
+                <select id="reportIsmsSelect" class="select-input w-full mb-4">
+                  <option value="">-- 請選擇資訊資產 --</option>
+                </select>
+                <button class="btn-secondary w-full" onclick="queryByIsmsAsset()">
+                  <i class="fas fa-search mr-2"></i>查詢
+                </button>
+              </div>
+
+              <!-- 匯出功能 -->
+              <div class="border rounded-lg p-4">
+                <h3 class="font-semibold text-gray-900 mb-4">
+                  <i class="fas fa-file-export mr-2 text-green-600"></i>匯出報表
+                </h3>
+                <p class="text-sm text-gray-500 mb-4">匯出完整的資產對照報表（CSV 格式）</p>
+                <button class="btn-primary w-full" onclick="exportReport()">
+                  <i class="fas fa-download mr-2"></i>匯出報表
+                </button>
+              </div>
+            </div>
+
+            <!-- 組別統計 -->
+            <div class="border rounded-lg p-4">
+              <h3 class="font-semibold text-gray-900 mb-4">
+                <i class="fas fa-chart-pie mr-2 text-purple-600"></i>組別對照統計
+              </h3>
+              <div class="overflow-x-auto">
+                <table class="data-table" id="groupStatsTable">
+                  <thead>
+                    <tr>
+                      <th>組別</th>
+                      <th>總數</th>
+                      <th>已對照</th>
+                      <th>未對照</th>
+                      <th>對照率</th>
+                    </tr>
+                  </thead>
+                  <tbody id="groupStatsBody">
+                    <tr>
+                      <td colspan="5" class="text-center py-4 text-gray-500">載入中...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 查詢結果 -->
+            <div id="queryResultSection" class="border rounded-lg p-4 mt-6 hidden">
+              <h3 class="font-semibold text-gray-900 mb-4">
+                <i class="fas fa-list mr-2 text-blue-600"></i>查詢結果
+                <span id="queryResultCount" class="text-sm text-gray-500 ml-2"></span>
+              </h3>
+              <div class="overflow-x-auto">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>資產編號</th>
+                      <th>資產名稱</th>
+                      <th>保管人</th>
+                      <th>地點</th>
+                      <th>組別</th>
+                    </tr>
+                  </thead>
+                  <tbody id="queryResultBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Toast 容器 -->
+    <div id="toastContainer"></div>
+
+    <!-- 確認對話框 -->
+    <div id="confirmModal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+          <i class="fas fa-exclamation-triangle text-amber-500 mr-2"></i>覆蓋確認
+        </h3>
+        <p class="text-gray-600 mb-4" id="confirmMessage">以下資產已有對照，是否要覆蓋？</p>
+        <div id="existingMappingsList" class="bg-amber-50 rounded-lg p-4 mb-6 max-h-40 overflow-y-auto"></div>
+        <div class="flex justify-end gap-3">
+          <button class="btn-secondary" onclick="closeConfirmModal()">取消</button>
+          <button class="btn-danger" onclick="confirmOverwrite()">確認覆蓋</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 全域狀態
+    let allAssets = [];
+    let allIsmsAssets = [];
+    let selectedAssetIds = new Set();
+    let pendingMappingData = null;
+
+    // ==========================================
+    // 初始化
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', function() {
+      loadUserInfo();
+      loadAssets();
+      loadIsmsAssets();
+      loadGroupList();
+      loadStatistics();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      // 資產搜尋
+      document.getElementById('assetSearch').addEventListener('input', debounce(filterAssets, 300));
+      document.getElementById('groupFilter').addEventListener('change', filterAssets);
+      document.getElementById('unmappedOnly').addEventListener('change', filterAssets);
+
+      // 資訊資產搜尋
+      document.getElementById('ismsSearch').addEventListener('input', debounce(filterIsmsSelect, 300));
+      document.getElementById('ismsListSearch').addEventListener('input', debounce(filterIsmsTable, 300));
+
+      // 資訊資產選擇
+      document.getElementById('ismsAssetSelect').addEventListener('change', updateCreateMappingBtn);
+    }
+
+    // ==========================================
+    // 資料載入
+    // ==========================================
+    function loadUserInfo() {
+      google.script.run
+        .withSuccessHandler(function(user) {
+          document.getElementById('userInfo').textContent = user.email;
+        })
+        .getCurrentUser();
+    }
+
+    function loadAssets() {
+      document.getElementById('assetTableBody').innerHTML = `
+        <tr><td colspan="8" class="text-center py-8 text-gray-500">
+          <div class="loading-spinner mx-auto mb-2"></div>載入中...
+        </td></tr>`;
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            allAssets = result.assets;
+            renderAssetTable(allAssets);
+            updateStats(result.statistics);
+          } else {
+            showToast(result.error, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          showToast('載入失敗: ' + err.message, 'error');
+        })
+        .getAssetsWithMappingStatus({});
+    }
+
+    function loadIsmsAssets() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            allIsmsAssets = result.assets;
+            // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
+            const filteredAssets = allIsmsAssets.filter(function(a) {
+              return a.category === 'HW' || a.category === 'EV';
+            });
+            renderIsmsTable(filteredAssets);
+            populateIsmsSelect();
+          } else {
+            showToast(result.error, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          showToast('載入資訊資產失敗: ' + err.message, 'error');
+        })
+        .getIsmsAssets({});
+    }
+
+    function loadGroupList() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            const select = document.getElementById('groupFilter');
+            select.innerHTML = '<option value="">全部組別</option>';
+            result.groups.forEach(function(group) {
+              const option = document.createElement('option');
+              option.value = group;
+              option.textContent = group;
+              select.appendChild(option);
+            });
+          }
+        })
+        .getGroupList();
+    }
+
+    function loadStatistics() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            renderGroupStats(result.byGroup);
+          }
+        })
+        .getMappingStatistics();
+    }
+
+    // ==========================================
+    // 渲染函式
+    // ==========================================
+    function renderAssetTable(assets) {
+      const tbody = document.getElementById('assetTableBody');
+
+      if (assets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = assets.map(function(asset) {
+        const isSelected = selectedAssetIds.has(asset.assetId);
+        return `
+          <tr class="${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtml(asset.assetId)}">
+            <td class="checkbox-wrapper">
+              <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleAssetSelection('${escapeHtml(asset.assetId)}')">
+            </td>
+            <td class="font-mono text-sm">${escapeHtml(asset.assetId)}</td>
+            <td>${escapeHtml(asset.assetName)}</td>
+            <td>${escapeHtml(asset.modelBrand || '-')}</td>
+            <td>${escapeHtml(asset.leaderName)}</td>
+            <td>${escapeHtml(asset.userName)}</td>
+            <td>${escapeHtml(asset.location)}</td>
+            <td>${escapeHtml(asset.group)}</td>
+            <td>
+              ${asset.isMapped
+                ? '<span class="badge badge-success"><i class="fas fa-check mr-1"></i>已對照</span>'
+                : '<span class="badge badge-warning"><i class="fas fa-times mr-1"></i>未對照</span>'}
+            </td>
+            <td class="font-mono text-sm">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderIsmsTable(assets) {
+      const tbody = document.getElementById('ismsTableBody');
+
+      if (assets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">無資訊資產資料</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = assets.map(function(asset) {
+        return `
+          <tr>
+            <td class="font-mono text-sm">${escapeHtml(asset.ismsAssetId)}</td>
+            <td>${escapeHtml(asset.name)}</td>
+            <td>${escapeHtml(asset.category)}</td>
+            <td>${escapeHtml(asset.responsibleUnit)}</td>
+            <td>${escapeHtml(asset.location)}</td>
+            <td>${escapeHtml(asset.status)}</td>
+            <td>
+              <button class="text-blue-600 hover:text-blue-800 text-sm" onclick="viewIsmsAssetDetail('${escapeHtml(asset.ismsAssetId)}')">
+                <i class="fas fa-eye mr-1"></i>查看
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function populateIsmsSelect() {
+      const select = document.getElementById('ismsAssetSelect');
+      const reportSelect = document.getElementById('reportIsmsSelect');
+
+      // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
+      const filteredAssets = allIsmsAssets.filter(function(asset) {
+        return asset.category === 'HW' || asset.category === 'EV';
+      });
+
+      const options = filteredAssets.map(function(asset) {
+        return `<option value="${escapeHtml(asset.ismsAssetId)}">${escapeHtml(asset.ismsAssetId)} - ${escapeHtml(asset.name)}</option>`;
+      }).join('');
+
+      select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
+      reportSelect.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
+    }
+
+    function renderGroupStats(stats) {
+      const tbody = document.getElementById('groupStatsBody');
+
+      if (!stats || stats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500">無統計資料</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = stats.map(function(stat) {
+        return `
+          <tr>
+            <td>${escapeHtml(stat.group)}</td>
+            <td>${stat.total}</td>
+            <td class="text-green-600">${stat.mapped}</td>
+            <td class="text-amber-600">${stat.unmapped}</td>
+            <td>
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-gray-200 rounded-full h-2">
+                  <div class="bg-blue-600 rounded-full h-2" style="width: ${stat.rate}%"></div>
+                </div>
+                <span class="text-sm font-medium">${stat.rate}%</span>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function updateStats(stats) {
+      document.getElementById('statTotal').textContent = stats.totalCount;
+      document.getElementById('statMapped').textContent = stats.mappedCount;
+      document.getElementById('statUnmapped').textContent = stats.unmappedCount;
+      document.getElementById('statRate').textContent = stats.mappingRate + '%';
+    }
+
+    // ==========================================
+    // 篩選與搜尋
+    // ==========================================
+    function filterAssets() {
+      const keyword = document.getElementById('assetSearch').value.toLowerCase();
+      const group = document.getElementById('groupFilter').value;
+      const unmappedOnly = document.getElementById('unmappedOnly').checked;
+
+      let filtered = allAssets;
+
+      if (keyword) {
+        filtered = filtered.filter(function(a) {
+          return a.assetId.toLowerCase().includes(keyword) ||
+                 a.assetName.toLowerCase().includes(keyword) ||
+                 a.leaderName.toLowerCase().includes(keyword) ||
+                 a.location.toLowerCase().includes(keyword);
+        });
+      }
+
+      if (group) {
+        filtered = filtered.filter(function(a) { return a.group === group; });
+      }
+
+      if (unmappedOnly) {
+        filtered = filtered.filter(function(a) { return !a.isMapped; });
+      }
+
+      renderAssetTable(filtered);
+    }
+
+    function filterIsmsSelect() {
+      const keyword = document.getElementById('ismsSearch').value.toLowerCase();
+      const select = document.getElementById('ismsAssetSelect');
+
+      // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
+      const filtered = allIsmsAssets.filter(function(a) {
+        return (a.category === 'HW' || a.category === 'EV') && (
+          a.ismsAssetId.toLowerCase().includes(keyword) ||
+          a.name.toLowerCase().includes(keyword)
+        );
+      });
+
+      select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' +
+        filtered.map(function(asset) {
+          return `<option value="${escapeHtml(asset.ismsAssetId)}">${escapeHtml(asset.ismsAssetId)} - ${escapeHtml(asset.name)}</option>`;
+        }).join('');
+    }
+
+    function filterIsmsTable() {
+      const keyword = document.getElementById('ismsListSearch').value.toLowerCase();
+
+      // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
+      const filtered = allIsmsAssets.filter(function(a) {
+        return (a.category === 'HW' || a.category === 'EV') && (
+          a.ismsAssetId.toLowerCase().includes(keyword) ||
+          a.name.toLowerCase().includes(keyword) ||
+          a.responsibleUnit.toLowerCase().includes(keyword)
+        );
+      });
+
+      renderIsmsTable(filtered);
+    }
+
+    // ==========================================
+    // 選擇功能
+    // ==========================================
+    function toggleAssetSelection(assetId) {
+      if (selectedAssetIds.has(assetId)) {
+        selectedAssetIds.delete(assetId);
+      } else {
+        selectedAssetIds.add(assetId);
+      }
+      updateSelectionUI();
+    }
+
+    function toggleSelectAll() {
+      const checkbox = document.getElementById('selectAllAssets');
+      const checkboxes = document.querySelectorAll('#assetTableBody input[type="checkbox"]');
+
+      checkboxes.forEach(function(cb) {
+        const row = cb.closest('tr');
+        const assetId = row.dataset.assetId;
+        if (checkbox.checked) {
+          selectedAssetIds.add(assetId);
+        } else {
+          selectedAssetIds.delete(assetId);
+        }
+        cb.checked = checkbox.checked;
+        row.classList.toggle('selected', checkbox.checked);
+      });
+
+      updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+      document.getElementById('selectedCount').textContent = selectedAssetIds.size;
+      document.getElementById('goToMappingBtn').disabled = selectedAssetIds.size === 0;
+
+      // 更新對照作業頁面
+      updateMappingTab();
+    }
+
+    function updateMappingTab() {
+      const container = document.getElementById('selectedAssetsList');
+      const countSpan = document.getElementById('mappingAssetCount');
+
+      countSpan.textContent = `(${selectedAssetIds.size} 筆)`;
+
+      if (selectedAssetIds.size === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-sm">請先在「資產清單」選擇資產</p>';
+        return;
+      }
+
+      const selectedAssets = allAssets.filter(function(a) { return selectedAssetIds.has(a.assetId); });
+
+      container.innerHTML = selectedAssets.map(function(asset) {
+        return `
+          <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+            <div>
+              <span class="font-mono text-sm">${escapeHtml(asset.assetId)}</span>
+              <span class="text-gray-500 ml-2">${escapeHtml(asset.assetName)}</span>
+              ${asset.isMapped ? '<span class="badge badge-success ml-2 text-xs">已對照</span>' : ''}
+            </div>
+            <button class="text-red-500 hover:text-red-700" onclick="removeFromSelection('${escapeHtml(asset.assetId)}')">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      updateCreateMappingBtn();
+    }
+
+    function removeFromSelection(assetId) {
+      selectedAssetIds.delete(assetId);
+      updateSelectionUI();
+
+      // 更新表格中的 checkbox
+      const row = document.querySelector(`tr[data-asset-id="${assetId}"]`);
+      if (row) {
+        row.classList.remove('selected');
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = false;
+      }
+    }
+
+    function updateCreateMappingBtn() {
+      const ismsAssetId = document.getElementById('ismsAssetSelect').value;
+      document.getElementById('createMappingBtn').disabled = selectedAssetIds.size === 0 || !ismsAssetId;
+    }
+
+    // ==========================================
+    // Tab 切換
+    // ==========================================
+    function switchTab(tabName) {
+      // 更新按鈕狀態
+      document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+      });
+
+      // 切換內容
+      document.querySelectorAll('.tab-content').forEach(function(content) {
+        content.classList.add('hidden');
+      });
+      document.getElementById('tab-' + tabName).classList.remove('hidden');
+
+      // 載入資料
+      if (tabName === 'report') {
+        loadStatistics();
+      }
+    }
+
+    function goToMapping() {
+      switchTab('mapping');
+    }
+
+    // ==========================================
+    // 對照操作
+    // ==========================================
+    function createMapping() {
+      const assetIds = Array.from(selectedAssetIds);
+      const ismsAssetId = document.getElementById('ismsAssetSelect').value;
+      const remarks = document.getElementById('mappingRemarks').value;
+
+      if (assetIds.length === 0 || !ismsAssetId) {
+        showToast('請選擇資產和資訊資產', 'error');
+        return;
+      }
+
+      // 檢查是否有既有對照
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success && result.hasExisting) {
+            // 顯示確認對話框
+            pendingMappingData = { assetIds, ismsAssetId, remarks };
+            showConfirmModal(result.existingMappings);
+          } else {
+            // 直接建立對照
+            doCreateMapping(assetIds, ismsAssetId, remarks);
+          }
+        })
+        .withFailureHandler(function(err) {
+          showToast('檢查失敗: ' + err.message, 'error');
+        })
+        .checkExistingMappings(assetIds);
+    }
+
+    function doCreateMapping(assetIds, ismsAssetId, remarks) {
+      document.getElementById('createMappingBtn').disabled = true;
+      document.getElementById('createMappingBtn').innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            showToast(result.message, 'success');
+            selectedAssetIds.clear();
+            updateSelectionUI();
+            loadAssets();
+            loadStatistics();
+            document.getElementById('mappingRemarks').value = '';
+            document.getElementById('ismsAssetSelect').value = '';
+          } else {
+            showToast(result.error, 'error');
+          }
+          resetCreateMappingBtn();
+        })
+        .withFailureHandler(function(err) {
+          showToast('建立失敗: ' + err.message, 'error');
+          resetCreateMappingBtn();
+        })
+        .createMappings(assetIds, ismsAssetId, remarks);
+    }
+
+    function resetCreateMappingBtn() {
+      const btn = document.getElementById('createMappingBtn');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-link mr-2"></i>建立對照';
+      updateCreateMappingBtn();
+    }
+
+    function showConfirmModal(existingMappings) {
+      const list = document.getElementById('existingMappingsList');
+      list.innerHTML = existingMappings.map(function(m) {
+        return `<div class="text-sm py-1"><span class="font-mono">${escapeHtml(m.assetId)}</span> → ${escapeHtml(m.currentIsmsAssetId)}</div>`;
+      }).join('');
+
+      document.getElementById('confirmModal').classList.remove('hidden');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').classList.add('hidden');
+      pendingMappingData = null;
+    }
+
+    function confirmOverwrite() {
+      closeConfirmModal();
+      if (pendingMappingData) {
+        doCreateMapping(pendingMappingData.assetIds, pendingMappingData.ismsAssetId, pendingMappingData.remarks);
+      }
+    }
+
+    // ==========================================
+    // 報表功能
+    // ==========================================
+    function queryByIsmsAsset() {
+      const ismsAssetId = document.getElementById('reportIsmsSelect').value;
+      if (!ismsAssetId) {
+        showToast('請選擇資訊資產', 'error');
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            const section = document.getElementById('queryResultSection');
+            section.classList.remove('hidden');
+            document.getElementById('queryResultCount').textContent = `(${result.count} 筆)`;
+
+            const tbody = document.getElementById('queryResultBody');
+            if (result.assets.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-500">無對照資產</td></tr>';
+            } else {
+              tbody.innerHTML = result.assets.map(function(asset) {
+                return `
+                  <tr>
+                    <td class="font-mono text-sm">${escapeHtml(asset.assetId)}</td>
+                    <td>${escapeHtml(asset.assetName)}</td>
+                    <td>${escapeHtml(asset.leaderName)}</td>
+                    <td>${escapeHtml(asset.userName)}</td>
+                    <td>${escapeHtml(asset.location)}</td>
+                    <td>${escapeHtml(asset.group)}</td>
+                  </tr>
+                `;
+              }).join('');
+            }
+          } else {
+            showToast(result.error, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          showToast('查詢失敗: ' + err.message, 'error');
+        })
+        .getAssetsByIsmsAsset(ismsAssetId);
+    }
+
+    function exportReport() {
+      showToast('正在產生報表...', 'info');
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            // 建立並下載 CSV
+            const blob = new Blob(['\uFEFF' + result.csvContent], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = result.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('報表匯出成功', 'success');
+          } else {
+            showToast(result.error, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          showToast('匯出失敗: ' + err.message, 'error');
+        })
+        .exportMappingReport();
+    }
+
+    function viewIsmsAssetDetail(ismsAssetId) {
+      // 切換到報表 tab 並查詢該資訊資產
+      document.getElementById('reportIsmsSelect').value = ismsAssetId;
+      switchTab('report');
+      queryByIsmsAsset();
+    }
+
+    // ==========================================
+    // 工具函式
+    // ==========================================
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function debounce(func, wait) {
+      let timeout;
+      return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(timeout);
+        timeout = setTimeout(function() {
+          func.apply(context, args);
+        }, wait);
+      };
+    }
+
+    function showToast(message, type) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle') + ' mr-2"></i>' + escapeHtml(message);
+      container.appendChild(toast);
+
+      setTimeout(function() {
+        toast.style.animation = 'slideIn 0.3s ease reverse';
+        setTimeout(function() {
+          container.removeChild(toast);
+        }, 300);
+      }, 3000);
+    }
+
+    // ==========================================
+    // 條碼掃描功能
+    // ==========================================
+    (function() {
+      let isScanning = false;
+      let lastScannedCode = null;
+      let lastScannedTime = 0;
+      const SCAN_COOLDOWN = 2000; // 2 秒冷卻時間
+
+      // 格式化條碼（參考主應用程式規則）
+      function formatBarcode(barcode) {
+        const cleanCode = barcode.toString().trim();
+        // 20 碼去前 2 位
+        let processed = cleanCode.length === 20 ? cleanCode.substring(2) : cleanCode;
+
+        if (processed.length < 11) return processed;
+
+        // 格式化為 XXXXXXX-XXXX-XXXXXXX (7-4-7)
+        return processed.substring(0, 7) + '-' +
+               processed.substring(7, 11) + '-' +
+               processed.substring(11);
+      }
+
+      // 切換掃描器顯示/隱藏
+      window.toggleScanner = function() {
+        const zone = document.getElementById('scannerZone');
+        const backdrop = document.getElementById('scannerBackdrop');
+
+        if (zone.classList.contains('active')) {
+          stopScanner();
+        } else {
+          zone.classList.add('active');
+          backdrop.classList.add('active');
+          startScanner();
+        }
+      };
+
+      // 啟動掃描器
+      function startScanner() {
+        if (typeof Quagga === 'undefined') {
+          updateScannerStatus('error', '無法載入掃描器函式庫，請使用搜尋功能');
+          setTimeout(() => {
+            document.getElementById('scannerZone').classList.remove('active');
+            document.getElementById('assetSearch').focus();
+          }, 2000);
+          return;
+        }
+
+        updateScannerStatus('scanning', '準備相機中...');
+
+        Quagga.init({
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#scanner-reader'),
+            constraints: {
+              width: 640,
+              height: 480,
+              facingMode: "environment"
+            }
+          },
+          decoder: {
+            readers: [
+              "code_128_reader",
+              "ean_reader",
+              "ean_8_reader",
+              "code_39_reader",
+              "code_39_vin_reader",
+              "codabar_reader",
+              "upc_reader",
+              "upc_e_reader",
+              "i2of5_reader"
+            ]
+          },
+          locate: true,
+          locator: {
+            patchSize: "medium",
+            halfSample: true
+          }
+        }, function(err) {
+          if (err) {
+            console.error('Quagga 初始化失敗:', err);
+            updateScannerStatus('error', '相機啟動失敗：' + err.message);
+            setTimeout(() => {
+              stopScanner();
+              document.getElementById('assetSearch').focus();
+            }, 2000);
+            return;
+          }
+
+          Quagga.start();
+          isScanning = true;
+          updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
+        });
+
+        Quagga.onDetected(onBarcodeDetected);
+      }
+
+      // 停止掃描器
+      function stopScanner() {
+        if (isScanning) {
+          Quagga.stop();
+          isScanning = false;
+        }
+
+        // 釋放相機資源
+        const videoElement = document.querySelector('#scanner-reader video');
+        if (videoElement && videoElement.srcObject) {
+          videoElement.srcObject.getTracks().forEach(track => track.stop());
+        }
+
+        // 清空 DOM
+        const reader = document.getElementById('scanner-reader');
+        while (reader.children.length > 1) {
+          reader.removeChild(reader.lastChild);
+        }
+
+        // 關閉彈出窗口和背景遮罩
+        document.getElementById('scannerZone').classList.remove('active');
+        document.getElementById('scannerBackdrop').classList.remove('active');
+      }
+
+      // 條碼檢測回調
+      function onBarcodeDetected(result) {
+        if (!result || !result.codeResult) return;
+
+        const code = result.codeResult.code;
+        const now = Date.now();
+
+        // 防重複掃描（2 秒冷卻）
+        if (code === lastScannedCode && (now - lastScannedTime) < SCAN_COOLDOWN) {
+          return;
+        }
+
+        lastScannedCode = code;
+        lastScannedTime = now;
+
+        // 播放提示音
+        try {
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZjjkIF2i37+ybUQwNUKvm77NkHQc4kNbx0H0vBSh+zPLdlEIKE160+O2rVxQKSJ/g8sJwIwUsgs/y2Y86CBdouO/sm1IMDVCr5fCyZB0HOJDV8dGAMAUpf8zy3ZNCChNesvjsrVgUCkqf4fHEcSQFLoLP8tqQOggXaLjw7JpRDA1Qq+bwsWQeBziP1vHSgjEFK3/L8t2UQwoTXrL47K1YFApKn+HxxHImBS+Dz/LbkjwIF2m78O2aUQwNUKvl8LFkHgc4jtXy0oQyBSyCy/LdlkMKFF+y+e2uWRQLSqDi8sVyJwUwg8/y25M8CBdpu/DumVEMDFGr5fCxZB8HOI3U8dOFMwUsgsvy3ZZDChVfsfrur1oVC06g4vLGcykFMYTQ8tyUPQgYarvw75pSDAxRquXwsmQfBziM0/HUhjQFLIHL8t6WRQoVYLL576BalBdVoOLzyHUpBTOE0fLdlT4IGGu88O+aUQwMUarl77JlIAc4i9Lx1Yc1BSyCyvLdl0UKFWO07PGvW5UXVp/i88p3KgU1htLy3ZY/CBhsvPDwm1EMDFGq5e+yZSAHN4rR8daINgUrgsvy3phGChRjte3ysVuWF1af4fPLeCsFNoXS8t6XQAYYZ73x8ZtSDAxRquXvsmYhBzeJ0fDXiTYGLIHL8t+ZRwoUZLbu8rJcmBdXoOLzzXorBjeF0vLelz8HGWi98fCbUwwNUank7rJmIQc4idHv14k2BiyBy/LemkcKFGS37vKyXJgXWKDi881xOwc5htLy3phACBloue/wmFMMDVGp5O6yZiEHN4jQ79aJNwYtgcvy3phFChRltu/ysl2ZF1mg4/PNcDsHOIfT8d6YQQgZaLjv8JdTDA1RqeTtsmYiBziH0O/ViTcGLoLL8d6ZSAoTZrbu87NemRhaoOLzznA7BzqH0vHfmUIIGWi48O+WUwwNUKjj77JnIwc4h8/u1Yk4By6CyvHemkgLE2W27vOzXpkYW6Hj889wPAc7iNLx35lDCBhotvDvllMMDk+n4+6wZiMHOYbP7tOJOQcvgsrx35tICxJktu7ztGCaGFyh4/PQcT0HOonS8eCaSggZaLXw75VSDk5Po+LusWckBzmFz+7TiDoIL4LJ8eCbSgwSZLfu9LRgmhhdouPz0HE+Bzus0vHgmkwIGWq17e+UUQ5PTaHg7bBnJQc6hc/u04g6CC+Cx/Hgm0wMEWO37vW1YZoYXaHj89BwPwc8rtLx4JpNCBlpsuzukU8OT0yf3+yvaCgHPIXP79OIPQkugMTw4JxPDBBhsez1t2KbGF+i5PTRcUAHPbHU8eCbTwkaal/pIAA=');
+          audio.volume = 0.3;
+          audio.play().catch(() => {});
+        } catch (e) {}
+
+        processBarcode(code);
+      }
+
+      // 處理條碼
+      function processBarcode(rawCode) {
+        const formattedCode = formatBarcode(rawCode);
+
+        updateScannerStatus('scanning', `掃描到條碼: ${formattedCode}，查找中...`);
+
+        // 在 allAssets 中查找（支援原始碼 + 格式化碼匹配）
+        const asset = allAssets.find(a => {
+          const assetId = a.assetId;
+          const assetIdNoDash = assetId.replace(/-/g, '');
+          const formattedNoDash = formattedCode.replace(/-/g, '');
+          const rawNoDash = rawCode.replace(/-/g, '');
+
+          return assetId === rawCode ||
+                 assetId === formattedCode ||
+                 assetIdNoDash === rawNoDash ||
+                 assetIdNoDash === formattedNoDash;
+        });
+
+        if (asset) {
+          // 找到資產，自動勾選
+          selectedAssetIds.add(asset.assetId);
+          updateSelectionUI();
+
+          updateScannerStatus('success', `✓ 已加入資產: ${asset.assetName}`);
+          showToast(`已加入資產: ${asset.assetName}`, 'success');
+
+          // 2 秒後恢復掃描狀態
+          setTimeout(() => {
+            if (isScanning) {
+              updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
+            }
+          }, 2000);
+        } else {
+          updateScannerStatus('error', `✗ 未找到資產編號: ${formattedCode}`);
+          console.log('無法匹配的條碼:', { raw: rawCode, formatted: formattedCode });
+
+          setTimeout(() => {
+            if (isScanning) {
+              updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
+            }
+          }, 2000);
+        }
+      }
+
+      // 更新掃描器狀態顯示
+      function updateScannerStatus(type, message) {
+        const status = document.getElementById('scannerStatus');
+        status.className = 'scanner-status ' + type;
+
+        let icon = '';
+        if (type === 'scanning') icon = '<i class="fas fa-spinner fa-spin mr-2"></i>';
+        else if (type === 'success') icon = '<i class="fas fa-check-circle mr-2"></i>';
+        else if (type === 'error') icon = '<i class="fas fa-exclamation-circle mr-2"></i>';
+
+        status.innerHTML = icon + message;
+      }
+
+      // 增強搜尋框功能：Enter 鍵快速掃描
+      function enhanceSearchBox() {
+        const searchInput = document.getElementById('assetSearch');
+        searchInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const code = this.value.trim();
+            if (code) {
+              const formattedCode = formatBarcode(code);
+
+              // 查找資產
+              const asset = allAssets.find(a => {
+                const assetId = a.assetId;
+                const assetIdNoDash = assetId.replace(/-/g, '');
+                const formattedNoDash = formattedCode.replace(/-/g, '');
+                const codeNoDash = code.replace(/-/g, '');
+
+                return assetId === code ||
+                       assetId === formattedCode ||
+                       assetIdNoDash === codeNoDash ||
+                       assetIdNoDash === formattedNoDash;
+              });
+
+              if (asset) {
+                selectedAssetIds.add(asset.assetId);
+                updateSelectionUI();
+                showToast(`已加入資產: ${asset.assetName}`, 'success');
+                this.value = ''; // 清空搜尋框
+              } else {
+                // 找不到，保持搜尋模式
+                filterAssets();
+              }
+            }
+          }
+        });
+      }
+
+      // 初始化增強功能
+      document.addEventListener('DOMContentLoaded', function() {
+        enhanceSearchBox();
+      });
+    })();
+  </script>
+</body>
+</html>
