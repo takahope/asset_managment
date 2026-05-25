@@ -129,6 +129,7 @@
 
   // ========== 掃描器頁面 URL ==========
   const SCANNER_PAGE_URL = 'https://takahope.github.io/1D_camera_scan/';
+  const SCANNER_PAGE_ORIGIN = new URL(SCANNER_PAGE_URL).origin;
 
   // ========== 全局變數 ==========
   let Scanner_active = false;
@@ -354,6 +355,14 @@
     Scanner_messageListener = function(event) {
       if (!event.data || event.data.type !== 'BARCODE_SCANNED') return;
       if (event.data.source !== 'github-pages-scanner') return;
+      if (event.origin !== SCANNER_PAGE_ORIGIN || event.source !== Scanner_popupWindow) {
+        console.warn('[Scanner] 忽略非預期來源的掃描訊息', {
+          origin: event.origin,
+          expectedOrigin: SCANNER_PAGE_ORIGIN,
+          isExpectedSource: event.source === Scanner_popupWindow
+        });
+        return;
+      }
       console.log('[Scanner] 收到掃描結果:', event.data.raw);
       Scanner_processBarcode(event.data.raw);
       Scanner_stop({ reason: 'scan-complete' });
