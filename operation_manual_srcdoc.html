@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>財產狀態管理 - 使用者操作手冊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'PingFang TC', 'Heiti TC', 'Microsoft JhengHei', sans-serif;
+            scroll-behavior: smooth;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+        th, td {
+            border: 1px solid #e5e7eb;
+            padding: 0.75rem 1rem;
+            text-align: left;
+        }
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        tr:nth-child(even) {
+            background-color: #fcfcfc;
+        }
+        .admin-badge {
+            display: inline-block;
+            background-color: #fee2e2;
+            color: #991b1b;
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            margin-right: 0.5rem;
+            font-weight: 500;
+            vertical-align: middle;
+        }
+        .icon-col {
+            width: 25%;
+            font-weight: 500;
+            color: #111827;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 leading-relaxed">
+
+    <div class="max-w-5xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
+        
+        <!-- Header -->
+        <header class="bg-white shadow-sm rounded-t-xl p-8 border-b-4 border-blue-600">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">財產狀態管理</h1>
+            <h2 class="text-xl sm:text-2xl text-gray-600 mb-6">使用者操作手冊</h2>
+            <div class="flex items-center text-sm text-gray-500">
+                <span class="font-semibold mr-2">Asset Management System</span> | 
+                <span class="ml-2">版本 1.0 · 2026 年 4 月 15 日</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="bg-white shadow-sm rounded-b-xl p-8 space-y-12">
+
+            <!-- 1. 系統概述 -->
+            <section id="section-1">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">1. 系統概述</h2>
+                <p class="mb-4">財產狀態管理，讓使用者能夠即時查看、操作與追蹤組織的財產與物品資產。</p>
+                
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">1.1 主要功能</h3>
+                <ul class="list-disc list-inside space-y-2 text-gray-700 ml-2">
+                    <li>財產與物品的完整生命週期管理（在庫、轉移、出借、報廢）</li>
+                    <li>多維度篩選與即時搜尋</li>
+                    <li>批次操作（同時對多筆資產執行相同動作）</li>
+                    <li>進階模式：將多項操作加入清單後統一送出</li>
+                    <li>資產盤點管理與進度追蹤</li>
+                    <li>Excel / CSV 匯出</li>
+                    <li>行動裝置條碼掃描</li>
+                    <li>ISMS 資訊資產分類（支援 ISO 驗證範圍標記）</li>
+                </ul>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-3">1.2 使用者權限</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="w-1/3">角色</th>
+                            <th>可用功能</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="font-medium">一般使用者</td>
+                            <td>查看自身資產、轉移、出借、報廢申請、盤點、匯出、掃描</td>
+                        </tr>
+                        <tr>
+                            <td class="font-medium">管理員</td>
+                            <td>以上所有功能 + 全域資產檢視、新增資產、編輯資產、盤點管理、視角切換</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 2. 頁面頂部操作區 -->
+            <section id="section-2">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">2. 頁面頂部操作區（頁首）</h2>
+                <p class="mb-6">進入系統後，頁面右上角提供以下核心操作按鈕，依使用者權限顯示不同選項。</p>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">2.1 視角切換（管理員專用）</h3>
+                <p class="mb-3 text-gray-700">管理員登入後，頂部會出現「一般 / 管理者」切換器，旁邊顯示當前模式標籤。</p>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>👤 一般</td>
+                            <td><span class="admin-badge">管理員限定</span>切換至一般使用者視角，僅顯示自身或同組成員的資產，適合模擬一般使用者的操作體驗。</td>
+                        </tr>
+                        <tr>
+                            <td>🔑 管理者</td>
+                            <td><span class="admin-badge">管理員限定</span>切換至全域管理員視角，可查看與操作所有人員的資產，並顯示新增資產、盤點管理等管理員專屬功能。</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-3">2.2 進階模式切換（ModeToggleCard）</h3>
+                <p class="mb-3 text-gray-700">位於頂部右側，所有使用者皆可操作。點擊可在「標準模式」與「進階模式」之間切換。</p>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>⚡ 標準模式</td>
+                            <td>預設模式。對每筆資產點擊操作按鈕後，立即彈出確認視窗並直接送出。操作流程最為簡單快速。</td>
+                        </tr>
+                        <tr>
+                            <td>🚀 進階模式</td>
+                            <td>啟用後，所有操作（轉移、出借、報廢、盤點）都會先加入「進階清單」，讓您可以批次設定多筆資產的操作內容，最後再統一送出，適合需要一次處理多筆不同操作的情境。</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 my-4 rounded-r">
+                    <p class="text-blue-800"><strong>📌 提示：</strong>進階模式下，操作按鈕點擊後不會立即送出，而是標記後加入清單。清單可在頁面底部的「進階清單」浮動面板中查看與提交。</p>
+                </div>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-3">2.3 盤點管理（管理員專用）</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>📋 盤點管理</td>
+                            <td><span class="admin-badge">管理員限定</span>開啟盤點管理 Modal，管理員可在此建立新的盤點會話、查看歷史盤點紀錄、匯出盤點結果，以及刪除盤點會話。一般使用者也可查看指派給自己的盤點任務。</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-3">2.4 新增資產（管理員專用）</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>➕ 新增資產</td>
+                            <td><span class="admin-badge">管理員限定</span>開啟新增資產 Modal，管理員可在此填寫並建立新的財產或物品資料，包含財產編號、名稱、保管人、存置地點、類別等欄位。建立完成後，資料將寫入後端 Google Sheets。</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-3">2.5 重新整理</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>🔄 重新整理</td>
+                            <td>重新向後端拉取最新的統計數據（各狀態資產數量）並更新頂部儀表板卡片。載入期間按鈕圖示會旋轉，完成後自動停止。若發現卡片數字未即時更新，可點擊此按鈕手動刷新。</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 3. 財產狀態卡片 -->
+            <section id="section-3">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">3. 財產狀態卡片</h2>
+                <p class="mb-4 text-gray-700">頁面頂部列有多張彩色統計卡片，每張卡片顯示特定狀態的資產數量。點擊卡片可開啟對應的詳細列表或操作視窗。</p>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>🔄 轉移中</td><td>顯示正在等待轉移確認的資產數量。點擊後開啟「轉移中」 Modal，列出所有待處理的轉移申請，並可在 Modal 內取消申請。</td></tr>
+                        <tr><td>🔄 待接收</td><td>顯示正在等待接收確認的資產數量。點擊後開啟「待接收」 Modal，列出所有待處理的轉移申請，並可在 Modal 內取消申請。</td></tr>
+                        <tr><td>📤 出借中</td><td>顯示目前出借給外部或內部人員的資產數量。點擊後開啟「出借中資產」 Modal，列出所有出借記錄，並可在 Modal 內執行歸還操作或列印出借單。</td></tr>
+                        <tr><td>⚠️ 待列印報廢申請單</td><td>顯示已申請報廢、正在等待審核的資產數量。點擊後開啟「報廢申請列表」 Modal，管理員可在此審核並列印報廢單。</td></tr>
+                        <tr><td>🗑️ 待列印報轉移申請單</td><td>顯示已成功轉移的財產，點擊後可以列印轉移申請單。</td></tr>
+                        <tr><td>📦 待盤點</td><td>顯示目前有進行中盤點任務且尚未確認的資產數量。點擊後開啟「待盤點任務」 Modal，列出指派給目前使用者（或全域，若為管理員）的待盤點資產清單。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 4. 篩選與搜尋區 -->
+            <section id="section-4">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">4. 篩選與搜尋區（FilterSection）</h2>
+                <p class="mb-4 text-gray-700">位於儀表板卡片下方，提供多種條件讓使用者快速定位資產。</p>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">4.1 搜尋欄</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>🔍 關鍵字搜尋</td><td>在輸入框中輸入任意文字，系統將即時篩選出財產編號、財產名稱、型號、保管人、使用人等欄位包含該關鍵字的資產。輸入後無需按 Enter，自動即時生效。</td></tr>
+                        <tr><td>✕ 清除搜尋</td><td>點擊輸入框右側的 ✕ 圖示，清空搜尋欄並顯示全部資產。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">4.2 多條件篩選下拉選單</h3>
+                <p class="mb-3 text-gray-700">以下每個篩選器均支援多選，可同時選取多個選項。</p>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>📊 狀態篩選</td><td>點擊開啟狀態下拉選單，可勾選「在庫」、「轉移中」、「出借中」、「待報廢」、「已報廢」等狀態，只顯示符合選取狀態的資產。</td></tr>
+                        <tr><td>👤 保管人篩選</td><td>點擊開啟保管人下拉選單，可搜尋並勾選一位或多位保管人，系統將只顯示該保管人負責的資產。</td></tr>
+                        <tr><td>👥 使用人篩選</td><td>點擊開啟使用人下拉選單，可搜尋並勾選特定使用人，只顯示該使用人持有的資產。</td></tr>
+                        <tr><td>🏷️ 組別篩選</td><td>點擊開啟組別下拉選單，可選取一個或多個組別，系統將只顯示屬於該組別的資產。</td></tr>
+                        <tr><td>📍 地點篩選</td><td>點擊開啟存置地點下拉選單，可選取一個或多個存放地點，只顯示存放於該地點的資產。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">4.3 下拉選單內的輔助按鈕</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>☑️ 全選</td><td>在任一下拉選單中，點擊「全選」可一次勾選所有顯示的選項（若有搜尋關鍵字，則只選取篩選後的結果）。</td></tr>
+                        <tr><td>🚫 清除所有</td><td>在任一下拉選單中，點擊「清除所有」取消所有已選取的選項，回到無條件篩選狀態。</td></tr>
+                        <tr><td>✕ 移除單項</td><td>已選取的選項會以標籤（Chip）形式顯示於下拉選單上方，點擊標籤內的 ✕ 可單獨移除該選項。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">4.4 匯出按鈕</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>📥 匯出 Excel</td><td>將目前篩選後顯示的資產以 .xlsx 格式匯出到本機，包含「財產總表」與「物品總表」兩個工作表（若兩者均有資料）。</td></tr>
+                        <tr><td>📄 匯出 CSV</td><td>將目前篩選後顯示的資產以 .csv 格式匯出，財產與物品分開下載，適合需要用其他工具進行資料分析的情境。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 5. 條碼掃描 -->
+            <section id="section-5">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">5. 條碼掃描（行動裝置）</h2>
+                <p class="mb-4 text-gray-700">在行動裝置上訪問系統時，篩選區上方會出現掃描入口卡片，方便快速定位資產。</p>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>📷 Tap to Scan Item</td><td>點擊後開啟手機相機，掃描資產上的 QR Code 或條碼，系統將自動搜尋並定位該資產，無需手動輸入編號。再次點擊或點擊背景遮罩可關閉掃描器。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 6. 批次操作按鈕 -->
+            <section id="section-6">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">6. 批次操作按鈕（BatchActionButtons）</h2>
+                <p class="mb-4 text-gray-700">位於篩選區下方。在「標準模式」下，需先在資產表格中以勾選框選取多筆資產，才能使用批次操作。在「進階模式」下，批次按鈕會處理已標記為對應動作的清單項目。</p>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>🔄 批次轉移</td><td>對所有已選取（或進階模式下已標記 TRANSFER）的資產，開啟「批次轉移」 Modal，統一填寫新保管人、新使用人、新存置地點等轉移資訊，一次送出所有轉移申請。</td></tr>
+                        <tr><td>📤 批次出借</td><td>對所有已選取（或進階模式下已標記 LEND）的資產，開啟「批次出借」 Modal，統一填寫借用人、預計歸還日期等資訊，一次建立所有出借記錄。</td></tr>
+                        <tr><td>🗑️ 批次報廢</td><td>對所有已選取（或進階模式下已標記 SCRAP）的資產，開啟「批次報廢」 Modal，統一填寫報廢原因，一次送出所有報廢申請。</td></tr>
+                        <tr><td>📦 批次盤點</td><td>對所有已選取（或進階模式下已標記 INVENTORY）且屬於進行中盤點會話的資產，開啟「批次盤點確認」 Modal，統一確認盤點結果（正常 / 異常 / 遺失）。僅在有進行中盤點任務時顯示此按鈕。</td></tr>
+                    </tbody>
+                </table>
+                <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 my-4 rounded-r">
+                    <p class="text-yellow-800"><strong>📌 注意：</strong>批次操作按鈕只有在勾選了至少一筆資產（標準模式）或進階清單中有對應操作項目（進階模式）時才能執行，否則會提示先選取資產。</p>
+                </div>
+            </section>
+
+            <!-- 7. 資產表格操作按鈕 -->
+            <section id="section-7">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">7. 資產表格操作按鈕</h2>
+                <p class="mb-4 text-gray-700">每一列資產右側（或操作欄中）都有對應的操作按鈕，依資產狀態與使用者權限顯示不同選項。</p>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">7.1 一般操作按鈕</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>🔄 轉移</td><td>為該資產發起轉移申請。點擊後開啟「快速轉移 Modal」，填寫新保管人、新使用人、新存置地點後送出。轉移申請送出後，資產狀態變更為「轉移中」，待新保管人確認接收後完成。</td></tr>
+                        <tr><td>📤 出借</td><td>為該資產建立出借記錄。點擊後開啟「快速出借 Modal」，填寫借用類型（內部 / 外部）、借用人姓名、聯絡電話、預計歸還日期等資訊後送出。送出後資產狀態變更為「出借中」。</td></tr>
+                        <tr><td>🗑️ 報廢</td><td>為該資產提交報廢申請。點擊後開啟「快速報廢 Modal」，填寫報廢原因後送出。送出後資產狀態變更為「待報廢」，等待管理員審核。</td></tr>
+                        <tr><td>📦 盤點</td><td>對該資產執行盤點確認。此按鈕僅在有進行中盤點任務時出現。點擊後開啟「盤點確認 Modal」，選擇盤點結果（正常 / 異常 / 遺失），並可填寫備註。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">7.2 管理員限定按鈕</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>✏️ 編輯</td><td><span class="admin-badge">管理員限定</span>開啟「編輯資產 Modal」，管理員可修改資產的基本資料，包括名稱、型號、保管人、使用人、存置地點、類別、取得日期、備註等欄位。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">7.3 狀態相關按鈕</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>❌ 取消申請</td><td>當資產處於「轉移中」或「待報廢」狀態時出現。點擊後彈出確認對話框，確認後將取消該申請並將資產狀態恢復為「在庫」。</td></tr>
+                        <tr><td>↩️ 回溯</td><td><span class="admin-badge">管理員限定</span>當資產處於「已報廢」狀態時，管理員可點擊此按鈕將資產回溯至「在庫」狀態。操作前需確認，完成後系統保留原報廢記錄並加上回溯標記。</td></tr>
+                        <tr><td>ℹ️ 狀態詳情</td><td>點擊後開啟「狀態詳情 Modal」，顯示該資產目前狀態的詳細資訊，例如：轉移申請時間、新舊保管人；出借人、借用人與預計歸還日期；或報廢申請原因等。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">7.4 勾選框</h3>
+                <table>
+                    <thead>
+                        <tr><th class="icon-col">按鈕</th><th>功能說明</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>☑️ 資產勾選框</td><td>每列最左側的勾選框，點擊後將該資產加入批次操作清單（以藍色邊框高亮顯示）。勾選後可使用頁面上方的「批次操作按鈕」對所有已勾選資產執行相同操作。</td></tr>
+                        <tr><td>☑️ 全選 / 取消全選</td><td>表格標題列的勾選框，點擊後一次選取或取消選取目前頁面顯示的所有資產。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 8. 快速操作 Modal -->
+            <section id="section-8">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">8. 快速操作 Modal</h2>
+                <p class="mb-4 text-gray-700">點擊資產列上的單一操作按鈕後，會開啟對應的快速操作視窗（Modal）。</p>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">8.1 快速轉移（QuickTransferModal）</h3>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>📝 填寫表單</td><td>在此視窗填寫新保管人、新使用人（可留空）、新存置地點等轉移資訊。系統會預先填入目前資產的現有資料。</td></tr>
+                        <tr><td>✅ 確認送出</td><td>填寫完成後點擊「確認送出」，系統將向後端提交轉移申請，同時發送 Email 通知新保管人確認接收。</td></tr>
+                        <tr><td>⚡ 加入進階清單</td><td>進階模式下，此按鈕變為「加入清單」，將設定好的轉移動作加入進階清單，不立即送出。</td></tr>
+                        <tr><td>✕ 取消</td><td>關閉 Modal，不執行任何操作。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">8.2 快速出借（QuickLendingModal）</h3>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>📝 填寫表單</td><td>填寫借用類型（內部人員 / 外部人員）、借用人姓名、聯絡電話、出借原因、預計歸還日期等資訊。</td></tr>
+                        <tr><td>✅ 確認送出</td><td>送出後建立出借記錄，資產狀態變更為「出借中」。</td></tr>
+                        <tr><td>⚡ 加入進階清單</td><td>進階模式下加入清單，不立即送出。</td></tr>
+                        <tr><td>✕ 取消</td><td>關閉 Modal，不執行任何操作。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">8.3 快速報廢（QuickScrapModal）</h3>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>📝 填寫表單</td><td>填寫報廢原因（可從預設選項選擇或自行輸入）及補充說明。</td></tr>
+                        <tr><td>✅ 確認送出</td><td>送出後資產狀態變更為「待報廢」，等待主管或管理員審核。系統同時發送審核通知 Email。</td></tr>
+                        <tr><td>⚡ 加入進階清單</td><td>進階模式下加入清單，不立即送出。</td></tr>
+                        <tr><td>✕ 取消</td><td>關閉 Modal，不執行任何操作。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 9. 批次操作 Modal -->
+            <section id="section-9">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">9. 批次操作 Modal</h2>
+                <p class="mb-4 text-gray-700">批次操作 Modal 與快速操作 Modal 相似，但同時對多筆資產執行。</p>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>📝 批次轉移表單</td><td>統一填寫新保管人、新使用人、新存置地點，所有已選取的資產將全部套用相同的轉移目標。</td></tr>
+                        <tr><td>📝 批次出借表單</td><td>統一填寫借用類型、借用人、歸還日期，所有已選取的資產將建立相同的出借記錄。</td></tr>
+                        <tr><td>📝 批次報廢表單</td><td>統一填寫報廢原因，所有已選取的資產將一次提交報廢申請。</td></tr>
+                        <tr><td>✅ 確認送出（批次）</td><td>確認後系統逐一處理每筆資產的操作，完成後顯示成功 / 失敗筆數摘要。</td></tr>
+                        <tr><td>✕ 取消</td><td>關閉 Modal，不執行任何操作。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 10. 盤點功能 -->
+            <section id="section-10">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">10. 盤點功能</h2>
+                
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">10.1 盤點管理 Modal（管理員）</h3>
+                <p class="mb-4 text-gray-700">點擊頂部「盤點管理」按鈕後開啟。管理員可在此建立、監控及結束盤點會話。</p>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>▶️ 開始盤點</td><td><span class="admin-badge">管理員限定</span>填寫盤點範圍（可依系統類別、保管人、使用人、組別、地點或手動選取篩選）後，點擊此按鈕建立一個新的盤點會話。會話建立後，符合條件的資產將出現盤點任務。</td></tr>
+                        <tr><td>📥 匯出 Excel</td><td>將該盤點會話的所有盤點明細匯出為 Excel 檔，包含財產編號、盤點結果、盤點人、盤點時間等欄位。</td></tr>
+                        <tr><td>📄 匯出 CSV</td><td>將盤點明細以 CSV 格式匯出。</td></tr>
+                        <tr><td>🗑️ 刪除盤點會話</td><td><span class="admin-badge">管理員限定</span>刪除指定的盤點會話及其所有明細記錄。操作不可逆，刪除前請確認資料已備份。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">10.2 盤點確認 Modal（InventoryConfirmModal）</h3>
+                <p class="mb-4 text-gray-700">一般使用者或管理員對單筆資產進行盤點確認時使用。</p>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>✅ 正常</td><td>確認資產實體存在且狀態良好，選擇此盤點結果。</td></tr>
+                        <tr><td>⚠️ 異常</td><td>資產存在但有損壞或問題，選擇此結果並可在備註欄填寫說明。</td></tr>
+                        <tr><td>❓ 遺失</td><td>資產無法找到，選擇此結果並可在備註欄填寫說明。</td></tr>
+                        <tr><td>🔐 ISMS 分類</td><td>若系統啟用 ISMS 功能，可在此勾選是否為資訊資產、是否在 ISO 驗證範圍內，並填寫對應的資訊資產編號。</td></tr>
+                        <tr><td>✅ 確認送出</td><td>送出本次盤點結果。標準模式下直接送出；進階模式下加入進階清單。</td></tr>
+                        <tr><td>↩️ 重設（取消確認）</td><td>若已盤點過的資產需要重新盤點，可點擊此按鈕將盤點狀態重設為「未盤點」。</td></tr>
+                        <tr><td>✕ 關閉</td><td>關閉 Modal，不送出任何盤點結果。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 11. 出借管理 Modal -->
+            <section id="section-11">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">11. 出借管理 Modal</h2>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">11.1 出借中資產（LentAssetsModal）</h3>
+                <p class="mb-4 text-gray-700">點擊「出借中」統計卡片後開啟，列出所有出借中的資產。</p>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>↩️ 歸還</td><td>對指定的出借資產執行歸還操作，系統將記錄歸還日期並將資產狀態恢復為「在庫」。</td></tr>
+                        <tr><td>🖨️ 列印出借單</td><td>開啟「出借單列印 Modal」，可查看出借申請單內容並列印。</td></tr>
+                        <tr><td>✕ 關閉</td><td>關閉 Modal。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">11.2 出借單列印（LendingPrintModal）</h3>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>🖨️ 列印</td><td>呼叫瀏覽器列印功能，列印出借申請單（適合存檔或取得借用人簽名）。</td></tr>
+                        <tr><td>✕ 關閉</td><td>關閉 Modal。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 12. 轉移管理 Modal -->
+            <section id="section-12">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">12. 轉移管理 Modal</h2>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">12.1 轉移中資產（TransferringModal）</h3>
+                <p class="mb-4 text-gray-700">點擊「轉移中」統計卡片後開啟，列出所有等待接收的轉移申請。</p>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>❌ 取消轉移</td><td>取消指定資產的轉移申請，資產狀態恢復為「在庫」。操作前需確認。</td></tr>
+                        <tr><td>✕ 關閉</td><td>關閉 Modal。</td></tr>
+                    </tbody>
+                </table>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">12.2 轉移單列印（TransferPrintModal）</h3>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>🖨️ 列印</td><td>呼叫瀏覽器列印功能，列印轉移申請單。</td></tr>
+                        <tr><td>🔄 刷新</td><td>重新載入轉移單資料。</td></tr>
+                        <tr><td>✕ 關閉</td><td>關閉 Modal。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 13. 報廢管理 Modal -->
+            <section id="section-13">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">13. 報廢管理 Modal</h2>
+
+                <h3 class="text-xl font-semibold text-gray-800 mt-6 mb-3">13.1 報廢申請列表（ScrapPrintModal）</h3>
+                <p class="mb-4 text-gray-700">點擊「待報廢」統計卡片後開啟。</p>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>🖨️ 列印報廢單</td><td>呼叫瀏覽器列印功能，列印報廢申請單。</td></tr>
+                        <tr><td>🔄 刷新</td><td>重新載入報廢申請資料。</td></tr>
+                        <tr><td>✕ 關閉</td><td>關閉 Modal。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 14. 新增 / 編輯資產 Modal -->
+            <section id="section-14">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">14. 新增 / 編輯資產 Modal（管理員）</h2>
+                <table>
+                    <thead><tr><th class="icon-col">按鈕</th><th>功能說明</th></tr></thead>
+                    <tbody>
+                        <tr><td>💾 儲存 / 新增</td><td><span class="admin-badge">管理員限定</span>填寫完所有必填欄位後，點擊此按鈕將資料寫入後端 Google Sheets。新增完成後資產會立即出現在資產列表中；編輯完成後資料即時更新。</td></tr>
+                        <tr><td>✕ 取消</td><td><span class="admin-badge">管理員限定</span>關閉 Modal，不儲存任何變更。</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- 15. 進階模式操作流程 -->
+            <section id="section-15">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">15. 進階模式操作流程</h2>
+                <p class="mb-4 text-gray-700">進階模式是為了提高大量操作效率所設計的工作流程，以下說明使用步驟：</p>
+                <ol class="list-decimal list-inside space-y-3 text-gray-700 ml-2 mb-6">
+                    <li>點擊頂部「進階模式」切換卡片，啟用進階模式（卡片變為紫色）。</li>
+                    <li>在資產表格中，對各資產分別點擊「轉移」、「出借」、「報廢」或「盤點」按鈕，填寫操作參數後點擊「加入清單」（而非直接送出）。</li>
+                    <li>每次加入清單後，頁面右下角的「進階清單」浮動面板會新增一筆記錄，顯示資產名稱與操作類型。</li>
+                    <li>重複步驟 2–3，直到所有要操作的資產都已加入清單。</li>
+                    <li>確認清單內容無誤後，點擊浮動面板中的「一鍵送出全部」按鈕，系統將依序處理所有操作並顯示結果摘要。</li>
+                </ol>
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r">
+                    <p class="text-blue-800"><strong>📌 提示：</strong>進階模式清單中的項目在送出前可以修改或移除。點擊清單中的項目可重新開啟操作 Modal 進行修改；點擊右側的刪除圖示可移除該項目。</p>
+                </div>
+            </section>
+
+            <!-- 16. 常見問題 (FAQ) -->
+            <section id="section-16">
+                <h2 class="text-2xl font-bold text-blue-700 border-b-2 border-blue-100 pb-2 mb-4">16. 常見問題（FAQ）</h2>
+                
+                <div class="space-y-6">
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-1">Q：為什麼某些按鈕（如「編輯」、「新增資產」）沒有出現？</h4>
+                        <p class="text-gray-700 ml-4">這些按鈕為管理員限定功能。請確認您的帳號已加入「管理員名單」工作表中。若確認為管理員但仍看不到按鈕，請嘗試重新整理頁面。</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-1">Q：點擊「轉移」後對方如何接收？</h4>
+                        <p class="text-gray-700 ml-4">系統送出轉移申請後，會自動發送 Email 通知新保管人。新保管人需點擊 Email 中的連結，進入接收確認頁面確認後，資產狀態才會從「轉移中」更新為「在庫」（由新保管人持有）。</p>
+                    </div>
+
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-1">Q：統計卡片的數字沒有即時更新，怎麼辦？</h4>
+                        <p class="text-gray-700 ml-4">點擊頂部右側的「重新整理」按鈕（圓形旋轉圖示），系統將重新向後端拉取最新統計數據。</p>
+                    </div>
+
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-1">Q：進階模式的清單送出失敗，如何處理？</h4>
+                        <p class="text-gray-700 ml-4">送出完成後，系統會顯示「成功 N 筆，失敗 N 筆」的摘要。失敗的項目不會從清單中移除，可以重新確認內容後再次嘗試送出。若持續失敗，請聯絡系統管理員。</p>
+                    </div>
+
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-1">Q：如何知道哪些資產需要盤點？</h4>
+                        <p class="text-gray-700 ml-4">待盤點的資產在資產表格中以「青綠色背景」高亮顯示，且「盤點」按鈕會出現在操作欄中。同時，頂部的「待盤點」統計卡片會顯示數量；點擊卡片可查看完整的待盤點清單。</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+        
+        <footer class="mt-8 text-center text-sm text-gray-500 pb-8">
+            &copy; 2026 Asset Management System. All rights reserved.
+        </footer>
+    </div>
+
+</body>
+</html>

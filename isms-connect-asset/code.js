@@ -6,11 +6,42 @@
  * Web App 入口點
  */
 function doGet(e) {
-  const html = HtmlService.createHtmlOutputFromFile('index');
-  html.setTitle('資產與資訊資產對照管理');
+  const email = Session.getActiveUser().getEmail();
+  // 白名單檢查 — 不在 ISMS 試算表「權限」工作表 A 欄者一律拒絕
+  if (!isInWhitelist_(email)) {
+    return createAccessDeniedPage_(email);
+  }
+
+  const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : '';
+  // 路由：預設=index, connect=對照管理, softwarelist=軟體清冊
+  var file = 'index';
+  var title = '資訊資產清單';
+  if (page === 'connect') { file = 'connect'; title = '資產與資訊資產對照管理'; }
+  else if (page === 'softwarelist') { file = 'softwarelist'; title = '軟體清冊管理'; }
+  const html = HtmlService.createHtmlOutputFromFile(file);
+  html.setTitle(title);
   html.addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   html.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   return html;
+}
+
+/**
+ * 拒絕存取頁面
+ */
+function createAccessDeniedPage_(email) {
+  const safeEmail = String(email || '(unknown)').replace(/[<>&"]/g, c => ({
+    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;'
+  }[c]));
+  return HtmlService.createHtmlOutput(
+    '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>存取被拒</title>' +
+    '<style>body{font-family:"Noto Sans TC",sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}' +
+    '.box{background:white;border-radius:12px;padding:40px 48px;box-shadow:0 4px 20px rgba(15,23,42,0.08);max-width:480px;text-align:center;}' +
+    '.icon{font-size:48px;color:#dc2626;margin-bottom:16px;}h1{color:#0f172a;font-size:20px;margin:0 0 12px;}' +
+    'p{color:#64748b;font-size:14px;line-height:1.6;margin:8px 0;}.email{font-family:Menlo,monospace;background:#f1f5f9;padding:2px 8px;border-radius:4px;}</style></head>' +
+    '<body><div class="box"><div class="icon">⛔</div><h1>存取被拒</h1>' +
+    '<p>您的帳號 <span class="email">' + safeEmail + '</span> 不在資訊資產系統的授權名單中。</p>' +
+    '<p>如需存取權限,請聯絡系統管理員將您加入「權限」工作表的白名單。</p></div></body></html>'
+  );
 }
 
 // ==========================================
@@ -29,25 +60,75 @@ function getCurrentUser() {
 }
 
 /**
- * 檢查是否為管理員
+ * 讀取 ISMS 權限工作表,回傳 {whitelist:Set, admins:Set}
+ * 結果快取 5 分鐘,減少試算表存取
  */
-function checkIsAdmin_(email) {
-  try {
-    const ss = SpreadsheetApp.openById(CONFIG.ASSET_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(CONFIG.ADMIN_LIST_SHEET_NAME);
-    if (!sheet) return false;
+function getPermissionLists_() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'isms_permission_lists_v1';
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try {
+      const obj = JSON.parse(cached);
+      return { whitelist: new Set(obj.whitelist || []), admins: new Set(obj.admins || []) };
+    } catch (_) { /* fall through to fresh read */ }
+  }
 
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] && data[i][0].toString().toLowerCase() === email.toLowerCase()) {
-        return true;
+  const whitelist = new Set();
+  const admins = new Set();
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.ISMS_PERMISSION_SHEET_NAME);
+    if (sheet && sheet.getLastRow() >= 1) {
+      // 讀 A、B 兩欄(可能有表頭,從第 1 列開始全收,toLowerCase 後比對自然會排除非 email)
+      const data = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const a = String(data[i][0] || '').trim().toLowerCase();
+        const b = String(data[i][1] || '').trim().toLowerCase();
+        if (a && a.indexOf('@') > 0) whitelist.add(a);
+        if (b && b.indexOf('@') > 0) {
+          admins.add(b);
+          whitelist.add(b); // 管理員自動視為白名單
+        }
       }
     }
-    return false;
   } catch (e) {
-    console.error('檢查管理員權限失敗:', e);
-    return false;
+    console.error('讀取權限工作表失敗:', e);
   }
+
+  try {
+    cache.put(cacheKey, JSON.stringify({
+      whitelist: Array.from(whitelist),
+      admins: Array.from(admins)
+    }), 300); // 5 分鐘
+  } catch (_) {}
+
+  return { whitelist, admins };
+}
+
+/**
+ * 清除權限快取(改完權限工作表後可手動執行)
+ */
+function clearPermissionCache() {
+  CacheService.getScriptCache().remove('isms_permission_lists_v1');
+}
+
+/**
+ * 檢查是否在白名單(A 欄或 B 欄)
+ */
+function isInWhitelist_(email) {
+  if (!email) return false;
+  const lists = getPermissionLists_();
+  return lists.whitelist.has(String(email).toLowerCase().trim());
+}
+
+/**
+ * 檢查是否為管理員(B 欄)
+ */
+function checkIsAdmin_(email) {
+  if (!email) return false;
+  const lists = getPermissionLists_();
+  return lists.admins.has(String(email).toLowerCase().trim());
 }
 
 /**
@@ -83,7 +164,7 @@ function getEmailToGroupMap_() {
 }
 
 /**
- * 取得資產的組別（優先使用 DEFAULT_GROUP，其次查詢 email 對照表）
+ * 取得資產的組別（優先使用 DEFAULT_GROUP，其次查詢使用人 email，最後查詢保管人 email）
  */
 function getAssetGroup_(asset, emailToGroupMap) {
   // 第一優先：使用資產的 DEFAULT_GROUP
@@ -95,6 +176,15 @@ function getAssetGroup_(asset, emailToGroupMap) {
   if (asset.userEmail) {
     const normalizedEmail = String(asset.userEmail).toLowerCase().trim();
     const groupName = emailToGroupMap[normalizedEmail];
+    if (groupName) {
+      return groupName;
+    }
+  }
+
+  // 第三優先：根據保管人 email 查詢組別
+  if (asset.leaderEmail) {
+    const normalizedLeaderEmail = String(asset.leaderEmail).toLowerCase().trim();
+    const groupName = emailToGroupMap[normalizedLeaderEmail];
     if (groupName) {
       return groupName;
     }
@@ -166,7 +256,9 @@ function mapRowToIsmsAssetObject_(row) {
     category: row[indices.CATEGORY - 1] ? row[indices.CATEGORY - 1].toString() : '',
     name: row[indices.NAME - 1] ? row[indices.NAME - 1].toString() : '',
     description: row[indices.DESCRIPTION - 1] ? row[indices.DESCRIPTION - 1].toString() : '',
-    quantity: row[indices.QUANTITY - 1] ? row[indices.QUANTITY - 1].toString() : '',
+    quantity: (row[indices.INVENTORY_COUNT - 1] ? row[indices.INVENTORY_COUNT - 1].toString() : '') ||
+              (row[indices.QUANTITY - 1] ? row[indices.QUANTITY - 1].toString() : ''),
+    quantityOriginal: row[indices.QUANTITY - 1] ? row[indices.QUANTITY - 1].toString() : '',
     location: row[indices.LOCATION - 1] ? row[indices.LOCATION - 1].toString() : '',
     responsibleUnit: row[indices.RESPONSIBLE_UNIT - 1] ? row[indices.RESPONSIBLE_UNIT - 1].toString() : '',
     mainCategory: row[indices.MAIN_CATEGORY - 1] ? row[indices.MAIN_CATEGORY - 1].toString() : '',
@@ -182,7 +274,8 @@ function mapRowToIsmsAssetObject_(row) {
     assetValue: row[indices.ASSET_VALUE - 1] ? row[indices.ASSET_VALUE - 1].toString() : '',
     group: row[indices.GROUP - 1] ? row[indices.GROUP - 1].toString() : '',
     serialNo: row[indices.SERIAL_NO - 1] ? row[indices.SERIAL_NO - 1].toString() : '',
-    inventoryCount: row[indices.INVENTORY_COUNT - 1] ? row[indices.INVENTORY_COUNT - 1].toString() : ''
+    inventoryCount: row[indices.INVENTORY_COUNT - 1] ? row[indices.INVENTORY_COUNT - 1].toString() : '',
+    businessProcess: row[indices.BUSINESS_PROCESS - 1] ? row[indices.BUSINESS_PROCESS - 1].toString() : ''
   };
 }
 
@@ -309,6 +402,355 @@ function getGroupList() {
 // ==========================================
 // 資訊資產 API
 // ==========================================
+
+/**
+ * 讀取「下拉選單」工作表，一次批次回傳類別 / 組別 / 狀態三組
+ * B 欄 = 定位 key、C 欄 = 顯示文字、D 欄 = 代號
+ */
+function getDropdownOptions() {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.DROPDOWN_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, error: '找不到「下拉選單」工作表' };
+    }
+
+    const categories = [];
+    const groups = [];
+    const statuses = [];
+    const businessProcesses = [];
+
+    if (sheet.getLastRow() > 1) {
+      const data = sheet.getRange(2, 2, sheet.getLastRow() - 1, 3).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const key = data[i][0] ? String(data[i][0]).trim() : '';     // B 欄
+        const display = data[i][1] ? String(data[i][1]).trim() : ''; // C 欄
+        const code = data[i][2] ? String(data[i][2]).trim() : '';    // D 欄
+        if (!key || !display) continue;
+
+        if (key === '資訊資產類別' || key === '類別') categories.push({ display, code });
+        else if (key === '組別') groups.push({ display, code });
+        else if (key === '資訊資產狀態' || key === '資產狀態' || key === '狀態') statuses.push({ display, code });
+        else if (key === '業務流程') businessProcesses.push({ display });
+      }
+    }
+
+    return { success: true, categories, groups, statuses, businessProcesses };
+  } catch (e) {
+    console.error('getDropdownOptions 錯誤:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 建立新資訊資產：自動產號 + 計算資產價值
+ * @param {Object} form
+ *   - categoryDisplay / categoryCode
+ *   - groupDisplay / groupCode
+ *   - statusDisplay
+ *   - name, description
+ *   - confidentiality, integrity, availability (1~4)
+ * @returns {Object} { success, ismsAssetId, serial, assetValue }
+ */
+function createIsmsAsset(form) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 最多等 10 秒，避免並發撞號
+
+    // 欄位驗證
+    if (!form || typeof form !== 'object') {
+      return { success: false, error: '表單資料不正確' };
+    }
+    const name = (form.name || '').toString().trim();
+    const categoryDisplay = (form.categoryDisplay || '').toString().trim();
+    const categoryCode = (form.categoryCode || '').toString().trim();
+    const groupDisplay = (form.groupDisplay || '').toString().trim();
+    const groupCode = (form.groupCode || '').toString().trim();
+    const statusDisplay = (form.statusDisplay || '').toString().trim();
+    const businessProcess = (form.businessProcess || '').toString().trim();
+    const description = (form.description || '').toString();
+    const c = Number(form.confidentiality);
+    const i = Number(form.integrity);
+    const a = Number(form.availability);
+
+    if (!name) return { success: false, error: '資產名稱必填' };
+    if (!categoryDisplay || !categoryCode) return { success: false, error: '請選擇類別' };
+    if (!groupDisplay || !groupCode) return { success: false, error: '請選擇組別' };
+    const isValidCIA = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
+    if (!isValidCIA(c) || !isValidCIA(i) || !isValidCIA(a)) {
+      return { success: false, error: 'CIA 三項必須是 1~4 的整數' };
+    }
+
+    // 讀取現有資訊資產
+    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.ISMS_ASSET_SHEET_NAME);
+    if (!sheet) return { success: false, error: '找不到資訊資產工作表' };
+
+    const idx = ISMS_ASSET_COLUMN_INDICES;
+    // 序號偵測策略：
+    // (1) 主：掃 A 欄編號本身，比對 `{groupCode}-{categoryCode}-\d+` 抽尾號
+    //     — 這是唯一真相，避免 T 欄為空或 B/S 欄資料不一致造成誤判
+    // (2) 備援：若列 A 欄無法解析，再看 B/S 欄是否相符且 T 欄是有效數字
+    // (3) 為避免萬一 nextSerial 仍撞號，最終再迴圈遞增直到 A 欄沒有這個 ID
+    const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const idPattern = new RegExp('^' + escapeRegExp(groupCode) + '-' + escapeRegExp(categoryCode) + '-(\\d+)$', 'i');
+    const existingIds = new Set();
+    let maxSerial = 0;
+
+    if (sheet.getLastRow() > 1) {
+      const data = sheet.getDataRange().getValues();
+      for (let r = 1; r < data.length; r++) {
+        const row = data[r];
+        const rowId = String(row[idx.ISMS_ASSET_ID - 1] || '').trim();
+        if (rowId) existingIds.add(rowId.toLowerCase());
+
+        const m = rowId.match(idPattern);
+        if (m) {
+          const serial = Number(m[1]);
+          if (!isNaN(serial) && serial > maxSerial) maxSerial = serial;
+          continue;
+        }
+
+        // 備援：A 欄不符合格式時，看 B/S 欄 + T 欄
+        const rowCategory = String(row[idx.CATEGORY - 1] || '').trim();
+        const rowGroup = String(row[idx.GROUP - 1] || '').trim();
+        const categoryMatch = rowCategory === categoryCode || rowCategory === categoryDisplay;
+        const groupMatch = rowGroup === groupCode || rowGroup === groupDisplay;
+        if (!categoryMatch || !groupMatch) continue;
+        const serial = Number(row[idx.SERIAL_NO - 1]);
+        if (!isNaN(serial) && serial > maxSerial) maxSerial = serial;
+      }
+    }
+
+    // 第三道防線：遞增直到 A 欄絕對不存在此 ID
+    let nextSerial = maxSerial + 1;
+    let serialPadded = String(nextSerial).padStart(3, '0');
+    let ismsAssetId = `${groupCode}-${categoryCode}-${serialPadded}`;
+    while (existingIds.has(ismsAssetId.toLowerCase())) {
+      nextSerial += 1;
+      serialPadded = String(nextSerial).padStart(3, '0');
+      ismsAssetId = `${groupCode}-${categoryCode}-${serialPadded}`;
+    }
+    const assetValue = c + i + a;
+
+    // 組 22 格陣列（A~V，對應 ISMS_ASSET_COLUMN_INDICES 1~22）
+    const row = new Array(22).fill('');
+    row[idx.ISMS_ASSET_ID - 1] = ismsAssetId;
+    row[idx.CATEGORY - 1] = categoryCode;         // B 欄寫「代號」
+    row[idx.NAME - 1] = name;
+    row[idx.DESCRIPTION - 1] = description;
+    row[idx.RESPONSIBLE_UNIT - 1] = groupDisplay; // G 欄寫「組別中文名稱」
+    row[idx.STATUS - 1] = statusDisplay;
+    row[idx.CONFIDENTIALITY - 1] = c;
+    row[idx.INTEGRITY - 1] = i;
+    row[idx.AVAILABILITY - 1] = a;
+    row[idx.ASSET_VALUE - 1] = assetValue;
+    row[idx.GROUP - 1] = groupCode;         // S 欄寫「代號」
+    row[idx.SERIAL_NO - 1] = nextSerial;
+    row[idx.BUSINESS_PROCESS - 1] = businessProcess; // V 欄:業務流程
+
+    sheet.appendRow(row);
+    SpreadsheetApp.flush(); // 強制同步寫入,避免後續讀取拿到 stale 資料
+
+    // 記錄操作日誌
+    const newRowIndex = sheet.getLastRow();
+    const snapshot = mapRowToIsmsAssetObject_(sheet.getRange(newRowIndex, 1, 1, 22).getValues()[0]);
+    logIsmsOperation_('新增', ismsAssetId, '', null, snapshot, '');
+
+    return {
+      success: true,
+      ismsAssetId,
+      serial: nextSerial,
+      assetValue,
+      rowIndex: newRowIndex
+    };
+  } catch (e) {
+    console.error('createIsmsAsset 錯誤:', e);
+    return { success: false, error: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+// ==========================================
+// 編輯 / 刪除 / 操作紀錄
+// ==========================================
+
+/**
+ * 確保操作紀錄工作表存在,不存在則自動建立並寫入表頭
+ */
+function ensureOperationLogSheet_() {
+  const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(CONFIG.ISMS_OPERATION_LOG_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.ISMS_OPERATION_LOG_SHEET_NAME);
+    sheet.getRange(1, 1, 1, 8).setValues([[
+      '時間戳', '操作者', '操作類型', '資訊資產編號',
+      '變更欄位', '變更前(JSON)', '變更後(JSON)', '備註'
+    ]]);
+    sheet.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#f1f5f9');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/**
+ * 寫入操作紀錄
+ * @param {string} operationType - '新增' / '編輯' / '刪除'
+ * @param {string} ismsAssetId - 目標編號
+ * @param {string} changedFields - 變更欄位 CSV(CREATE/DELETE 留空)
+ * @param {Object|null} beforeObj - 變更前快照(CREATE 時為 null)
+ * @param {Object|null} afterObj - 變更後快照(DELETE 時為 null)
+ * @param {string} remarks - 備註
+ */
+function logIsmsOperation_(operationType, ismsAssetId, changedFields, beforeObj, afterObj, remarks) {
+  try {
+    const sheet = ensureOperationLogSheet_();
+    const email = Session.getActiveUser().getEmail() || '(unknown)';
+    sheet.appendRow([
+      new Date().toISOString(),
+      email,
+      operationType,
+      ismsAssetId || '',
+      changedFields || '',
+      beforeObj ? JSON.stringify(beforeObj) : '',
+      afterObj ? JSON.stringify(afterObj) : '',
+      remarks || ''
+    ]);
+  } catch (e) {
+    console.error('logIsmsOperation_ 錯誤:', e);
+    // log 失敗不阻斷主操作
+  }
+}
+
+/**
+ * 依編號定位資訊資產列
+ * @param {string} ismsAssetId
+ * @returns {{rowIndex:number, rowData:any[]}|null}
+ */
+function findIsmsAssetRow_(ismsAssetId) {
+  const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.ISMS_ASSET_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() <= 1) return null;
+  const idx = ISMS_ASSET_COLUMN_INDICES;
+  const data = sheet.getDataRange().getValues();
+  const target = String(ismsAssetId).trim().toLowerCase();
+  for (let r = 1; r < data.length; r++) {
+    const id = String(data[r][idx.ISMS_ASSET_ID - 1] || '').trim().toLowerCase();
+    if (id && id === target) {
+      return { rowIndex: r + 1, rowData: data[r], sheet: sheet };
+    }
+  }
+  return null;
+}
+
+/**
+ * 編輯資訊資產(可修改:名稱、說明、狀態、CIA)
+ */
+function updateIsmsAsset(form) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    if (!form || typeof form !== 'object') {
+      return { success: false, error: '表單資料不正確' };
+    }
+    const ismsAssetId = (form.ismsAssetId || '').toString().trim();
+    const name = (form.name || '').toString().trim();
+    const description = (form.description || '').toString();
+    const statusDisplay = (form.statusDisplay || '').toString().trim();
+    const c = Number(form.confidentiality);
+    const i = Number(form.integrity);
+    const a = Number(form.availability);
+
+    if (!ismsAssetId) return { success: false, error: '資訊資產編號必填' };
+    if (!name) return { success: false, error: '資產名稱必填' };
+    const isValidCIA = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
+    if (!isValidCIA(c) || !isValidCIA(i) || !isValidCIA(a)) {
+      return { success: false, error: 'CIA 三項必須是 1~4 的整數' };
+    }
+
+    const located = findIsmsAssetRow_(ismsAssetId);
+    if (!located) return { success: false, error: '找不到資產:' + ismsAssetId };
+
+    const idx = ISMS_ASSET_COLUMN_INDICES;
+    const sheet = located.sheet;
+    const rowIndex = located.rowIndex;
+    const before = mapRowToIsmsAssetObject_(located.rowData);
+    const assetValue = c + i + a;
+
+    // 比對差異
+    const changed = [];
+    if (before.name !== name) changed.push('name');
+    if (before.description !== description) changed.push('description');
+    if (before.status !== statusDisplay) changed.push('status');
+    if (Number(before.confidentiality) !== c) changed.push('confidentiality');
+    if (Number(before.integrity) !== i) changed.push('integrity');
+    if (Number(before.availability) !== a) changed.push('availability');
+    if (Number(before.assetValue) !== assetValue) changed.push('assetValue');
+
+    if (changed.length === 0) {
+      return { success: true, noChange: true, ismsAssetId };
+    }
+
+    // 逐欄寫入
+    sheet.getRange(rowIndex, idx.NAME).setValue(name);
+    sheet.getRange(rowIndex, idx.DESCRIPTION).setValue(description);
+    sheet.getRange(rowIndex, idx.STATUS).setValue(statusDisplay);
+    sheet.getRange(rowIndex, idx.CONFIDENTIALITY).setValue(c);
+    sheet.getRange(rowIndex, idx.INTEGRITY).setValue(i);
+    sheet.getRange(rowIndex, idx.AVAILABILITY).setValue(a);
+    sheet.getRange(rowIndex, idx.ASSET_VALUE).setValue(assetValue);
+    SpreadsheetApp.flush();
+
+    // 組 after 快照
+    const afterRow = sheet.getRange(rowIndex, 1, 1, 22).getValues()[0];
+    const after = mapRowToIsmsAssetObject_(afterRow);
+
+    logIsmsOperation_('編輯', ismsAssetId, changed.join(','), before, after, '');
+
+    return { success: true, ismsAssetId, changedFields: changed };
+  } catch (e) {
+    console.error('updateIsmsAsset 錯誤:', e);
+    return { success: false, error: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+/**
+ * 刪除資訊資產(僅管理員)
+ */
+function deleteIsmsAsset(ismsAssetId, reason) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    const email = Session.getActiveUser().getEmail() || '';
+    if (!checkIsAdmin_(email)) {
+      return { success: false, error: '僅管理員可刪除' };
+    }
+
+    const targetId = (ismsAssetId || '').toString().trim();
+    if (!targetId) return { success: false, error: '資訊資產編號必填' };
+
+    const located = findIsmsAssetRow_(targetId);
+    if (!located) return { success: false, error: '找不到資產:' + targetId };
+
+    const before = mapRowToIsmsAssetObject_(located.rowData);
+    located.sheet.deleteRow(located.rowIndex);
+    SpreadsheetApp.flush();
+
+    logIsmsOperation_('刪除', targetId, '', before, null, reason || '');
+
+    return { success: true, ismsAssetId: targetId };
+  } catch (e) {
+    console.error('deleteIsmsAsset 錯誤:', e);
+    return { success: false, error: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
 
 /**
  * 取得資訊資產清單
@@ -629,6 +1071,129 @@ function exportMappingReport() {
       filename: `資產對照報表_${new Date().toISOString().slice(0, 10)}.csv`
     };
   } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 取得浮動按鈕導航連結
+ */
+function getFabNavigationUrls() {
+  var baseUrl = ScriptApp.getService().getUrl();
+  return {
+    connectUrl: baseUrl + '?page=connect',
+    softwareListUrl: baseUrl + '?page=softwarelist',
+    mainAppUrl: 'https://script.google.com/a/macros/as.edu.tw/s/AKfycbxkg0u0OFBLCft2gHstJ3eVE94INrZ1G59Ek0MIs_fmdLG00N9YoHyH9EmbW4geifg7/exec'
+  };
+}
+
+// ==========================================
+// 軟體清冊 API
+// ==========================================
+
+/**
+ * 取得軟體清冊資料
+ * @param {Object} options - 篩選選項
+ *   - searchKeyword: 關鍵字搜尋
+ *   - filterType: 軟體類型篩選
+ *   - filterUnit: 保管單位篩選
+ * @returns {Object} { success, data, totalCount }
+ */
+function getSoftwareList(options) {
+  options = options || {};
+  try {
+    var ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(CONFIG.SOFTWARE_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, error: '找不到「軟體清冊」工作表' };
+    }
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return { success: true, data: [], totalCount: 0 };
+    }
+
+    var rawData = sheet.getRange(2, 1, lastRow - 1, 9).getValues();
+    var idx = SOFTWARE_COLUMN_INDICES;
+    var data = [];
+
+    for (var i = 0; i < rawData.length; i++) {
+      var row = rawData[i];
+      var softwareId = row[idx.SOFTWARE_ID - 1] ? String(row[idx.SOFTWARE_ID - 1]).trim() : '';
+      if (!softwareId) continue;
+
+      data.push({
+        softwareId: softwareId,
+        softwareName: row[idx.SOFTWARE_NAME - 1] ? String(row[idx.SOFTWARE_NAME - 1]).trim() : '',
+        quantity: row[idx.QUANTITY - 1] ? String(row[idx.QUANTITY - 1]).trim() : '',
+        custodyUnit: row[idx.CUSTODY_UNIT - 1] ? String(row[idx.CUSTODY_UNIT - 1]).trim() : '',
+        custodian: row[idx.CUSTODIAN - 1] ? String(row[idx.CUSTODIAN - 1]).trim() : '',
+        user: row[idx.USER - 1] ? String(row[idx.USER - 1]).trim() : '',
+        softwareType: row[idx.SOFTWARE_TYPE - 1] ? String(row[idx.SOFTWARE_TYPE - 1]).trim() : '',
+        typeCode: row[idx.TYPE_CODE - 1] ? String(row[idx.TYPE_CODE - 1]).trim() : '',
+        serialNo: row[idx.SERIAL_NO - 1] ? String(row[idx.SERIAL_NO - 1]).trim() : ''
+      });
+    }
+
+    var totalCount = data.length;
+    var filtered = data;
+
+    // 關鍵字篩選
+    if (options.searchKeyword) {
+      var keyword = options.searchKeyword.toLowerCase();
+      filtered = filtered.filter(function(item) {
+        return item.softwareId.toLowerCase().indexOf(keyword) >= 0 ||
+               item.softwareName.toLowerCase().indexOf(keyword) >= 0 ||
+               item.custodian.toLowerCase().indexOf(keyword) >= 0 ||
+               item.user.toLowerCase().indexOf(keyword) >= 0 ||
+               item.serialNo.toLowerCase().indexOf(keyword) >= 0;
+      });
+    }
+
+    // 軟體類型篩選
+    if (options.filterType) {
+      filtered = filtered.filter(function(item) {
+        return item.softwareType === options.filterType;
+      });
+    }
+
+    // 保管單位篩選
+    if (options.filterUnit) {
+      filtered = filtered.filter(function(item) {
+        return item.custodyUnit === options.filterUnit;
+      });
+    }
+
+    return { success: true, data: filtered, totalCount: totalCount };
+  } catch (e) {
+    console.error('getSoftwareList 錯誤:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 取得軟體清冊的下拉選項（不重複的軟體類型、保管單位）
+ * @returns {Object} { success, types, units }
+ */
+function getSoftwareDropdownOptions() {
+  try {
+    var result = getSoftwareList({});
+    if (!result.success) return result;
+
+    var typeSet = {};
+    var unitSet = {};
+    for (var i = 0; i < result.data.length; i++) {
+      var item = result.data[i];
+      if (item.softwareType) typeSet[item.softwareType] = true;
+      if (item.custodyUnit) unitSet[item.custodyUnit] = true;
+    }
+
+    var types = Object.keys(typeSet).sort(function(a, b) { return a.localeCompare(b, 'zh-TW'); });
+    var units = Object.keys(unitSet).sort(function(a, b) { return a.localeCompare(b, 'zh-TW'); });
+
+    return { success: true, types: types, units: units };
+  } catch (e) {
+    console.error('getSoftwareDropdownOptions 錯誤:', e);
     return { success: false, error: e.message };
   }
 }

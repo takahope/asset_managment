@@ -178,6 +178,64 @@
   margin: 0;
 }
 
+/* ========== 購物車內批次動作按鈕 ========== */
+.batch-list-cart-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.cart-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  color: #fff;
+  background: #64748b;
+}
+
+.cart-action-btn i {
+  font-size: 14px;
+}
+
+.cart-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+.cart-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.cart-action-btn--transfer {
+  background: #2563eb;
+}
+
+.cart-action-btn--lending {
+  background: #7c3aed;
+}
+
+.cart-action-btn--scrap {
+  background: #dc2626;
+}
+
+.cart-action-btn--inventory {
+  background: #0d9488;
+}
+
 /* ========== 遮罩層樣式 ========== */
 .batch-list-overlay {
   position: fixed;
@@ -337,6 +395,21 @@
       <i class="fa-solid fa-cart-shopping"></i>
       <p>清單是空的</p>
     </div>
+  </div>
+
+  <div id="BatchList_cartActions" class="batch-list-cart-actions" style="display:none">
+    <button type="button" data-cart-action="transfer" class="cart-action-btn cart-action-btn--transfer">
+      <i class="fas fa-exchange-alt"></i><span>批次轉移</span>
+    </button>
+    <button type="button" data-cart-action="lending" class="cart-action-btn cart-action-btn--lending">
+      <i class="fas fa-hand-holding"></i><span>批次出借</span>
+    </button>
+    <button type="button" data-cart-action="scrap" class="cart-action-btn cart-action-btn--scrap">
+      <i class="fas fa-trash-alt"></i><span>批次報廢</span>
+    </button>
+    <button type="button" data-cart-action="inventory" class="cart-action-btn cart-action-btn--inventory">
+      <i class="fas fa-clipboard-check"></i><span>批次盤點</span>
+    </button>
   </div>
 
   <div class="sidebar-footer">
@@ -632,7 +705,109 @@
         </div>
       `;
     }).join('');
+
+    BatchList_refreshCartActions();
   };
+
+  // ========== 購物車內批次動作按鈕同步 ==========
+  window.BatchList_refreshCartActions = function() {
+    const container = document.getElementById('BatchList_cartActions');
+    if (!container) return;
+
+    const bridge = window.UserstateCartBridge || {};
+    const isAdvancedMode = !!bridge.isAdvancedMode;
+    const hasPendingInventory = !!bridge.hasPendingInventory;
+    const itemCount = BatchList_items.length;
+
+    // 進階模式：整區隱藏
+    if (isAdvancedMode) {
+      container.style.display = 'none';
+      return;
+    }
+    container.style.display = 'grid';
+
+    const disabledBase = itemCount === 0;
+    const buttons = container.querySelectorAll('button[data-cart-action]');
+    buttons.forEach(btn => {
+      const action = btn.getAttribute('data-cart-action');
+      if (action === 'inventory') {
+        // 沒有進行中的盤點會話則隱藏
+        if (!hasPendingInventory) {
+          btn.style.display = 'none';
+          return;
+        }
+        btn.style.display = '';
+        btn.disabled = disabledBase;
+      } else {
+        btn.disabled = disabledBase;
+      }
+    });
+  };
+
+  function BatchList_onCartActionClick(event) {
+    const btn = event.target.closest('button[data-cart-action]');
+    if (!btn) return;
+    if (btn.disabled) return;
+    const action = btn.getAttribute('data-cart-action');
+    const bridge = window.UserstateCartBridge;
+    if (!bridge || !bridge.handlers || typeof bridge.handlers[action] !== 'function') {
+      BatchList_showToast('批次功能尚未就緒，請稍後再試', 'warning');
+      return;
+    }
+
+    // 先收合購物車側欄與遮罩，讓彈出的 modal 取得焦點
+    const sidebar = document.getElementById('BatchList_sidebar');
+    const overlay = document.getElementById('BatchList_overlay');
+    if (sidebar) sidebar.classList.remove('active');
+    if (overlay) overlay.classList.remove('active');
+    if (btn && typeof btn.blur === 'function') btn.blur();
+
+    // 等側欄關閉動畫開始後再觸發 handler，避免焦點被側欄搶回
+    setTimeout(() => {
+      try {
+        bridge.handlers[action]();
+
+        // modal 打開後主動把焦點轉到 modal 容器
+        setTimeout(() => {
+          const modalRoot = document.querySelector(
+            '[role="dialog"][aria-modal="true"], .fixed.inset-0 [role="dialog"], .fixed.inset-0.z-50, .modal.show, .modal-container'
+          );
+          if (!modalRoot) return;
+          const focusable = modalRoot.querySelector(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable && typeof focusable.focus === 'function') {
+            focusable.focus();
+          } else if (typeof modalRoot.focus === 'function') {
+            if (!modalRoot.hasAttribute('tabindex')) modalRoot.setAttribute('tabindex', '-1');
+            modalRoot.focus();
+          }
+        }, 120);
+      } catch (err) {
+        console.error('[BatchList] 批次動作執行失敗', err);
+        BatchList_showToast('批次動作執行失敗', 'error');
+      }
+    }, 50);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('BatchList_cartActions');
+    if (container) {
+      container.addEventListener('click', BatchList_onCartActionClick);
+    }
+    // Bridge 更新時同步按鈕狀態
+    window.addEventListener('UserstateCartBridge:update', () => {
+      if (typeof window.BatchList_refreshCartActions === 'function') {
+        window.BatchList_refreshCartActions();
+      }
+    });
+    // 初始化後觸發一次
+    setTimeout(() => {
+      if (typeof window.BatchList_refreshCartActions === 'function') {
+        window.BatchList_refreshCartActions();
+      }
+    }, 600);
+  });
 
   // ========== 同步機制函數 ==========
   window.BatchList_syncFromCheckboxes = function() {

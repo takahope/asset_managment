@@ -173,17 +173,13 @@ const INVENTORY_LOG_HEADERS = [
   '已盤點數量',
   '總數量',
   '狀態',
-  '完成時間'
+  '完成時間',
+  '篩選條件摘要'
 ];
 
 const INVENTORY_DETAIL_HEADERS = [
   '盤點ID',
   '財產編號',
-  '財產名稱',
-  '保管人',
-  '使用人',
-  '地點',
-  '原狀態',
   '盤點結果',
   '備註',
   '盤點時間',
@@ -307,11 +303,6 @@ function ensureInventorySheets_(ss) {
     headerRange.setValues([values]);
     updated = true;
   } else {
-    if (!normalized.includes('使用人')) {
-      detailSheet.insertColumnAfter(4);
-      updated = true;
-    }
-
     const targetColumnCount = Math.max(detailSheet.getLastColumn(), INVENTORY_DETAIL_HEADERS.length, 1);
     headerRange = detailSheet.getRange(1, 1, 1, targetColumnCount);
     currentRow = headerRange.getValues()[0];
@@ -335,6 +326,77 @@ function ensureInventorySheets_(ss) {
 
   results.push({ sheetName: INVENTORY_DETAIL_SHEET_NAME, created: created, updated: updated });
   return results;
+}
+
+function migrateInventoryDetailSheetToCompactSchema() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+  if (!sheet) {
+    throw new Error(`找不到工作表「${INVENTORY_DETAIL_SHEET_NAME}」`);
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = Math.max(sheet.getLastColumn(), INVENTORY_DETAIL_HEADERS.length);
+  const headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(value => String(value || '').trim());
+
+  const isCompactSchema = headerRow[0] === '盤點ID' &&
+    headerRow[1] === '財產編號' &&
+    headerRow[2] === '盤點結果' &&
+    headerRow[6] === '指派人員';
+  const isLegacySchema = headerRow[0] === '盤點ID' &&
+    headerRow[1] === '財產編號' &&
+    headerRow[7] === '盤點結果' &&
+    headerRow[11] === '指派人員';
+
+  if (!isCompactSchema && !isLegacySchema && lastRow > 1) {
+    throw new Error('盤點明細表頭格式無法辨識，請先確認現有欄位結構。');
+  }
+
+  let migratedRows = [];
+  if (lastRow > 1) {
+    const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    migratedRows = data
+      .filter(row => row.some(value => String(value || '').trim() !== ''))
+      .map(row => {
+        if (isLegacySchema) {
+          return [
+            row[0] || '',
+            row[1] || '',
+            row[7] || '',
+            row[8] || '',
+            row[9] || '',
+            row[10] || '',
+            row[11] || ''
+          ];
+        }
+        return [
+          row[0] || '',
+          row[1] || '',
+          row[2] || '',
+          row[3] || '',
+          row[4] || '',
+          row[5] || '',
+          row[6] || ''
+        ];
+      });
+  }
+
+  if (sheet.getMaxColumns() > INVENTORY_DETAIL_HEADERS.length) {
+    sheet.deleteColumns(INVENTORY_DETAIL_HEADERS.length + 1, sheet.getMaxColumns() - INVENTORY_DETAIL_HEADERS.length);
+  }
+  if (sheet.getMaxColumns() < INVENTORY_DETAIL_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), INVENTORY_DETAIL_HEADERS.length - sheet.getMaxColumns());
+  }
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, INVENTORY_DETAIL_HEADERS.length).setValues([INVENTORY_DETAIL_HEADERS]);
+  applyHeaderStyle_(sheet, INVENTORY_DETAIL_HEADERS.length);
+
+  if (migratedRows.length > 0) {
+    sheet.getRange(2, 1, migratedRows.length, INVENTORY_DETAIL_HEADERS.length).setValues(migratedRows);
+  }
+
+  return `盤點明細已轉換為精簡欄位，共保留 ${migratedRows.length} 筆資料。`;
 }
 
 function applyHeaderStyle_(sheet, headerLength) {

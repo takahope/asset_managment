@@ -53,7 +53,9 @@ const PROPERTY_COLUMN_INDICES = {
   IS_ACTUALLY_COMPUTER: 25, // Y欄: 是否為電腦 (原X欄)
   IS_ISO_SCOPE: 26,     // Z欄: 是否在ISO驗證範圍內
   NOTES: 30,            // AD欄: 備註
-  DEFAULT_GROUP: 31     // AE欄: 預設組別
+  DEFAULT_GROUP: 31,    // AE欄: 預設組別
+  ISMS_ASSET_ID: 32,    // AF欄: 對應資訊資產編號
+  PROPERTY_CATEGORY: 33 // AG欄: 財產區分（科研基金 / 公務用_一般 等）
 };
 
 const ITEM_COLUMN_INDICES = {
@@ -83,7 +85,8 @@ const ITEM_COLUMN_INDICES = {
   IS_ACTUALLY_COMPUTER: 25, // Y欄 是否為電腦
   IS_ISO_SCOPE: 26,     // Z欄 是否在ISO驗證範圍內
   NOTES: 30,            // AD欄: 備註
-  DEFAULT_GROUP: 31     // AE欄: 預設組別
+  DEFAULT_GROUP: 31,    // AE欄: 預設組別
+  ISMS_ASSET_ID: 32     // AF欄: 對應資訊資產編號
 };
 
 
@@ -117,20 +120,47 @@ const IL_VERIFIED_COUNT_COLUMN_INDEX = 6;      // F欄: 已盤點數量
 const IL_TOTAL_COUNT_COLUMN_INDEX = 7;         // G欄: 總數量
 const IL_STATUS_COLUMN_INDEX = 8;              // H欄: 狀態
 const IL_COMPLETION_TIME_COLUMN_INDEX = 9;     // I欄: 完成時間
+const IL_SUMMARY_COLUMN_INDEX = 10;            // J欄: 篩選條件摘要（系統類別 + 範圍 + 分派）
 
 // --- ✨ **新增：「盤點明細」工作表中的欄位索引** ---
 const ID_INVENTORY_ID_COLUMN_INDEX = 1;        // A欄: 盤點ID
 const ID_ASSET_ID_COLUMN_INDEX = 2;            // B欄: 財產編號
-const ID_ASSET_NAME_COLUMN_INDEX = 3;          // C欄: 財產名稱
-const ID_KEEPER_NAME_COLUMN_INDEX = 4;         // D欄: 保管人
-const ID_USER_NAME_COLUMN_INDEX = 5;           // E欄: 使用人
-const ID_LOCATION_COLUMN_INDEX = 6;            // F欄: 地點
-const ID_ORIGINAL_STATUS_COLUMN_INDEX = 7;     // G欄: 原狀態
-const ID_INVENTORY_RESULT_COLUMN_INDEX = 8;    // H欄: 盤點結果
-const ID_REMARKS_COLUMN_INDEX = 9;             // I欄: 備註
-const ID_VERIFICATION_TIME_COLUMN_INDEX = 10;  // J欄: 盤點時間
-const ID_VERIFIED_BY_COLUMN_INDEX = 11;        // K欄: 盤點人
-const ID_ASSIGNED_USER_COLUMN_INDEX = 12;      // ✨ L欄: 指派人員 (New!)
+const ID_INVENTORY_RESULT_COLUMN_INDEX = 3;    // C欄: 盤點結果
+const ID_REMARKS_COLUMN_INDEX = 4;             // D欄: 備註
+const ID_VERIFICATION_TIME_COLUMN_INDEX = 5;   // E欄: 盤點時間
+const ID_VERIFIED_BY_COLUMN_INDEX = 6;         // F欄: 盤點人
+const ID_ASSIGNED_USER_COLUMN_INDEX = 7;       // G欄: 指派人員
+
+// --- ✨ **新增：ISMS 資訊資產欄位索引** ---
+const ISMS_ASSET_COLUMN_INDICES = {
+  ISMS_ASSET_ID: 1,      // A欄: 資訊資產編號
+  CATEGORY: 2,           // B欄: 資訊資產類別
+  NAME: 3,               // C欄: 資訊資產名稱
+  DESCRIPTION: 4,        // D欄: 資訊資產說明
+  QUANTITY: 5,           // E欄: 數量
+  LOCATION: 6,           // F欄: 地點
+  RESPONSIBLE_UNIT: 7,   // G欄: 權責單位
+  MAIN_CATEGORY: 8,      // H欄: 主類別
+  SUB_CATEGORY: 9,       // I欄: 子類別
+  STATUS: 13,            // M欄: 狀態
+  CONFIDENTIALITY: 15,   // O欄: 機密性
+  INTEGRITY: 16,         // P欄: 完整性
+  AVAILABILITY: 17,      // Q欄: 可用性
+  ASSET_VALUE: 18,       // R欄: 資產價值
+  GROUP: 19,             // S欄: 組別代號
+  SERIAL_NO: 20,         // T欄: 流水號
+  INVENTORY_COUNT: 21,   // U欄: 已盤點數量
+  BUSINESS_PROCESS: 22   // V欄: 業務流程
+};
+
+// ISMS 資產對照表欄位索引
+const ISMS_MAPPING_COLUMN_INDICES = {
+  ASSET_ID: 1,           // A欄: 資產編號
+  ISMS_ASSET_ID: 2,      // B欄: 資訊資產編號
+  CREATED_TIME: 3,       // C欄: 建立時間
+  CREATED_BY: 4,         // D欄: 建立人
+  REMARKS: 5             // E欄: 備註
+};
 
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
@@ -215,7 +245,9 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
       isItAsset: row[indices.IS_IT_ASSET - 1],
       isActuallyComputer: row[indices.IS_ACTUALLY_COMPUTER - 1],
       isIsoScope: row[indices.IS_ISO_SCOPE - 1],
+      ismsAssetId: indices.ISMS_ASSET_ID ? row[indices.ISMS_ASSET_ID - 1] : '',
       defaultGroup: indices.DEFAULT_GROUP ? row[indices.DEFAULT_GROUP - 1] : null,
+      propertyCategory: indices.PROPERTY_CATEGORY ? (row[indices.PROPERTY_CATEGORY - 1] || '') : '',
       sourceSheet: sourceSheet
     };
 }
@@ -250,6 +282,97 @@ function getAllAssets() {
   
   Logger.log(`getAllAssets: 共讀取並正規化 ${allAssetObjects.length} 筆資產物件。`);
   return allAssetObjects;
+}
+
+function buildAssetAliasFields_(asset) {
+  return {
+    assetAlias: String(asset?.assetAlias || ''),
+    productSerial: String(asset?.productSerial || ''),
+    sourceSheet: String(asset?.sourceSheet || '')
+  };
+}
+
+function createEmptyInventoryAssetContext_(assetId) {
+  return {
+    assetId: String(assetId || '').trim(),
+    assetName: '',
+    assetAlias: '',
+    productSerial: '',
+    keeperName: '',
+    userName: '',
+    modelBrand: '',
+    unit: '',
+    purchaseDate: '',
+    useLife: '',
+    location: '',
+    accessory: '',
+    originalStatus: '',
+    status: '',
+    isItAsset: '',
+    isIsoScope: '',
+    ismsAssetId: '',
+    sourceSheet: ''
+  };
+}
+
+function buildInventoryAssetContextMap_(assetIds) {
+  const normalizedIds = Array.from(new Set((assetIds || [])
+    .map(id => String(id || '').trim())
+    .filter(Boolean)));
+  const contextMap = {};
+
+  if (normalizedIds.length === 0) {
+    return contextMap;
+  }
+
+  const assetIdSet = {};
+  normalizedIds.forEach(id => {
+    assetIdSet[id] = true;
+    contextMap[id] = createEmptyInventoryAssetContext_(id);
+  });
+
+  const allAssets = getAllAssets();
+  allAssets.forEach(asset => {
+    const assetId = String(asset.assetId || '').trim();
+    if (!assetId || !assetIdSet[assetId]) return;
+    contextMap[assetId] = {
+      assetId: assetId,
+      assetName: String(asset.assetName || ''),
+      assetAlias: String(asset.assetAlias || ''),
+      productSerial: String(asset.productSerial || ''),
+      keeperName: String(asset.leaderName || ''),
+      userName: String(asset.userName || ''),
+      modelBrand: String(asset.modelBrand || ''),
+      unit: String(asset.unit || ''),
+      purchaseDate: asset.purchaseDate || '',
+      useLife: String(asset.useLife || ''),
+      location: String(asset.location || ''),
+      accessory: String(asset.accessory || ''),
+      originalStatus: String(asset.assetStatus || ''),
+      status: String(asset.assetStatus || ''),
+      isItAsset: String(asset.isItAsset || ''),
+      isIsoScope: String(asset.isIsoScope || ''),
+      ismsAssetId: String(asset.ismsAssetId || ''),
+      sourceSheet: String(asset.sourceSheet || '')
+    };
+  });
+
+  const ismsMappingResult = getIsmsMappingForAssets(normalizedIds);
+  const ismsMappings = ismsMappingResult && ismsMappingResult.success && ismsMappingResult.mappings
+    ? ismsMappingResult.mappings
+    : {};
+
+  normalizedIds.forEach(assetId => {
+    const mapping = ismsMappings[assetId] || {};
+    if (mapping.isItAsset && !contextMap[assetId].isItAsset) {
+      contextMap[assetId].isItAsset = String(mapping.isItAsset || '');
+    }
+    if (mapping.ismsAssetId) {
+      contextMap[assetId].ismsAssetId = String(mapping.ismsAssetId || '');
+    }
+  });
+
+  return contextMap;
 }
 
 /**
@@ -409,6 +532,46 @@ function getGroupMemberEmails(targetEmail) {
   const uniqueMembers = new Set(members);
   uniqueMembers.add(normalizedTarget);
   return Array.from(uniqueMembers);
+}
+
+/**
+ * 取得目前使用者的組別與 ISMS 盤點白名單權限
+ * G欄：使用者組別
+ * H欄：允許使用 ISMS 盤點的組別
+ * 管理員永遠可用，不受 H 欄限制
+ * @param {SpreadsheetApp.Spreadsheet} ss
+ * @param {string} currentUserEmail
+ * @param {boolean} isAdmin
+ * @returns {{ currentUserGroup: string, allowedIsmsGroups: string[], canUseIsmsInventory: boolean }}
+ */
+function getIsmsInventoryAccess_(ss, currentUserEmail, isAdmin) {
+  const normalizedEmail = String(currentUserEmail || '').toLowerCase().trim();
+  let currentUserGroup = '未分組';
+  const allowedIsmsGroupSet = new Set();
+
+  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
+    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 8).getValues();
+    keeperData.forEach(row => {
+      const email = row[1];
+      const groupName = row[6] ? String(row[6]).trim() : '';
+      const allowedGroup = row[7] ? String(row[7]).trim() : '';
+      if (allowedGroup) {
+        allowedIsmsGroupSet.add(allowedGroup);
+      }
+      if (!email) return;
+      const rowEmail = String(email).toLowerCase().trim();
+      if (rowEmail === normalizedEmail && groupName) {
+        currentUserGroup = groupName;
+      }
+    });
+  }
+
+  return {
+    currentUserGroup: currentUserGroup,
+    allowedIsmsGroups: Array.from(allowedIsmsGroupSet),
+    canUseIsmsInventory: Boolean(isAdmin || (currentUserGroup && allowedIsmsGroupSet.has(currentUserGroup)))
+  };
 }
 
 /**
@@ -576,6 +739,13 @@ function getAllowedEmails() {
 }
 
 /**
+ * 清除權限快取（改完「保管人/信箱」或「管理員名單」工作表後可手動執行）
+ */
+function clearPermissionCache() {
+  CacheService.getScriptCache().remove('system_access_allowlist');
+}
+
+/**
  * 建立存取拒絕頁面
  * @param {string} userEmail 被拒絕存取的使用者 Email
  * @returns {HtmlOutput} 存取拒絕頁面
@@ -677,6 +847,11 @@ function doGet(e) {
   let title;
 
   switch (page) {
+    case 'barcodeprint':
+      // 列印條碼標籤頁面
+      template = HtmlService.createTemplateFromFile('barcodeprint');
+      title = "列印條碼";
+      break;
     default:
       // 預設顯示入口網站
       template = HtmlService.createTemplateFromFile('userstate');
@@ -689,6 +864,77 @@ function doGet(e) {
   html.addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   return html;
 }
+
+function parseUserStateDateValue_(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : new Date(time);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const firstLine = raw
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line) || raw;
+
+  const dateMatch = firstLine.match(/(\d{1,4})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})/);
+  if (dateMatch) {
+    let year = parseInt(dateMatch[1], 10);
+    const month = parseInt(dateMatch[2], 10);
+    const day = parseInt(dateMatch[3], 10);
+
+    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+      if (year < 1911) {
+        year += 1911;
+      }
+
+      const parsed = new Date(year, month - 1, day);
+      if (!Number.isNaN(parsed.getTime()) &&
+          parsed.getFullYear() === year &&
+          parsed.getMonth() === month - 1 &&
+          parsed.getDate() === day) {
+        return parsed;
+      }
+    }
+  }
+
+  const fallback = new Date(firstLine);
+  if (!Number.isNaN(fallback.getTime())) {
+    return fallback;
+  }
+
+  return null;
+}
+
+function formatUserStateDateDisplay_(value) {
+  if (!value) {
+    return '';
+  }
+
+  const parsed = parseUserStateDateValue_(value);
+  if (parsed) {
+    return Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+  }
+
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  return raw
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line) || raw;
+}
+
 function getUserStateData(forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const normalizedCurrentEmail = String(currentUserEmail).toLowerCase();
@@ -699,13 +945,18 @@ function getUserStateData(forceUserScope) {
   let currentUserName = currentUserEmail.split('@')[0]; // 預設使用 email 前綴
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  const userNameToGroupMap = {};
   if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
     for (let row of keeperData) {
+      const name = row[0] ? String(row[0]).trim() : '';
       const email = row[1];
+      const groupName = row[6] ? String(row[6]).trim() : '';
       if (email && String(email).toLowerCase() === normalizedCurrentEmail) {
-        currentUserName = row[0]; // 找到對應的姓名
-        break;
+        currentUserName = name || currentUserName; // 找到對應的姓名
+      }
+      if (name && groupName && !userNameToGroupMap[name]) {
+        userNameToGroupMap[name] = groupName;
       }
     }
   }
@@ -738,19 +989,45 @@ function getUserStateData(forceUserScope) {
     }
   }
 
-  const results = filteredData.map(asset => ({
-    assetId: asset.assetId,
-    assetName: asset.assetName,
-    modelBrand: asset.modelBrand || '',
-    leader: asset.leaderName,
-    leaderEmail: asset.leaderEmail, // ✨ Add leaderEmail
-    userEmail: asset.userEmail || '',
-    location: asset.location,
-    status: asset.assetStatus,
-    category: asset.assetCategory,
-    userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
-    sourceSheet: asset.sourceSheet
-  }));
+  const assetIds = filteredData
+    .map(asset => String(asset.assetId || '').trim())
+    .filter(Boolean);
+  const ismsMappingResult = getIsmsMappingForAssets(assetIds);
+  const ismsMappings = ismsMappingResult && ismsMappingResult.success && ismsMappingResult.mappings
+    ? ismsMappingResult.mappings
+    : {};
+
+  const results = filteredData.map(asset => {
+    const assetId = String(asset.assetId || '').trim();
+    const mapping = ismsMappings[assetId] || {};
+    const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
+    const mappedUserGroup = asset.userName ? (userNameToGroupMap[String(asset.userName).trim()] || '') : '';
+    const mappedLeaderGroup = asset.leaderName ? (userNameToGroupMap[String(asset.leaderName).trim()] || '') : '';
+    const groupName = defaultGroup || mappedUserGroup || mappedLeaderGroup || '未分組';
+    return {
+      assetId: asset.assetId,
+      assetName: asset.assetName,
+      assetAlias: asset.assetAlias || '',
+      productSerial: asset.productSerial || '',
+      modelBrand: asset.modelBrand || '',
+      leader: asset.leaderName,
+      leaderEmail: asset.leaderEmail,
+      userEmail: asset.userEmail || '',
+      location: asset.location,
+      status: asset.assetStatus,
+      category: asset.assetCategory,
+      group: groupName,
+      userName: asset.userName || '無',
+      sourceSheet: asset.sourceSheet || '',
+      useLife: asset.useLife || '',
+      purchaseDate: asset.purchaseDate ? (asset.purchaseDate instanceof Date ? asset.purchaseDate.toISOString() : String(asset.purchaseDate)) : '',
+      purchaseDateDisplay: formatUserStateDateDisplay_(asset.purchaseDate),
+      isItAsset: asset.isItAsset || '',
+      isIsoScope: asset.isIsoScope || '',
+      ismsAssetId: String(mapping.ismsAssetId || asset.ismsAssetId || ''),
+      propertyCategory: String(asset.propertyCategory || '')
+    };
+  });
 
   return {
     isAdmin: isAdmin,
@@ -896,6 +1173,42 @@ function getAppUrl() {
   return ScriptApp.getService().getUrl();
 }
 
+function sanitizeOptionalUrl_(value) {
+  var raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.indexOf('YOUR_') !== -1) return '';
+  return raw;
+}
+
+/**
+ * 取得 userstate.html 需要的頁面連結
+ */
+function getUserStatePageUrls() {
+  var fallbackManualUrl = sanitizeOptionalUrl_(USERSTATE_OPERATION_MANUAL_URL);
+  var pdfDownloadUrl = sanitizeOptionalUrl_(USERSTATE_OPERATION_MANUAL_PDF_DOWNLOAD_URL) || fallbackManualUrl;
+  return {
+    webAppUrl: ScriptApp.getService().getUrl(),
+    operationManualUrl: fallbackManualUrl,
+    operationManualPdfDownloadUrl: pdfDownloadUrl,
+    operationManualVideoYoutubeUrl: sanitizeOptionalUrl_(USERSTATE_OPERATION_MANUAL_VIDEO_YOUTUBE_URL),
+    operationManualVideoDriveUrl: sanitizeOptionalUrl_(USERSTATE_OPERATION_MANUAL_VIDEO_DRIVE_URL)
+  };
+}
+
+/**
+ * 取得浮動按鈕導航連結（供 userstate.html FAB 使用）
+ */
+function getFabNavigationUrls() {
+  var webAppUrl = ScriptApp.getService().getUrl();
+  return {
+    isAdmin: checkAdminPermissions(),
+    ismsAssetUrl: FAB_URL_ISMS_ASSET,
+    ismsConnectUrl: FAB_URL_ISMS_CONNECT,
+    softwareListUrl: FAB_URL_SOFTWARE_LIST,
+    barcodePrintUrl: webAppUrl + '?page=barcodeprint'
+  };
+}
+
 /**
  * [供 Index.html 呼叫] 獲取駐站與電腦的二級下拉選單資料 (修正並清理版)
  */
@@ -953,6 +1266,8 @@ function getTransferData(forceUserScope) {
     .map(asset => ({
       id: asset.assetId,
       assetName: asset.assetName,
+      assetAlias: String(asset.assetAlias || ''),
+      productSerial: String(asset.productSerial || ''),
       modelBrand: asset.modelBrand || '',
       location: asset.location,
       category: asset.assetCategory,
@@ -1713,8 +2028,11 @@ function getPendingApprovals(forceUserScope) {
       asset.assetId,
       {
         assetName: asset.assetName,
+        assetAlias: String(asset.assetAlias || ''),
+        productSerial: String(asset.productSerial || ''),
         modelBrand: asset.modelBrand || '',
-        userName: asset.userName || '無'
+        userName: asset.userName || '無',
+        sourceSheet: String(asset.sourceSheet || '')
       }
     ]));
     
@@ -1745,7 +2063,7 @@ function getPendingApprovals(forceUserScope) {
       })
       .map(row => {
         const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
-        const assetInfo = assetIdToInfoMap.get(assetId) || { assetName: '（找不到名稱）', modelBrand: '', userName: '無' };
+        const assetInfo = assetIdToInfoMap.get(assetId) || { assetName: '（找不到名稱）', assetAlias: '', productSerial: '', modelBrand: '', userName: '無', sourceSheet: '' };
 
         // ✨ 讀取轉移類型資訊（如果有的話）
         const transferType = row.length > AL_TRANSFER_TYPE_COLUMN_INDEX - 1
@@ -1765,6 +2083,8 @@ function getPendingApprovals(forceUserScope) {
           applyTime: new Date(row[AL_APP_TIME_COLUMN_INDEX - 1]).toLocaleString('zh-TW'),
           assetId: assetId,
           assetName: assetInfo.assetName,
+          assetAlias: String(assetInfo.assetAlias || ''),
+          productSerial: String(assetInfo.productSerial || ''),
           modelBrand: assetInfo.modelBrand,
           userName: assetInfo.userName,
           oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
@@ -1773,7 +2093,8 @@ function getPendingApprovals(forceUserScope) {
           newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1], // ✨ 新增：新保管人姓名
           oldUser: oldUser, // ✨ 新增：原使用人
           newUser: newUser, // ✨ 新增：新使用人
-          transferType: transferType // ✨ 新增：轉移類型
+          transferType: transferType, // ✨ 新增：轉移類型
+          sourceSheet: String(assetInfo.sourceSheet || '')
         };
       });
     
@@ -2325,10 +2646,13 @@ function getLendingData() {
       .map(asset => ({
         id: asset.assetId,
         assetName: asset.assetName,
+        assetAlias: String(asset.assetAlias || ''),
+        productSerial: String(asset.productSerial || ''),
         modelBrand: asset.modelBrand || '',
         leaderName: asset.leaderName,
         location: asset.location,
-        userName: asset.userName || '無' // 使用者名稱，物品總表顯示「無」
+        userName: asset.userName || '無', // 使用者名稱，物品總表顯示「無」
+        sourceSheet: String(asset.sourceSheet || '')
       }));
 
     // 2. 從所有資產中，提取不重複的借用人 (姓名) 和地點
@@ -2500,12 +2824,15 @@ function getLentOutAssets(forceUserScope) {
         const allAssets = getAllAssets();
         const assetIdToInfoMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), {
             assetName: asset.assetName,
+            assetAlias: String(asset.assetAlias || ''),
+            productSerial: String(asset.productSerial || ''),
             modelBrand: asset.modelBrand || '',
             leaderName: asset.leaderName || '',
             leaderEmail: asset.leaderEmail || '',
             userName: asset.userName || '無',
             userEmail: asset.userEmail || '',
-            location: asset.location || ''
+            location: asset.location || '',
+            sourceSheet: String(asset.sourceSheet || '')
         }]));  // ✨ 新增：資產資訊映射
 
         const lentAssets = lendingData
@@ -2547,6 +2874,8 @@ function getLentOutAssets(forceUserScope) {
                     applyTime: formatDateValue(row[LL_LEND_TIME_COLUMN_INDEX - 1], 'yyyy/MM/dd'),
                     assetId: assetId,
                     assetName: assetInfo.assetName || '',
+                    assetAlias: String(assetInfo.assetAlias || ''),
+                    productSerial: String(assetInfo.productSerial || ''),
                     modelBrand: assetInfo.modelBrand || '',
                     keeperName: assetInfo.leaderName || '',
                     userName: assetInfo.userName || '',
@@ -2559,7 +2888,8 @@ function getLentOutAssets(forceUserScope) {
                     borrowerType: borrowerType,
                     contactPhone: contactPhone,
                     docUrl: docUrl,
-                    printTime: printTime
+                    printTime: printTime,
+                    sourceSheet: String(assetInfo.sourceSheet || '')
                 };
             });
 
@@ -2715,8 +3045,11 @@ function getExternalLendingPrintGroups(forceUserScope) {
         lendId: row[LL_LEND_ID_COLUMN_INDEX - 1],
         assetId: assetId,
         assetName: assetInfo.assetName || '',
+        assetAlias: String(assetInfo.assetAlias || ''),
+        productSerial: String(assetInfo.productSerial || ''),
         serialNumber: serialAndId,
-        lendingLocation: lendingLocation
+        lendingLocation: lendingLocation,
+        sourceSheet: String(assetInfo.sourceSheet || '')
       });
     });
 
@@ -3492,17 +3825,23 @@ function getScrapAssetsByDateRange(startDate, endDate, assetCategory) {
       }
     };
 
+    const assetMap = new Map(getAllAssets().map(asset => [String(asset.assetId || '').trim(), asset]));
     const results = filteredRows.map(row => {
       const rawDate = row[SL_UPDATE_TIME_COLUMN_INDEX - 1] || row[SL_APPLY_TIME_COLUMN_INDEX - 1];
+      const assetId = String(row[SL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      const asset = assetMap.get(assetId) || {};
       return {
-        assetId: String(row[SL_ASSET_ID_COLUMN_INDEX - 1] || ''),
+        assetId: assetId,
         assetName: String(row[SL_ASSET_NAME_COLUMN_INDEX - 1] || ''),
+        assetAlias: String(asset.assetAlias || ''),
+        productSerial: String(asset.productSerial || ''),
         modelBrand: String(row[SL_MODEL_BRAND_COLUMN_INDEX - 1] || ''),
         leaderName: String(row[SL_KEEPER_NAME_COLUMN_INDEX - 1] || ''),
         userName: String(row[SL_USER_NAME_COLUMN_INDEX - 1] || ''),
         location: String(row[SL_LOCATION_COLUMN_INDEX - 1] || ''),
         scrapDate: formatDateValue(rawDate, 'yyyy/MM/dd'),
-        scrapReason: String(row[SL_SCRAP_REASON_COLUMN_INDEX - 1] || '')
+        scrapReason: String(row[SL_SCRAP_REASON_COLUMN_INDEX - 1] || ''),
+        sourceSheet: String(asset.sourceSheet || '')
       };
     });
 
@@ -3740,11 +4079,14 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
     return {
       assetId: String(asset.assetId || ''),
       assetName: String(asset.assetName || ''),
+      assetAlias: String(asset.assetAlias || ''),
+      productSerial: String(asset.productSerial || ''),
       modelBrand: String(asset.modelBrand || ''),
       originalKeeper: String(asset.leaderName || ''),
       originalUser: String(asset.userName || ''), // 物品總表可能無此欄位，轉為空字串
       scrapDate: scrapDateStr,                    // 傳送格式化後的字串，而非 Date 物件
-      scrapReason: String(asset.remarks || '')    // 確保為字串
+      scrapReason: String(asset.remarks || ''),    // 確保為字串
+      sourceSheet: String(asset.sourceSheet || '')
     };
   });
 }
@@ -4336,6 +4678,8 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
         items.push({
           assetId: asset.assetId,
           assetName: asset.assetName,
+          assetAlias: String(asset.assetAlias || ''),
+          productSerial: String(asset.productSerial || ''),
           modelBrand: asset.modelBrand || '',
           oldKeeper: transfer.oldKeeper,
           oldUser: transfer.oldUser || '',
@@ -4344,7 +4688,8 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
           newUser: transfer.newUser || '',
           newLocation: transfer.newLocation,
           transferType: transfer.transferType,
-          transferDate: new Date(transfer.reviewTime).toLocaleDateString('zh-TW')
+          transferDate: new Date(transfer.reviewTime).toLocaleDateString('zh-TW'),
+          sourceSheet: String(asset.sourceSheet || '')
         });
       }
     });
@@ -4921,6 +5266,8 @@ function getTransferringAssets(forceUserScope) {
           results.push({
             assetId: assetId || '',
             assetName: asset ? asset.assetName : '',
+            assetAlias: asset ? String(asset.assetAlias || '') : '',
+            productSerial: asset ? String(asset.productSerial || '') : '',
             modelBrand: asset ? asset.modelBrand : '',
             category: asset ? asset.assetCategory : '',
             oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1] || '',
@@ -4932,7 +5279,8 @@ function getTransferringAssets(forceUserScope) {
             userName: asset ? asset.userName || '無' : '無',
             applicationTime: applicationTime,
             status: status,
-            transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點'
+            transferType: row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '地點',
+            sourceSheet: asset ? String(asset.sourceSheet || '') : ''
           });
         }
       }
@@ -5034,6 +5382,8 @@ function getTransferOverviewForUserState(forceUserScope) {
         transferringAssets.push({
           assetId: assetId,
           assetName: assetInfo.assetName || '',
+          assetAlias: String(assetInfo.assetAlias || ''),
+          productSerial: String(assetInfo.productSerial || ''),
           modelBrand: assetInfo.modelBrand || '',
           category: assetInfo.assetCategory || '',
           oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1] || '',
@@ -5046,7 +5396,8 @@ function getTransferOverviewForUserState(forceUserScope) {
           applicationTime: applicationTime,
           status: status,
           transferType: transferType,
-          applicantEmail: applicantEmail || ''
+          applicantEmail: applicantEmail || '',
+          sourceSheet: String(assetInfo.sourceSheet || '')
         });
       }
 
@@ -5062,6 +5413,8 @@ function getTransferOverviewForUserState(forceUserScope) {
           applyTime: applyTime,
           assetId: assetId,
           assetName: assetInfo.assetName,
+          assetAlias: String(assetInfo.assetAlias || ''),
+          productSerial: String(assetInfo.productSerial || ''),
           modelBrand: assetInfo.modelBrand,
           userName: assetInfo.userName,
           oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
@@ -5070,7 +5423,8 @@ function getTransferOverviewForUserState(forceUserScope) {
           newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1] || '',
           oldUser: row[AL_OLD_USER_COLUMN_INDEX - 1] || '',
           newUser: row[AL_NEW_USER_COLUMN_INDEX - 1] || '',
-          transferType: transferType
+          transferType: transferType,
+          sourceSheet: String(assetInfo.sourceSheet || '')
         });
       }
 
@@ -5111,6 +5465,7 @@ function getTransferOverviewForUserState(forceUserScope) {
       transferDetailMap[assetId] = {
         assetId: assetId,
         assetName: String(asset.assetName || ''),
+        ...buildAssetAliasFields_(asset),
         status: String(asset.assetStatus || row[AL_STATUS_COLUMN_INDEX - 1] || '').trim(),
         type: 'transfer',
         detail: {
@@ -5239,6 +5594,7 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
       details[assetId] = {
         assetId: assetId,
         assetName: asset ? String(asset.assetName || '') : '',
+        ...buildAssetAliasFields_(asset),
         status: String(asset?.assetStatus || row[AL_STATUS_COLUMN_INDEX - 1] || '').trim(),
         type: 'transfer',
         detail: {
@@ -5300,6 +5656,7 @@ function getAssetStatusDetail(assetId, forceUserScope) {
     const baseResult = {
       assetId: normalizedAssetId,
       assetName: String(asset.assetName || ''),
+      ...buildAssetAliasFields_(asset),
       status: status
     };
     const formatDateValue = (value, pattern) => {
@@ -6066,6 +6423,8 @@ function getInventoryData(forceUserScope) {
     // 提取唯一的使用人 (只從財產總表,因為物品總表沒有使用人欄位)
     const users = [...new Set(availableAssets.map(a => a.userName))].filter(Boolean).sort();
 
+    const ismsAccess = getIsmsInventoryAccess_(ss, currentUserEmail, isAdmin);
+
     // 建立 Email -> 姓名 / 組別 對照表（用於前端顯示指派人員與分派判斷）
     const emailToNameMap = {};
     const emailToGroupMap = {};
@@ -6097,7 +6456,7 @@ function getInventoryData(forceUserScope) {
         }
       });
     }
-    const currentUserGroup = emailToGroupMap[currentUserEmail] || '未分組';
+    const currentUserGroup = ismsAccess.currentUserGroup || emailToGroupMap[currentUserEmail] || '未分組';
     const groups = Array.from(new Set(Object.values(emailToGroupMap).filter(Boolean))).sort();
     const assigneeUsers = Object.values(assigneeUserMap).sort((a, b) => {
       const left = a.name || a.email || '';
@@ -6144,6 +6503,22 @@ function getInventoryData(forceUserScope) {
       });
     }
 
+    // ✨ 取得 ISMS 資訊資產清單（供盤點時選擇）
+    let ismsAssets = [];
+    let ismsEnabled = false;
+    const isIsmsConfigured = ISMS_SPREADSHEET_ID && ISMS_SPREADSHEET_ID !== 'YOUR_ISMS_SPREADSHEET_ID_HERE';
+    if (isIsmsConfigured && ismsAccess.canUseIsmsInventory) {
+      ismsEnabled = true;
+      try {
+        const ismsResult = getIsmsAssetList();
+        if (ismsResult.success) {
+          ismsAssets = ismsResult.assets;
+        }
+      } catch (e) {
+        Logger.log('載入 ISMS 資產清單失敗（非致命）: ' + e.message);
+      }
+    }
+
     // 注意: 不返回完整的 assets 陣列,因為其中包含 Date 物件無法序列化
     // 前端只需要 locations, keepers, users 和 activeSessions
     return {
@@ -6159,7 +6534,9 @@ function getInventoryData(forceUserScope) {
       currentUserEmail: currentUserEmail,
       isAdmin: isAdmin,
       myPendingInventoryCount: myPendingInventoryCount, // ✨ 使用者待盤點資產數量
-      totalPendingInventoryCount: totalPendingInventoryCount // ✨ 管理員全域待盤點資產數量
+      totalPendingInventoryCount: totalPendingInventoryCount, // ✨ 管理員全域待盤點資產數量
+      ismsAssets: ismsAssets, // ✨ ISMS 資訊資產清單
+      ismsEnabled: ismsEnabled // ✨ 目前使用者是否可使用 ISMS 功能
     };
   } catch (e) {
     Logger.log(`getInventoryData 失敗: ${e.message}`);
@@ -6294,7 +6671,10 @@ function getPendingInventoryAssignments(forceUserScope) {
       };
     }
 
-    const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, ID_ASSIGNED_USER_COLUMN_INDEX).getValues();
+    const detailReadCols = Math.max(inventoryDetailSheet.getLastColumn(), ID_ASSIGNED_USER_COLUMN_INDEX);
+    const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, detailReadCols).getValues();
+    const scopedRows = [];
+    const assetIds = [];
     const pendingItems = [];
 
     detailData.forEach(row => {
@@ -6312,16 +6692,30 @@ function getPendingInventoryAssignments(forceUserScope) {
         if (!isMyTask) return;
       }
 
+      scopedRows.push(row);
+      const assetId = String(row[ID_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      if (assetId) {
+        assetIds.push(assetId);
+      }
+    });
+
+    const inventoryAssetContextMap = buildInventoryAssetContextMap_(assetIds);
+
+    scopedRows.forEach(row => {
+      const inventoryId = row[ID_INVENTORY_ID_COLUMN_INDEX - 1];
+      const assignedUser = row[ID_ASSIGNED_USER_COLUMN_INDEX - 1];
+
       const inventoryResult = row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1];
       const normalizedStatus = normalizeInventoryStatus(inventoryResult);
-      const assetId = row[ID_ASSET_ID_COLUMN_INDEX - 1];
+      const assetId = String(row[ID_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
       if (assetId) {
-        trackInventoryStatus(String(assetId).trim(), inventoryId, normalizedStatus);
+        trackInventoryStatus(assetId, inventoryId, normalizedStatus);
       }
 
       if (normalizedStatus !== '未盤點') return;
 
       const session = activeSessions[inventoryId];
+      const assetContext = inventoryAssetContextMap[assetId] || createEmptyInventoryAssetContext_(assetId);
       const assignedUserValue = assignedUser ? String(assignedUser).trim() : '';
       const assignedIsEmail = assignedUserValue.includes('@');
       const normalizedAssignedEmail = assignedIsEmail ? assignedUserValue.toLowerCase() : '';
@@ -6345,15 +6739,21 @@ function getPendingInventoryAssignments(forceUserScope) {
         inventoryPerson: session.inventoryPerson,
         inventoryEmail: session.inventoryEmail,
         assetId: assetId,
-        assetName: row[ID_ASSET_NAME_COLUMN_INDEX - 1],
-        keeperName: row[ID_KEEPER_NAME_COLUMN_INDEX - 1],
-        userName: row[ID_USER_NAME_COLUMN_INDEX - 1],
-        location: row[ID_LOCATION_COLUMN_INDEX - 1],
-        originalStatus: row[ID_ORIGINAL_STATUS_COLUMN_INDEX - 1],
+        assetName: assetContext.assetName,
+        assetAlias: assetContext.assetAlias,
+        productSerial: assetContext.productSerial,
+        keeperName: assetContext.keeperName,
+        userName: assetContext.userName,
+        location: assetContext.location,
+        originalStatus: assetContext.originalStatus,
         assignedUser: assignedUserValue,
         assignedUserLabel: assignedUserLabel,
         assignedGroup: assignedGroup,
-        assignedUserType: assignedUserType
+        assignedUserType: assignedUserType,
+        isItAsset: assetContext.isItAsset,
+        ismsAssetId: assetContext.ismsAssetId,
+        isIsoScope: assetContext.isIsoScope,
+        sourceSheet: assetContext.sourceSheet
       });
     });
 
@@ -6472,6 +6872,7 @@ function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
           inventoryPerson: inventoryPersonName, // 使用從映射表查詢的真實姓名
           inventoryEmail: sessionEmail, // 新增：管理員需要知道會話屬於誰
           filter: row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1],
+          conditionSummary: row[IL_SUMMARY_COLUMN_INDEX - 1] || '', // J 欄：篩選條件摘要（新舊會話相容）
           verifiedCount: row[IL_VERIFIED_COUNT_COLUMN_INDEX - 1],
           totalCount: row[IL_TOTAL_COUNT_COLUMN_INDEX - 1],
           status: status,
@@ -6558,6 +6959,13 @@ function startInventorySession(options) {
     const userFilterValues = options.filterType === 'user' ? normalizeFilterValues(options.filterValue) : [];
     const groupFilterValues = options.filterType === 'group' ? normalizeFilterValues(options.filterValue) : [];
 
+    // ✨ 系統類別範圍：all / new / old，與 filterType 正交組合（AND）
+    const systemScopeRaw = String(options.systemScope || 'all').trim().toLowerCase();
+    const systemScope = (systemScopeRaw === 'new' || systemScopeRaw === 'old') ? systemScopeRaw : 'all';
+    const systemScopeLabel = systemScope === 'new' ? '僅新系統'
+      : systemScope === 'old' ? '僅舊系統'
+      : '全部系統';
+
     // 建立篩選描述
     let filterDescription = '全部';
     if (options.filterType === 'location') {
@@ -6643,8 +7051,13 @@ function startInventorySession(options) {
 
     // 取得要盤點的資產
     const allAssets = getAllAssets();
+
     let assetsToInventory = allAssets.filter(asset => {
       if (asset.assetStatus !== '在庫' && asset.assetStatus !== '出借中' && asset.assetStatus !== '轉移中' && asset.assetStatus !== '報廢中') return false;
+
+      // ✨ 系統類別前置過濾（與 filterType 正交 AND）
+      if (systemScope === 'new' && asset.sourceSheet !== PROPERTY_MASTER_SHEET_NAME) return false;
+      if (systemScope === 'old' && asset.sourceSheet !== ITEM_MASTER_SHEET_NAME) return false;
 
       if (options.filterType === 'all') return true;
       if (options.filterType === 'location') return locationFilterSet.size > 0 && locationFilterSet.has(asset.location);
@@ -6663,6 +7076,14 @@ function startInventorySession(options) {
       throw new Error('沒有符合條件的資產可供盤點');
     }
 
+    // ✨ 組裝 J 欄篩選條件摘要：系統類別 + 盤點範圍 + 分派方式
+    const assignmentLabelForSummary = assignmentMode === 'custom'
+      ? `指定${assignmentTargetType === 'group' ? '組別' : '使用者'}: ${assignmentTargetLabel || assignmentTargetValue}`
+      : assignmentMode === 'group'
+        ? '依組別分派'
+        : '依人名分派';
+    const sessionSummary = `系統類別: ${systemScopeLabel}, 盤點範圍: ${filterDescription}, 分派方式: ${assignmentLabelForSummary}`;
+
     // 在盤點紀錄表新增一筆記錄
     inventoryLogSheet.appendRow([
       inventoryId,
@@ -6673,7 +7094,8 @@ function startInventorySession(options) {
       0, // 已盤點數量
       assetsToInventory.length, // 總數量
       '進行中',
-      '' // 完成時間
+      '', // 完成時間
+      sessionSummary // J 欄：篩選條件摘要
     ]);
 
     // ✨ 核心邏輯：準備寫入明細表，並自動分發任務
@@ -6706,27 +7128,24 @@ function startInventorySession(options) {
         }
       }
 
-      const userName = asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME ? (asset.userName || '') : '';
-
       return [
         inventoryId,
         asset.assetId,
-        asset.assetName,
-        asset.leaderName,
-        userName,
-        asset.location,
-        asset.assetStatus,
         '未盤點', // 盤點結果
         '', // 備註
         '', // 盤點時間
         '', // 盤點人
-        assignedUser // ✨ 指派人員 (Col 12)
+        assignedUser
       ];
     });
 
     if (detailRows.length > 0) {
-      // 寫入資料 (注意：現在是 12 欄)
-      inventoryDetailSheet.getRange(inventoryDetailSheet.getLastRow() + 1, 1, detailRows.length, 12).setValues(detailRows);
+      inventoryDetailSheet.getRange(
+        inventoryDetailSheet.getLastRow() + 1,
+        1,
+        detailRows.length,
+        ID_ASSIGNED_USER_COLUMN_INDEX
+      ).setValues(detailRows);
     }
 
     const assignmentMessage = assignmentMode === 'custom'
@@ -6768,13 +7187,24 @@ function getInventoryDetails(inventoryId) {
       return [];
     }
 
-    // 讀取包含第 12 欄的資料
-    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, 12).getValues();
+    const readCols = Math.max(inventoryDetailSheet.getLastColumn(), ID_ASSIGNED_USER_COLUMN_INDEX);
+    const data = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, readCols).getValues();
+    const assetIds = [];
+    data.forEach(row => {
+      if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] !== inventoryId) return;
+      const assetId = String(row[ID_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+      if (assetId) {
+        assetIds.push(assetId);
+      }
+    });
+    const inventoryAssetContextMap = buildInventoryAssetContextMap_(assetIds);
     const details = [];
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       if (row[ID_INVENTORY_ID_COLUMN_INDEX - 1] === inventoryId) {
+        const assetId = String(row[ID_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
+        const assetContext = inventoryAssetContextMap[assetId] || createEmptyInventoryAssetContext_(assetId);
         const rawVerificationTime = row[ID_VERIFICATION_TIME_COLUMN_INDEX - 1];
         const verificationTimeStr = rawVerificationTime instanceof Date
           ? Utilities.formatDate(rawVerificationTime, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm:ss")
@@ -6782,17 +7212,27 @@ function getInventoryDetails(inventoryId) {
 
         details.push({
           rowIndex: i + 2,
-          assetId: row[ID_ASSET_ID_COLUMN_INDEX - 1],
-          assetName: row[ID_ASSET_NAME_COLUMN_INDEX - 1],
-          keeperName: row[ID_KEEPER_NAME_COLUMN_INDEX - 1],
-          userName: row[ID_USER_NAME_COLUMN_INDEX - 1],
-          location: row[ID_LOCATION_COLUMN_INDEX - 1],
-          originalStatus: row[ID_ORIGINAL_STATUS_COLUMN_INDEX - 1],
+          assetId: assetId,
+          assetName: assetContext.assetName,
+          assetAlias: assetContext.assetAlias,
+          productSerial: assetContext.productSerial,
+          keeperName: assetContext.keeperName,
+          userName: assetContext.userName,
+          modelBrand: assetContext.modelBrand,
+          unit: assetContext.unit,
+          purchaseDate: assetContext.purchaseDate,
+          useLife: assetContext.useLife,
+          location: assetContext.location,
+          accessory: assetContext.accessory,
+          originalStatus: assetContext.originalStatus,
           inventoryResult: row[ID_INVENTORY_RESULT_COLUMN_INDEX - 1],
           remarks: row[ID_REMARKS_COLUMN_INDEX - 1],
           verificationTime: verificationTimeStr,
           verifiedBy: row[ID_VERIFIED_BY_COLUMN_INDEX - 1],
-          assignedUser: row[ID_ASSIGNED_USER_COLUMN_INDEX - 1] // ✨ 新增：回傳指派人員
+          assignedUser: row[ID_ASSIGNED_USER_COLUMN_INDEX - 1],
+          isItAsset: assetContext.isItAsset,
+          ismsAssetId: assetContext.ismsAssetId,
+          sourceSheet: assetContext.sourceSheet
         });
       }
     }
@@ -6819,6 +7259,229 @@ function getInventoryAssigneeNameMap() {
     });
   }
   return emailToNameMap;
+}
+
+function getInventoryExportHeaders_() {
+  return [
+    '項次',
+    '財產區分',
+    '編號(含分號)/名稱',
+    '別名',
+    '型式/廠牌',
+    '大陸製造',
+    '數量單位',
+    '取得日期／購置日期',
+    '使用年限',
+    '存置地點',
+    '使用人／使用單位',
+    '已達使用年限',
+    '附屬設備',
+    '盤點結果',
+    '備註',
+    '盤點時間',
+    '盤點人',
+    '指派對象'
+  ];
+}
+
+function parseInventoryExportDate_(value) {
+  if (!value) return null;
+
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : new Date(time);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const firstLine = raw
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line) || raw;
+
+  const dateMatch = firstLine.match(/(\d{1,4})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})/);
+  if (dateMatch) {
+    let year = parseInt(dateMatch[1], 10);
+    const month = parseInt(dateMatch[2], 10);
+    const day = parseInt(dateMatch[3], 10);
+
+    if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
+      if (year < 1911) {
+        year += 1911;
+      }
+
+      const parsed = new Date(year, month - 1, day);
+      if (!Number.isNaN(parsed.getTime()) &&
+          parsed.getFullYear() === year &&
+          parsed.getMonth() === month - 1 &&
+          parsed.getDate() === day) {
+        return parsed;
+      }
+    }
+  }
+
+  const fallback = new Date(firstLine);
+  if (!Number.isNaN(fallback.getTime())) {
+    return fallback;
+  }
+
+  return null;
+}
+
+function formatInventoryExportDate_(value) {
+  if (!value) return '';
+  const parsed = parseInventoryExportDate_(value);
+  if (!parsed) {
+    return String(value || '');
+  }
+  return Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+}
+
+function getInventoryAssetTypeLabel_(sourceSheet) {
+  return String(sourceSheet || '').trim() === ITEM_MASTER_SHEET_NAME ? '物品' : '財產';
+}
+
+function computeReachedUseLifeLabel_(purchaseDateValue, useLifeValue) {
+  if (!purchaseDateValue || useLifeValue === null || useLifeValue === undefined || useLifeValue === '') {
+    return '';
+  }
+
+  const purchaseDate = parseInventoryExportDate_(purchaseDateValue);
+  if (!purchaseDate) {
+    return '';
+  }
+
+  const useLife = parseInt(String(useLifeValue).trim(), 10);
+  if (isNaN(useLife) || useLife <= 0) {
+    return '';
+  }
+
+  const expireDate = new Date(purchaseDate.getTime());
+  expireDate.setFullYear(expireDate.getFullYear() + useLife);
+  expireDate.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return expireDate.getTime() <= today.getTime() ? '是' : '否';
+}
+
+function formatInventoryAssignedUserLabel_(assignedUser, emailToNameMap) {
+  const raw = String(assignedUser || '').trim();
+  if (!raw) return '';
+  if (!raw.includes('@')) return raw;
+
+  const normalizedEmail = raw.toLowerCase();
+  const displayName = emailToNameMap[normalizedEmail] || normalizedEmail.split('@')[0];
+  return `${displayName} (${normalizedEmail})`;
+}
+
+function canAccessInventorySession_(ss, inventoryId, currentUserEmail, isAdmin) {
+  if (isAdmin) return true;
+
+  const normalizedInventoryId = String(inventoryId || '').trim();
+  const normalizedCurrentEmail = String(currentUserEmail || '').toLowerCase().trim();
+  if (!normalizedInventoryId || !normalizedCurrentEmail) return false;
+
+  const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
+  if (inventoryLogSheet && inventoryLogSheet.getLastRow() > 1) {
+    const logData = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
+    for (let i = 0; i < logData.length; i++) {
+      const row = logData[i];
+      if (String(row[IL_INVENTORY_ID_COLUMN_INDEX - 1] || '').trim() !== normalizedInventoryId) continue;
+      const ownerEmail = String(row[IL_INVENTORY_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim();
+      if (ownerEmail && ownerEmail === normalizedCurrentEmail) {
+        return true;
+      }
+      break;
+    }
+  }
+
+  const currentUserGroup = getInventoryUserGroup_(ss, normalizedCurrentEmail);
+  const inventoryDetailSheet = ss.getSheetByName(INVENTORY_DETAIL_SHEET_NAME);
+  if (!inventoryDetailSheet || inventoryDetailSheet.getLastRow() <= 1) {
+    return false;
+  }
+
+  const readCols = Math.max(inventoryDetailSheet.getLastColumn(), ID_ASSIGNED_USER_COLUMN_INDEX);
+  const detailData = inventoryDetailSheet.getRange(2, 1, inventoryDetailSheet.getLastRow() - 1, readCols).getValues();
+  for (let i = 0; i < detailData.length; i++) {
+    const row = detailData[i];
+    if (String(row[ID_INVENTORY_ID_COLUMN_INDEX - 1] || '').trim() !== normalizedInventoryId) continue;
+    const assignedUser = String(row[ID_ASSIGNED_USER_COLUMN_INDEX - 1] || '').trim();
+    if (!assignedUser) continue;
+    if (assignedUser.includes('@')) {
+      if (assignedUser.toLowerCase() === normalizedCurrentEmail) {
+        return true;
+      }
+    } else if (currentUserGroup && assignedUser === currentUserGroup) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getInventoryExportData(inventoryId) {
+  try {
+    const normalizedInventoryId = String(inventoryId || '').trim();
+    if (!normalizedInventoryId) {
+      throw new Error('缺少盤點會話 ID');
+    }
+
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const normalizedCurrentEmail = String(currentUserEmail || '').toLowerCase().trim();
+    const isAdmin = checkAdminPermissions();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    if (!canAccessInventorySession_(ss, normalizedInventoryId, normalizedCurrentEmail, isAdmin)) {
+      throw new Error('權限不足：您無法匯出此盤點會話');
+    }
+
+    const details = getInventoryDetails(normalizedInventoryId);
+    const emailToNameMap = getInventoryAssigneeNameMap();
+    const headers = getInventoryExportHeaders_();
+    const rows = (Array.isArray(details) ? details : []).map((detail, index) => {
+      const assetId = String(detail?.assetId || '').trim();
+      const assetName = String(detail?.assetName || '').trim();
+      const idAndName = assetId && assetName
+        ? `${assetId}\n${assetName}`
+        : (assetId || assetName || '');
+      const userDisplay = String(detail?.userName || '').trim() || String(detail?.keeperName || '').trim();
+      const inventoryResult = String(detail?.inventoryResult || '').trim() || '未盤點';
+
+      return [
+        index + 1,
+        getInventoryAssetTypeLabel_(detail?.sourceSheet || ''),
+        idAndName,
+        String(detail?.assetAlias || '').trim(),
+        String(detail?.modelBrand || '').trim(),
+        '',
+        String(detail?.unit || '').trim(),
+        formatInventoryExportDate_(detail?.purchaseDate || ''),
+        String(detail?.useLife || '').trim(),
+        String(detail?.location || '').trim(),
+        userDisplay,
+        computeReachedUseLifeLabel_(detail?.purchaseDate || '', detail?.useLife || ''),
+        String(detail?.accessory || '').trim(),
+        inventoryResult,
+        String(detail?.remarks || '').trim(),
+        String(detail?.verificationTime || '').trim(),
+        String(detail?.verifiedBy || '').trim(),
+        formatInventoryAssignedUserLabel_(detail?.assignedUser || '', emailToNameMap)
+      ];
+    });
+
+    return {
+      inventoryId: normalizedInventoryId,
+      headers: headers,
+      rows: rows
+    };
+  } catch (e) {
+    Logger.log(`getInventoryExportData 失敗: ${e.message}`);
+    throw e;
+  }
 }
 
 function buildInventoryStatsByAssignee(details, emailToNameMap) {
@@ -6888,7 +7551,9 @@ function getInventoryDashboardData(inventoryId) {
       remarks: item?.remarks || '',
       verificationTime: item?.verificationTime || '',
       verifiedBy: item?.verifiedBy || '',
-      assignedUser: item?.assignedUser || ''
+      assignedUser: item?.assignedUser || '',
+      isItAsset: item?.isItAsset || '',     // ✨ ISMS
+      ismsAssetId: item?.ismsAssetId || ''  // ✨ ISMS
     }));
     const safeStats = (Array.isArray(stats) ? stats : []).map(item => ({
       email: item?.email || '',
@@ -7632,6 +8297,7 @@ function getInventoryHistory(allRecords) {
       const totalCount = Number(row[IL_TOTAL_COUNT_COLUMN_INDEX - 1] || 0);
       const sessionId = row[IL_INVENTORY_ID_COLUMN_INDEX - 1];
       const summary = row[IL_INVENTORY_FILTER_COLUMN_INDEX - 1] || '';
+      const conditionSummary = row[IL_SUMMARY_COLUMN_INDEX - 1] || '';
 
       return {
         inventoryId: sessionId,
@@ -7648,7 +8314,8 @@ function getInventoryHistory(allRecords) {
         auditor: sessionEmail || inventoryPersonName || '',
         statusCode: statusCode,
         progressDisplay: `${verifiedCount} / ${totalCount}`,
-        summary: summary
+        summary: summary,
+        conditionSummary: conditionSummary // J 欄：篩選條件摘要（新舊會話相容）
       };
     }).filter(item => item);
 
@@ -7793,4 +8460,456 @@ function deleteInventorySession(sessionId) {
     Logger.log(`deleteInventorySession 失敗: ${e.message}`);
     throw e;
   }
+}
+
+// =================================================================
+// --- ✨ ISMS 資訊資產分類整合（盤點流程用）---
+// =================================================================
+
+/**
+ * 取得 ISMS 資訊資產清單（供盤點時下拉選擇）
+ * 僅回傳必要欄位以減少傳輸量
+ * @returns {Object} { success, assets: [{ ismsAssetId, category, name, mainCategory, subCategory }] }
+ */
+function getIsmsAssetList() {
+  try {
+    if (!ISMS_SPREADSHEET_ID || ISMS_SPREADSHEET_ID === 'YOUR_ISMS_SPREADSHEET_ID_HERE') {
+      return { success: false, error: 'ISMS 試算表 ID 尚未設定，請在 env.js 中設定 ISMS_SPREADSHEET_ID' };
+    }
+
+    const ss = SpreadsheetApp.openById(ISMS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(ISMS_ASSET_SHEET_NAME);
+
+    if (!sheet) {
+      return { success: false, error: '找不到資訊資產清單工作表' };
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return { success: true, assets: [] };
+    }
+
+    const data = sheet.getRange(2, 1, lastRow - 1, ISMS_ASSET_COLUMN_INDICES.STATUS).getValues();
+    const assets = [];
+    const indices = ISMS_ASSET_COLUMN_INDICES;
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const ismsAssetId = row[indices.ISMS_ASSET_ID - 1];
+      if (!ismsAssetId) continue;
+
+      assets.push({
+        ismsAssetId: ismsAssetId.toString(),
+        category: row[indices.CATEGORY - 1] ? row[indices.CATEGORY - 1].toString() : '',
+        name: row[indices.NAME - 1] ? row[indices.NAME - 1].toString() : '',
+        mainCategory: row[indices.MAIN_CATEGORY - 1] ? row[indices.MAIN_CATEGORY - 1].toString() : '',
+        subCategory: row[indices.SUB_CATEGORY - 1] ? row[indices.SUB_CATEGORY - 1].toString() : '',
+        responsibleUnit: row[indices.RESPONSIBLE_UNIT - 1] ? row[indices.RESPONSIBLE_UNIT - 1].toString() : ''
+      });
+    }
+
+    return { success: true, assets: assets };
+  } catch (e) {
+    Logger.log('getIsmsAssetList 失敗: ' + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 讀取 ISMS 試算表「下拉選單」工作表，回傳類別 / 組別 / 狀態三組
+ * B 欄=key、C 欄=中文顯示文字、D 欄=代號
+ */
+function getIsmsDropdownOptions() {
+  try {
+    if (!ISMS_SPREADSHEET_ID || ISMS_SPREADSHEET_ID === 'YOUR_ISMS_SPREADSHEET_ID_HERE') {
+      return { success: false, error: 'ISMS 試算表 ID 尚未設定' };
+    }
+    const ss = SpreadsheetApp.openById(ISMS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(ISMS_DROPDOWN_SHEET_NAME);
+    if (!sheet) return { success: false, error: '找不到「下拉選單」工作表' };
+
+    const categories = [];
+    const groups = [];
+    const statuses = [];
+    const businessProcesses = [];
+
+    if (sheet.getLastRow() > 1) {
+      const data = sheet.getRange(2, 2, sheet.getLastRow() - 1, 3).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const key = data[i][0] ? String(data[i][0]).trim() : '';     // B 欄
+        const display = data[i][1] ? String(data[i][1]).trim() : ''; // C 欄
+        const code = data[i][2] ? String(data[i][2]).trim() : '';    // D 欄
+        if (!key || !display) continue;
+
+        if (key === '資訊資產類別' || key === '類別') categories.push({ display, code });
+        else if (key === '組別') groups.push({ display, code });
+        else if (key === '資訊資產狀態' || key === '資產狀態' || key === '狀態') statuses.push({ display, code });
+        else if (key === '業務流程') businessProcesses.push({ display });
+      }
+    }
+
+    return { success: true, categories, groups, statuses, businessProcesses };
+  } catch (e) {
+    Logger.log('getIsmsDropdownOptions 錯誤: ' + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 新增 ISMS 資訊資產：自動產號 + 計算資產價值
+ * 供盤點流程即時建立新資訊資產使用
+ * @param {Object} form
+ *   - categoryDisplay / categoryCode
+ *   - groupDisplay / groupCode
+ *   - statusDisplay
+ *   - name, description
+ *   - confidentiality, integrity, availability (1~4)
+ * @returns {Object} { success, ismsAssetId, serial, assetValue, rowIndex }
+ */
+function createIsmsAsset(form) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    if (!ISMS_SPREADSHEET_ID || ISMS_SPREADSHEET_ID === 'YOUR_ISMS_SPREADSHEET_ID_HERE') {
+      return { success: false, error: 'ISMS 試算表 ID 尚未設定' };
+    }
+    if (!form || typeof form !== 'object') {
+      return { success: false, error: '表單資料不正確' };
+    }
+
+    const name = (form.name || '').toString().trim();
+    const categoryDisplay = (form.categoryDisplay || '').toString().trim();
+    const categoryCode = (form.categoryCode || '').toString().trim();
+    const groupDisplay = (form.groupDisplay || '').toString().trim();
+    const groupCode = (form.groupCode || '').toString().trim();
+    const statusDisplay = (form.statusDisplay || '').toString().trim();
+    const businessProcess = (form.businessProcess || '').toString().trim();
+    const description = (form.description || '').toString();
+    const c = Number(form.confidentiality);
+    const i = Number(form.integrity);
+    const a = Number(form.availability);
+
+    if (!name) return { success: false, error: '資產名稱必填' };
+    if (!categoryDisplay || !categoryCode) return { success: false, error: '請選擇類別' };
+    if (!groupDisplay || !groupCode) return { success: false, error: '請選擇組別' };
+    const isValidCIA = (n) => Number.isInteger(n) && n >= 1 && n <= 4;
+    if (!isValidCIA(c) || !isValidCIA(i) || !isValidCIA(a)) {
+      return { success: false, error: 'CIA 三項必須是 1~4 的整數' };
+    }
+
+    const ss = SpreadsheetApp.openById(ISMS_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(ISMS_ASSET_SHEET_NAME);
+    if (!sheet) return { success: false, error: '找不到資訊資產工作表' };
+
+    const idx = ISMS_ASSET_COLUMN_INDICES;
+    // 序號策略：(1) 掃 A 欄比對 `{group}-{category}-\d+` 抽尾號 (2) 備援比對 B/S 欄 (3) 最終迴圈避免撞號
+    const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const idPattern = new RegExp('^' + escapeRegExp(groupCode) + '-' + escapeRegExp(categoryCode) + '-(\\d+)$', 'i');
+    const existingIds = new Set();
+    let maxSerial = 0;
+
+    if (sheet.getLastRow() > 1) {
+      const data = sheet.getDataRange().getValues();
+      for (let r = 1; r < data.length; r++) {
+        const row = data[r];
+        const rowId = String(row[idx.ISMS_ASSET_ID - 1] || '').trim();
+        if (rowId) existingIds.add(rowId.toLowerCase());
+
+        const m = rowId.match(idPattern);
+        if (m) {
+          const serial = Number(m[1]);
+          if (!isNaN(serial) && serial > maxSerial) maxSerial = serial;
+          continue;
+        }
+
+        const rowCategory = String(row[idx.CATEGORY - 1] || '').trim();
+        const rowGroup = String(row[idx.GROUP - 1] || '').trim();
+        const categoryMatch = rowCategory === categoryCode || rowCategory === categoryDisplay;
+        const groupMatch = rowGroup === groupCode || rowGroup === groupDisplay;
+        if (!categoryMatch || !groupMatch) continue;
+        const serial = Number(row[idx.SERIAL_NO - 1]);
+        if (!isNaN(serial) && serial > maxSerial) maxSerial = serial;
+      }
+    }
+
+    let nextSerial = maxSerial + 1;
+    let serialPadded = String(nextSerial).padStart(3, '0');
+    let ismsAssetId = `${groupCode}-${categoryCode}-${serialPadded}`;
+    while (existingIds.has(ismsAssetId.toLowerCase())) {
+      nextSerial += 1;
+      serialPadded = String(nextSerial).padStart(3, '0');
+      ismsAssetId = `${groupCode}-${categoryCode}-${serialPadded}`;
+    }
+    const assetValue = c + i + a;
+
+    const row = new Array(22).fill('');
+    row[idx.ISMS_ASSET_ID - 1] = ismsAssetId;
+    row[idx.CATEGORY - 1] = categoryCode;
+    row[idx.NAME - 1] = name;
+    row[idx.DESCRIPTION - 1] = description;
+    row[idx.RESPONSIBLE_UNIT - 1] = groupDisplay;
+    row[idx.STATUS - 1] = statusDisplay;
+    row[idx.CONFIDENTIALITY - 1] = c;
+    row[idx.INTEGRITY - 1] = i;
+    row[idx.AVAILABILITY - 1] = a;
+    row[idx.ASSET_VALUE - 1] = assetValue;
+    row[idx.GROUP - 1] = groupCode;
+    row[idx.SERIAL_NO - 1] = nextSerial;
+    row[idx.BUSINESS_PROCESS - 1] = businessProcess; // V 欄:業務流程
+
+    sheet.appendRow(row);
+    SpreadsheetApp.flush();
+
+    return {
+      success: true,
+      ismsAssetId,
+      serial: nextSerial,
+      assetValue,
+      rowIndex: sheet.getLastRow()
+    };
+  } catch (e) {
+    Logger.log('createIsmsAsset 錯誤: ' + e.message);
+    return { success: false, error: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+/**
+ * 取得指定資產的 ISMS 對照資訊
+ * @param {string[]} assetIds - 資產編號陣列
+ * @returns {Object} { success, mappings: { [assetId]: { ismsAssetId, isItAsset } } }
+ */
+function getIsmsMappingForAssets(assetIds) {
+  try {
+    if (!assetIds || assetIds.length === 0) {
+      return { success: true, mappings: {} };
+    }
+
+    const result = {};
+
+    // 從主試算表讀取 IS_IT_ASSET 欄位
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const assetIdSet = {};
+    for (let i = 0; i < assetIds.length; i++) {
+      assetIdSet[assetIds[i]] = true;
+      result[assetIds[i]] = { isItAsset: '', ismsAssetId: '' };
+    }
+
+    // 讀取財產總表的 IS_IT_ASSET
+    const propSheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+    if (propSheet && propSheet.getLastRow() > 1) {
+      const propData = propSheet.getRange(2, 1, propSheet.getLastRow() - 1, PROPERTY_COLUMN_INDICES.DEFAULT_GROUP).getValues();
+      for (let i = 0; i < propData.length; i++) {
+        const aid = propData[i][PROPERTY_COLUMN_INDICES.ASSET_ID - 1];
+        if (aid && assetIdSet[aid.toString()]) {
+          result[aid.toString()].isItAsset = propData[i][PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1] ? propData[i][PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1].toString() : '';
+        }
+      }
+    }
+
+    // 讀取物品總表的 IS_IT_ASSET
+    const itemSheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
+    if (itemSheet && itemSheet.getLastRow() > 1) {
+      const itemData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, ITEM_COLUMN_INDICES.DEFAULT_GROUP).getValues();
+      for (let i = 0; i < itemData.length; i++) {
+        const aid = itemData[i][ITEM_COLUMN_INDICES.ASSET_ID - 1];
+        if (aid && assetIdSet[aid.toString()]) {
+          result[aid.toString()].isItAsset = itemData[i][ITEM_COLUMN_INDICES.IS_IT_ASSET - 1] ? itemData[i][ITEM_COLUMN_INDICES.IS_IT_ASSET - 1].toString() : '';
+        }
+      }
+    }
+
+    // 讀取 ISMS 對照表
+    if (ISMS_SPREADSHEET_ID && ISMS_SPREADSHEET_ID !== 'YOUR_ISMS_SPREADSHEET_ID_HERE') {
+      try {
+        const ismsSs = SpreadsheetApp.openById(ISMS_SPREADSHEET_ID);
+        const mappingSheet = ismsSs.getSheetByName(ISMS_MAPPING_SHEET_NAME);
+        if (mappingSheet && mappingSheet.getLastRow() > 1) {
+          const mappingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, ISMS_MAPPING_COLUMN_INDICES.REMARKS).getValues();
+          for (let i = 0; i < mappingData.length; i++) {
+            const aid = mappingData[i][ISMS_MAPPING_COLUMN_INDICES.ASSET_ID - 1];
+            if (aid && assetIdSet[aid.toString()]) {
+              result[aid.toString()].ismsAssetId = mappingData[i][ISMS_MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1] ? mappingData[i][ISMS_MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1].toString() : '';
+            }
+          }
+        }
+      } catch (e) {
+        Logger.log('讀取 ISMS 對照表失敗（非致命）: ' + e.message);
+      }
+    }
+
+    return { success: true, mappings: result };
+  } catch (e) {
+    Logger.log('getIsmsMappingForAssets 失敗: ' + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 儲存資產的 ISMS 分類（盤點時呼叫）
+ * 同時更新：1) 主試算表 IS_IT_ASSET 欄位 2) ISMS 對照表
+ * @param {string} assetId - 資產編號
+ * @param {boolean} isItAsset - 是否為資訊資產
+ * @param {string} ismsAssetId - 資訊資產編號（空字串表示不對照）
+ * @returns {Object} 操作結果
+ */
+function saveIsmsClassification(assetId, isItAsset, ismsAssetId, isIsoScope) {
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const timestamp = new Date().toISOString();
+
+    // 1. 更新主試算表的 IS_IT_ASSET / IS_ISO_SCOPE / ISMS_ASSET_ID 欄位
+    const location = findAssetLocation(assetId);
+    if (location) {
+      const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME
+        ? PROPERTY_COLUMN_INDICES
+        : ITEM_COLUMN_INDICES;
+      location.sheet.getRange(location.rowIndex, indices.IS_IT_ASSET).setValue(isItAsset ? '是' : '');
+      // 更新 IS_ISO_SCOPE 欄位（僅當 isItAsset 為 true 時允許 isIsoScope）
+      if (indices.IS_ISO_SCOPE) {
+        location.sheet.getRange(location.rowIndex, indices.IS_ISO_SCOPE).setValue(
+          (isItAsset && isIsoScope) ? '是' : ''
+        );
+      }
+      if (indices.ISMS_ASSET_ID) {
+        location.sheet.getRange(location.rowIndex, indices.ISMS_ASSET_ID).setValue(
+          isItAsset ? String(ismsAssetId || '').trim() : ''
+        );
+      }
+    }
+
+    // 2. 更新 ISMS 對照表
+    if (ismsAssetId && ISMS_SPREADSHEET_ID && ISMS_SPREADSHEET_ID !== 'YOUR_ISMS_SPREADSHEET_ID_HERE') {
+      try {
+        const ismsSs = SpreadsheetApp.openById(ISMS_SPREADSHEET_ID);
+        let mappingSheet = ismsSs.getSheetByName(ISMS_MAPPING_SHEET_NAME);
+
+        if (!mappingSheet) {
+          mappingSheet = ismsSs.insertSheet(ISMS_MAPPING_SHEET_NAME);
+          mappingSheet.appendRow(['資產編號', '資訊資產編號', '建立時間', '建立人', '備註']);
+        }
+
+        // 查找是否已有對照記錄
+        const lastRow = mappingSheet.getLastRow();
+        let existingRow = -1;
+        if (lastRow > 1) {
+          const existingData = mappingSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+          for (let i = 0; i < existingData.length; i++) {
+            if (existingData[i][0] && existingData[i][0].toString() === assetId) {
+              existingRow = i + 2;
+              break;
+            }
+          }
+        }
+
+        if (existingRow > 0) {
+          // 更新現有記錄
+          mappingSheet.getRange(existingRow, ISMS_MAPPING_COLUMN_INDICES.ISMS_ASSET_ID).setValue(ismsAssetId);
+          mappingSheet.getRange(existingRow, ISMS_MAPPING_COLUMN_INDICES.CREATED_TIME).setValue(timestamp);
+          mappingSheet.getRange(existingRow, ISMS_MAPPING_COLUMN_INDICES.CREATED_BY).setValue(currentUserEmail);
+        } else {
+          // 新增記錄
+          mappingSheet.appendRow([assetId, ismsAssetId, timestamp, currentUserEmail, '盤點時建立']);
+        }
+      } catch (e) {
+        Logger.log('更新 ISMS 對照表失敗（非致命）: ' + e.message);
+      }
+    } else if (!isItAsset && ISMS_SPREADSHEET_ID && ISMS_SPREADSHEET_ID !== 'YOUR_ISMS_SPREADSHEET_ID_HERE') {
+      // 如果取消資訊資產標記，刪除對照記錄
+      try {
+        const ismsSs = SpreadsheetApp.openById(ISMS_SPREADSHEET_ID);
+        const mappingSheet = ismsSs.getSheetByName(ISMS_MAPPING_SHEET_NAME);
+        if (mappingSheet && mappingSheet.getLastRow() > 1) {
+          const existingData = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, 1).getValues();
+          for (let i = existingData.length - 1; i >= 0; i--) {
+            if (existingData[i][0] && existingData[i][0].toString() === assetId) {
+              mappingSheet.deleteRow(i + 2);
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        Logger.log('刪除 ISMS 對照記錄失敗（非致命）: ' + e.message);
+      }
+    }
+
+    return { success: true, message: '已儲存資訊資產分類' };
+  } catch (e) {
+    Logger.log('saveIsmsClassification 失敗: ' + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 盤點時同時提交盤點結果與 ISMS 分類（單筆）
+ * @param {string} assetId - 資產編號
+ * @param {string} result - 盤點結果
+ * @param {string} remarks - 備註
+ * @param {Object} ismsData - ISMS 分類資料 { isItAsset: boolean, ismsAssetId: string }
+ * @returns {Object} 操作結果
+ */
+function markAssetInventoryWithIsms(assetId, result, remarks, ismsData) {
+  // 先執行原有的盤點標記
+  const inventoryResult = markAssetInventoryInActiveSessions(assetId, result, remarks);
+
+  // 如果有 ISMS 資料，同步處理 ISMS 分類
+  if (ismsData && (ismsData.isItAsset !== undefined)) {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const isAdmin = checkAdminPermissions();
+    const ismsAccess = getIsmsInventoryAccess_(ss, currentUserEmail, isAdmin);
+    if (!ismsAccess.canUseIsmsInventory) {
+      Logger.log('使用者無 ISMS 盤點權限，已忽略 ISMS 資料: ' + assetId);
+    } else {
+      const ismsResult = saveIsmsClassification(assetId, ismsData.isItAsset, ismsData.ismsAssetId || '', ismsData.isIsoScope || false);
+      if (!ismsResult.success) {
+        Logger.log('ISMS 分類儲存失敗（盤點結果已成功）: ' + ismsResult.error);
+      }
+    }
+  }
+
+  return inventoryResult;
+}
+
+/**
+ * 盤點時同時提交盤點結果與 ISMS 分類（批次）
+ * @param {Array} assetResults - [{ assetId, result, remarks, ismsData: { isItAsset, ismsAssetId } }]
+ * @returns {Object} 操作結果
+ */
+function markBatchInventoryWithIsms(assetResults) {
+  // 分離盤點資料與 ISMS 資料
+  const inventoryResults = assetResults.map(function(item) {
+    return {
+      assetId: item.assetId,
+      result: item.result,
+      remarks: item.remarks
+    };
+  });
+
+  // 先執行批次盤點標記
+  const inventoryResult = markBatchInventoryInActiveSessions(inventoryResults);
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const currentUserEmail = Session.getActiveUser().getEmail();
+  const isAdmin = checkAdminPermissions();
+  const ismsAccess = getIsmsInventoryAccess_(ss, currentUserEmail, isAdmin);
+
+  // 處理 ISMS 分類
+  for (let i = 0; i < assetResults.length; i++) {
+    var item = assetResults[i];
+    if (item.ismsData && (item.ismsData.isItAsset !== undefined)) {
+      if (!ismsAccess.canUseIsmsInventory) {
+        Logger.log('使用者無 ISMS 盤點權限，已忽略批次 ISMS 資料: ' + item.assetId);
+        continue;
+      }
+      var ismsResult = saveIsmsClassification(item.assetId, item.ismsData.isItAsset, item.ismsData.ismsAssetId || '', item.ismsData.isIsoScope || false);
+      if (!ismsResult.success) {
+        Logger.log('批次 ISMS 分類儲存失敗 (' + item.assetId + '): ' + ismsResult.error);
+      }
+    }
+  }
+
+  return inventoryResult;
 }

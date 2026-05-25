@@ -30,3 +30,9 @@ gha-creds-*.json
 temp/
 promo-video/
 >>>>>>> bmain/main
+
+table_example.md
+qrcode.js
+graphify-out/
+example/
+.memsearch/

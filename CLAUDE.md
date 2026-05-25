@@ -4,198 +4,110 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概述
 
-這是一個基於 Google Apps Script (GAS) 的資產管理系統,包含多個獨立的 Web App 模組,用於管理財產與物品的轉移、出借、報廢和盤點等流程。
+基於 Google Apps Script (GAS) 的資產管理系統。主應用程式是位於根目錄的 Web App,另外有四個彼此獨立的子專案(`computer-report/`, `dashboard-app/`, `itasset-warning/`, `isms-connect-asset/`),每個子專案都是一個獨立的 GAS script(各自有 `appsscript.json`、`env.js`、`code.js`,並各自 `clasp push`)。
 
-## 開發環境設定
+## 開發指令
 
-### 必要工具
-- [clasp](https://github.com/google/clasp) - Google Apps Script 命令列工具
-
-### 基本命令
 ```bash
-# 首次使用需要登入
-clasp login
-
-# 從 GAS 拉取最新程式碼
-clasp pull
-
-# 推送本地修改到 GAS
-clasp push
-
-# 建立新部署版本
-clasp deploy
-
-# 在瀏覽器開啟 Apps Script 編輯器
-clasp open
+clasp login          # 首次登入 Google 帳號
+clasp pull           # 從 GAS 拉取最新程式碼
+clasp push           # 推送本地修改到 GAS
+clasp deploy         # 建立新部署版本
+clasp open           # 瀏覽器開啟 Apps Script 編輯器
 ```
+
+主專案與每個子專案各有自己的 `.clasp.json`,請 `cd` 到對應目錄再執行 `clasp push`。
 
 ### 初始化工作表
-第一次部署時,需要在 Apps Script 編輯器中執行:
+首次部署或新增欄位時,在 Apps Script 編輯器執行:
 ```javascript
-deployAllSheets()  // 位於 deploy.js
+deployAllSheets()   // deploy.js:位於檔案尾端,建立/補齊所有必要工作表表頭
 ```
 
-## 專案架構
+### 無自動化測試
+需手動驗證:Apps Script 編輯器直接呼叫後端函式 → 部署 Web App 跑完整流程 → 檢查試算表寫入結果 → 分別用一般使用者與管理員測權限。
 
-### 核心模組
+## 架構重點
 
-#### 主應用程式 (根目錄)
-- `code.js` - 核心業務邏輯,包含所有資產操作 API
-- `env.js` - 環境設定 (試算表 ID、文件夾 ID 等)
-- `deploy.js` - 工作表初始化工具
-- `dashboard_code.js` - 儀表板專用邏輯
-- `*.html` - UI 頁面模板
+### 1. 雙總表 + V3 資料抽象層
 
-#### 子專案
-- `computer-report/` - 電腦資產報告模組
-- `dashboard-app/` - 資料儀表板模組
-- `itasset-warning/` - IT 資產警示模組
-- `isms-connect-asset/` - 資訊資產對照模組
+資料分成 **財產總表** (`PROPERTY_MASTER_SHEET_NAME`) 與 **物品總表** (`ITEM_MASTER_SHEET_NAME`) 兩張 sheet,欄位布局不同。所有查詢都必須透過 `code.js` 頂端的統一資料層,**不要直接讀 raw row**:
 
-每個子專案都有獨立的 `appsscript.json`, `env.js`, `code.js`。
+- `PROPERTY_COLUMN_INDICES` / `ITEM_COLUMN_INDICES`:以物件表示欄位索引(1-based),新增/移動欄位時**只改這裡**。
+- `mapRowToAssetObject(row, indices, sourceSheet)`:把 row 轉成標準化 asset object。
+- `getAllAssets()`:合併兩張總表,回傳統一陣列。
+- `findAssetLocation(assetId)`:定位某筆資產所在的 sheet/row。
 
-### 資料架構
+這是「V3 物件化架構」,舊的 `MASTER_*` 常數已棄用,加新功能請沿用 V3 模式。
 
-系統使用 **雙工作表架構** 管理不同類型資產:
+### 2. Web App 入口:單頁應用
 
-1. **財產總表** (`PROPERTY_MASTER_SHEET_NAME`) - 高價值固定資產
-2. **物品總表** (`ITEM_MASTER_SHEET_NAME`) - 一般消耗品/低價物品
+`doGet(e)` (`code.js:794`) **目前只會回傳 `userstate.html`**;歷史上的 `?page=apply/review/lending/scrap/inventory/...` 已整併進單頁應用,轉移、出借、歸還、報廢、盤點、ISMS 分類皆為 userstate.html 內嵌的 modal / bottom sheet。新增功能時請以 SPA 心態修改 `userstate.html` + `code.js`,不要再新增獨立頁面。
 
-#### 統一資料抽象層
-所有資產查詢透過以下函式統一處理:
+`userstate.html` 超過 14k 行,修改前先用 Grep 定位區塊。
 
-- `getAllAssets()` - 合併兩張表的資料,回傳統一格式
-- `mapRowToAssetObject(row, indices, sourceSheet)` - 將工作表列轉為物件
-- `findAssetLocation(assetId)` - 自動定位資產所在工作表與列
+另外還有一組從試算表選單觸發的 modal 函式:`openPortal` / `openApplyPage` / `openUpdatePage` / `openReviewDashboard` (`code.js:586-648`),這些是 Sheet UI,與 Web App 入口分離。
 
-#### 欄位索引物件
-使用物件定義欄位位置,方便維護:
+### 3. 全域存取控制
+
+**所有 Web App 請求都會先經過白名單檢查** (`doGet` 前段 + `getAllowedEmails`,`code.js:664`):
+
+- 白名單 = 「保管人/信箱」工作表的 Email 欄 ∪ 「管理員名單」工作表
+- 使用 `CacheService` 快取 10 分鐘(cacheKey: `system_access_allowlist`)
+- 不在名單內會回傳 `createAccessDeniedPage()`
+- 改名單後若沒立即生效,要等快取過期或清除 script cache
+
+後端敏感函式另外會透過 `checkAdminPermissions()` / `isAdmin()` 做二次檢查 — 新增管理用 API 時**務必補上這個檢查**,避免 IDOR。
+
+### 4. 同組代理轉移
+
+`isGroupProxyTransferEnabled()` 是功能旗標。啟用時,非管理員使用者會看到「同組成員」的資產(以 `getGroupMemberEmails()` 擴展範圍),而不是只看到自己名下的。多個查詢函式都接受 `forceUserScope` 參數來覆寫這個行為(例如 `getUserStateData`、`getTransferData`、`getPendingApprovals`、`getLentOutAssets`、`getAllScrappableItems` 等),新增 list 類 API 時請沿用同一個慣例。
+
+### 5. ISMS 資訊資產對照
+
+系統會把內部資產編號與 ISMS 系統的資訊資產編號做對照,儲存於「資產對照表」工作表。相關函式:`getIsmsAssetList`、`getIsmsMappingForAssets`、`saveIsmsClassification`、`markAssetInventoryWithIsms`。ISMS 試算表 ID 設定在 `env.js` 的 `ISMS_SPREADSHEET_ID`。盤點流程會同時寫回 ISMS 相關欄位 — 修改盤點邏輯時要留意 `markBatch*` 系列的 ISMS 分支。
+
+### 6. 關鍵工作流程
+
+- **轉移**:`processBatchTransferApplication` → 寫入「轉移申請紀錄」→ `processBatchApproval` / `processBatchRejection` 審核 → 更新總表的保管人/使用人/地點,並產生 Google Docs 轉移單 (`createTransferDoc`)。轉移類型分「地點/保管人/使用人」,由 `AL_TRANSFER_TYPE_COLUMN_INDEX` 記錄。
+- **出借/歸還**:`processBatchLending` / `processBatchReturn`,可產出外部出借申請單 (`createLendingDoc`,分組列印靠 `getExternalLendingPrintGroups`)。
+- **報廢**:`processBatchScrapping` → 狀態 `在庫 → 報廢中 → 已報廢`;可透過 `restoreFromScrap` 還原;產生 Docs 用 `createScrapDoc` / `createScrapDocByDateRange`。
+- **盤點**:`startInventorySession` → `markBatchInventory` / `resetBatchInventory`(寫入「盤點明細」)→ `updateInventoryProgress` → `completeInventorySession`。active session 的寫入有一組 `*InActiveSessions` helper,**修改明細時請走這些 helper**,不要只更新單一 session。
+- **批次匯入**:詳細檔案格式見 `batchimport.md`;入口在 `userstate.html` 的「新增資產」modal → `addNewAssetsBatch()`。
+
+### 7. 子專案
+
+各子專案是獨立 GAS script,**不共用常數**。`computer-report` 只讀取 `PROPERTY_COLUMN_INDICES` 的子集,因此在主專案新增欄位時,不需要同步到它,但**移動現有欄位時要同步更新**每個子專案的索引物件。
+
+## GAS 特殊限制
+
+### 序列化
+GAS 無法序列化 `Date`, `Map`, `Set`。後端函式回傳前必須轉換:
 ```javascript
-PROPERTY_COLUMN_INDICES = {
-  ASSET_ID: 1,
-  ASSET_NAME: 2,
-  LEADER_EMAIL: 13,
-  // ...
-}
-
-ITEM_COLUMN_INDICES = {
-  ASSET_ID: 1,
-  ASSET_NAME: 2,
-  // ...
-}
+return {
+  timestamp: new Date().toISOString(),  // ✅
+  items: Array.from(mySet)              // ✅
+};
 ```
 
-### Web App 路由
+### 時區
+`appsscript.json` 設為 `Asia/Taipei`;寫入時間戳時若用 `new Date()` 直接存到 sheet 會走此時區,但跨函式傳遞請都用 ISO string。
 
-主應用程式透過 `doGet(e)` 處理頁面路由:
-
-| URL 參數 | 頁面 | 功能 |
-|---------|------|------|
-| `?page=` (空) | portal.html | 入口頁 |
-| `?page=apply` | apply.html | 申請轉移 |
-| `?page=review` | review.html | 審核轉移 |
-| `?page=lending` | lending.html | 出借登記 |
-| `?page=return` | return.html | 歸還登記 |
-| `?page=scrap` | scrap.html | 報廢申請 |
-| `?page=inventory` | inventory.html | 盤點作業 |
-| `?page=userstate` | userstate.html | 個人資產狀態 |
-
-### 關鍵工作流程
-
-#### 1. 資產轉移流程
-1. 使用者在 `apply.html` 提交轉移申請
-2. 寫入「轉移申請紀錄」工作表
-3. 審核者在 `review.html` 核准/拒絕
-4. 核准後更新資產總表的保管人/地點
-
-#### 2. 出借/歸還流程
-- `handleLend()` - 登記出借,寫入「出借紀錄」
-- `handleReturn()` - 登記歸還,更新狀態為「在庫」
-
-#### 3. 報廢流程
-- `handleScrap()` - 提交報廢申請,產生 Google Docs 申請單
-- 狀態變更: 在庫 → 報廢中 → 已報廢
-
-#### 4. 盤點流程
-- `startInventory()` - 建立盤點作業
-- `submitInventoryResults()` - 提交盤點結果
-- `completeInventory()` - 結案並產生差異報告
-
-### 權限控制
-
-系統使用「管理員名單」工作表 (`ADMIN_LIST_SHEET_NAME`) 控制特定功能權限:
-```javascript
-function isAdmin() {
-  // 檢查當前使用者是否在管理員名單中
-}
-```
-
-### GAS 序列化注意事項
-
-**重要**: GAS 無法序列化 `Date`, `Map`, `Set` 等物件。
-
-✅ 正確做法:
-```javascript
-function getData() {
-  return {
-    timestamp: new Date().toISOString(),  // 轉字串
-    items: Array.from(mySet)              // 轉陣列
-  };
-}
-```
-
-❌ 錯誤做法:
-```javascript
-function getData() {
-  return {
-    timestamp: new Date(),  // ❌ 會失敗
-    items: mySet            // ❌ 會失敗
-  };
-}
-```
-
-詳見 `.gemini/skills/gas-serialization-knowledge/`
+### 存取模式
+`"access": "DOMAIN"` — Web App 限網域內使用者。搭配第 3 點的白名單做雙重防護。
 
 ## 編碼風格
 
-- **縮排**: 2 空格 (JS/HTML)
-- **命名規則**:
-  - 函式/變數: `camelCase`
-  - 常數: `SCREAMING_SNAKE_CASE`
-- **註解**: 繁體中文為主,保持簡潔
-- **常數管理**: 將工作表名稱、欄位索引集中在檔案頂部
-
-## 安全性注意事項
-
-1. **環境設定**: 部署前必須更新 `env.js` 中的試算表/文件夾 ID
-2. **存取權限**: `appsscript.json` 設定為網域內存取 (`"access": "DOMAIN"`)
-3. **IDOR 防護**: 所有資產操作需驗證使用者權限
-4. **XSS 防護**: 避免使用 `innerHTML`,改用 `textContent` 或模板引擎
-
-詳見 `.gemini/skills/gas-security-audit/`
-
-## 測試方式
-
-目前無自動化測試框架,需手動驗證:
-
-1. 在 Apps Script 編輯器測試後端函式
-2. 部署 Web App 測試完整流程
-3. 檢查試算表中的資料寫入與時間戳記
-4. 驗證權限控制 (一般使用者 vs 管理員)
+- 2 空格縮排(JS/HTML)
+- 函式/變數 `camelCase`,常數 `SCREAMING_SNAKE_CASE`
+- 註解用繁體中文,保持簡潔
+- 工作表名稱、欄位索引集中在檔案頂部
+- 避免 `innerHTML`(XSS),用 `textContent` 或樣板
 
 ## 部署流程
 
 1. 修改本地程式碼
-2. `clasp push` 推送到 GAS
-3. 在 Apps Script 編輯器測試
-4. `clasp deploy` 建立新版本
-5. 更新 Web App 部署設定
-
-## 相關技能包
-
-專案包含多個 Gemini AI 技能包 (`.gemini/skills/`):
-
-- `asset-manage` - 完整 API 參考文件
-- `gas-serialization-knowledge` - GAS 序列化規則
-- `gas-security-audit` - 安全性檢查清單
-- `gas-webapp-navigation-fix` - 頁面導航問題修復指南
+2. 對應目錄 `clasp push`
+3. Apps Script 編輯器手動測試
+4. `clasp deploy` 建新版本
+5. 更新 Web App 部署設定(必要時)

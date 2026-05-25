@@ -14,9 +14,19 @@ const CONFIG = {
   ITEM_MASTER_SHEET_NAME: '物品總表',
   ISMS_ASSET_SHEET_NAME: '資訊資產清單',
   MAPPING_SHEET_NAME: '資產對照表',
+  DROPDOWN_SHEET_NAME: '下拉選單',
 
-  // 管理員名單
-  ADMIN_LIST_SHEET_NAME: '管理員名單'
+  // 操作紀錄(新增/編輯/刪除的稽核 log)
+  ISMS_OPERATION_LOG_SHEET_NAME: '資訊資產操作紀錄',
+
+  // 權限工作表(位於 ISMS 試算表): A 欄=白名單 Email、B 欄=管理員 Email
+  ISMS_PERMISSION_SHEET_NAME: '權限',
+
+  // 管理員名單(legacy,位於主試算表;已停用,改用 ISMS_PERMISSION_SHEET_NAME)
+  ADMIN_LIST_SHEET_NAME: '管理員名單',
+
+  // 軟體清冊工作表
+  SOFTWARE_SHEET_NAME: '軟體清冊'
 };
 
 // ==========================================
@@ -88,7 +98,8 @@ const ISMS_ASSET_COLUMN_INDICES = {
   ASSET_VALUE: 18,       // R欄: 資產價值
   GROUP: 19,             // S欄: 組別
   SERIAL_NO: 20,         // T欄: 序號
-  INVENTORY_COUNT: 21    // U欄: 已盤點數量
+  INVENTORY_COUNT: 21,   // U欄: 已盤點數量
+  BUSINESS_PROCESS: 22   // V欄: 業務流程
 };
 
 // 資產對照表欄位索引
@@ -98,4 +109,29 @@ const MAPPING_COLUMN_INDICES = {
   CREATED_TIME: 3,       // C欄: 建立時間
   CREATED_BY: 4,         // D欄: 建立人
   REMARKS: 5             // E欄: 備註
+};
+
+// 軟體清冊欄位索引（A~I 欄）
+const SOFTWARE_COLUMN_INDICES = {
+  SOFTWARE_ID: 1,        // A欄: 軟體編號
+  SOFTWARE_NAME: 2,      // B欄: 軟體名稱
+  QUANTITY: 3,           // C欄: 數量
+  CUSTODY_UNIT: 4,       // D欄: 保管單位
+  CUSTODIAN: 5,          // E欄: 保管人
+  USER: 6,               // F欄: 使用人
+  SOFTWARE_TYPE: 7,      // G欄: 軟體類型
+  TYPE_CODE: 8,          // H欄: 類型代碼
+  SERIAL_NO: 9           // I欄: 編號
+};
+
+// 資訊資產操作紀錄欄位索引
+const ISMS_OP_LOG_COLUMN_INDICES = {
+  TIMESTAMP: 1,       // A欄: ISO 時間戳
+  OPERATOR_EMAIL: 2,  // B欄: 操作者 Email
+  OPERATION_TYPE: 3,  // C欄: 新增 / 編輯 / 刪除
+  ISMS_ASSET_ID: 4,   // D欄: 目標資訊資產編號
+  CHANGED_FIELDS: 5,  // E欄: 變更欄位清單(逗號分隔;CREATE/DELETE 留空)
+  BEFORE_JSON: 6,     // F欄: 變更前完整快照(JSON)
+  AFTER_JSON: 7,      // G欄: 變更後完整快照(JSON)
+  REMARKS: 8          // H欄: 備註(刪除原因等)
 };

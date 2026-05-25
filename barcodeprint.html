@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>列印條碼 | 財產管理</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- 條碼與 PDF 輸出 -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        :root {
+            --ink-900: #0f172a;
+            --ink-700: #334155;
+            --ink-500: #64748b;
+            --surface: #ffffff;
+            --surface-muted: #f8fafc;
+            --accent-500: #2f6c7f;
+            --accent-400: #3d8c9c;
+            --accent-300: #7dd3c7;
+            --warm-200: #f7d7b5;
+            --shadow-soft: 0 24px 60px rgba(15, 23, 42, 0.12);
+            --label-font-family: "Microsoft JhengHei", "PingFang TC", "Heiti TC", "Noto Sans TC", sans-serif;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: "Noto Sans TC", "Noto Sans", sans-serif;
+            color: var(--ink-900);
+            background:
+                radial-gradient(circle at 12% 12%, rgba(125, 211, 199, 0.25), transparent 55%),
+                radial-gradient(circle at 88% 0%, rgba(247, 215, 181, 0.32), transparent 48%),
+                linear-gradient(180deg, #f8fafc 0%, #eef2f7 60%, #ecf4f2 100%);
+            min-height: 100vh;
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .page-shell { padding: 28px 24px 120px; max-width: 1400px; margin: 0 auto; }
+
+        .hero {
+            background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(244,250,250,0.92));
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 24px;
+            padding: 24px 28px;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .hero h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin: 0 0 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .hero .subtitle { color: var(--ink-500); font-size: 0.95rem; margin: 0; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 9px 16px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-500), #1e5568);
+            color: #fff;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(47, 108, 127, 0.35); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-ghost {
+            background: #fff;
+            color: var(--ink-700);
+            border-color: #cbd5e1;
+        }
+        .btn-ghost:hover { background: #f8fafc; border-color: #94a3b8; }
+        .btn-sm { padding: 5px 10px; font-size: 0.8rem; border-radius: 8px; }
+
+        .card {
+            background: #fff;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 20px;
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+            overflow: hidden;
+        }
+
+        .filter-bar { padding: 18px 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+        .filter-bar label { display: block; font-size: 0.78rem; font-weight: 500; color: var(--ink-500); margin-bottom: 4px; }
+        .filter-bar input, .filter-bar select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: #fff;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent-400); box-shadow: 0 0 0 3px rgba(61,140,156,0.15); }
+
+        /* ===========================================================
+           篩選卡片精進版：多選下拉 + 搜尋 + chips
+           =========================================================== */
+        /* 覆寫 .card 的 overflow: hidden，讓下拉選單面板可溢出至卡片外 */
+        .filter-card {
+            padding: 20px 22px;
+            overflow: visible;
+            position: relative;
+            z-index: 5;
+        }
+
+        .filter-selects {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+
+        .ms-filter { position: relative; }
+
+        .ms-trigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            background: #fff;
+            color: var(--ink-700);
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: left;
+            font-family: inherit;
+        }
+        .ms-trigger:hover { border-color: var(--accent-400); background: #f8fafc; }
+        .ms-filter.is-open .ms-trigger,
+        .ms-filter.is-active .ms-trigger {
+            border-color: var(--accent-500);
+            box-shadow: 0 0 0 3px rgba(61, 140, 156, 0.12);
+        }
+        .ms-filter.is-active .ms-trigger { background: #f0f7f6; }
+
+        .ms-trigger > i:first-child { color: var(--accent-500); font-size: 0.9rem; }
+        .ms-trigger .ms-label { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ms-trigger .ms-badge {
+            background: var(--accent-500);
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: 999px;
+            min-width: 20px;
+            text-align: center;
+            line-height: 1.4;
+        }
+        .ms-trigger .ms-caret {
+            color: var(--ink-500);
+            transition: transform 0.15s;
+            font-size: 0.75rem;
+        }
+        .ms-filter.is-open .ms-trigger .ms-caret { transform: rotate(180deg); }
+
+        .ms-panel {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            z-index: 30;
+            background: #fff;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            border-radius: 12px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            animation: ms-pop 0.14s ease-out;
+        }
+        @keyframes ms-pop {
+            from { opacity: 0; transform: translateY(-4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .ms-search { position: relative; margin-bottom: 8px; }
+        .ms-search i {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--ink-500);
+            font-size: 0.82rem;
+        }
+        .ms-search input {
+            width: 100%;
+            padding: 7px 10px 7px 30px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            outline: none;
+            background: #f8fafc;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+        .ms-search input:focus { background: #fff; border-color: var(--accent-400); box-shadow: 0 0 0 3px rgba(61,140,156,0.15); }
+
+        .ms-actions {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .ms-action {
+            flex: 1;
+            padding: 5px 8px;
+            font-size: 0.78rem;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            color: var(--ink-700);
+            cursor: pointer;
+            transition: all 0.12s;
+            font-family: inherit;
+        }
+        .ms-action:hover { background: #eff6ff; border-color: var(--accent-400); color: var(--accent-500); }
+
+        .ms-options {
+            overflow-y: auto;
+            max-height: 220px;
+            padding: 2px;
+            margin: -2px;
+        }
+        .ms-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--ink-700);
+            transition: background 0.1s;
+        }
+        .ms-option:hover { background: #f8fafc; }
+        .ms-option input { display: none; }
+        .ms-option .ms-check {
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.12s;
+            background: #fff;
+        }
+        .ms-option .ms-check i { color: #fff; font-size: 0.62rem; opacity: 0; }
+        .ms-option.is-checked .ms-check {
+            background: var(--accent-500);
+            border-color: var(--accent-500);
+        }
+        .ms-option.is-checked .ms-check i { opacity: 1; }
+        .ms-option.is-checked { background: rgba(47, 108, 127, 0.06); color: var(--ink-900); }
+        .ms-option .ms-text {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ms-empty {
+            padding: 20px 10px;
+            text-align: center;
+            color: var(--ink-500);
+            font-size: 0.82rem;
+        }
+
+        /* 已選條件 chips */
+        .active-filters {
+            margin-top: 14px;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .active-filters .af-label {
+            font-size: 0.8rem;
+            color: var(--ink-500);
+            font-weight: 500;
+            margin-right: 2px;
+        }
+        .active-filters .af-label i { margin-right: 4px; color: var(--accent-500); }
+        .af-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: #fff;
+            border: 1px solid rgba(47, 108, 127, 0.3);
+            border-radius: 999px;
+            font-size: 0.78rem;
+            color: var(--accent-500);
+            cursor: pointer;
+            transition: all 0.12s;
+            font-weight: 500;
+            font-family: inherit;
+        }
+        .af-chip:hover {
+            background: var(--accent-500);
+            color: #fff;
+            border-color: var(--accent-500);
+        }
+        .af-chip .af-cat { color: var(--ink-500); font-size: 0.72rem; }
+        .af-chip:hover .af-cat { color: rgba(255, 255, 255, 0.85); }
+        .af-chip .af-val { font-weight: 600; }
+        .af-chip i { font-size: 0.7rem; }
+
+        /* 搜尋 + 清除列（現為篩選卡片第一行） */
+        .filter-search-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+        .search-input-wrap { position: relative; flex: 1; }
+        .search-input-wrap .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--ink-500);
+            font-size: 0.88rem;
+            pointer-events: none;
+        }
+        .search-input-wrap input {
+            width: 100%;
+            padding: 11px 14px 11px 40px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 0.92rem;
+            background: #fff;
+            outline: none;
+            transition: all 0.15s;
+            font-family: inherit;
+            color: var(--ink-900);
+        }
+        .search-input-wrap input:focus {
+            border-color: var(--accent-400);
+            box-shadow: 0 0 0 3px rgba(61, 140, 156, 0.15);
+        }
+        .search-input-wrap input::placeholder { color: #94a3b8; }
+        .filter-search-row #clearFiltersBtn { flex-shrink: 0; padding: 11px 18px; }
+
+        @media (max-width: 640px) {
+            .filter-selects { grid-template-columns: repeat(2, 1fr); }
+            .filter-search-row { flex-direction: column; }
+            .filter-search-row #clearFiltersBtn { width: 100%; }
+        }
+
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            text-align: left;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--ink-500);
+            background: var(--surface-muted);
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.88rem;
+            vertical-align: middle;
+        }
+        tbody tr { transition: background-color 0.1s; }
+        tbody tr:hover { background: #f8fafc; }
+        tbody tr.selected { background: #eff9f7; }
+        .cell-mono { font-family: "SFMono-Regular", "Menlo", "Consolas", monospace; color: var(--ink-700); }
+        .cell-clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+        .badge-property { background: #ecfdf5; color: #047857; }
+        .badge-item     { background: #eff6ff; color: #1d4ed8; }
+        .badge-status   { background: #f1f5f9; color: #475569; }
+
+        .chip {
+            display: inline-block;
+            padding: 3px 10px;
+            background: rgba(47, 108, 127, 0.12);
+            color: var(--accent-500);
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .list-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            border-top: 1px solid #f1f5f9;
+            font-size: 0.85rem;
+            color: var(--ink-500);
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .pager { display: inline-flex; gap: 4px; }
+        .pager button {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            color: var(--ink-700);
+        }
+        .pager button:hover:not(:disabled) { background: #f1f5f9; }
+        .pager button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .pager .current { background: var(--accent-500); color: #fff; border-color: var(--accent-500); }
+
+        .action-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 40;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.98);
+            border-top: 1px solid rgba(148, 163, 184, 0.4);
+            box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.08);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            transform: translateY(110%);
+            transition: transform 0.25s ease;
+        }
+        .action-bar.visible { transform: translateY(0); }
+        .action-bar .count-badge {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--accent-500);
+        }
+        .action-bar .count-badge .num {
+            font-size: 1.3rem;
+            padding: 0 4px;
+        }
+
+        /* Modal */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 20px;
+        }
+        .modal-backdrop.visible { display: flex; }
+        .modal-content {
+            background: #fff;
+            border-radius: 20px;
+            max-width: 540px;
+            width: 100%;
+            padding: 24px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+        }
+        #previewModal .modal-content {
+            max-width: 620px;
+        }
+        .modal-content h3 { margin: 0 0 12px 0; font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top: 12px; flex-wrap: wrap; }
+        .modal-note { color: var(--ink-500); font-size: 0.82rem; margin-top: 12px; }
+        .print-method-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .print-method-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            min-height: 112px;
+            padding: 16px 18px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.38);
+            background: linear-gradient(180deg, #ffffff, #f8fafc);
+            color: var(--ink-900);
+            cursor: pointer;
+            transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+            text-align: left;
+            font-family: inherit;
+        }
+        .print-method-btn:hover {
+            border-color: var(--accent-400);
+            transform: translateY(-1px);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }
+        .print-method-btn i { color: var(--accent-500); font-size: 1rem; }
+        .print-method-btn .method-title { font-size: 0.98rem; font-weight: 700; }
+        .print-method-btn .method-desc { font-size: 0.82rem; color: var(--ink-500); line-height: 1.45; }
+
+        .progress-bar-wrap {
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+            margin: 12px 0 8px;
+        }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent-400), var(--accent-500)); transition: width 0.2s; width: 0%; }
+
+        .empty-state {
+            padding: 80px 20px;
+            text-align: center;
+            color: var(--ink-500);
+        }
+        .empty-state i { font-size: 2.4rem; margin-bottom: 10px; color: #cbd5e1; }
+
+        /* ========================================================
+           標籤模板 —— 嚴格依照 example/printbarcode_exmple.html
+           尺寸 60.06 x 30.03 mm，不得更動
+           ======================================================== */
+        /* html2canvas 擷取用的隱藏容器：避免使用極端負座標，降低 CJK 文字光柵化異常。 */
+        .label-capture-stage {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            width: 60.06mm;
+            height: 30.03mm;
+            overflow: hidden;
+            pointer-events: none;
+            visibility: hidden;
+            z-index: -1;
+            contain: layout paint style;
+        }
+        .label-base {
+            width: 60.06mm;
+            height: 30.03mm;
+            background-color: #ffffff;
+            color: #000000;
+            font-family: var(--label-font-family);
+            font-weight: 700;
+            padding: 0mm 0.5mm 0.5mm 0.5mm;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            line-height: 1;
+            overflow: hidden;
+            visibility: visible;
+            text-rendering: geometricPrecision;
+            -webkit-font-smoothing: antialiased;
+        }
+        .label-html2canvas {
+            transform-origin: top left;
+        }
+        .label-native-print {
+            transform: none;
+        }
+        .native-print-root {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+        }
+        .native-print-page {
+            width: 60.06mm;
+            height: 30.03mm;
+            page-break-after: always;
+            break-after: page;
+            overflow: hidden;
+        }
+        .native-print-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+        }
+        .native-print-page > .label-base {
+            margin: 0;
+        }
+
+        #label-template, .label-tpl { }
+        /* 所有文字列：不可被壓縮 */
+        .row-header, .row-header-new, .row-name, .row-alias, .row-brand, .row-info, .row-info-new, .row-small-text { flex-shrink: 0; }
+
+        /* 依系統切換顯示（舊系統／新系統共存於同一模板中） */
+        .label-base[data-system="new"] .old-only { display: none; }
+        .label-base[data-system="old"] .new-only { display: none; }
+
+        /* 第一列：機構名稱＋財産編號（左），使用年限（右） Y≈4mm */
+        .row-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 1mm;
+        }
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 4mm;
+            flex-shrink: 1;
+        }
+        .header-org {
+            font-size: 8pt;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .header-prop-no {
+            font-size: 9pt;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+        .header-life {
+            font-size: 9pt;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* 第二列：財産名稱 Y≈9mm */
+        .row-name {
+            font-size: 8pt;
+            margin-top: 0.5mm;
+            white-space: nowrap;
+        }
+
+        /* 舊系統第三列：財産別名 Y≈14mm */
+        .label-base[data-system="old"] .row-alias {
+            font-size: 8pt;
+            margin-top: 0.8mm;
+            white-space: nowrap;
+        }
+
+        /* 舊系統第三列：廠牌 *S/N:別名 之間的上標分隔符 */
+        .label-base[data-system="old"] .row-alias .alias-sep {
+            font-size: 8pt;         /* ← 分隔符大小 */
+            display: inline-block;
+            position: relative;
+            top: 0.1mm;            /* ← 負值往上，絕對值越大越高 */
+            line-height: 0;         /* 避免推高行高 */
+            margin: 0 0.4mm;        /* ← 左右間距 */
+            font-weight: 400;
+        }
+
+        /* 第四列：位置（左）、保管人＋日期（右） Y≈19mm */
+        .row-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 8pt;
+            margin-top: 0.8mm;
+            gap: 1mm;
+        }
+        .info-loc {
+            text-align: left;
+            white-space: nowrap;
+            flex: 1 1 auto;
+        }
+        .info-right {
+            display: flex;
+            gap: 1.5mm;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-right: 2mm; 
+        }
+
+        /* 條碼：高度 6.5mm，寬度 90%，置中 Y≈21mm */
+        .row-barcode {
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            margin-top: 2.3mm;
+            width: 90%;
+            align-self: center;
+            height: 8mm;
+            flex: 0 0 8mm;
+            overflow: hidden;
+        }
+        .row-barcode svg { height: 100%; width: 100%; display: block; }
+
+        /* 底部小字：沿用同一組列印字型，避免中英字混用時 PDF 更模糊。 */
+        .row-small-text { font-size: 7pt; text-align: center; margin-top: 0.1mm; font-family: var(--label-font-family); }
+
+        /* ===== 新系統專屬版面 ===== */
+        /* 第一列：機構｜購置日期｜使用年限（3 欄 flex） */
+        .row-header-new {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 1mm;
+            font-size: 7pt;
+        }
+        .row-header-new .header-org,
+        .row-header-new .header-date-new,
+        .row-header-new .header-life {
+            white-space: nowrap;
+        }
+
+        /* 第二列：財産別名 */
+        .label-base[data-system="new"] .row-alias {
+            font-size: 7pt;
+            margin-top: 1mm;
+            white-space: nowrap;
+        }
+
+        /* 第三列：廠牌/型號 */
+        .row-brand {
+            font-size: 7pt;
+            margin-top: 1.4mm;
+            white-space: nowrap;
+        }
+
+        /* 第四列：位置｜保管人（無日期） */
+        .row-info-new {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 7pt;
+            margin-top: 1.4mm;
+            gap: 1mm;
+        }
+        .row-info-new .info-loc {
+            text-align: left;
+            white-space: nowrap;
+            flex: 1 1 auto;
+        }
+
+        /* 新系統：條碼靠左對齊（覆寫舊系統的 center） */
+        .label-base[data-system="new"] .row-barcode {
+            align-self: flex-start;
+            margin-top: 2.3mm;
+            height: 6mm;
+            flex: 0 0 6mm;
+        }
+
+        /* 新系統：編號純文字靠左對齊（覆寫舊系統的 center） */
+        .label-base[data-system="new"] .row-small-text {
+            text-align: left;
+            font-size: 8pt;      /* ← 調字型大小改這裡 */                 
+            margin-top: 0.1mm;   /* ← 縮小與條碼的間距改這裡 */  
+        }
+
+        @media print {
+            html.native-print-root,
+            body.native-print-root {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+            }
+            .native-print-page {
+                margin: 0;
+            }
+        }
+
+        /* 預覽用：放大顯示
+           標籤 60.06×30.03mm，scale(2.2) 後視覺尺寸約 500×250px
+           transform 不佔 layout 空間，需用 wrapper 撐高 */
+        .preview-wrap {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            /* 視覺高度 ≈ 30.03mm × 2.2 × 3.78px/mm ≈ 250px，加上留白 */
+            height: 290px;
+        }
+        .preview-wrap .preview-scale {
+            transform: scale(2.2);
+            transform-origin: center center;
+            flex-shrink: 0;
+        }
+
+        /* loading skeleton */
+        .loading-skeleton {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--ink-500);
+        }
+        .loading-skeleton i { font-size: 1.8rem; color: var(--accent-400); }
+
+        @media (max-width: 640px) {
+            .page-shell { padding: 16px 12px 140px; }
+            .hero { padding: 18px; }
+            .hero h1 { font-size: 1.25rem; }
+            .action-bar { padding: 10px 14px; flex-direction: column; gap: 8px; align-items: stretch; }
+            .action-bar .btn { width: 100%; }
+            .cell-clip { max-width: 140px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-shell">
+
+    <!-- Hero / Header -->
+    <div class="hero">
+        <div>
+            <h1>
+                <i class="fa-solid fa-barcode" style="color: var(--accent-500);"></i>
+                列印條碼
+            </h1>
+            <p class="subtitle">勾選資產後產出 60.06 × 30.03 mm 條碼標籤 PDF，支援批次列印。</p>
+        </div>
+        <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+            <a href="#" id="backToHomeLink" class="btn btn-ghost">
+                <i class="fa-solid fa-arrow-left"></i>
+                返回資產管理
+            </a>
+        </div>
+    </div>
+
+    <!-- 篩選卡片 -->
+    <div class="card filter-card" style="margin-top: 20px;">
+        <!-- 第 1 行：全文搜尋 + 清除按鈕 -->
+        <div class="filter-search-row">
+            <div class="search-input-wrap">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input id="f-search" type="text" placeholder="輸入關鍵字搜尋（財產編號／名稱／別名／保管人／位置…）">
+            </div>
+            <button id="clearFiltersBtn" class="btn btn-ghost">
+                <i class="fa-solid fa-eraser"></i>
+                清除篩選
+            </button>
+        </div>
+
+        <!-- 第 2 行：多選下拉列 -->
+        <div id="filterSelects" class="filter-selects"></div>
+
+        <!-- 第 3 行：已選條件 chips（動態顯示） -->
+        <div id="activeFiltersBar" class="active-filters" hidden></div>
+    </div>
+
+    <!-- 清單 -->
+    <div class="card" style="margin-top: 16px;">
+        <div id="tableContainer" class="table-wrap">
+            <div class="loading-skeleton">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <div style="margin-top:8px;">載入資產中…</div>
+            </div>
+        </div>
+        <div class="list-toolbar">
+            <div id="countSummary">—</div>
+            <div style="display:flex; align-items:center; gap: 12px; flex-wrap: wrap;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+                    每頁顯示
+                    <select id="pageSizeSelect" style="padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                </label>
+                <div id="pager" class="pager"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- 固定底部操作列 -->
+<div id="actionBar" class="action-bar">
+    <div class="count-badge">
+        已選取 <span id="selectedCount" class="num">0</span> 筆
+    </div>
+    <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+        <button id="previewBtn" class="btn btn-ghost">
+            <i class="fa-solid fa-eye"></i>
+            預覽第一筆
+        </button>
+        <button id="clearSelectionBtn" class="btn btn-ghost">
+            <i class="fa-solid fa-xmark"></i>
+            取消選取
+        </button>
+        <button id="printBtn" class="btn btn-primary">
+            <i class="fa-solid fa-download"></i>
+            下載 PDF
+        </button>
+    </div>
+</div>
+
+<!-- 預覽 Modal -->
+<div id="previewModal" class="modal-backdrop">
+    <div class="modal-content">
+        <h3><i class="fa-solid fa-eye" style="color: var(--accent-500);"></i> 標籤預覽</h3>
+        <div class="preview-wrap">
+            <div class="preview-scale">
+                <div id="preview-label" class="label-preview-body"></div>
+            </div>
+        </div>
+        <p style="color: var(--ink-500); font-size: 0.82rem; margin-top: 12px;">
+            * 實際列印尺寸 60.06 × 30.03 mm，採用 Code 128 條碼。
+        </p>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top: 12px;">
+            <button class="btn btn-ghost" onclick="closeModal('previewModal')">關閉</button>
+        </div>
+    </div>
+</div>
+
+<!-- 列印進度 Modal -->
+<div id="progressModal" class="modal-backdrop">
+    <div class="modal-content">
+        <h3><i class="fa-solid fa-file-pdf" style="color: var(--accent-500);"></i> 產生 PDF 中</h3>
+        <p id="progressText" style="color: var(--ink-700); margin: 6px 0;">準備中…</p>
+        <div class="progress-bar-wrap"><div id="progressBar" class="progress-bar"></div></div>
+        <p style="color: var(--ink-500); font-size: 0.82rem;">請稍候，瀏覽器會自動下載完成後的 PDF 檔。</p>
+    </div>
+</div>
+
+<!-- 列印方式選擇 Modal -->
+<div id="printMethodModal" class="modal-backdrop">
+    <div class="modal-content">
+        <h3><i class="fa-solid fa-print" style="color: var(--accent-500);"></i> 選擇列印方式</h3>
+        <p style="color: var(--ink-700); margin: 6px 0 0 0;">同一組標籤可用兩種流程輸出，方便比較清晰度與列印結果。</p>
+        <div class="print-method-actions">
+            <button id="printMethodHtml2CanvasBtn" class="print-method-btn" type="button">
+                <i class="fa-solid fa-file-arrow-down"></i>
+                <span class="method-title">下載 PDF（html2canvas）</span>
+                <span class="method-desc">沿用目前流程，先把標籤轉成圖片後再匯出 PDF。</span>
+            </button>
+            <button id="printMethodNativeBtn" class="print-method-btn" type="button">
+                <i class="fa-solid fa-up-right-from-square"></i>
+                <span class="method-title">原生列印</span>
+                <span class="method-desc">不經 html2canvas，改由瀏覽器原生列印視窗輸出與另存 PDF。</span>
+            </button>
+        </div>
+        <p class="modal-note">原生列印會開啟新視窗，由瀏覽器決定實際列印對話框與另存 PDF 流程。</p>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal('printMethodModal')">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 錯誤提示 Modal -->
+<div id="alertModal" class="modal-backdrop">
+    <div class="modal-content">
+        <h3 id="alertTitle"><i class="fa-solid fa-circle-exclamation" style="color: #d97706;"></i> 提醒</h3>
+        <p id="alertBody" style="color: var(--ink-700); white-space: pre-wrap;"></p>
+        <div style="display:flex; justify-content:flex-end; margin-top: 12px;">
+            <button class="btn btn-primary" onclick="closeModal('alertModal')">確定</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 隱藏的標籤渲染區：html2canvas 會擷取此區塊產出圖檔 ===== -->
+<div class="label-capture-stage" aria-hidden="true">
+    <div id="label-template" class="label-tpl label-base label-html2canvas" data-system="old">
+        <!-- 舊系統第一列：機構+編號｜使用年限 -->
+        <div class="row-header old-only">
+            <div class="header-left">
+                <span class="header-org">中央研究院</span>
+                <span class="header-prop-no" id="lbl-prop-no"></span>
+            </div>
+            <span class="header-life" id="lbl-life"></span>
+        </div>
+
+        <!-- 新系統第一列：機構｜購置日期｜使用年限 -->
+        <div class="row-header-new new-only">
+            <span class="header-org" id="lbl-org-new"></span>
+            <span class="header-date-new" id="lbl-date-new"></span>
+            <span class="header-life" id="lbl-life-new"></span>
+        </div>
+
+        <!-- 舊系統第二列：財產名稱（新系統不顯示） -->
+        <div class="row-name old-only" id="lbl-name"></div>
+
+        <!-- 別名（兩系統共用） -->
+        <div class="row-alias" id="lbl-alias"></div>
+
+        <!-- 新系統第三列：廠牌/型號 -->
+        <div class="row-brand new-only" id="lbl-brand"></div>
+
+        <!-- 舊系統第四列：位置｜保管人+日期 -->
+        <div class="row-info old-only">
+            <div class="info-loc" id="lbl-loc"></div>
+            <div class="info-right">
+                <span id="lbl-custodian"></span>
+                <span id="lbl-date"></span>
+            </div>
+        </div>
+
+        <!-- 新系統第四列：位置｜保管人（無日期） -->
+        <div class="row-info-new new-only">
+            <div class="info-loc" id="lbl-loc-new"></div>
+            <span id="lbl-custodian-new"></span>
+        </div>
+
+        <!-- 條碼（共用；CSS 依 data-system 決定對齊） -->
+        <div class="row-barcode">
+            <svg id="barcode-svg"></svg>
+        </div>
+
+        <!-- 編號純文字（共用；CSS 依 data-system 決定對齊） -->
+        <div class="row-small-text" id="lbl-prop-no-small"></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    // =========================================================
+    // 狀態
+    // =========================================================
+    const state = {
+        assets: [],
+        filtered: [],
+        selected: new Set(),
+        pendingPrintAssets: null,
+        page: 1,
+        pageSize: 50,
+        isAdmin: false,
+        forceUserScope: false,
+        filters: {
+            search: '',
+            system:   new Set(),
+            status:   new Set(),
+            location: new Set(),
+            leader:   new Set(),
+            category: new Set()
+        }
+    };
+
+    // =========================================================
+    // DOM shortcut
+    // =========================================================
+    const $ = (id) => document.getElementById(id);
+    const LABEL_SIZE_MM = { width: 60.06, height: 30.03 };
+
+    // =========================================================
+    // Helpers
+    // =========================================================
+    function debounce(fn, wait) {
+        let t;
+        return function (...args) {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), wait);
+        };
+    }
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // ISO / Date → 民國年 YYY/MM/DD（舊資料 fallback 用）
+    function toRocDate(value) {
+        if (!value) return '';
+        const d = (value instanceof Date) ? value : new Date(value);
+        if (!d || isNaN(d.getTime())) return String(value);
+        const y = d.getFullYear() - 1911;
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}/${m}/${day}`;
+    }
+
+    function formatUseLife(val) {
+        if (val === null || val === undefined || val === '') return '';
+        const s = String(val).trim();
+        if (!s) return '';
+        // 若已含「年」或其他單位，直接顯示；否則補上「年」
+        return /[年月日]/.test(s) ? s : `${s}年`;
+    }
+
+    function systemLabel(asset) {
+        const src = String(asset.sourceSheet || '');
+        if (src.indexOf('財產') !== -1) return '新系統';
+        if (src.indexOf('物品') !== -1) return '舊系統';
+        return src || '其他';
+    }
+
+    // 新系統（財產總表）專屬：依「財產區分」決定第一列機構名稱
+    function getOrgNameForProperty(asset) {
+        const cat = String(asset && asset.propertyCategory || '').trim();
+        if (cat === '科研基金')     return '中央研究院(轉譯中心)基';
+        if (cat === '公務用_一般')  return '中央研究院(轉譯中心)公';
+        return '中央研究院(轉譯中心)';
+    }
+
+    // 判定使用哪一套標籤版面
+    function getLabelSystem(asset) {
+        return systemLabel(asset) === '新系統' ? 'new' : 'old';
+    }
+
+    function getAliasDisplay(asset) {
+        return asset.assetAlias || asset.productSerial || '';
+    }
+
+    // 移除民國年首位的 0,例如 "0109/4/3" → "109/4/3"
+    function stripLeadingZeroOnRocDate(s) {
+        if (!s) return '';
+        const str = String(s).trim();
+        // 僅在「以 0 開頭、且第二碼仍為數字」時才剝除,避免把單碼 "0/x/x" 誤吃
+        return str.replace(/^0(?=\d)/, '');
+    }
+
+    function getPurchaseDateDisplay(asset) {
+        if (asset && asset.purchaseDateDisplay) {
+            return stripLeadingZeroOnRocDate(asset.purchaseDateDisplay);
+        }
+        return stripLeadingZeroOnRocDate(toRocDate(asset ? asset.purchaseDate : ''));
+    }
+
+    function buildSearchText(a) {
+        return [
+            a.assetId, a.assetName, a.assetAlias, a.productSerial,
+            a.leader, a.userName, a.location, a.status, a.category, a.modelBrand
+        ].filter(Boolean).join(' ').toLowerCase();
+    }
+
+    function uniqSorted(arr) {
+        return Array.from(new Set(arr.filter(v => v !== null && v !== undefined && v !== '')))
+            .map(String)
+            .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    }
+
+    function showAlert(msg, title) {
+        $('alertBody').textContent = msg || '';
+        if (title) $('alertTitle').innerHTML = `<i class="fa-solid fa-circle-exclamation" style="color:#d97706;"></i> ${escapeHtml(title)}`;
+        openModal('alertModal');
+    }
+    function openModal(id) { $(id).classList.add('visible'); }
+    function closeModal(id) {
+        $(id).classList.remove('visible');
+        if (id === 'printMethodModal') state.pendingPrintAssets = null;
+    }
+    window.closeModal = closeModal;
+
+    function getOrderedAssetsForSelection() {
+        const idSet = state.selected;
+        const inFiltered = state.filtered.filter(a => idSet.has(String(a.assetId)));
+        const orderedIds = new Set(inFiltered.map(a => String(a.assetId)));
+        const tail = state.assets.filter(a => idSet.has(String(a.assetId)) && !orderedIds.has(String(a.assetId)));
+        return [...inFiltered, ...tail];
+    }
+
+    function openPrintMethodModal(assets) {
+        if (!assets || assets.length === 0) return;
+        state.pendingPrintAssets = assets.slice();
+        openModal('printMethodModal');
+    }
+
+    function getPendingPrintAssets() {
+        return Array.isArray(state.pendingPrintAssets) ? state.pendingPrintAssets.slice() : [];
+    }
+
+    function getLabelField(root, id) {
+        return root.querySelector(`[id="${id}"]`);
+    }
+
+    function getLabelPrintStyles() {
+        return `
+            :root { --label-font-family: "Microsoft JhengHei", "PingFang TC", "Heiti TC", "Noto Sans TC", sans-serif; }
+            @page { size: ${LABEL_SIZE_MM.width}mm ${LABEL_SIZE_MM.height}mm; margin: 0; }
+            html, body {
+                margin: 0;
+                padding: 0;
+                background: #ffffff;
+                font-family: var(--label-font-family);
+            }
+            .label-base {
+                width: ${LABEL_SIZE_MM.width}mm;
+                height: ${LABEL_SIZE_MM.height}mm;
+                background-color: #ffffff;
+                color: #000000;
+                font-family: var(--label-font-family);
+                font-weight: 700;
+                padding: 0mm 0.5mm 0.5mm 0.5mm;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                line-height: 1;
+                overflow: hidden;
+                visibility: visible;
+                text-rendering: geometricPrecision;
+                -webkit-font-smoothing: antialiased;
+            }
+            .label-base[data-system="new"] .old-only { display: none; }
+            .label-base[data-system="old"] .new-only { display: none; }
+            .row-header, .row-header-new, .row-name, .row-alias, .row-brand, .row-info, .row-info-new, .row-small-text { flex-shrink: 0; }
+            .row-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                gap: 1mm;
+            }
+            .header-left {
+                display: flex;
+                align-items: baseline;
+                gap: 4mm;
+                flex-shrink: 1;
+            }
+            .header-org { font-size: 8pt; white-space: nowrap; flex-shrink: 0; }
+            .header-prop-no { font-size: 9pt; font-weight: 900; white-space: nowrap; }
+            .header-life { font-size: 9pt; white-space: nowrap; flex-shrink: 0; }
+            .row-name { font-size: 8pt; margin-top: 0.5mm; white-space: nowrap; }
+            .label-base[data-system="old"] .row-alias { font-size: 8pt; margin-top: 0.8mm; white-space: nowrap; }
+            .label-base[data-system="old"] .row-alias .alias-sep {
+                font-size: 8pt;
+                display: inline-block;
+                position: relative;
+                top: 0.1mm;
+                line-height: 0;
+                margin: 0 0.4mm;
+                font-weight: 400;
+            }
+            .row-info {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                font-size: 8pt;
+                margin-top: 0.8mm;
+                gap: 1mm;
+            }
+            .info-loc { text-align: left; white-space: nowrap; flex: 1 1 auto; }
+            .info-right {
+                display: flex;
+                gap: 1.5mm;
+                white-space: nowrap;
+                flex-shrink: 0;
+                margin-right: 2mm;
+            }
+            .row-barcode {
+                display: flex;
+                justify-content: center;
+                align-items: stretch;
+                margin-top: 2.3mm;
+                width: 90%;
+                align-self: center;
+                height: 8mm;
+                flex: 0 0 8mm;
+                overflow: hidden;
+            }
+            .row-barcode svg { height: 100%; width: 100%; display: block; }
+            .row-small-text { font-size: 7pt; text-align: center; margin-top: 0.1mm; font-family: var(--label-font-family); }
+            .row-header-new {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                gap: 1mm;
+                font-size: 7pt;
+            }
+            .row-header-new .header-org,
+            .row-header-new .header-date-new,
+            .row-header-new .header-life { white-space: nowrap; }
+            .label-base[data-system="new"] .row-alias { font-size: 7pt; margin-top: 1mm; white-space: nowrap; }
+            .row-brand { font-size: 7pt; margin-top: 1.4mm; white-space: nowrap; }
+            .row-info-new {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                font-size: 7pt;
+                margin-top: 1.4mm;
+                gap: 1mm;
+            }
+            .row-info-new .info-loc { text-align: left; white-space: nowrap; flex: 1 1 auto; }
+            .label-base[data-system="new"] .row-barcode {
+                align-self: flex-start;
+                margin-top: 2.3mm;
+                height: 6mm;
+                flex: 0 0 6mm;
+            }
+            .label-base[data-system="new"] .row-small-text {
+                text-align: left;
+                font-size: 8pt;
+                margin-top: 0.1mm;
+            }
+            html.native-print-root,
+            body.native-print-root {
+                margin: 0;
+                padding: 0;
+                background: #ffffff;
+            }
+            .native-print-page {
+                width: ${LABEL_SIZE_MM.width}mm;
+                height: ${LABEL_SIZE_MM.height}mm;
+                page-break-after: always;
+                break-after: page;
+                overflow: hidden;
+            }
+            .native-print-page:last-child {
+                page-break-after: auto;
+                break-after: auto;
+            }
+            .native-print-page > .label-base { margin: 0; }
+        `;
+    }
+
+    // =========================================================
+    // 載入資料
+    // =========================================================
+    function loadData() {
+        $('tableContainer').innerHTML = `
+            <div class="loading-skeleton">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <div style="margin-top:8px;">載入資產中…</div>
+            </div>`;
+        google.script.run
+            .withSuccessHandler(onDataLoaded)
+            .withFailureHandler(onDataFailed)
+            .getUserStateData(state.forceUserScope);
+    }
+
+    function onDataFailed(err) {
+        $('tableContainer').innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div>載入失敗：${escapeHtml(err && err.message ? err.message : '未知錯誤')}</div>
+                <button class="btn btn-primary" style="margin-top:10px;" onclick="location.reload()">重新載入</button>
+            </div>`;
+    }
+
+    function onDataLoaded(resp) {
+        if (!resp || !Array.isArray(resp.assets)) {
+            onDataFailed(new Error('伺服器回傳格式不正確'));
+            return;
+        }
+        state.isAdmin = !!resp.isAdmin;
+        state.assets = resp.assets.map(a => {
+            a.__search = buildSearchText(a);
+            return a;
+        });
+
+        populateFilters();
+        applyFilters();
+    }
+
+    // =========================================================
+    // 篩選：多選下拉元件
+    // =========================================================
+    const multiSelects = {};  // field -> instance
+    const MS_CONFIGS = [
+        { field: 'system',   label: '系統類別', icon: 'fa-layer-group', mode: 'single' },
+        { field: 'status',   label: '狀態',     icon: 'fa-circle-dot',  mode: 'single' },
+        { field: 'location', label: '保管位置', icon: 'fa-location-dot' },
+        { field: 'leader',   label: '保管人',   icon: 'fa-user' },
+        { field: 'category', label: '財產類別', icon: 'fa-tags',        mode: 'single' }
+    ];
+
+    function initMultiSelects() {
+        const parent = $('filterSelects');
+        if (!parent) return;
+        parent.innerHTML = '';
+        MS_CONFIGS.forEach(c => {
+            multiSelects[c.field] = createMultiSelect({ ...c, parentEl: parent });
+        });
+        // 點擊面板以外任何地方關閉所有面板
+        document.addEventListener('click', (e) => {
+            Object.values(multiSelects).forEach(ms => {
+                if (!ms.host.contains(e.target)) ms.close();
+            });
+        });
+    }
+
+    function createMultiSelect(config) {
+        const host = document.createElement('div');
+        host.className = 'ms-filter';
+        host.dataset.field = config.field;
+        const isSingle = config.mode === 'single';
+        if (isSingle) host.classList.add('is-single-mode');
+
+        host.innerHTML = `
+            <button type="button" class="ms-trigger">
+                <i class="fa-solid ${escapeHtml(config.icon)}"></i>
+                <span class="ms-label">${escapeHtml(config.label)}</span>
+                <span class="ms-badge" hidden>0</span>
+                <i class="fa-solid fa-chevron-down ms-caret"></i>
+            </button>
+            <div class="ms-panel" hidden>
+                ${isSingle ? '' : `
+                <div class="ms-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" placeholder="搜尋選項…" autocomplete="off">
+                </div>`}
+                <div class="ms-actions">
+                    ${isSingle ? '' : '<button type="button" class="ms-action" data-act="all">全選</button>'}
+                    <button type="button" class="ms-action" data-act="clear">清除</button>
+                </div>
+                <div class="ms-options"></div>
+                <div class="ms-empty" hidden>無符合選項</div>
+            </div>
+        `;
+        config.parentEl.appendChild(host);
+
+        const trigger = host.querySelector('.ms-trigger');
+        const panel = host.querySelector('.ms-panel');
+        const badge = host.querySelector('.ms-badge');
+        const searchInput = host.querySelector('.ms-search input'); // 單選模式下為 null
+        const optionsBox = host.querySelector('.ms-options');
+        const emptyBox = host.querySelector('.ms-empty');
+
+        let allOptions = [];
+        const getSelected = () => state.filters[config.field];
+        const getSearchText = () => (searchInput ? searchInput.value.trim().toLowerCase() : '');
+
+        function renderOptions() {
+            const q = getSearchText();
+            const sel = getSelected();
+            const filtered = allOptions.filter(v => !q || v.toLowerCase().includes(q));
+            if (filtered.length === 0) {
+                optionsBox.innerHTML = '';
+                emptyBox.hidden = false;
+                return;
+            }
+            emptyBox.hidden = true;
+            optionsBox.innerHTML = filtered.map(v => `
+                <label class="ms-option${sel.has(v) ? ' is-checked' : ''}${isSingle ? ' is-single' : ''}">
+                    <input type="${isSingle ? 'radio' : 'checkbox'}" name="${escapeHtml(config.field)}-opt" value="${escapeHtml(v)}" ${sel.has(v) ? 'checked' : ''}>
+                    <span class="ms-check"><i class="fa-solid fa-check"></i></span>
+                    <span class="ms-text" title="${escapeHtml(v)}">${escapeHtml(v)}</span>
+                </label>
+            `).join('');
+        }
+
+        function updateBadge() {
+            const n = getSelected().size;
+            if (n === 0) {
+                badge.hidden = true;
+                host.classList.remove('is-active');
+            } else {
+                badge.hidden = false;
+                badge.textContent = String(n);
+                host.classList.add('is-active');
+            }
+        }
+
+        function open() {
+            Object.values(multiSelects).forEach(ms => { if (ms.host !== host) ms.close(); });
+            panel.hidden = false;
+            host.classList.add('is-open');
+            if (searchInput) searchInput.value = '';
+            renderOptions();
+            if (searchInput) setTimeout(() => searchInput.focus(), 0);
+        }
+        function close() {
+            panel.hidden = true;
+            host.classList.remove('is-open');
+        }
+
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (panel.hidden) open(); else close();
+        });
+        panel.addEventListener('click', (e) => e.stopPropagation());
+        if (searchInput) searchInput.addEventListener('input', renderOptions);
+
+        optionsBox.addEventListener('change', (e) => {
+            if (!e.target.matches('input[type="checkbox"], input[type="radio"]')) return;
+            const val = e.target.value;
+            const sel = getSelected();
+            if (isSingle) {
+                // 單選：清掉舊值，設為當前勾選值（radio 不會觸發 unchecked 事件）
+                sel.clear();
+                if (e.target.checked) sel.add(val);
+                renderOptions();            // 重繪以更新其他選項的視覺狀態
+                close();                    // 單選完成後自動收起面板
+            } else {
+                if (e.target.checked) sel.add(val); else sel.delete(val);
+                const opt = e.target.closest('.ms-option');
+                if (opt) opt.classList.toggle('is-checked', e.target.checked);
+            }
+            updateBadge();
+            renderActiveFilters();
+            applyFilters();
+        });
+
+        host.querySelectorAll('.ms-action').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const act = btn.dataset.act;
+                const sel = getSelected();
+                if (act === 'clear') {
+                    sel.clear();
+                } else if (act === 'all') {
+                    const q = getSearchText();
+                    allOptions.forEach(v => { if (!q || v.toLowerCase().includes(q)) sel.add(v); });
+                }
+                renderOptions();
+                updateBadge();
+                renderActiveFilters();
+                applyFilters();
+            });
+        });
+
+        return {
+            host,
+            config,
+            setOptions(opts) {
+                allOptions = opts.slice();
+                // 移除不存在於新選項內的已選值
+                const sel = getSelected();
+                Array.from(sel).forEach(v => { if (!allOptions.includes(v)) sel.delete(v); });
+                updateBadge();
+                if (!panel.hidden) renderOptions();
+            },
+            refresh() { updateBadge(); if (!panel.hidden) renderOptions(); },
+            close
+        };
+    }
+
+    function renderActiveFilters() {
+        const bar = $('activeFiltersBar');
+        if (!bar) return;
+        const parts = [];
+        MS_CONFIGS.forEach(c => {
+            const sel = state.filters[c.field];
+            sel.forEach(v => parts.push({ field: c.field, label: c.label, value: v }));
+        });
+        if (parts.length === 0) {
+            bar.hidden = true;
+            bar.innerHTML = '';
+            return;
+        }
+        bar.hidden = false;
+        bar.innerHTML = `
+            <span class="af-label"><i class="fa-solid fa-filter"></i>已選條件：</span>
+            ${parts.map(p => `
+                <button type="button" class="af-chip" data-field="${escapeHtml(p.field)}" data-value="${escapeHtml(p.value)}">
+                    <span class="af-cat">${escapeHtml(p.label)}</span>
+                    <span class="af-val">${escapeHtml(p.value)}</span>
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `).join('')}
+        `;
+        bar.querySelectorAll('.af-chip').forEach(c => {
+            c.addEventListener('click', () => {
+                const field = c.dataset.field;
+                const val = c.dataset.value;
+                state.filters[field].delete(val);
+                if (multiSelects[field]) multiSelects[field].refresh();
+                renderActiveFilters();
+                applyFilters();
+            });
+        });
+    }
+
+    function populateFilters() {
+        const assets = state.assets;
+        const opts = {
+            system:   uniqSorted(assets.map(a => systemLabel(a))),
+            status:   uniqSorted(assets.map(a => a.status)),
+            location: uniqSorted(assets.map(a => a.location)),
+            leader:   uniqSorted(assets.map(a => a.leader)),
+            category: uniqSorted(assets.map(a => a.category))
+        };
+        Object.keys(opts).forEach(k => {
+            if (multiSelects[k]) multiSelects[k].setOptions(opts[k]);
+        });
+        renderActiveFilters();
+    }
+
+    function applyFilters() {
+        const f = state.filters;
+        const q = (f.search || '').toLowerCase();
+
+        state.filtered = state.assets.filter(a => {
+            if (q && (a.__search || '').indexOf(q) === -1) return false;
+            if (f.system.size   && !f.system.has(systemLabel(a)))              return false;
+            if (f.status.size   && !f.status.has(String(a.status    || '')))   return false;
+            if (f.location.size && !f.location.has(String(a.location || '')))  return false;
+            if (f.leader.size   && !f.leader.has(String(a.leader    || '')))   return false;
+            if (f.category.size && !f.category.has(String(a.category || '')))  return false;
+            return true;
+        });
+
+        state.page = 1;
+        renderTable();
+    }
+
+    // =========================================================
+    // 清單渲染
+    // =========================================================
+    function renderTable() {
+        const total = state.filtered.length;
+        if (total === 0) {
+            $('tableContainer').innerHTML = `
+                <div class="empty-state">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <div>找不到符合條件的資產</div>
+                </div>`;
+            $('countSummary').textContent = '共 0 筆';
+            $('pager').innerHTML = '';
+            updateActionBar();
+            return;
+        }
+
+        const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+        if (state.page > totalPages) state.page = totalPages;
+        const start = (state.page - 1) * state.pageSize;
+        const slice = state.filtered.slice(start, start + state.pageSize);
+
+        const allChecked = slice.length > 0 && slice.every(a => state.selected.has(String(a.assetId)));
+
+        const rows = slice.map(a => {
+            const id = String(a.assetId || '');
+            const checked = state.selected.has(id);
+            const sysLabel = systemLabel(a);
+            const sysClass = sysLabel === '新系統' ? 'badge-property' : (sysLabel === '舊系統' ? 'badge-item' : 'badge-status');
+            return `
+                <tr class="${checked ? 'selected' : ''}" data-id="${escapeHtml(id)}">
+                    <td><input type="checkbox" class="row-check" ${checked ? 'checked' : ''}></td>
+                    <td class="cell-mono">${escapeHtml(id)}</td>
+                    <td><span class="badge ${sysClass}">${escapeHtml(sysLabel)}</span></td>
+                    <td class="cell-clip" title="${escapeHtml(a.assetName || '')}">${escapeHtml(a.assetName || '')}</td>
+                    <td class="cell-clip" title="${escapeHtml(getAliasDisplay(a))}">${escapeHtml(getAliasDisplay(a))}</td>
+                    <td class="cell-clip" title="${escapeHtml(a.modelBrand || '')}">${escapeHtml(a.modelBrand || '')}</td>
+                    <td>${escapeHtml(a.leader || '')}</td>
+                    <td class="cell-clip" title="${escapeHtml(a.location || '')}">${escapeHtml(a.location || '')}</td>
+                    <td class="cell-mono">${escapeHtml(getPurchaseDateDisplay(a))}</td>
+                    <td>${escapeHtml(formatUseLife(a.useLife))}</td>
+                    <td><span class="badge badge-status">${escapeHtml(a.status || '-')}</span></td>
+                    <td>
+                        <button class="btn btn-ghost btn-sm print-one-btn" title="單獨列印此標籤">
+                            <i class="fa-solid fa-print"></i>
+                            列印
+                        </button>
+                    </td>
+                </tr>`;
+        }).join('');
+
+        $('tableContainer').innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:36px;"><input type="checkbox" id="checkAll" ${allChecked ? 'checked' : ''} title="全選本頁"></th>
+                        <th>財產編號</th>
+                        <th>系統</th>
+                        <th>名稱</th>
+                        <th>別名／序號</th>
+                        <th>廠牌／型號</th>
+                        <th>保管人</th>
+                        <th>保管位置</th>
+                        <th>購置日期</th>
+                        <th>使用年限</th>
+                        <th>狀態</th>
+                        <th style="width:90px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+
+        // 摘要 & 分頁
+        $('countSummary').textContent =
+            `共 ${total} 筆（顯示 ${start + 1}–${Math.min(start + state.pageSize, total)}）`;
+        renderPager(totalPages);
+
+        // 綁定：全選本頁
+        $('checkAll').addEventListener('change', (e) => {
+            const on = e.target.checked;
+            slice.forEach(a => {
+                const id = String(a.assetId);
+                if (on) state.selected.add(id); else state.selected.delete(id);
+            });
+            renderTable();
+        });
+
+        // 綁定：單行 checkbox
+        document.querySelectorAll('#tableContainer .row-check').forEach(el => {
+            el.addEventListener('change', (e) => {
+                const tr = e.target.closest('tr');
+                const id = tr.getAttribute('data-id');
+                if (e.target.checked) state.selected.add(id); else state.selected.delete(id);
+                tr.classList.toggle('selected', e.target.checked);
+                updateActionBar();
+                // 更新 header 全選 state
+                const chk = $('checkAll');
+                if (chk) chk.checked = slice.every(a => state.selected.has(String(a.assetId)));
+            });
+        });
+
+        // 綁定：單獨列印
+        document.querySelectorAll('#tableContainer .print-one-btn').forEach(el => {
+            el.addEventListener('click', (e) => {
+                const tr = e.target.closest('tr');
+                const id = tr.getAttribute('data-id');
+                const asset = state.assets.find(a => String(a.assetId) === id);
+                if (asset) openPrintMethodModal([asset]);
+            });
+        });
+
+        updateActionBar();
+    }
+
+    function renderPager(totalPages) {
+        const pager = $('pager');
+        if (totalPages <= 1) { pager.innerHTML = ''; return; }
+        const cur = state.page;
+        const pages = [];
+        const win = 2;
+        for (let p = 1; p <= totalPages; p++) {
+            if (p === 1 || p === totalPages || (p >= cur - win && p <= cur + win)) {
+                pages.push(p);
+            } else if (pages[pages.length - 1] !== '…') {
+                pages.push('…');
+            }
+        }
+        const html = [
+            `<button ${cur === 1 ? 'disabled' : ''} data-p="${cur - 1}">‹</button>`,
+            ...pages.map(p => p === '…'
+                ? `<button disabled>…</button>`
+                : `<button class="${p === cur ? 'current' : ''}" data-p="${p}">${p}</button>`),
+            `<button ${cur === totalPages ? 'disabled' : ''} data-p="${cur + 1}">›</button>`
+        ].join('');
+        pager.innerHTML = html;
+        pager.querySelectorAll('button').forEach(b => {
+            b.addEventListener('click', () => {
+                const p = parseInt(b.getAttribute('data-p'), 10);
+                if (!isNaN(p) && p >= 1 && p <= totalPages) {
+                    state.page = p;
+                    renderTable();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+        });
+    }
+
+    // =========================================================
+    // 底部操作列
+    // =========================================================
+    function updateActionBar() {
+        const n = state.selected.size;
+        $('selectedCount').textContent = n;
+        $('actionBar').classList.toggle('visible', n > 0);
+        $('printBtn').disabled = n === 0;
+        $('previewBtn').disabled = n === 0;
+    }
+
+    // =========================================================
+    // 標籤渲染 & PDF 產生
+    // =========================================================
+    function fillLabelTemplate(asset, root) {
+        const labelRoot = root || $('label-template');
+        const propNo = String(asset.assetId || '');
+        const sys = getLabelSystem(asset);
+
+        // 切換模板（CSS 依 data-system 顯示對應區塊、對齊條碼與編號文字）
+        labelRoot.setAttribute('data-system', sys);
+
+        // 共用欄位
+        getLabelField(labelRoot, 'lbl-prop-no-small').textContent = propNo;
+
+        if (sys === 'old') {
+            // 舊系統（物品總表）— 原排版邏輯
+            // 第三列：廠牌／型號 *S/N:別名／序號（＊為半形並上標靠攏）
+            const aliasText = getAliasDisplay(asset);
+            const brandText = asset.modelBrand || '';
+            const aliasEl = getLabelField(labelRoot, 'lbl-alias');
+            aliasEl.textContent = ''; // 清空後以 DOM 節點組裝，避免 innerHTML XSS
+            if (brandText) {
+                aliasEl.appendChild(document.createTextNode(brandText));
+            }
+            if (brandText && aliasText) {
+                const sup = document.createElement('sup');
+                sup.className = 'alias-sep';
+                sup.textContent = '*';
+                aliasEl.appendChild(sup);
+            }
+            if (aliasText) {
+                aliasEl.appendChild(document.createTextNode('S/N:' + aliasText));
+            }
+
+            getLabelField(labelRoot, 'lbl-prop-no').textContent = propNo;
+            getLabelField(labelRoot, 'lbl-life').textContent = formatUseLife(asset.useLife);
+            getLabelField(labelRoot, 'lbl-name').textContent = asset.assetName || '';
+            getLabelField(labelRoot, 'lbl-loc').textContent = asset.location || '';
+            getLabelField(labelRoot, 'lbl-custodian').textContent = asset.leader || '';
+            getLabelField(labelRoot, 'lbl-date').textContent = getPurchaseDateDisplay(asset);
+        } else {
+            // 新系統（財產總表）— 新排版
+            getLabelField(labelRoot, 'lbl-alias').textContent = getAliasDisplay(asset);
+            getLabelField(labelRoot, 'lbl-org-new').textContent = getOrgNameForProperty(asset);
+            getLabelField(labelRoot, 'lbl-date-new').textContent = getPurchaseDateDisplay(asset);
+            getLabelField(labelRoot, 'lbl-life-new').textContent = formatUseLife(asset.useLife);
+            getLabelField(labelRoot, 'lbl-brand').textContent = asset.modelBrand || '';
+            getLabelField(labelRoot, 'lbl-loc-new').textContent = asset.location || '';
+            getLabelField(labelRoot, 'lbl-custodian-new').textContent = asset.leader || '';
+        }
+
+        // 條碼：CODE128，與範例完全一致
+        try {
+            const barcodeSvg = getLabelField(labelRoot, 'barcode-svg');
+            if (propNo) {
+                JsBarcode(barcodeSvg, propNo, {
+                    format: "CODE128",
+                    displayValue: false,
+                    margin: 0,
+                    width: 2,
+                    height: 40
+                });
+                barcodeSvg.setAttribute('preserveAspectRatio', 'none');
+            } else {
+                // 無編號則清空
+                barcodeSvg.innerHTML = '';
+            }
+        } catch (e) {
+            console.error("條碼生成失敗：", e, "資產：", propNo);
+        }
+    }
+
+    function createFilledLabelNode(asset, variantClass) {
+        const labelNode = $('label-template').cloneNode(true);
+        labelNode.removeAttribute('id');
+        labelNode.classList.remove('label-html2canvas', 'label-native-print');
+        labelNode.classList.add('label-base');
+        if (variantClass) labelNode.classList.add(variantClass);
+        fillLabelTemplate(asset, labelNode);
+        labelNode.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+        return labelNode;
+    }
+
+    function buildNativePrintDocument(assets) {
+        const pages = assets.map(asset => {
+            const labelNode = createFilledLabelNode(asset, 'label-native-print');
+            return `<div class="native-print-page">${labelNode.outerHTML}</div>`;
+        }).join('');
+
+        return `<!DOCTYPE html>
+<html lang="zh-TW" class="native-print-root">
+<head>
+    <meta charset="UTF-8">
+    <title>財產標籤列印</title>
+    <style>${getLabelPrintStyles()}</style>
+</head>
+<body class="native-print-root">
+${pages}
+<script>
+window.addEventListener('load', function () {
+    var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+    ready.then(function () {
+        setTimeout(function () { window.print(); }, 80);
+    });
+});
+window.addEventListener('afterprint', function () {
+    setTimeout(function () { window.close(); }, 120);
+});
+<\/script>
+</body>
+</html>`;
+    }
+
+    async function runHtml2CanvasPrint(assets) {
+        if (!assets || assets.length === 0) return;
+        if (!window.jspdf || !window.JsBarcode || !window.html2canvas) {
+            showAlert('列印資源尚未完全載入，請稍後再試。');
+            return;
+        }
+
+        openModal('progressModal');
+        const progressBar = $('progressBar');
+        const progressText = $('progressText');
+        progressBar.style.width = '0%';
+
+        // 等 DOM paint 完成再截圖（requestAnimationFrame × 2 保險）
+        const waitForPaint = () => new Promise(resolve => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+
+        try {
+            // 等字型載入完成，避免字體 fallback 造成尺寸偏差
+            if (document.fonts && document.fonts.ready) {
+                try { await document.fonts.ready; } catch (e) { /* ignore */ }
+            }
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: [LABEL_SIZE_MM.width, LABEL_SIZE_MM.height]
+            });
+
+            for (let i = 0; i < assets.length; i++) {
+                const a = assets[i];
+                progressText.textContent = `產生中 ${i + 1} / ${assets.length}：${a.assetId || ''}`;
+                fillLabelTemplate(a, $('label-template'));
+                await waitForPaint();
+
+                const labelNode = document.getElementById('label-template');
+                const canvas = await html2canvas(labelNode, {
+                    scale: 8,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    removeContainer: true,
+                    letterRendering: true
+                });
+                const imgData = canvas.toDataURL('image/png');
+                if (i > 0) pdf.addPage([LABEL_SIZE_MM.width, LABEL_SIZE_MM.height], 'landscape');
+                pdf.addImage(imgData, 'PNG', 0, 0, LABEL_SIZE_MM.width, LABEL_SIZE_MM.height);
+
+                progressBar.style.width = `${((i + 1) / assets.length * 100).toFixed(1)}%`;
+            }
+
+            const filename = assets.length === 1
+                ? `財產標籤_${String(assets[0].assetId || 'label').replace(/[\/\\:*?"<>|]/g, '_')}.pdf`
+                : `財產標籤_批次${assets.length}筆_${new Date().toISOString().slice(0, 10)}.pdf`;
+            pdf.save(filename);
+
+            progressText.textContent = '完成！';
+            setTimeout(() => closeModal('progressModal'), 500);
+        } catch (err) {
+            console.error(err);
+            closeModal('progressModal');
+            showAlert('PDF 產生失敗：' + (err && err.message ? err.message : '未知錯誤'));
+        }
+    }
+
+    function runNativeBrowserPrint(assets) {
+        if (!assets || assets.length === 0) return;
+        const printWindow = window.open('', '_blank', 'width=960,height=720');
+        if (!printWindow) {
+            showAlert('瀏覽器阻擋了列印視窗，請允許彈出視窗後再試一次。', '無法開啟列印視窗');
+            return;
+        }
+
+        const doc = printWindow.document;
+        doc.open();
+        doc.write(buildNativePrintDocument(assets));
+        doc.close();
+        try { printWindow.focus(); } catch (e) { /* ignore */ }
+    }
+
+    // =========================================================
+    // 預覽（使用同一個 label template 的快照）
+    // =========================================================
+    function openPreview() {
+        if (state.selected.size === 0) return;
+        const firstSelected = state.filtered.find(a => state.selected.has(String(a.assetId)))
+            || state.assets.find(a => state.selected.has(String(a.assetId)));
+        if (!firstSelected) return;
+
+        const wrap = $('preview-label');
+        wrap.innerHTML = '';
+        wrap.appendChild(createFilledLabelNode(firstSelected, 'label-html2canvas'));
+
+        openModal('previewModal');
+    }
+
+    // =========================================================
+    // 事件綁定
+    // =========================================================
+    function bindEvents() {
+        // 初始化多選下拉元件
+        initMultiSelects();
+
+        // 全文搜尋
+        $('f-search').addEventListener('input', debounce((e) => {
+            state.filters.search = e.target.value.trim();
+            applyFilters();
+        }, 180));
+
+        // 清除所有篩選
+        $('clearFiltersBtn').addEventListener('click', () => {
+            state.filters.search = '';
+            MS_CONFIGS.forEach(c => state.filters[c.field].clear());
+            $('f-search').value = '';
+            Object.values(multiSelects).forEach(ms => ms.refresh());
+            renderActiveFilters();
+            applyFilters();
+        });
+
+        // 每頁筆數
+        $('pageSizeSelect').addEventListener('change', (e) => {
+            state.pageSize = parseInt(e.target.value, 10) || 50;
+            state.page = 1;
+            renderTable();
+        });
+
+        // 底部工具
+        $('clearSelectionBtn').addEventListener('click', () => {
+            state.selected.clear();
+            renderTable();
+        });
+        $('printBtn').addEventListener('click', () => {
+            if (state.selected.size === 0) return;
+            openPrintMethodModal(getOrderedAssetsForSelection());
+        });
+        $('previewBtn').addEventListener('click', openPreview);
+        $('printMethodHtml2CanvasBtn').addEventListener('click', async () => {
+            const assets = getPendingPrintAssets();
+            closeModal('printMethodModal');
+            await runHtml2CanvasPrint(assets);
+        });
+        $('printMethodNativeBtn').addEventListener('click', () => {
+            const assets = getPendingPrintAssets();
+            closeModal('printMethodModal');
+            runNativeBrowserPrint(assets);
+        });
+
+        // 關閉 modal：背景點擊關閉
+        document.querySelectorAll('.modal-backdrop').forEach(m => {
+            m.addEventListener('click', (e) => {
+                if (e.target === m) closeModal(m.id);
+            });
+        });
+    }
+
+    // =========================================================
+    // Boot
+    // =========================================================
+    // 取得部署 URL 並設到「返回資產管理」連結（sandbox iframe 內相對 URL 不可靠）
+    function wireBackLink() {
+        const link = $('backToHomeLink');
+        if (!link) return;
+        google.script.run
+            .withSuccessHandler((url) => {
+                if (url) link.setAttribute('href', url);
+            })
+            .withFailureHandler(() => { /* 保留 href="#"，點擊無作用總比跳錯頁好 */ })
+            .getAppUrl();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        bindEvents();
+        wireBackLink();
+        loadData();
+    });
+})();
+</script>
+
+</body>
+</html>

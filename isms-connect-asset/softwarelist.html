@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>軟體清冊管理</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    (function() {
+      var originalWarn = console.warn;
+      console.warn = function() {
+        if (typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') >= 0) return;
+        originalWarn.apply(console, arguments);
+      };
+    })();
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --ink-900: #0f172a;
+      --ink-700: #334155;
+      --ink-500: #64748b;
+      --ink-300: #cbd5e1;
+      --surface: #ffffff;
+      --bg-soft: #f8fafc;
+      --accent-500: #7c3aed;
+      --accent-600: #6d28d9;
+      --accent-50: #f5f3ff;
+      --border: #e2e8f0;
+    }
+
+    body {
+      font-family: "Noto Sans TC", sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #ede9fe 50%, #e2e8f0 100%);
+      min-height: 100vh;
+      color: var(--ink-900);
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+      border: 1px solid var(--border);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      color: white;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3); }
+
+    .btn-secondary {
+      background: white;
+      color: var(--ink-700);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .btn-secondary:hover { background: var(--bg-soft); border-color: var(--ink-300); }
+
+    .stat-card {
+      background: white;
+      border-radius: 14px;
+      padding: 20px 22px;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0;
+      width: 4px; height: 100%;
+      background: var(--accent-color, var(--accent-500));
+    }
+    .stat-card .label { font-size: 13px; color: var(--ink-500); font-weight: 500; margin-bottom: 6px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; color: var(--ink-900); line-height: 1.1; }
+    .stat-card .icon { position: absolute; right: 18px; top: 18px; opacity: 0.15; font-size: 36px; color: var(--accent-color, var(--accent-500)); }
+
+    .field {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 14px;
+      color: var(--ink-900);
+      outline: none;
+      transition: all 0.15s;
+      width: 100%;
+    }
+    .field:focus { border-color: var(--accent-500); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15); }
+
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    /* 表格 */
+    .data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .data-table thead th {
+      background: #f8fafc;
+      padding: 12px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-500);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .data-table thead th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .data-table thead th.sortable:hover {
+      background: #eef2ff;
+      color: var(--accent-600);
+    }
+    .data-table tbody tr {
+      transition: background 0.1s;
+    }
+    .data-table tbody tr:hover {
+      background: #faf5ff;
+    }
+    .data-table tbody td {
+      padding: 12px 14px;
+      font-size: 14px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* 骨架載入 */
+    .skeleton {
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 6px;
+      height: 16px;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 14px 20px;
+      border-radius: 10px;
+      color: white;
+      font-weight: 500;
+      font-size: 14px;
+      z-index: 9999;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { background: linear-gradient(135deg, #059669, #047857); }
+    .toast.error { background: linear-gradient(135deg, #dc2626, #b91c1c); }
+    .toast.info { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+
+    /* 手機卡片模式 */
+    .mobile-card {
+      display: none;
+    }
+    @media (max-width: 1024px) {
+      .desktop-table { display: none !important; }
+      .mobile-card { display: block !important; }
+    }
+    @media (min-width: 1025px) {
+      .mobile-card { display: none !important; }
+    }
+
+    .mobile-item {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 4px rgba(15,23,42,0.04);
+    }
+    .mobile-item .item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .mobile-item .item-id {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--accent-600);
+    }
+    .mobile-item .item-name {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+    .mobile-item .item-detail {
+      display: flex;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--ink-500);
+      margin-bottom: 4px;
+    }
+    .mobile-item .item-detail .detail-label {
+      color: var(--ink-300);
+      min-width: 56px;
+    }
+
+    /* 匯出 modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.4);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: white;
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 440px;
+      width: 90%;
+      box-shadow: 0 20px 40px rgba(15,23,42,0.15);
+    }
+
+    /* FAB — 此處僅放空狀態/匯出等非 FAB 樣式,FAB 專屬樣式在下方獨立 <style> 區塊 */
+
+    /* 空狀態 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--ink-500);
+    }
+    .empty-state .empty-icon {
+      font-size: 56px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+    .empty-state .empty-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--ink-700);
+      margin-bottom: 8px;
+    }
+    .empty-state .empty-desc {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-3">
+          <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+            <i class="fa-solid fa-compact-disc text-white text-lg"></i>
+          </span>
+          軟體清冊管理
+        </h1>
+        <p class="text-sm text-slate-500 mt-1 ml-[52px]">Software Inventory Management</p>
+      </div>
+      <div class="flex gap-3 ml-[52px] sm:ml-0">
+        <button class="btn-secondary" onclick="loadData()">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          <span class="hidden sm:inline">重新整理</span>
+        </button>
+        <button class="btn-primary" onclick="openExportModal()">
+          <i class="fa-solid fa-file-export"></i>
+          <span class="hidden sm:inline">匯出</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 統計卡片 -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="statsContainer">
+      <div class="stat-card" style="--accent-color: #7c3aed;">
+        <div class="label">軟體總數</div>
+        <div class="value" id="statTotal">-</div>
+        <div class="icon"><i class="fa-solid fa-box-archive"></i></div>
+      </div>
+      <div class="stat-card" style="--accent-color: #2563eb;">
+        <div class="label">軟體類型數</div>
+        <div class="value" id="statTypes">-</div>
+        <div class="icon"><i class="fa-solid fa-tags"></i></div>
+      </div>
+      <div class="stat-card" style="--accent-color: #059669;">
+        <div class="label">保管單位數</div>
+        <div class="value" id="statUnits">-</div>
+        <div class="icon"><i class="fa-solid fa-building"></i></div>
+      </div>
+      <div class="stat-card" style="--accent-color: #d97706;">
+        <div class="label">顯示筆數</div>
+        <div class="value" id="statFiltered">-</div>
+        <div class="icon"><i class="fa-solid fa-filter"></i></div>
+      </div>
+    </div>
+
+    <!-- 篩選列 -->
+    <div class="card mb-6">
+      <div class="p-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="text" id="searchInput" class="field pl-9" placeholder="搜尋軟體編號、名稱、保管人、使用人...">
+          </div>
+          <select id="filterType" class="field">
+            <option value="">所有軟體類型</option>
+          </select>
+          <select id="filterUnit" class="field">
+            <option value="">所有保管單位</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 資料表格（桌面版） -->
+    <div class="card desktop-table">
+      <div class="overflow-x-auto" style="max-height: 70vh; overflow-y: auto;">
+        <table class="data-table" id="mainTable">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="softwareId">軟體編號 <i class="fa-solid fa-sort text-slate-300 ml-1"></i></th>
+              <th class="sortable" data-sort="softwareName">軟體名稱 <i class="fa-solid fa-sort text-slate-300 ml-1"></i></th>
+              <th class="sortable" data-sort="quantity">數量 <i class="fa-solid fa-sort text-slate-300 ml-1"></i></th>
+              <th>保管單位</th>
+              <th>保管人</th>
+              <th>使用人</th>
+              <th>軟體類型</th>
+              <th>類型代碼</th>
+              <th class="sortable" data-sort="serialNo">編號 <i class="fa-solid fa-sort text-slate-300 ml-1"></i></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 資料卡片（手機版） -->
+    <div class="mobile-card" id="mobileContainer"></div>
+  </div>
+
+  <!-- 匯出 Modal -->
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal-box">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-bold text-slate-900">
+          <i class="fa-solid fa-file-export text-violet-500 mr-2"></i>匯出軟體清冊
+        </h3>
+        <button onclick="closeExportModal()" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="space-y-3 mb-5">
+        <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition" id="exportCsvLabel">
+          <input type="radio" name="exportFormat" value="csv" checked class="accent-violet-600">
+          <i class="fa-solid fa-file-csv text-green-600 text-lg"></i>
+          <div>
+            <div class="font-semibold text-sm">CSV</div>
+            <div class="text-xs text-slate-500">通用格式,可用 Excel 開啟</div>
+          </div>
+        </label>
+        <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition">
+          <input type="radio" name="exportFormat" value="excel" class="accent-violet-600">
+          <i class="fa-solid fa-file-excel text-emerald-600 text-lg"></i>
+          <div>
+            <div class="font-semibold text-sm">Excel (.xlsx)</div>
+            <div class="text-xs text-slate-500">含欄位格式,可直接列印</div>
+          </div>
+        </label>
+      </div>
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-slate-700 mb-1">檔案名稱</label>
+        <input type="text" id="exportFilename" class="field" value="軟體清冊">
+      </div>
+      <div class="flex gap-3 justify-end">
+        <button class="btn-secondary" onclick="closeExportModal()">取消</button>
+        <button class="btn-primary" onclick="doExport()">
+          <i class="fa-solid fa-download"></i> 匯出
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 浮動快速導航按鈕 (FAB) ========== -->
+  <style>
+    /* FAB 容器 */
+    .fab-container {
+      position: fixed;
+      z-index: 9999;
+      bottom: 32px;
+      right: 32px;
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: center;
+      gap: 0;
+      user-select: none;
+      touch-action: none;
+    }
+
+    /* 主按鈕 */
+    .fab-main {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #7c3aed 0%, #2563eb 50%, #7c3aed 100%);
+      background-size: 200% 200%;
+      color: #fff;
+      font-size: 20px;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        0 6px 24px rgba(124, 58, 237, 0.4),
+        0 0 0 0 rgba(37, 99, 235, 0);
+      transition: transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s;
+      position: relative;
+      animation:
+        fabPulse 3s ease-in-out infinite,
+        fabGradient 4s ease infinite;
+    }
+    /* 外圈脈動光環 */
+    .fab-main::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid rgba(124, 58, 237, 0.35);
+      animation: fabRingPulse 3s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .fab-main:hover {
+      box-shadow: 0 8px 30px rgba(124, 58, 237, 0.55);
+    }
+    .fab-main:active {
+      cursor: grabbing;
+    }
+
+    /* 閒置呼吸脈動 */
+    @keyframes fabPulse {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.06); }
+    }
+    /* 漸層緩慢流動 */
+    @keyframes fabGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+    /* 外圈光環擴散 */
+    @keyframes fabRingPulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50%      { opacity: 0; transform: scale(1.25); }
+    }
+
+    /* 圖示本身：閒置緩慢旋轉 */
+    .fab-main .fab-icon-svg {
+      pointer-events: none;
+      transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+      animation: fabIconSpin 8s linear infinite;
+    }
+    @keyframes fabIconSpin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* 展開時：停止所有閒置動畫，圖示轉為 × */
+    .fab-container.open .fab-main {
+      animation: none;
+    }
+    .fab-container.open .fab-main::before {
+      animation: none;
+      opacity: 0;
+    }
+    .fab-container.open .fab-main .fab-icon-svg {
+      animation: none;
+      transform: rotate(180deg);
+    }
+
+    /* 拖曳視覺提示 — 也停止閒置動畫 */
+    .fab-main.dragging {
+      opacity: 0.85;
+      box-shadow: 0 10px 40px rgba(124, 58, 237, 0.5);
+      transform: scale(1.08);
+      animation: none;
+    }
+    .fab-main.dragging::before {
+      animation: none;
+      opacity: 0;
+    }
+    .fab-main.dragging .fab-icon-svg {
+      animation: none;
+    }
+
+    /* 子按鈕容器 */
+    .fab-menu {
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(20px) scale(0.8);
+      transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1);
+    }
+    .fab-container.open .fab-menu {
+      pointer-events: auto;
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    /* 單一子按鈕 */
+    .fab-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      white-space: nowrap;
+      animation: fabItemIn 0.3s both;
+    }
+    .fab-container.open .fab-item:nth-child(1) { animation-delay: 0.04s; }
+    .fab-container.open .fab-item:nth-child(2) { animation-delay: 0.1s; }
+    .fab-container.open .fab-item:nth-child(3) { animation-delay: 0.16s; }
+
+    @keyframes fabItemIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.85); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .fab-item-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .fab-item-btn:hover {
+      transform: scale(1.12);
+      box-shadow: 0 5px 18px rgba(0,0,0,0.25);
+    }
+    .fab-item-label {
+      background: rgba(15, 23, 42, 0.88);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      pointer-events: none;
+    }
+
+    /* 遮罩層 */
+    .fab-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(2px);
+      transition: opacity 0.25s;
+    }
+    .fab-overlay.show {
+      display: block;
+    }
+  </style>
+
+  <!-- 遮罩 -->
+  <div class="fab-overlay" id="fabOverlay"></div>
+
+  <!-- FAB 按鈕群組 -->
+  <div class="fab-container" id="fabContainer">
+    <button class="fab-main" id="fabMain" title="快速導航">
+      <svg class="fab-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12,2 20,7 20,17 12,22 4,17 4,7" />
+        <circle cx="12" cy="12" r="3" />
+        <line x1="12" y1="2" x2="12" y2="9" />
+        <line x1="12" y1="15" x2="12" y2="22" />
+      </svg>
+    </button>
+    <div class="fab-menu" id="fabMenu">
+      <!-- 子按鈕 1：資訊資產清單 -->
+      <a class="fab-item" id="fabLinkIndex" href="#" target="_blank">
+        <span class="fab-item-label">資訊資產清單</span>
+        <span class="fab-item-btn" style="background: linear-gradient(135deg, #2563eb, #1d4ed8);">
+          <i class="fa-solid fa-list-check"></i>
+        </span>
+      </a>
+      <!-- 子按鈕 2：資產對照管理 -->
+      <a class="fab-item" id="fabLinkConnect" href="#" target="_blank">
+        <span class="fab-item-label">資產對照管理</span>
+        <span class="fab-item-btn" style="background: linear-gradient(135deg, #0891b2, #0e7490);">
+          <i class="fa-solid fa-link"></i>
+        </span>
+      </a>
+      <!-- 子按鈕 3：主資產管理系統 -->
+      <a class="fab-item" id="fabLinkMain" href="#" target="_blank">
+        <span class="fab-item-label">主資產管理系統</span>
+        <span class="fab-item-btn" style="background: linear-gradient(135deg, #059669, #047857);">
+          <i class="fa-solid fa-building"></i>
+        </span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ==========================================
+    // State
+    // ==========================================
+    var state = {
+      all: [],
+      filtered: [],
+      sortKey: null,
+      sortDir: 'asc',
+      dropdownTypes: [],
+      dropdownUnits: []
+    };
+
+    // 軟體類型配色
+    var TYPE_COLORS = {
+      '系統軟體': { bg: '#ede9fe', color: '#6d28d9' },
+      '應用軟體': { bg: '#dbeafe', color: '#1d4ed8' },
+      '工具軟體': { bg: '#dcfce7', color: '#15803d' },
+      '安全軟體': { bg: '#fee2e2', color: '#b91c1c' },
+      '開發工具': { bg: '#fef3c7', color: '#b45309' },
+      '資料庫軟體': { bg: '#e0f2fe', color: '#0369a1' },
+      '多媒體軟體': { bg: '#fce7f3', color: '#be185d' }
+    };
+    var DEFAULT_TYPE_COLORS = [
+      { bg: '#f0fdf4', color: '#166534' },
+      { bg: '#fff7ed', color: '#9a3412' },
+      { bg: '#fdf4ff', color: '#86198f' },
+      { bg: '#f0f9ff', color: '#075985' },
+      { bg: '#fefce8', color: '#854d0e' },
+      { bg: '#faf5ff', color: '#7e22ce' }
+    ];
+    var typeColorIndex = 0;
+
+    function getTypeColor(type) {
+      if (!type) return { bg: '#f1f5f9', color: '#64748b' };
+      if (TYPE_COLORS[type]) return TYPE_COLORS[type];
+      var c = DEFAULT_TYPE_COLORS[typeColorIndex % DEFAULT_TYPE_COLORS.length];
+      TYPE_COLORS[type] = c;
+      typeColorIndex++;
+      return c;
+    }
+
+    // ==========================================
+    // Init
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', function() {
+      loadData();
+      setupSearch();
+      setupSort();
+      loadFab();
+    });
+
+    function loadData() {
+      showSkeleton();
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.success) {
+            state.all = res.data;
+            updateStats();
+            loadDropdowns();
+            applyFilters();
+          } else {
+            showToast(res.error || '載入失敗', 'error');
+            clearSkeleton();
+          }
+        })
+        .withFailureHandler(function(err) {
+          showToast('載入錯誤: ' + err.message, 'error');
+          clearSkeleton();
+        })
+        .getSoftwareList({});
+    }
+
+    function loadDropdowns() {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.success) {
+            state.dropdownTypes = res.types;
+            state.dropdownUnits = res.units;
+            populateDropdowns();
+          }
+        })
+        .withFailureHandler(function() {})
+        .getSoftwareDropdownOptions();
+    }
+
+    function populateDropdowns() {
+      var typeSelect = document.getElementById('filterType');
+      var unitSelect = document.getElementById('filterUnit');
+      var currentType = typeSelect.value;
+      var currentUnit = unitSelect.value;
+
+      // 保留第一個 option
+      typeSelect.innerHTML = '<option value="">所有軟體類型</option>';
+      unitSelect.innerHTML = '<option value="">所有保管單位</option>';
+
+      state.dropdownTypes.forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        typeSelect.appendChild(opt);
+      });
+      state.dropdownUnits.forEach(function(u) {
+        var opt = document.createElement('option');
+        opt.value = u;
+        opt.textContent = u;
+        unitSelect.appendChild(opt);
+      });
+
+      typeSelect.value = currentType;
+      unitSelect.value = currentUnit;
+    }
+
+    // ==========================================
+    // 搜尋與篩選
+    // ==========================================
+    function setupSearch() {
+      var timer = null;
+      var searchInput = document.getElementById('searchInput');
+      var filterType = document.getElementById('filterType');
+      var filterUnit = document.getElementById('filterUnit');
+
+      searchInput.addEventListener('input', function() {
+        clearTimeout(timer);
+        timer = setTimeout(applyFilters, 300);
+      });
+      filterType.addEventListener('change', applyFilters);
+      filterUnit.addEventListener('change', applyFilters);
+    }
+
+    function applyFilters() {
+      var keyword = document.getElementById('searchInput').value.toLowerCase().trim();
+      var type = document.getElementById('filterType').value;
+      var unit = document.getElementById('filterUnit').value;
+
+      var filtered = state.all;
+
+      if (keyword) {
+        filtered = filtered.filter(function(item) {
+          return item.softwareId.toLowerCase().indexOf(keyword) >= 0 ||
+                 item.softwareName.toLowerCase().indexOf(keyword) >= 0 ||
+                 item.custodian.toLowerCase().indexOf(keyword) >= 0 ||
+                 item.user.toLowerCase().indexOf(keyword) >= 0 ||
+                 item.serialNo.toLowerCase().indexOf(keyword) >= 0;
+        });
+      }
+      if (type) {
+        filtered = filtered.filter(function(item) { return item.softwareType === type; });
+      }
+      if (unit) {
+        filtered = filtered.filter(function(item) { return item.custodyUnit === unit; });
+      }
+
+      state.filtered = filtered;
+
+      // 套用排序
+      if (state.sortKey) {
+        sortData(state.sortKey, false);
+      }
+
+      document.getElementById('statFiltered').textContent = filtered.length;
+      renderTable();
+      renderMobileCards();
+    }
+
+    // ==========================================
+    // 排序
+    // ==========================================
+    function setupSort() {
+      var ths = document.querySelectorAll('.sortable');
+      ths.forEach(function(th) {
+        th.addEventListener('click', function() {
+          sortData(th.getAttribute('data-sort'), true);
+        });
+      });
+    }
+
+    function sortData(key, toggle) {
+      if (toggle) {
+        if (state.sortKey === key) {
+          state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.sortKey = key;
+          state.sortDir = 'asc';
+        }
+      }
+
+      state.filtered.sort(function(a, b) {
+        var va = a[key] || '';
+        var vb = b[key] || '';
+        // 數字比較
+        if (key === 'quantity') {
+          va = Number(va) || 0;
+          vb = Number(vb) || 0;
+        }
+        var cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'zh-TW');
+        return state.sortDir === 'asc' ? cmp : -cmp;
+      });
+
+      // 更新表頭圖示
+      document.querySelectorAll('.sortable i').forEach(function(icon) {
+        icon.className = 'fa-solid fa-sort text-slate-300 ml-1';
+      });
+      var activeHeader = document.querySelector('.sortable[data-sort="' + state.sortKey + '"] i');
+      if (activeHeader) {
+        activeHeader.className = 'fa-solid fa-sort-' + (state.sortDir === 'asc' ? 'up' : 'down') + ' text-violet-500 ml-1';
+      }
+
+      renderTable();
+      renderMobileCards();
+    }
+
+    // ==========================================
+    // 渲染
+    // ==========================================
+    function updateStats() {
+      document.getElementById('statTotal').textContent = state.all.length;
+
+      var typeSet = {};
+      var unitSet = {};
+      state.all.forEach(function(item) {
+        if (item.softwareType) typeSet[item.softwareType] = true;
+        if (item.custodyUnit) unitSet[item.custodyUnit] = true;
+      });
+      document.getElementById('statTypes').textContent = Object.keys(typeSet).length;
+      document.getElementById('statUnits').textContent = Object.keys(unitSet).length;
+      document.getElementById('statFiltered').textContent = state.all.length;
+    }
+
+    function renderTable() {
+      var tbody = document.getElementById('tableBody');
+      if (state.filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9">' +
+          '<div class="empty-state">' +
+          '<div class="empty-icon"><i class="fa-solid fa-box-open"></i></div>' +
+          '<div class="empty-title">沒有找到軟體資料</div>' +
+          '<div class="empty-desc">請調整篩選條件或確認工作表中有資料</div>' +
+          '</div></td></tr>';
+        return;
+      }
+
+      var html = '';
+      state.filtered.forEach(function(item) {
+        var tc = getTypeColor(item.softwareType);
+        html += '<tr>' +
+          '<td><span class="font-semibold text-violet-700">' + esc(item.softwareId) + '</span></td>' +
+          '<td><span class="font-medium">' + esc(item.softwareName) + '</span></td>' +
+          '<td class="text-center"><span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 font-bold text-sm">' + esc(item.quantity) + '</span></td>' +
+          '<td>' + esc(item.custodyUnit) + '</td>' +
+          '<td>' + esc(item.custodian) + '</td>' +
+          '<td>' + esc(item.user) + '</td>' +
+          '<td><span class="type-badge" style="background:' + tc.bg + ';color:' + tc.color + ';">' + esc(item.softwareType || '-') + '</span></td>' +
+          '<td><span class="text-xs font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded">' + esc(item.typeCode) + '</span></td>' +
+          '<td><span class="font-mono text-sm">' + esc(item.serialNo) + '</span></td>' +
+          '</tr>';
+      });
+      tbody.innerHTML = html;
+    }
+
+    function renderMobileCards() {
+      var container = document.getElementById('mobileContainer');
+      if (state.filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state">' +
+          '<div class="empty-icon"><i class="fa-solid fa-box-open"></i></div>' +
+          '<div class="empty-title">沒有找到軟體資料</div>' +
+          '<div class="empty-desc">請調整篩選條件或確認工作表中有資料</div>' +
+          '</div>';
+        return;
+      }
+
+      var html = '';
+      state.filtered.forEach(function(item) {
+        var tc = getTypeColor(item.softwareType);
+        html += '<div class="mobile-item">' +
+          '<div class="item-header">' +
+            '<span class="item-id">' + esc(item.softwareId) + '</span>' +
+            '<span class="type-badge" style="background:' + tc.bg + ';color:' + tc.color + ';">' + esc(item.softwareType || '-') + '</span>' +
+          '</div>' +
+          '<div class="item-name">' + esc(item.softwareName) + '</div>' +
+          '<div class="item-detail"><span class="detail-label">數量</span>' + esc(item.quantity) + '</div>' +
+          '<div class="item-detail"><span class="detail-label">保管單位</span>' + esc(item.custodyUnit) + '</div>' +
+          '<div class="item-detail"><span class="detail-label">保管人</span>' + esc(item.custodian) + '</div>' +
+          '<div class="item-detail"><span class="detail-label">使用人</span>' + esc(item.user) + '</div>' +
+          '<div class="item-detail"><span class="detail-label">代碼</span><span class="font-mono text-xs">' + esc(item.typeCode) + '</span></div>' +
+          '<div class="item-detail"><span class="detail-label">編號</span><span class="font-mono text-xs">' + esc(item.serialNo) + '</span></div>' +
+          '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    // ==========================================
+    // 骨架載入
+    // ==========================================
+    function showSkeleton() {
+      var tbody = document.getElementById('tableBody');
+      var rows = '';
+      for (var i = 0; i < 8; i++) {
+        rows += '<tr>';
+        for (var j = 0; j < 9; j++) {
+          var w = [100, 140, 40, 80, 60, 60, 80, 50, 60][j];
+          rows += '<td><div class="skeleton" style="width:' + w + 'px;"></div></td>';
+        }
+        rows += '</tr>';
+      }
+      tbody.innerHTML = rows;
+
+      var mobileHtml = '';
+      for (var k = 0; k < 4; k++) {
+        mobileHtml += '<div class="mobile-item"><div class="skeleton" style="width:60%;height:20px;margin-bottom:8px;"></div>' +
+          '<div class="skeleton" style="width:80%;height:16px;margin-bottom:6px;"></div>' +
+          '<div class="skeleton" style="width:50%;height:14px;"></div></div>';
+      }
+      document.getElementById('mobileContainer').innerHTML = mobileHtml;
+    }
+
+    function clearSkeleton() {
+      document.getElementById('tableBody').innerHTML = '';
+      document.getElementById('mobileContainer').innerHTML = '';
+    }
+
+    // ==========================================
+    // 匯出
+    // ==========================================
+    function openExportModal() {
+      document.getElementById('exportModal').classList.add('active');
+    }
+    function closeExportModal() {
+      document.getElementById('exportModal').classList.remove('active');
+    }
+
+    function doExport() {
+      var format = document.querySelector('input[name="exportFormat"]:checked').value;
+      var filename = document.getElementById('exportFilename').value.trim() || '軟體清冊';
+      var data = state.filtered;
+
+      if (data.length === 0) {
+        showToast('沒有可匯出的資料', 'error');
+        return;
+      }
+
+      var headers = ['軟體編號', '軟體名稱', '數量', '保管單位', '保管人', '使用人', '軟體類型', '類型代碼', '編號'];
+      var rows = data.map(function(item) {
+        return [item.softwareId, item.softwareName, item.quantity, item.custodyUnit,
+                item.custodian, item.user, item.softwareType, item.typeCode, item.serialNo];
+      });
+
+      if (format === 'csv') {
+        var csvContent = [headers].concat(rows)
+          .map(function(row) {
+            return row.map(function(cell) { return '"' + String(cell || '').replace(/"/g, '""') + '"'; }).join(',');
+          }).join('\n');
+        var bom = '\uFEFF';
+        var blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+        downloadBlob(blob, filename + '.csv');
+      } else {
+        // Excel
+        var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
+        ws['!cols'] = [
+          { wch: 14 }, { wch: 28 }, { wch: 8 }, { wch: 14 },
+          { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 14 }
+        ];
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '軟體清冊');
+        XLSX.writeFile(wb, filename + '.xlsx');
+      }
+
+      showToast('匯出成功！', 'success');
+      closeExportModal();
+    }
+
+    function downloadBlob(blob, filename) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // ==========================================
+    // FAB（拖曳 + 動畫）
+    // ==========================================
+    function loadFab() {
+      google.script.run
+        .withSuccessHandler(function(urls) {
+          var baseUrl = urls.connectUrl ? urls.connectUrl.replace('?page=connect', '') : '#';
+          if (urls.connectUrl)  document.getElementById('fabLinkConnect').href = urls.connectUrl;
+          if (urls.mainAppUrl)  document.getElementById('fabLinkMain').href = urls.mainAppUrl;
+          document.getElementById('fabLinkIndex').href = baseUrl;
+        })
+        .withFailureHandler(function() {})
+        .getFabNavigationUrls();
+
+      // ===== FAB 開關 =====
+      var container = document.getElementById('fabContainer');
+      var mainBtn   = document.getElementById('fabMain');
+      var overlay   = document.getElementById('fabOverlay');
+      var isOpen    = false;
+
+      function toggleFab() {
+        isOpen = !isOpen;
+        container.classList.toggle('open', isOpen);
+        overlay.classList.toggle('show', isOpen);
+      }
+      function closeFab() {
+        if (!isOpen) return;
+        isOpen = false;
+        container.classList.remove('open');
+        overlay.classList.remove('show');
+      }
+
+      overlay.addEventListener('click', closeFab);
+
+      // ===== 拖曳功能 =====
+      var isDragging = false;
+      var hasMoved   = false;
+      var startX, startY, origX, origY;
+      var DRAG_THRESHOLD = 6;
+
+      function onPointerDown(e) {
+        if (e.target.closest('.fab-menu')) return;
+        e.preventDefault();
+        var t = e.touches ? e.touches[0] : e;
+        startX = t.clientX;
+        startY = t.clientY;
+        origX = container.offsetLeft || (window.innerWidth - container.offsetWidth - 32);
+        origY = container.offsetTop  || (window.innerHeight - container.offsetHeight - 32);
+        container.style.left   = origX + 'px';
+        container.style.top    = origY + 'px';
+        container.style.right  = 'auto';
+        container.style.bottom = 'auto';
+        isDragging = true;
+        hasMoved   = false;
+      }
+
+      function onPointerMove(e) {
+        if (!isDragging) return;
+        var t = e.touches ? e.touches[0] : e;
+        var dx = t.clientX - startX;
+        var dy = t.clientY - startY;
+        if (!hasMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        hasMoved = true;
+        mainBtn.classList.add('dragging');
+        closeFab();
+
+        var newX = origX + dx;
+        var newY = origY + dy;
+        var maxX = window.innerWidth  - container.offsetWidth;
+        var maxY = window.innerHeight - container.offsetHeight;
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+
+        container.style.left = newX + 'px';
+        container.style.top  = newY + 'px';
+      }
+
+      function onPointerUp() {
+        if (!isDragging) return;
+        isDragging = false;
+        mainBtn.classList.remove('dragging');
+        if (!hasMoved) {
+          toggleFab();
+        }
+      }
+
+      // 桌面
+      mainBtn.addEventListener('mousedown', onPointerDown);
+      document.addEventListener('mousemove', onPointerMove);
+      document.addEventListener('mouseup',   onPointerUp);
+      // 行動裝置
+      mainBtn.addEventListener('touchstart', onPointerDown, { passive: false });
+      document.addEventListener('touchmove',  onPointerMove, { passive: false });
+      document.addEventListener('touchend',   onPointerUp);
+
+      // 子按鈕點擊後自動收合
+      document.querySelectorAll('.fab-item').forEach(function(link) {
+        link.addEventListener('click', function() {
+          setTimeout(closeFab, 150);
+        });
+      });
+    }
+
+    // ==========================================
+    // 工具函式
+    // ==========================================
+    function esc(str) {
+      if (!str) return '';
+      var div = document.createElement('div');
+      div.textContent = String(str);
+      return div.innerHTML;
+    }
+
+    function showToast(message, type) {
+      type = type || 'info';
+      var toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast ' + type;
+      setTimeout(function() { toast.classList.add('show'); }, 10);
+      setTimeout(function() { toast.classList.remove('show'); }, 2500);
+    }
+  </script>
+</body>
+</html>

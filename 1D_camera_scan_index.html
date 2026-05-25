@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>條碼掃描器</title>
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #e8ecf0;
+      min-height: 100dvh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .scanner-card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+      width: 100%;
+      max-width: 440px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 17px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .card-title-icon {
+      width: 32px;
+      height: 32px;
+      background: #e8f0fe;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .card-close {
+      width: 32px;
+      height: 32px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: #4a90e2;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background 0.15s;
+      font-weight: 300;
+    }
+
+    .card-close:hover { background: #f0f4ff; }
+
+    .mode-switch-wrap {
+      padding: 16px 20px 0;
+    }
+
+    .mode-switch {
+      display: inline-flex;
+      width: 100%;
+      padding: 4px;
+      border-radius: 999px;
+      background: #eef2f7;
+      border: 1px solid #d7dee8;
+      gap: 4px;
+    }
+
+    .mode-button {
+      flex: 1;
+      border: none;
+      border-radius: 999px;
+      padding: 11px 14px;
+      background: transparent;
+      color: #475569;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    }
+
+    .mode-button.active {
+      background: #ffffff;
+      color: #0f172a;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+    }
+
+    .camera-wrapper {
+      position: relative;
+      width: 100%;
+      height: 280px;
+      background: #111;
+      overflow: hidden;
+      margin-top: 16px;
+    }
+
+    #scanner-reader {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #shared-video,
+    #freeze-frame,
+    #barcode-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #shared-video,
+    #freeze-frame {
+      object-fit: cover;
+      background: #111;
+    }
+
+    #freeze-frame {
+      display: none;
+      z-index: 2;
+    }
+
+    #barcode-overlay {
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .torch-toggle {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      min-width: 92px;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.58);
+      color: #f8fafc;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      z-index: 5;
+      backdrop-filter: blur(8px);
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .torch-toggle.visible {
+      display: inline-flex;
+    }
+
+    .torch-toggle.active {
+      background: rgba(245, 158, 11, 0.9);
+      border-color: rgba(253, 224, 71, 0.7);
+      color: #1f2937;
+    }
+
+    .torch-toggle:active {
+      transform: translateY(1px);
+    }
+
+    .torch-toggle:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .scan-frame {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: calc(100% - 40px);
+      height: 110px;
+      border: 2px solid rgba(74, 144, 226, 0.9);
+      border-radius: 10px;
+      pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
+      z-index: 4;
+      transition: width 0.2s ease, height 0.2s ease, border-color 0.2s ease, border-radius 0.2s ease;
+    }
+
+    .scan-frame::before,
+    .scan-frame::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-color: #4a90e2;
+      border-style: solid;
+      transition: border-color 0.2s ease;
+    }
+
+    .scan-frame::before {
+      top: -2px;
+      left: -2px;
+      border-width: 3px 0 0 3px;
+      border-radius: 7px 0 0 0;
+    }
+
+    .scan-frame::after {
+      bottom: -2px;
+      right: -2px;
+      border-width: 0 3px 3px 0;
+      border-radius: 0 0 7px 0;
+    }
+
+    .scanner-card.mode-ocr .scan-frame {
+      width: calc(100% - 72px);
+      height: 74px;
+      border-color: rgba(245, 158, 11, 0.95);
+      border-radius: 14px;
+    }
+
+    .scanner-card.mode-ocr .scan-frame::before,
+    .scanner-card.mode-ocr .scan-frame::after {
+      border-color: #f59e0b;
+    }
+
+    .scan-line {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, #e74c3c 40%, #ff6b6b 50%, #e74c3c 60%, transparent 100%);
+      border-radius: 1px;
+      animation: scanLine 1.8s ease-in-out infinite;
+    }
+
+    .scanner-card.mode-ocr .scan-line { display: none; }
+
+    @keyframes scanLine {
+      0% { top: 12%; opacity: 0.9; }
+      50% { top: 82%; opacity: 1; }
+      100% { top: 12%; opacity: 0.9; }
+    }
+
+    .confirm-dots {
+      position: absolute;
+      bottom: -26px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+    }
+
+    .scanner-card.mode-ocr .confirm-dots { display: none; }
+
+    .confirm-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.35);
+      transition: background 0.2s;
+    }
+
+    .confirm-dot.active { background: #4ade80; }
+
+    .camera-hint {
+      position: absolute;
+      bottom: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.76);
+      pointer-events: none;
+      z-index: 4;
+      padding: 0 18px;
+    }
+
+    .ocr-actions {
+      display: none;
+      padding: 18px 20px 0;
+    }
+
+    .scanner-card.mode-ocr .ocr-actions {
+      display: block;
+    }
+
+    .capture-btn {
+      width: 100%;
+      border: none;
+      border-radius: 18px;
+      padding: 18px 20px;
+      background: linear-gradient(135deg, #f97316, #fb923c);
+      color: #ffffff;
+      font-size: 22px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 12px 20px rgba(249, 115, 22, 0.28);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
+    }
+
+    .capture-btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 8px 14px rgba(249, 115, 22, 0.24);
+    }
+
+    .capture-btn:disabled {
+      cursor: wait;
+      opacity: 0.58;
+      box-shadow: none;
+    }
+
+    .ocr-result-panel {
+      display: none;
+      padding: 16px 20px 0;
+    }
+
+    .ocr-result-panel.active { display: block; }
+
+    .ocr-result-card {
+      background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+      border: 1px solid #86efac;
+      border-radius: 18px;
+      padding: 18px 16px;
+      text-align: center;
+      box-shadow: 0 10px 18px rgba(22, 163, 74, 0.12);
+    }
+
+    .ocr-result-label {
+      color: #166534;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    .ocr-result-value {
+      color: #15803d;
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: 0.02em;
+      word-break: break-word;
+    }
+
+    .ocr-result-meta {
+      margin-top: 10px;
+      color: #166534;
+      font-size: 12px;
+    }
+
+    .ocr-result-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .ocr-action-btn {
+      flex: 1;
+      border: none;
+      border-radius: 14px;
+      padding: 13px 14px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .ocr-action-btn--submit {
+      background: #16a34a;
+      color: #ffffff;
+    }
+
+    .ocr-action-btn--rescan {
+      background: #fff7ed;
+      color: #c2410c;
+      border: 1px solid #fdba74;
+    }
+
+    #status {
+      padding: 12px 20px;
+      font-size: 14px;
+      text-align: center;
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-top: 1px solid #f0f0f0;
+      margin-top: 16px;
+    }
+
+    #status.info { color: #555; background: #fafafa; }
+    #status.pending { color: #b45309; background: #fffbeb; }
+    #status.success { color: #166534; background: #dcfce7; }
+    #status.error { color: #991b1b; background: #fee2e2; }
+
+    #fallback {
+      display: none;
+      padding: 24px 20px;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    #fallback p {
+      font-size: 13px;
+      color: #666;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    #manual-input {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 17px;
+      border-radius: 10px;
+      border: 2px solid #d1d5db;
+      background: #f9fafb;
+      color: #111;
+      text-align: center;
+      letter-spacing: 0.5px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #manual-input:focus {
+      border-color: #4a90e2;
+      background: #fff;
+    }
+
+    #submit-btn {
+      width: 100%;
+      padding: 13px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #submit-btn:hover { background: #1d4ed8; }
+
+    #fallback-close {
+      font-size: 13px;
+      color: #9ca3af;
+      cursor: pointer;
+      text-decoration: underline;
+      background: none;
+      border: none;
+      padding: 2px;
+    }
+
+    .hidden-canvas {
+      position: fixed;
+      left: -9999px;
+      top: -9999px;
+      opacity: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="scanner-card mode-barcode" id="scanner-card">
+  <div class="card-header">
+    <div class="card-title">
+      <div class="card-title-icon">📷</div>
+      條碼掃描
+    </div>
+    <button class="card-close" onclick="closeScanner()" aria-label="關閉">✕</button>
+  </div>
+
+  <div class="mode-switch-wrap">
+    <div class="mode-switch" role="tablist" aria-label="掃描模式">
+      <button
+        id="mode-barcode-btn"
+        class="mode-button active"
+        type="button"
+        role="tab"
+        aria-selected="true"
+        onclick="setScanMode('barcode')"
+      >一維條碼</button>
+      <button
+        id="mode-ocr-btn"
+        class="mode-button"
+        type="button"
+        role="tab"
+        aria-selected="false"
+        onclick="setScanMode('ocr')"
+      >數字 OCR</button>
+    </div>
+  </div>
+
+  <div class="camera-wrapper">
+    <div id="scanner-reader">
+      <video id="shared-video" autoplay muted playsinline></video>
+      <canvas id="freeze-frame"></canvas>
+      <canvas id="barcode-overlay"></canvas>
+    </div>
+    <button id="torch-toggle" class="torch-toggle" type="button" aria-pressed="false">補光燈</button>
+    <div class="scan-frame" id="scan-frame">
+      <div class="scan-line"></div>
+      <div class="confirm-dots">
+        <div class="confirm-dot" id="dot-0"></div>
+      </div>
+    </div>
+    <div class="camera-hint" id="camera-hint">將條碼水平對準框內</div>
+  </div>
+
+  <div class="ocr-actions">
+    <button id="ocr-capture-btn" class="capture-btn" type="button">擷取畫面</button>
+  </div>
+
+  <div id="ocr-result-panel" class="ocr-result-panel" aria-live="polite">
+    <div class="ocr-result-card">
+      <div class="ocr-result-label">OCR 辨識結果</div>
+      <div id="ocr-result-value" class="ocr-result-value"></div>
+      <div id="ocr-result-meta" class="ocr-result-meta"></div>
+      <div class="ocr-result-actions">
+        <button id="ocr-submit-btn" class="ocr-action-btn ocr-action-btn--submit" type="button">送出</button>
+        <button id="ocr-rescan-btn" class="ocr-action-btn ocr-action-btn--rescan" type="button">重新掃描</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="status" class="info">
+    <span id="status-text">正在啟動相機...</span>
+  </div>
+
+  <div id="fallback">
+    <p>相機無法使用，請手動輸入或貼上條碼編號，<br>按 Enter 或點擊「確認」送出。</p>
+    <input type="text" id="manual-input" placeholder="輸入條碼..." autocomplete="off" autocorrect="off" spellcheck="false">
+    <button id="submit-btn" onclick="submitManual()">確認送出</button>
+    <button id="fallback-close" onclick="closeScanner()">關閉</button>
+  </div>
+</div>
+
+<canvas id="frame-canvas" class="hidden-canvas"></canvas>
+<canvas id="ocr-canvas" class="hidden-canvas"></canvas>
+<canvas id="ocr-work-canvas" class="hidden-canvas"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  var CONFIRM_NEEDED = 1;
+  var CONFIRM_WINDOW_MS = 250;
+  var MAX_AVG_ERROR = 0.10;
+  var BARCODE_LOOP_DELAY = 220;
+  var BARCODE_MODE = 'barcode';
+  var OCR_MODE = 'ocr';
+  var OCR_WHITELIST = '0123456789AB-';
+  var OCR_CAPTURE_PADDING = 20;
+  var OCR_OUTPUT_PADDING = 56;
+  var OCR_UPSCALE = 4;
+
+  var elements = {};
+  var currentMode = BARCODE_MODE;
+  var pendingMap = {};
+  var stream = null;
+  var videoTrack = null;
+  var streamActive = false;
+  var barcodeTimer = null;
+  var barcodeDecodeBusy = false;
+  var barcodeLoopEnabled = false;
+  var activeRunToken = 0;
+  var isClosing = false;
+  var ocrWorker = null;
+  var ocrWorkerPromise = null;
+  var ocrCaptureBusy = false;
+  var pendingOcrResult = null;
+  var latestPreviewMetrics = null;
+  var torchSupported = false;
+  var torchEnabled = false;
+  var torchBusy = false;
+
+  function cacheElements() {
+    elements.card = document.getElementById('scanner-card');
+    elements.video = document.getElementById('shared-video');
+    elements.reader = document.getElementById('scanner-reader');
+    elements.overlay = document.getElementById('barcode-overlay');
+    elements.overlayCtx = elements.overlay.getContext('2d');
+    elements.freezeFrame = document.getElementById('freeze-frame');
+    elements.freezeCtx = elements.freezeFrame.getContext('2d');
+    elements.scanFrame = document.getElementById('scan-frame');
+    elements.cameraHint = document.getElementById('camera-hint');
+    elements.status = document.getElementById('status');
+    elements.statusText = document.getElementById('status-text');
+    elements.fallback = document.getElementById('fallback');
+    elements.manualInput = document.getElementById('manual-input');
+    elements.cameraWrapper = document.querySelector('.camera-wrapper');
+    elements.modeBarcodeBtn = document.getElementById('mode-barcode-btn');
+    elements.modeOcrBtn = document.getElementById('mode-ocr-btn');
+    elements.ocrCaptureBtn = document.getElementById('ocr-capture-btn');
+    elements.ocrResultPanel = document.getElementById('ocr-result-panel');
+    elements.ocrResultValue = document.getElementById('ocr-result-value');
+    elements.ocrResultMeta = document.getElementById('ocr-result-meta');
+    elements.ocrSubmitBtn = document.getElementById('ocr-submit-btn');
+    elements.ocrRescanBtn = document.getElementById('ocr-rescan-btn');
+    elements.torchToggle = document.getElementById('torch-toggle');
+    elements.frameCanvas = document.getElementById('frame-canvas');
+    elements.frameCtx = elements.frameCanvas.getContext('2d', { willReadFrequently: true });
+    elements.ocrCanvas = document.getElementById('ocr-canvas');
+    elements.ocrCtx = elements.ocrCanvas.getContext('2d', { willReadFrequently: true });
+    elements.ocrWorkCanvas = document.getElementById('ocr-work-canvas');
+    elements.ocrWorkCtx = elements.ocrWorkCanvas.getContext('2d', { willReadFrequently: true });
+  }
+
+  function bindEvents() {
+    elements.manualInput.addEventListener('keypress', function (event) {
+      if (event.key === 'Enter') {
+        window.submitManual();
+      }
+    });
+
+    elements.ocrCaptureBtn.addEventListener('click', handleOcrCapture);
+    elements.ocrSubmitBtn.addEventListener('click', submitPendingOcrResult);
+    elements.ocrRescanBtn.addEventListener('click', resetOcrReviewState);
+    elements.torchToggle.addEventListener('click', toggleTorch);
+
+    window.addEventListener('resize', refreshOverlaySize);
+    window.addEventListener('beforeunload', cleanupApp);
+    window.addEventListener('pagehide', cleanupApp);
+  }
+
+  function setStatus(type, text) {
+    elements.status.className = type;
+    elements.statusText.textContent = text;
+  }
+
+  function resetConfirmState() {
+    pendingMap = {};
+    updateConfirmDots(0);
+  }
+
+  function updateConfirmDots(count) {
+    for (var i = 0; i < CONFIRM_NEEDED; i++) {
+      var dot = document.getElementById('dot-' + i);
+      if (dot) {
+        dot.className = 'confirm-dot' + (i < count ? ' active' : '');
+      }
+    }
+  }
+
+  function normalizeAssetCode(value) {
+    if (!value) return '';
+    return toHalfWidth(String(value))
+      .toUpperCase()
+      .replace(/\s+/g, '')
+      .replace(/[^0-9A-Z-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+
+  function formatBarcode(barcode) {
+    if (!barcode) return '';
+    var clean = normalizeAssetCode(barcode);
+
+    if (/^\d{20}$/.test(clean)) {
+      clean = clean.substring(2);
+    }
+
+    if (/^\d{10}[0-9AB]\d{7}$/.test(clean)) {
+      return clean.substring(0, 7) + '-' +
+             clean.substring(7, 11) + '-' +
+             clean.substring(11);
+    }
+
+    if (/^\d{7}-\d{3}[0-9AB]-\d{7}$/.test(clean)) return clean;
+    if (/^\d{5}-\d{4}$/.test(clean)) return clean;
+    if (/^\d{5}-\d{3}[AB]$/.test(clean)) return clean;
+
+    return clean;
+  }
+
+  function canonicalizeOcrText(text) {
+    var clean = normalizeAssetCode(text);
+    var hyphenatedLongMatch;
+    var compactLongMatch;
+    if (!clean) return '';
+
+    if (/^\d{7}-\d{3}[0-9AB]-\d{7}$/.test(clean)) return clean;
+    hyphenatedLongMatch = clean.match(/^(\d{7})-(\d{3}[0-9AB])-([0-9A-Z]{8,})$/);
+    if (hyphenatedLongMatch) {
+      return hyphenatedLongMatch[1] + '-' + hyphenatedLongMatch[2] + '-' + hyphenatedLongMatch[3].substring(0, 7);
+    }
+    if (/^\d{5}-\d{4}$/.test(clean)) return clean;
+    if (/^\d{5}-\d{3}[AB]$/.test(clean)) return clean;
+
+    var compact = clean.replace(/-/g, '');
+
+    if (/^\d{10}[0-9AB]\d{7}$/.test(compact)) {
+      return compact.substring(0, 7) + '-' +
+             compact.substring(7, 11) + '-' +
+             compact.substring(11);
+    }
+
+    compactLongMatch = compact.match(/^(\d{7})(\d{3}[0-9AB])([0-9A-Z]{8,})$/);
+    if (compactLongMatch) {
+      return compactLongMatch[1] + '-' +
+             compactLongMatch[2] + '-' +
+             compactLongMatch[3].substring(0, 7);
+    }
+
+    if (/^\d{9}$/.test(compact)) {
+      return compact.substring(0, 5) + '-' + compact.substring(5);
+    }
+
+    if (/^\d{8}[AB]$/.test(compact)) {
+      return compact.substring(0, 5) + '-' + compact.substring(5);
+    }
+
+    return '';
+  }
+
+  function toHalfWidth(value) {
+    return String(value || '').replace(/[\uFF01-\uFF5E]/g, function (char) {
+      return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+    }).replace(/\u3000/g, ' ');
+  }
+
+  function sendResult(rawCode) {
+    var normalizedRaw = normalizeAssetCode(rawCode);
+    var formatted = formatBarcode(normalizedRaw);
+    var message = {
+      type: 'BARCODE_SCANNED',
+      barcode: formatted,
+      raw: normalizedRaw,
+      source: 'github-pages-scanner',
+      timestamp: Date.now()
+    };
+
+    setStatus('success', '✓ 已掃描：' + formatted);
+    resetConfirmState();
+    stopBarcodeLoop();
+    clearOverlay();
+
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage(message, '*');
+      setTimeout(function () {
+        closeScanner();
+      }, 1200);
+    } else {
+      showFallback(normalizedRaw);
+    }
+  }
+
+  function closeScanner() {
+    cleanupApp();
+    window.close();
+  }
+
+  window.closeScanner = closeScanner;
+
+  function showFallback(prefilledCode) {
+    stopBarcodeLoop();
+    clearOverlay();
+    hideFreezeFrame();
+    stopSharedCamera();
+    elements.cameraWrapper.style.display = 'none';
+    elements.modeBarcodeBtn.disabled = true;
+    elements.modeOcrBtn.disabled = true;
+    elements.ocrCaptureBtn.disabled = true;
+    elements.card.classList.remove('mode-ocr', 'mode-barcode');
+    elements.ocrResultPanel.classList.remove('active');
+    elements.fallback.style.display = 'flex';
+    if (prefilledCode) {
+      elements.manualInput.value = prefilledCode;
+    }
+    setTimeout(function () {
+      elements.manualInput.focus();
+    }, 100);
+  }
+
+  window.submitManual = function () {
+    var code = elements.manualInput.value.trim();
+    if (!code) return;
+    sendResult(code);
+  };
+
+  async function initializeApp() {
+    cacheElements();
+    bindEvents();
+    updateModeUi();
+
+    try {
+      await startSharedCamera();
+      applyMode(currentMode);
+    } catch (error) {
+      console.error('[Scanner] 初始化相機失敗:', error);
+      setStatus('error', '相機啟動失敗，請手動輸入');
+      showFallback();
+    }
+  }
+
+  async function startSharedCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('getUserMedia not supported');
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { min: 640, ideal: 1280 },
+        height: { min: 480, ideal: 720 },
+        facingMode: { ideal: 'environment' }
+      },
+      audio: false
+    });
+
+    elements.video.srcObject = stream;
+    videoTrack = stream.getVideoTracks()[0] || null;
+    await waitForVideoReady(elements.video);
+    streamActive = true;
+    refreshOverlaySize();
+    detectTorchSupport();
+    setStatus('info', '掃描器運作中，請將條碼對準框內...');
+  }
+
+  function waitForVideoReady(video) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+
+      function cleanup() {
+        video.removeEventListener('loadedmetadata', onReady);
+        video.removeEventListener('canplay', onReady);
+        video.removeEventListener('error', onError);
+      }
+
+      function onReady() {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        video.play().then(function () {
+          resolve();
+        }).catch(reject);
+      }
+
+      function onError(error) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error || new Error('video load error'));
+      }
+
+      if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+        onReady();
+        return;
+      }
+
+      video.addEventListener('loadedmetadata', onReady, { once: true });
+      video.addEventListener('canplay', onReady, { once: true });
+      video.addEventListener('error', onError, { once: true });
+    });
+  }
+
+  function refreshOverlaySize() {
+    if (!elements.reader || !elements.overlay) return;
+    elements.overlay.width = elements.reader.clientWidth;
+    elements.overlay.height = elements.reader.clientHeight;
+  }
+
+  function setScanMode(mode) {
+    if (mode !== BARCODE_MODE && mode !== OCR_MODE) return;
+    if (currentMode === mode && !pendingOcrResult) return;
+    currentMode = mode;
+    activeRunToken++;
+    applyMode(mode);
+  }
+
+  window.setScanMode = setScanMode;
+
+  function applyMode(mode) {
+    resetConfirmState();
+    clearOverlay();
+    hideFreezeFrame();
+    pendingOcrResult = null;
+    elements.ocrResultPanel.classList.remove('active');
+
+    if (mode === OCR_MODE) {
+      stopBarcodeLoop();
+      updateModeUi();
+      prepareOcrMode(activeRunToken);
+    } else {
+      updateModeUi();
+      setStatus('info', '掃描器運作中，請將條碼對準框內...');
+      startBarcodeLoop();
+    }
+  }
+
+  function updateModeUi() {
+    var isOcrMode = currentMode === OCR_MODE;
+    elements.card.classList.toggle('mode-ocr', isOcrMode);
+    elements.card.classList.toggle('mode-barcode', !isOcrMode);
+    elements.modeBarcodeBtn.classList.toggle('active', !isOcrMode);
+    elements.modeBarcodeBtn.setAttribute('aria-selected', String(!isOcrMode));
+    elements.modeOcrBtn.classList.toggle('active', isOcrMode);
+    elements.modeOcrBtn.setAttribute('aria-selected', String(isOcrMode));
+    elements.cameraHint.textContent = isOcrMode
+      ? '將編號置中對準黃框後，點擊下方按鈕手動拍攝'
+      : '將條碼水平對準框內';
+    updateTorchUi();
+    updateOcrActionState();
+  }
+
+  function updateOcrActionState() {
+    var isOcrMode = currentMode === OCR_MODE;
+    var hasReviewResult = !!pendingOcrResult;
+    elements.ocrCaptureBtn.style.display = isOcrMode && !hasReviewResult ? 'block' : 'none';
+    elements.ocrResultPanel.classList.toggle('active', isOcrMode && hasReviewResult);
+  }
+
+  function startBarcodeLoop() {
+    if (!streamActive) return;
+    if (currentMode !== BARCODE_MODE) return;
+    barcodeLoopEnabled = true;
+    scheduleBarcodeLoop(60);
+  }
+
+  function stopBarcodeLoop() {
+    barcodeLoopEnabled = false;
+    barcodeDecodeBusy = false;
+    if (barcodeTimer) {
+      clearTimeout(barcodeTimer);
+      barcodeTimer = null;
+    }
+  }
+
+  function scheduleBarcodeLoop(delay) {
+    if (!barcodeLoopEnabled || currentMode !== BARCODE_MODE) return;
+    if (barcodeTimer) clearTimeout(barcodeTimer);
+    barcodeTimer = setTimeout(runBarcodeDecode, delay || BARCODE_LOOP_DELAY);
+  }
+
+  function runBarcodeDecode() {
+    if (!barcodeLoopEnabled || currentMode !== BARCODE_MODE || !streamActive) return;
+    if (barcodeDecodeBusy || elements.video.readyState < 2 || elements.video.videoWidth === 0) {
+      scheduleBarcodeLoop(BARCODE_LOOP_DELAY);
+      return;
+    }
+    if (document.hidden) {
+      scheduleBarcodeLoop(350);
+      return;
+    }
+
+    barcodeDecodeBusy = true;
+    var capture = captureVideoFrame(elements.frameCanvas, elements.frameCtx, { maxWidth: 1280 });
+    var imageSource = capture.dataUrl;
+    var loopToken = activeRunToken;
+
+    Quagga.decodeSingle({
+      src: imageSource,
+      numOfWorkers: 0,
+      inputStream: {
+        size: capture.width
+      },
+      locator: {
+        patchSize: 'large',
+        halfSample: false
+      },
+      locate: true,
+      decoder: {
+        readers: [
+          'code_128_reader',
+          'ean_reader',
+          'code_39_reader'
+        ],
+        multiple: false
+      }
+    }, function (result) {
+      barcodeDecodeBusy = false;
+      if (!barcodeLoopEnabled || currentMode !== BARCODE_MODE || loopToken !== activeRunToken) return;
+      handleBarcodeResult(result, capture.width, capture.height);
+      scheduleBarcodeLoop(BARCODE_LOOP_DELAY);
+    });
+  }
+
+  function handleBarcodeResult(result, sourceWidth, sourceHeight) {
+    drawBarcodeOverlay(result, sourceWidth, sourceHeight);
+    if (!result || !result.codeResult || !result.codeResult.code) {
+      return;
+    }
+
+    var rawCode = String(result.codeResult.code || '').trim();
+    if (!rawCode) return;
+
+    var decodedCodes = result.codeResult.decodedCodes;
+    if (decodedCodes && decodedCodes.length > 0) {
+      var errValues = decodedCodes
+        .filter(function (entry) {
+          return typeof entry.error !== 'undefined';
+        })
+        .map(function (entry) {
+          return entry.error;
+        });
+
+      if (errValues.length > 0) {
+        var avgError = errValues.reduce(function (sum, value) {
+          return sum + value;
+        }, 0) / errValues.length;
+
+        if (avgError > MAX_AVG_ERROR) {
+          return;
+        }
+      }
+    }
+
+    var now = Date.now();
+    var entry = pendingMap[rawCode];
+
+    if (!entry || (now - entry.firstTime) > CONFIRM_WINDOW_MS) {
+      entry = { count: 1, firstTime: now };
+    } else {
+      entry.count++;
+    }
+    pendingMap[rawCode] = entry;
+
+    Object.keys(pendingMap).forEach(function (key) {
+      if (key !== rawCode) delete pendingMap[key];
+    });
+
+    updateConfirmDots(Math.min(entry.count, CONFIRM_NEEDED));
+
+    if (entry.count < CONFIRM_NEEDED) {
+      setStatus('pending', '偵測到條碼（' + entry.count + '/' + CONFIRM_NEEDED + '）...');
+      return;
+    }
+
+    sendResult(rawCode);
+  }
+
+  function drawBarcodeOverlay(result, sourceWidth, sourceHeight) {
+    clearOverlay();
+    if (!result) return;
+
+    var ctx = elements.overlayCtx;
+    if (result.boxes) {
+      result.boxes
+        .filter(function (box) { return box !== result.box; })
+        .forEach(function (box) {
+          drawPath(ctx, box, sourceWidth, sourceHeight, 'rgba(74,144,226,0.35)', 1, true);
+        });
+    }
+
+    if (result.box) {
+      drawPath(ctx, result.box, sourceWidth, sourceHeight, '#4a90e2', 2, true);
+    }
+
+    if (result.codeResult && result.codeResult.code && result.line) {
+      drawPath(ctx, result.line, sourceWidth, sourceHeight, '#ff6b35', 3, false);
+    }
+  }
+
+  function drawPath(ctx, points, sourceWidth, sourceHeight, color, lineWidth, shouldClose) {
+    if (!Array.isArray(points) || points.length === 0) return;
+    ctx.beginPath();
+    points.forEach(function (point, index) {
+      var mapped = mapSourcePointToOverlay(point, sourceWidth, sourceHeight);
+      if (!mapped) return;
+      if (index === 0) {
+        ctx.moveTo(mapped.x, mapped.y);
+      } else {
+        ctx.lineTo(mapped.x, mapped.y);
+      }
+    });
+    if (shouldClose) {
+      ctx.closePath();
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+
+  function clearOverlay() {
+    elements.overlayCtx.clearRect(0, 0, elements.overlay.width, elements.overlay.height);
+  }
+
+  function mapSourcePointToOverlay(point, sourceWidth, sourceHeight) {
+    if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return null;
+    var metrics = getPreviewMetrics(sourceWidth, sourceHeight);
+    return {
+      x: point.x * metrics.scale + metrics.offsetX,
+      y: point.y * metrics.scale + metrics.offsetY
+    };
+  }
+
+  function getPreviewMetrics(sourceWidth, sourceHeight) {
+    var containerWidth = elements.reader.clientWidth;
+    var containerHeight = elements.reader.clientHeight;
+    var width = sourceWidth || elements.video.videoWidth || containerWidth;
+    var height = sourceHeight || elements.video.videoHeight || containerHeight;
+    var scale = Math.max(containerWidth / width, containerHeight / height);
+    latestPreviewMetrics = {
+      containerWidth: containerWidth,
+      containerHeight: containerHeight,
+      scale: scale,
+      offsetX: (containerWidth - width * scale) / 2,
+      offsetY: (containerHeight - height * scale) / 2
+    };
+    return latestPreviewMetrics;
+  }
+
+  function captureVideoFrame(canvas, context, options) {
+    var maxWidth = options && options.maxWidth ? options.maxWidth : elements.video.videoWidth;
+    var sourceWidth = elements.video.videoWidth;
+    var sourceHeight = elements.video.videoHeight;
+    var scale = Math.min(1, maxWidth / sourceWidth);
+    var targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    var targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    context.drawImage(elements.video, 0, 0, targetWidth, targetHeight);
+
+    return {
+      width: targetWidth,
+      height: targetHeight,
+      dataUrl: canvas.toDataURL('image/jpeg', 0.9)
+    };
+  }
+
+  async function prepareOcrMode(modeToken) {
+    pendingOcrResult = null;
+    updateOcrActionState();
+    elements.ocrCaptureBtn.disabled = true;
+    elements.ocrCaptureBtn.textContent = 'OCR 載入中...';
+    setStatus('info', 'OCR 引擎準備中...');
+
+    try {
+      await ensureOcrWorker();
+      if (currentMode !== OCR_MODE || modeToken !== activeRunToken) return;
+      elements.ocrCaptureBtn.disabled = false;
+      elements.ocrCaptureBtn.textContent = '擷取畫面';
+      setStatus('info', 'OCR 模式已就緒，請將編號對準黃框後拍攝');
+    } catch (error) {
+      console.error('[Scanner] OCR 初始化失敗:', error);
+      if (currentMode !== OCR_MODE || modeToken !== activeRunToken) return;
+      elements.ocrCaptureBtn.disabled = true;
+      elements.ocrCaptureBtn.textContent = 'OCR 載入失敗';
+      setStatus('error', 'OCR 引擎載入失敗，請切回條碼或手動輸入');
+    }
+  }
+
+  async function ensureOcrWorker() {
+    if (ocrWorker) return ocrWorker;
+    if (ocrWorkerPromise) return ocrWorkerPromise;
+
+    if (typeof Tesseract === 'undefined' || typeof Tesseract.createWorker !== 'function') {
+      throw new Error('Tesseract not available');
+    }
+
+    ocrWorkerPromise = (async function () {
+      var worker = await Tesseract.createWorker('eng');
+      if (typeof worker.setParameters === 'function') {
+        await worker.setParameters({
+          tessedit_char_whitelist: OCR_WHITELIST,
+          tessedit_pageseg_mode: 7
+        });
+      }
+      ocrWorker = worker;
+      return worker;
+    }()).catch(function (error) {
+      ocrWorkerPromise = null;
+      throw error;
+    });
+
+    return ocrWorkerPromise;
+  }
+
+  async function handleOcrCapture() {
+    if (currentMode !== OCR_MODE || ocrCaptureBusy) return;
+    if (!streamActive || elements.video.readyState < 2) return;
+
+    var captureToken = ++activeRunToken;
+    ocrCaptureBusy = true;
+    elements.ocrCaptureBtn.disabled = true;
+    elements.ocrCaptureBtn.textContent = '辨識中...';
+    setStatus('pending', '正在擷取畫面並辨識，請稍候...');
+
+    try {
+      drawFreezeFrame();
+      var crop = prepareOcrCrop();
+      var worker = await ensureOcrWorker();
+      var result = await worker.recognize(elements.ocrCanvas);
+
+      if (currentMode !== OCR_MODE || captureToken !== activeRunToken) return;
+
+      var rawText = result && result.data ? result.data.text : '';
+      var normalizedText = normalizeAssetCode(rawText);
+      var canonicalCode = canonicalizeOcrText(normalizedText);
+
+      if (!canonicalCode) {
+        hideFreezeFrame();
+        setStatus('error', normalizedText ? '辨識到「' + normalizedText + '」，但格式不符合支援規則，請重新掃描' : '無法辨識編號，請重新掃描');
+        elements.ocrCaptureBtn.disabled = false;
+        elements.ocrCaptureBtn.textContent = '重新擷取';
+        return;
+      }
+
+      pendingOcrResult = {
+        code: canonicalCode,
+        rawText: rawText,
+        normalizedText: normalizedText,
+        crop: crop
+      };
+
+      elements.ocrResultValue.textContent = canonicalCode;
+      elements.ocrResultMeta.textContent = normalizedText && normalizedText !== canonicalCode
+        ? '原始辨識：' + normalizedText
+        : '請確認數字後再送出';
+      updateOcrActionState();
+      setStatus('success', '辨識完成，請確認數字後送出');
+    } catch (error) {
+      console.error('[Scanner] OCR 辨識失敗:', error);
+      hideFreezeFrame();
+      setStatus('error', 'OCR 辨識失敗，請重新掃描');
+      elements.ocrCaptureBtn.disabled = false;
+      elements.ocrCaptureBtn.textContent = '重新擷取';
+    } finally {
+      ocrCaptureBusy = false;
+      if (currentMode === OCR_MODE && !pendingOcrResult) {
+        elements.ocrCaptureBtn.disabled = false;
+        elements.ocrCaptureBtn.textContent = '擷取畫面';
+      }
+    }
+  }
+
+  function drawFreezeFrame() {
+    var width = elements.reader.clientWidth;
+    var height = elements.reader.clientHeight;
+    var metrics = getPreviewMetrics(elements.video.videoWidth, elements.video.videoHeight);
+
+    elements.freezeFrame.width = width;
+    elements.freezeFrame.height = height;
+    elements.freezeCtx.clearRect(0, 0, width, height);
+    elements.freezeCtx.drawImage(
+      elements.video,
+      0,
+      0,
+      elements.video.videoWidth,
+      elements.video.videoHeight,
+      metrics.offsetX,
+      metrics.offsetY,
+      elements.video.videoWidth * metrics.scale,
+      elements.video.videoHeight * metrics.scale
+    );
+    elements.freezeFrame.style.display = 'block';
+  }
+
+  function hideFreezeFrame() {
+    elements.freezeFrame.style.display = 'none';
+    elements.freezeCtx.clearRect(0, 0, elements.freezeFrame.width, elements.freezeFrame.height);
+  }
+
+  function prepareOcrCrop() {
+    var frameRect = elements.scanFrame.getBoundingClientRect();
+    var readerRect = elements.reader.getBoundingClientRect();
+    var padding = OCR_CAPTURE_PADDING;
+    var displayRect = {
+      x: Math.max(0, frameRect.left - readerRect.left - padding),
+      y: Math.max(0, frameRect.top - readerRect.top - padding),
+      width: Math.min(readerRect.width - Math.max(0, frameRect.left - readerRect.left - padding), frameRect.width + padding * 2),
+      height: Math.min(readerRect.height - Math.max(0, frameRect.top - readerRect.top - padding), frameRect.height + padding * 2)
+    };
+
+    var metrics = getPreviewMetrics(elements.video.videoWidth, elements.video.videoHeight);
+    var sourceX = Math.max(0, Math.round((displayRect.x - metrics.offsetX) / metrics.scale));
+    var sourceY = Math.max(0, Math.round((displayRect.y - metrics.offsetY) / metrics.scale));
+    var sourceWidth = Math.min(elements.video.videoWidth - sourceX, Math.round(displayRect.width / metrics.scale));
+    var sourceHeight = Math.min(elements.video.videoHeight - sourceY, Math.round(displayRect.height / metrics.scale));
+
+    elements.ocrWorkCanvas.width = Math.max(1, sourceWidth * OCR_UPSCALE);
+    elements.ocrWorkCanvas.height = Math.max(1, sourceHeight * OCR_UPSCALE);
+    elements.ocrWorkCtx.fillStyle = '#ffffff';
+    elements.ocrWorkCtx.fillRect(0, 0, elements.ocrWorkCanvas.width, elements.ocrWorkCanvas.height);
+    elements.ocrWorkCtx.drawImage(
+      elements.video,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      elements.ocrWorkCanvas.width,
+      elements.ocrWorkCanvas.height
+    );
+
+    preprocessOcrCanvas(elements.ocrWorkCanvas, elements.ocrWorkCtx);
+
+    var quietPadding = Math.max(OCR_OUTPUT_PADDING, Math.round(Math.max(elements.ocrWorkCanvas.width, elements.ocrWorkCanvas.height) * 0.12));
+    elements.ocrCanvas.width = elements.ocrWorkCanvas.width + quietPadding * 2;
+    elements.ocrCanvas.height = elements.ocrWorkCanvas.height + quietPadding * 2;
+    elements.ocrCtx.fillStyle = '#ffffff';
+    elements.ocrCtx.fillRect(0, 0, elements.ocrCanvas.width, elements.ocrCanvas.height);
+    elements.ocrCtx.drawImage(elements.ocrWorkCanvas, quietPadding, quietPadding);
+
+    return {
+      sourceX: sourceX,
+      sourceY: sourceY,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      quietPadding: quietPadding
+    };
+  }
+
+  function preprocessOcrCanvas(canvas, context) {
+    var imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    var data = imageData.data;
+    var total = 0;
+    var minLuminance = 255;
+    var maxLuminance = 0;
+    var luminances = new Uint8Array(data.length / 4);
+
+    for (var i = 0, index = 0; i < data.length; i += 4, index++) {
+      var luminance = Math.round(data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+      luminances[index] = luminance;
+      total += luminance;
+      if (luminance < minLuminance) minLuminance = luminance;
+      if (luminance > maxLuminance) maxLuminance = luminance;
+    }
+
+    var average = total / luminances.length;
+    var range = Math.max(1, maxLuminance - minLuminance);
+    var gain = 255 / range;
+    var contrastBoost = range < 110 ? 1.95 : 1.7;
+    var threshold = Math.max(142, Math.min(212, average * 0.96 + 18));
+
+    for (var j = 0, cursor = 0; j < data.length; j += 4, cursor++) {
+      var stretched = (luminances[cursor] - minLuminance) * gain;
+      var contrasted = (stretched - 128) * contrastBoost + 128;
+      var clamped = Math.max(0, Math.min(255, contrasted));
+      var value = clamped >= threshold ? 255 : Math.max(0, Math.round(clamped * 0.14));
+      data[j] = value;
+      data[j + 1] = value;
+      data[j + 2] = value;
+      data[j + 3] = 255;
+    }
+
+    context.putImageData(imageData, 0, 0);
+  }
+
+  function submitPendingOcrResult() {
+    if (!pendingOcrResult || !pendingOcrResult.code) return;
+    sendResult(pendingOcrResult.code);
+  }
+
+  function resetOcrReviewState() {
+    pendingOcrResult = null;
+    updateOcrActionState();
+    elements.ocrResultValue.textContent = '';
+    elements.ocrResultMeta.textContent = '';
+    hideFreezeFrame();
+    elements.ocrCaptureBtn.disabled = false;
+    elements.ocrCaptureBtn.textContent = '擷取畫面';
+    setStatus('info', '請重新對準編號後擷取畫面');
+    activeRunToken++;
+  }
+
+  function cleanupApp() {
+    if (isClosing) return;
+    isClosing = true;
+
+    stopBarcodeLoop();
+    clearOverlay();
+    if (torchSupported && torchEnabled) {
+      disableTorchSilently();
+    }
+    stopSharedCamera();
+
+    if (ocrWorker) {
+      ocrWorker.terminate();
+      ocrWorker = null;
+    } else if (ocrWorkerPromise) {
+      ocrWorkerPromise.then(function (worker) {
+        if (worker && typeof worker.terminate === 'function') {
+          worker.terminate();
+        }
+      }).catch(function () {});
+    }
+    ocrWorkerPromise = null;
+  }
+
+  function stopSharedCamera() {
+    if (stream) {
+      stream.getTracks().forEach(function (track) {
+        try {
+          track.stop();
+        } catch (error) {}
+      });
+      stream = null;
+      videoTrack = null;
+      streamActive = false;
+    }
+
+    if (elements.video) {
+      elements.video.pause();
+      elements.video.srcObject = null;
+    }
+    torchSupported = false;
+    torchEnabled = false;
+    torchBusy = false;
+    if (elements.torchToggle) {
+      updateTorchUi();
+    }
+  }
+
+  function detectTorchSupport() {
+    torchSupported = false;
+    torchEnabled = false;
+    if (!videoTrack) {
+      updateTorchUi();
+      return;
+    }
+
+    try {
+      var supportedConstraints = navigator.mediaDevices && navigator.mediaDevices.getSupportedConstraints
+        ? navigator.mediaDevices.getSupportedConstraints()
+        : {};
+      var capabilities = typeof videoTrack.getCapabilities === 'function'
+        ? videoTrack.getCapabilities()
+        : null;
+      torchSupported = !!(
+        supportedConstraints.torch ||
+        (capabilities && (capabilities.torch === true || Array.isArray(capabilities.torch)))
+      );
+    } catch (error) {
+      torchSupported = false;
+    }
+
+    updateTorchUi();
+  }
+
+  function updateTorchUi() {
+    if (!elements.torchToggle) return;
+    var shouldShow = torchSupported && streamActive;
+    elements.torchToggle.classList.toggle('visible', shouldShow);
+    elements.torchToggle.classList.toggle('active', torchEnabled);
+    elements.torchToggle.disabled = torchBusy;
+    elements.torchToggle.setAttribute('aria-pressed', String(torchEnabled));
+    elements.torchToggle.textContent = torchEnabled ? '補光燈 ON' : '補光燈';
+  }
+
+  async function toggleTorch() {
+    if (!torchSupported || !videoTrack || torchBusy) return;
+
+    torchBusy = true;
+    updateTorchUi();
+
+    try {
+      var nextState = !torchEnabled;
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: nextState }]
+      });
+      torchEnabled = nextState;
+    } catch (error) {
+      console.warn('[Scanner] 補光燈切換失敗:', error);
+      setStatus('error', '此裝置暫時無法切換補光燈');
+    } finally {
+      torchBusy = false;
+      updateTorchUi();
+    }
+  }
+
+  function disableTorchSilently() {
+    if (!videoTrack) return;
+    try {
+      videoTrack.applyConstraints({
+        advanced: [{ torch: false }]
+      });
+    } catch (error) {}
+    torchEnabled = false;
+  }
+
+  document.addEventListener('DOMContentLoaded', initializeApp);
+})();
+</script>
+</body>
+</html>
