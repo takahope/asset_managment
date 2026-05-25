@@ -405,7 +405,7 @@ function getGroupList() {
 
 /**
  * 讀取「下拉選單」工作表，一次批次回傳類別 / 組別 / 狀態三組
- * A 欄 = 定位 key、B 欄 = 顯示文字、C 欄 = 代號
+ * B 欄 = 定位 key、C 欄 = 顯示文字、D 欄 = 代號
  */
 function getDropdownOptions() {
   try {
