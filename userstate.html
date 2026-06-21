@@ -25,12 +25,12 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- React 18 + ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- React 18 + ReactDOM (Production) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
     <!-- Excel Export with cell style support -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
     <!-- Babel Standalone -->
      <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
@@ -14210,8 +14210,11 @@
             const loadData = (overrideViewMode) => {
                 showFlyProgressBar('正在載入財產狀態資料...');
                 setIsLoadingCards(true); // 初始載入時也顯示卡片載入動畫
+                const isInitialLoad = !overrideViewMode && !viewModeInitializedRef.current;
                 const effectiveViewMode = overrideViewMode || viewMode;
-                const forceUserScope = effectiveViewMode === 'user';
+                // ✨ 初次載入不強制使用者範圍：管理員直接取得管理員視角，
+                // 一般使用者後端本來就只會回傳使用者範圍，避免載入後再切換而重複載入
+                const forceUserScope = isInitialLoad ? false : (effectiveViewMode === 'user');
 
                 // ✨ 方案 A：單次往返取得首屏所有資料（後端以記憶化讓 getAllAssets 只讀一次）
                 google.script.run
@@ -14230,13 +14233,6 @@
                         setIsAdmin(response.isAdmin);
                         setCurrentUserEmail(response.userEmail);
                         setCurrentUserName(response.userName || '');
-                        const shouldSwitchToAdmin = response.isAdmin && forceUserScope && !viewModeInitializedRef.current;
-                        if (shouldSwitchToAdmin) {
-                            setViewMode('admin');
-                            viewModeInitializedRef.current = true;
-                            loadData('admin');
-                            return;
-                        }
 
                         setAllAssets(decorateAssetListForUserState(response.assets));
                         if (!viewModeInitializedRef.current) {
