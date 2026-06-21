@@ -256,7 +256,19 @@ function mapRowToAssetObject(row, indices, sourceSheet) {
  * 從「財產總表」和「物品總表」讀取所有資產資料，並將它們正規化為標準的物件陣列。
  * @returns {Array<Object>} 包含所有資產物件的陣列。
  */
+// 請求範圍記憶化：僅在唯讀 bundle 期間啟用，避免跨寫入操作回傳過期資料
+let _allAssetsMemo_ = null;
+let _allAssetsMemoArmed_ = false;
+
+function armAllAssetsMemo_()    { _allAssetsMemoArmed_ = true;  _allAssetsMemo_ = null; }
+function disarmAllAssetsMemo_() { _allAssetsMemoArmed_ = false; _allAssetsMemo_ = null; }
+
 function getAllAssets() {
+  // 命中請求範圍快取時直接回傳，跳過試算表讀取
+  if (_allAssetsMemoArmed_ && _allAssetsMemo_) {
+    return _allAssetsMemo_;
+  }
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const propertySheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
   const itemSheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
@@ -281,6 +293,9 @@ function getAllAssets() {
   }
   
   Logger.log(`getAllAssets: 共讀取並正規化 ${allAssetObjects.length} 筆資產物件。`);
+  if (_allAssetsMemoArmed_) {
+    _allAssetsMemo_ = allAssetObjects;
+  }
   return allAssetObjects;
 }
 
@@ -1035,6 +1050,37 @@ function getUserStateData(forceUserScope) {
     userName: currentUserName, // ✨ 新增使用者姓名
     assets: results
   };
+}
+
+/**
+ * [供 userstate.html 首次載入呼叫] 一次性回傳頁面所需的所有資料。
+ * 透過請求範圍記憶化讓內部所有 getAllAssets() 只實際讀取試算表一次，
+ * 並把原本 6 個 google.script.run 往返合併為 1 個。
+ * 各子項以 try/catch 包裹，個別失敗不拖垮整個 bundle（沿用前端原本各自的容錯）。
+ */
+function getUserStateBundle(forceUserScope) {
+  armAllAssetsMemo_();
+  try {
+    const safe = (fn, fallback) => {
+      try {
+        return fn();
+      } catch (e) {
+        Logger.log(`getUserStateBundle 子項失敗（非致命）: ${e.message}`);
+        return fallback;
+      }
+    };
+    return {
+      appUrl:        safe(() => getAppUrl(), ''),
+      userState:     getUserStateData(forceUserScope), // 主資料，失敗則整體失敗
+      inventory:     safe(() => getInventoryData(forceUserScope), null),
+      transferCount: safe(() => getTransferableItemsCount(forceUserScope), null),
+      transfer:      safe(() => getTransferData(forceUserScope), null),
+      lending:       safe(() => getLendingData(), null),
+      lentOut:       safe(() => getLentOutAssets(forceUserScope), null)
+    };
+  } finally {
+    disarmAllAssetsMemo_();
+  }
 }
 
 function getUserStateExportDataByTargets(targets, forceUserScope) {

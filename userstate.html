@@ -14213,147 +14213,97 @@
                 const effectiveViewMode = overrideViewMode || viewMode;
                 const forceUserScope = effectiveViewMode === 'user';
 
+                // ✨ 方案 A：單次往返取得首屏所有資料（後端以記憶化讓 getAllAssets 只讀一次）
                 google.script.run
-                    .withSuccessHandler(url => {
-                        setWebAppUrl(url);
+                    .withSuccessHandler(bundle => {
+                        const response = bundle && bundle.userState;
+                        if (!response || response.error) {
+                            alert('載入失敗：' + ((response && response.error) || '無資料'));
+                            hideFlyProgressBar('載入失敗', 0);
+                            return;
+                        }
 
-                        // 載入使用者資料
-                        google.script.run
-                            .withSuccessHandler(response => {
-                                if (response.error) {
-                                    alert('載入失敗：' + response.error);
-                                    hideFlyProgressBar('載入失敗', 0);
-                                    return;
-                                }
+                        // ── App URL ──
+                        setWebAppUrl(bundle.appUrl || '');
 
-                                setIsAdmin(response.isAdmin);
-                                setCurrentUserEmail(response.userEmail);
-                                setCurrentUserName(response.userName || '');
-                                const shouldSwitchToAdmin = response.isAdmin && forceUserScope && !viewModeInitializedRef.current;
-                                if (shouldSwitchToAdmin) {
-                                    setViewMode('admin');
-                                    viewModeInitializedRef.current = true;
-                                    loadData('admin');
-                                    return;
-                                }
+                        // ── 使用者資料 ──
+                        setIsAdmin(response.isAdmin);
+                        setCurrentUserEmail(response.userEmail);
+                        setCurrentUserName(response.userName || '');
+                        const shouldSwitchToAdmin = response.isAdmin && forceUserScope && !viewModeInitializedRef.current;
+                        if (shouldSwitchToAdmin) {
+                            setViewMode('admin');
+                            viewModeInitializedRef.current = true;
+                            loadData('admin');
+                            return;
+                        }
 
-                                setAllAssets(decorateAssetListForUserState(response.assets));
-                                if (!viewModeInitializedRef.current) {
-                                    setViewMode(response.isAdmin ? 'admin' : 'user');
-                                    viewModeInitializedRef.current = true;
-                                }
+                        setAllAssets(decorateAssetListForUserState(response.assets));
+                        if (!viewModeInitializedRef.current) {
+                            setViewMode(response.isAdmin ? 'admin' : 'user');
+                            viewModeInitializedRef.current = true;
+                        }
 
-                                let transferLoaded = false;
-                                let inventoryLoaded = false;
-                                const finishCardLoading = () => {
-                                    if (transferLoaded && inventoryLoaded) {
-                                        setIsLoadingCards(false);
-                                    }
-                                };
+                        scheduleTransferOverviewLoad(forceUserScope);
+                        scheduleScrapPendingPreload(forceUserScope);
+                        scheduleTransferPendingPreload(forceUserScope);
+                        if (response.isAdmin && !forceUserScope) {
+                            scheduleAddAssetDropdownPreload();
+                        }
 
-                                scheduleTransferOverviewLoad(forceUserScope);
-                                transferLoaded = true;
-                                finishCardLoading();
-                                scheduleScrapPendingPreload(forceUserScope);
-                                scheduleTransferPendingPreload(forceUserScope);
-                                if (response.isAdmin && !forceUserScope) {
-                                    scheduleAddAssetDropdownPreload();
-                                }
+                        // ── 盤點資料 ──
+                        const inventoryResponse = bundle.inventory;
+                        if (inventoryResponse && !inventoryResponse.error) {
+                            setInventorySessions(inventoryResponse);
+                            setCurrentUserGroup(inventoryResponse.currentUserGroup || '');
 
-                                // 載入盤點資料
-                                google.script.run
-                                    .withSuccessHandler(inventoryResponse => {
-                                        if (inventoryResponse) {
-                                            setInventorySessions(inventoryResponse);
-                                            setCurrentUserGroup(inventoryResponse.currentUserGroup || '');
+                            // ✨ 儲存 ISMS 資料
+                            if (inventoryResponse.ismsAssets) {
+                                setIsmsAssets(inventoryResponse.ismsAssets);
+                            }
+                            if (inventoryResponse.ismsEnabled !== undefined) {
+                                setIsmsEnabled(inventoryResponse.ismsEnabled);
+                            }
 
-                                            // ✨ 儲存 ISMS 資料
-                                            if (inventoryResponse.ismsAssets) {
-                                                setIsmsAssets(inventoryResponse.ismsAssets);
-                                            }
-                                            if (inventoryResponse.ismsEnabled !== undefined) {
-                                                setIsmsEnabled(inventoryResponse.ismsEnabled);
-                                            }
+                            // 如有進行中會話，載入詳情以獲取待盤點資產
+                            const activeSessions = inventoryResponse.activeSessions || [];
+                            const sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
+                            updateCurrentInventorySessionId(sessionId);
+                        } else {
+                            console.warn('載入盤點資料失敗或無資料');
+                        }
+                        schedulePendingInventoryLoad(forceUserScope);
 
-                                            // 如有進行中會話，載入詳情以獲取待盤點資產
-                                            const activeSessions = inventoryResponse.activeSessions || [];
-                                            const sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
-                                            updateCurrentInventorySessionId(sessionId);
-                                        }
-                                        schedulePendingInventoryLoad(forceUserScope);
-                                        inventoryLoaded = true;
-                                        finishCardLoading();
-                                    })
-                                    .withFailureHandler(error => {
-                                        console.warn('載入盤點資料失敗：', error.message);
-                                        inventoryLoaded = true;
-                                        finishCardLoading();
-                                    })
-                                    .getInventoryData(forceUserScope);
+                        // ── 轉移待列印數量 ──
+                        setTransferPendingCount(typeof bundle.transferCount === 'number' ? bundle.transferCount : 0);
 
-                                // 載入轉移待列印數量
-                                google.script.run
-                                    .withSuccessHandler(count => {
-                                        if (typeof count === 'number') {
-                                            setTransferPendingCount(count);
-                                        }
-                                    })
-                                    .withFailureHandler(error => {
-                                        console.warn('載入轉移數量失敗：', error.message);
-                                        setTransferPendingCount(0);
-                                    })
-                                    .getTransferableItemsCount(forceUserScope);
+                        // ── 轉移選項（保管人、地點等）──
+                        if (bundle.transfer && !bundle.transfer.error) {
+                            setTransferOptions(bundle.transfer);
+                        }
 
-                                // 載入轉移選項資料（保管人、地點等）
-                                google.script.run
-                                    .withSuccessHandler(transferData => {
-                                        if (transferData && !transferData.error) {
-                                            setTransferOptions(transferData);
-                                        }
-                                    })
-                                    .withFailureHandler(error => {
-                                        console.warn('載入轉移選項失敗：', error.message);
-                                    })
-                                    .getTransferData(forceUserScope);
+                        // ── 出借選項（借用人、地點）──
+                        if (bundle.lending && !bundle.lending.error) {
+                            setLendingOptions(bundle.lending);
+                        }
 
-                                // 載入出借選項資料（借用人、地點）
-                                google.script.run
-                                    .withSuccessHandler(lendingData => {
-                                        if (lendingData && !lendingData.error) {
-                                            setLendingOptions(lendingData);
-                                        }
-                                    })
-                                    .withFailureHandler(error => {
-                                        console.warn('載入出借選項失敗：', error.message);
-                                    })
-                                    .getLendingData();
+                        // ── 出借中清單 ──
+                        if (bundle.lentOut && !bundle.lentOut.error) {
+                            setLentAssetsDetails(bundle.lentOut.assets || []);
+                        } else {
+                            setLentAssetsDetails(null);
+                        }
 
-                                // 預先載入出借中清單
-                                google.script.run
-                                    .withSuccessHandler(response => {
-                                        if (response && !response.error) {
-                                            setLentAssetsDetails(response.assets || []);
-                                        } else {
-                                            setLentAssetsDetails(null);
-                                        }
-                                    })
-                                    .withFailureHandler(error => {
-                                        console.warn('預先載入出借清單失敗：', error.message);
-                                        setLentAssetsDetails(null);
-                                    })
-                                    .getLentOutAssets(forceUserScope);
-
-                                setIsReady(true);
-                                hideFlyProgressBar('資料載入完成！', 300);
-                            })
-                            .withFailureHandler(error => {
-                                setIsLoadingCards(false); // 失敗時也關閉卡片動畫
-                                hideFlyProgressBar('載入失敗', 0);
-                                alert('錯誤：' + error.message);
-                            })
-                            .getUserStateData(forceUserScope);
+                        setIsLoadingCards(false);
+                        setIsReady(true);
+                        hideFlyProgressBar('資料載入完成！', 300);
                     })
-                    .getAppUrl();
+                    .withFailureHandler(error => {
+                        setIsLoadingCards(false); // 失敗時也關閉卡片動畫
+                        hideFlyProgressBar('載入失敗', 0);
+                        alert('錯誤：' + error.message);
+                    })
+                    .getUserStateBundle(forceUserScope);
             };
 
             // 重新整理卡片數據（並行載入）
