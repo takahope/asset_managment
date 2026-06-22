@@ -26,6 +26,13 @@
     display: flex;
   }
 
+  /* 整頁載入／切換視圖時的遮罩：蓋住底下重繪，避免畫面很亂 */
+  .progress-fly-overlay.masked {
+    background-color: rgba(248, 250, 252, 0.94);
+    backdrop-filter: blur(4px);
+    pointer-events: auto; /* 載入中擋住操作，避免亂點 */
+  }
+
   /* 狀態文字 */
   .progress-fly-text {
     color: #333;
@@ -83,6 +90,17 @@
     font-size: 14px;
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
+
+  /* 每秒輪播的處理說明文字 */
+  .progress-fly-substep {
+    margin-top: 8px;
+    min-height: 18px;
+    color: #94a3b8;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    transition: opacity 0.3s ease;
+  }
 </style>
 
 <div id="progress-fly-overlay" class="progress-fly-overlay">
@@ -98,12 +116,54 @@
   </div>
 
   <div class="progress-fly-percent" id="progress-fly-percent">0%</div>
+  <div class="progress-fly-substep" id="progress-fly-substep"></div>
 </div>
 
 <script>
   let _flyProgressInterval;
+  let _flyMessageInterval;
 
-  function showFlyProgressBar(statusText = '正在載入資料...') {
+  // 每秒輪播的「正在處理…」說明文字（整頁載入模式使用，營造處理資料的錯覺）
+  const _flyProcessingMessages = [
+    '正在建立安全連線…',
+    '正在驗證使用者權限…',
+    '正在讀取財產總表…',
+    '正在讀取物品總表…',
+    '正在整理保管人資料…',
+    '正在比對 ISMS 資訊資產…',
+    '正在計算轉移狀態…',
+    '正在統計待辦事項…',
+    '正在載入出借紀錄…',
+    '正在彙整盤點資料…',
+    '正在套用群組權限…',
+    '正在準備儀表板…',
+    '正在最佳化顯示效能…',
+    '即將完成，請稍候…'
+  ];
+
+  // 啟動每秒輪播文字；到末尾停在最後一句（不重頭循環，避免穿幫）
+  function _startFlyMessages() {
+    const substep = document.getElementById('progress-fly-substep');
+    if (!substep) return;
+    let idx = 0;
+    substep.textContent = _flyProcessingMessages[0];
+    _flyMessageInterval = setInterval(() => {
+      if (idx < _flyProcessingMessages.length - 1) {
+        idx++;
+        substep.textContent = _flyProcessingMessages[idx];
+      }
+    }, 1000);
+  }
+
+  function _stopFlyMessages() {
+    clearInterval(_flyMessageInterval);
+    _flyMessageInterval = null;
+    const substep = document.getElementById('progress-fly-substep');
+    if (substep) substep.textContent = '';
+  }
+
+  function showFlyProgressBar(statusText = '正在載入資料...', options = {}) {
+    const { mask = false } = options;
     const overlay = document.getElementById('progress-fly-overlay');
     const bar = document.getElementById('progress-fly-bar');
     const runner = document.getElementById('runner');
@@ -140,9 +200,21 @@
       }, 100);
     }
 
+    // 依 mask 同步遮罩狀態（避免不同情境間殘留）
+    if (mask) {
+      overlay.classList.add('masked');
+    } else {
+      overlay.classList.remove('masked');
+    }
+
     // 如果進度條已經在運行中，只更新文字，不重置進度
     if (_flyProgressInterval) {
       text.textContent = statusText;
+      if (mask && !_flyMessageInterval) {
+        _startFlyMessages();
+      } else if (!mask) {
+        _stopFlyMessages();
+      }
       return;
     }
 
@@ -154,7 +226,13 @@
     text.textContent = statusText;
     overlay.classList.add('active');
 
-    // 模擬進度增長
+    // 整頁載入模式：啟動每秒輪播處理文字
+    _stopFlyMessages();
+    if (mask) {
+      _startFlyMessages();
+    }
+
+    // 模擬進度增長：每 200ms +1%，到 90% 約需 18 秒
     _flyProgressInterval = setInterval(() => {
       if (progress < 90) {
         progress++;
@@ -174,6 +252,7 @@
 
     clearInterval(_flyProgressInterval);
     _flyProgressInterval = null; // 重置標記，允許下次重新啟動進度條
+    _stopFlyMessages(); // 停止並清空輪播文字
 
     // 跳到 100%
     bar.style.width = '100%';
@@ -183,6 +262,7 @@
 
     setTimeout(() => {
       overlay.classList.remove('active');
+      overlay.classList.remove('masked'); // 移除遮罩，下次非遮罩呼叫恢復透明
     }, delay);
   }
 </script>

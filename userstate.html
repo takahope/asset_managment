@@ -3983,7 +3983,7 @@
             );
         };
 
-        const InventoryManagementModal = ({ onClose, isAdminView }) => {
+        const InventoryManagementModal = ({ onClose, isAdminView, inventoryFeatureEnabled, inventoryFeatureToggling, onToggleInventoryFeature }) => {
             const [historyItems, setHistoryItems] = useState([]);
             const [isHistoryLoading, setIsHistoryLoading] = useState(true);
             const [historyError, setHistoryError] = useState('');
@@ -4643,17 +4643,37 @@
                                 <i className="fa-solid fa-clipboard-list text-blue-500"></i>
                                 盤點管理 (Inventory Management)
                             </h3>
-                            <button
-                                type="button"
-                                className="text-slate-400 hover:text-slate-600 transition-colors"
-                                onClick={() => {
-                                    closeAllFilterDropdowns();
-                                    onClose();
-                                }}
-                                aria-label="關閉"
-                            >
-                                <i className="fa-solid fa-xmark text-xl"></i>
-                            </button>
+                            <div className="flex items-center gap-3">
+                                {/* ✨ 盤點功能開關（僅管理員）：關閉時頁面載入略過盤點資料以加速 */}
+                                {isAdminView && (
+                                    <div className="flex items-center gap-2" title={inventoryFeatureEnabled ? '盤點功能開啟中：頁面載入會載入盤點資料' : '盤點功能已關閉：頁面載入略過盤點資料以加速'}>
+                                        <span className="text-sm text-slate-600 whitespace-nowrap">盤點功能</span>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={!!inventoryFeatureEnabled}
+                                            disabled={inventoryFeatureToggling}
+                                            onClick={() => onToggleInventoryFeature && onToggleInventoryFeature(!inventoryFeatureEnabled)}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${inventoryFeatureEnabled ? 'bg-blue-500' : 'bg-slate-300'} ${inventoryFeatureToggling ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                            aria-label="切換盤點功能"
+                                        >
+                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${inventoryFeatureEnabled ? 'translate-x-6' : 'translate-x-1'}`}></span>
+                                        </button>
+                                        <span className="text-xs text-slate-400 w-5 text-center">{inventoryFeatureEnabled ? '開' : '關'}</span>
+                                    </div>
+                                )}
+                                <button
+                                    type="button"
+                                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                                    onClick={() => {
+                                        closeAllFilterDropdowns();
+                                        onClose();
+                                    }}
+                                    aria-label="關閉"
+                                >
+                                    <i className="fa-solid fa-xmark text-xl"></i>
+                                </button>
+                            </div>
                         </div>
                         <div className="inventory-section-switch" aria-label="盤點管理區塊切換">
                             <button
@@ -12856,6 +12876,9 @@
 
             // 盤點管理 Modal 相關 state
             const [showInventoryMgmtModal, setShowInventoryMgmtModal] = useState(false);
+            // ✨ 盤點功能開關（全系統設定，後端「管理員名單」E2 控制）
+            const [inventoryFeatureEnabled, setInventoryFeatureEnabled] = useState(true);
+            const [inventoryFeatureToggling, setInventoryFeatureToggling] = useState(false);
 
             // 盤點相關狀態
             const [inventoryPendingByAsset, setInventoryPendingByAsset] = useState({});
@@ -13580,6 +13603,19 @@
                 });
             }, []);
 
+            // ✨ 盤點功能關閉時清空所有盤點 state，讓 UI 優雅降級
+            const clearInventoryState = useCallback(() => {
+                setInventorySessions(null);
+                setInventoryPendingByAsset({});
+                setPendingInventoryItems([]);
+                setInventoryStatusByAsset({});
+                setIsLoadingPendingInventory(false);
+                setPendingInventoryError('');
+                setIsmsAssets([]);
+                setIsmsEnabled(false);
+                updateCurrentInventorySessionId(null);
+            }, [updateCurrentInventorySessionId]);
+
             const fetchPendingInventoryAssignments = useCallback((forceUserScope, options = {}) => {
                 const {
                     onCached,
@@ -14103,7 +14139,7 @@
 
             // 載入資料
             const loadData = (overrideViewMode) => {
-                showFlyProgressBar('正在載入財產狀態資料...');
+                showFlyProgressBar('正在載入財產狀態資料...', { mask: true });
                 setIsLoadingCards(true); // 初始載入時也顯示卡片載入動畫
                 const isInitialLoad = !overrideViewMode && !viewModeInitializedRef.current;
                 const effectiveViewMode = overrideViewMode || viewMode;
@@ -14142,28 +14178,35 @@
                             scheduleAddAssetDropdownPreload();
                         }
 
-                        // ── 盤點資料 ──
-                        const inventoryResponse = bundle.inventory;
-                        if (inventoryResponse && !inventoryResponse.error) {
-                            setInventorySessions(inventoryResponse);
-                            setCurrentUserGroup(inventoryResponse.currentUserGroup || '');
+                        // ── 盤點資料（受盤點功能開關控制）──
+                        const inventoryEnabled = bundle.inventoryEnabled !== false;
+                        setInventoryFeatureEnabled(inventoryEnabled);
+                        if (inventoryEnabled) {
+                            const inventoryResponse = bundle.inventory;
+                            if (inventoryResponse && !inventoryResponse.error) {
+                                setInventorySessions(inventoryResponse);
+                                setCurrentUserGroup(inventoryResponse.currentUserGroup || '');
 
-                            // ✨ 儲存 ISMS 資料
-                            if (inventoryResponse.ismsAssets) {
-                                setIsmsAssets(inventoryResponse.ismsAssets);
-                            }
-                            if (inventoryResponse.ismsEnabled !== undefined) {
-                                setIsmsEnabled(inventoryResponse.ismsEnabled);
-                            }
+                                // ✨ 儲存 ISMS 資料
+                                if (inventoryResponse.ismsAssets) {
+                                    setIsmsAssets(inventoryResponse.ismsAssets);
+                                }
+                                if (inventoryResponse.ismsEnabled !== undefined) {
+                                    setIsmsEnabled(inventoryResponse.ismsEnabled);
+                                }
 
-                            // 如有進行中會話，載入詳情以獲取待盤點資產
-                            const activeSessions = inventoryResponse.activeSessions || [];
-                            const sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
-                            updateCurrentInventorySessionId(sessionId);
+                                // 如有進行中會話，載入詳情以獲取待盤點資產
+                                const activeSessions = inventoryResponse.activeSessions || [];
+                                const sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
+                                updateCurrentInventorySessionId(sessionId);
+                            } else {
+                                console.warn('載入盤點資料失敗或無資料');
+                            }
+                            schedulePendingInventoryLoad(forceUserScope);
                         } else {
-                            console.warn('載入盤點資料失敗或無資料');
+                            // 盤點功能關閉：清空盤點 state，跳過所有盤點載入以加速
+                            clearInventoryState();
                         }
-                        schedulePendingInventoryLoad(forceUserScope);
 
                         // ── 轉移待列印數量 ──
                         setTransferPendingCount(typeof bundle.transferCount === 'number' ? bundle.transferCount : 0);
@@ -14220,12 +14263,15 @@
                                 .withFailureHandler(reject)
                                 .getTransferOverviewForUserState(forceUserScope);
                         }),
-                        new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler(resolve)
-                                .withFailureHandler(reject)
-                                .getInventoryData(forceUserScope);
-                        }),
+                        // ✨ 盤點功能關閉時跳過 getInventoryData
+                        inventoryFeatureEnabled
+                            ? new Promise((resolve, reject) => {
+                                google.script.run
+                                    .withSuccessHandler(resolve)
+                                    .withFailureHandler(reject)
+                                    .getInventoryData(forceUserScope);
+                            })
+                            : Promise.resolve(null),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
@@ -14238,7 +14284,10 @@
                                 .withFailureHandler(reject)
                                 .getTransferableItemsCount(forceUserScope);
                         }),
-                        fetchPendingInventoryAssignments(forceUserScope, { force: true, allowStale: false }),
+                        // ✨ 盤點功能關閉時跳過待盤點載入
+                        inventoryFeatureEnabled
+                            ? fetchPendingInventoryAssignments(forceUserScope, { force: true, allowStale: false })
+                            : Promise.resolve(null),
                         new Promise((resolve, reject) => {
                             google.script.run
                                 .withSuccessHandler(resolve)
@@ -14268,7 +14317,10 @@
                             setTransferOverviewLoaded(true);
                         }
                     }
-                    if (inventoryResponse.status === 'fulfilled' && inventoryResponse.value) {
+                    if (!inventoryFeatureEnabled) {
+                        // 盤點功能關閉：清空盤點 state，不顯示盤點相關 UI
+                        clearInventoryState();
+                    } else if (inventoryResponse.status === 'fulfilled' && inventoryResponse.value) {
                         setInventorySessions(inventoryResponse.value);
                         const activeSessions = inventoryResponse.value.activeSessions || [];
                         const sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
@@ -14313,11 +14365,33 @@
                 } finally {
                     setIsLoadingPendingInventory(false);
                 }
-            }, [decorateAssetListForUserState, fetchPendingInventoryAssignments, isAdmin, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode]);
+            }, [decorateAssetListForUserState, fetchPendingInventoryAssignments, isAdmin, scheduleScrapPendingPreload, scheduleTransferPendingPreload, scheduleAddAssetDropdownPreload, updateCurrentInventorySessionId, viewMode, inventoryFeatureEnabled, clearInventoryState]);
 
             // 重新整理按鈕點擊處理
             const handleRefreshCards = () => {
                 refreshCardData();
+            };
+
+            // ✨ 盤點功能開關切換（管理員）：寫入後端設定，開啟時重新載入盤點資料，關閉時清空
+            const handleToggleInventoryFeature = (next) => {
+                setInventoryFeatureToggling(true);
+                google.script.run
+                    .withSuccessHandler(() => {
+                        setInventoryFeatureEnabled(next);
+                        if (next) {
+                            // 開啟：重新載入頁面資料（後端旗標已為開，loadData 會載入盤點）
+                            loadData();
+                        } else {
+                            // 關閉：直接清空盤點 state，無需重新載入其他資料
+                            clearInventoryState();
+                        }
+                        setInventoryFeatureToggling(false);
+                    })
+                    .withFailureHandler(error => {
+                        setInventoryFeatureToggling(false);
+                        alert('變更盤點功能設定失敗：' + (error && error.message ? error.message : error));
+                    })
+                    .setInventoryFeatureEnabled(next);
             };
 
             const handleViewModeChange = (mode) => {
@@ -15740,13 +15814,7 @@
                                 {currentUserName && <span className="font-medium text-slate-700">{currentUserName}</span>}
                                 {currentUserName && '，'}歡迎回來，今天是 {(() => {
                                     const now = new Date();
-                                    const date = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
-                                    const hours = now.getHours();
-                                    const minutes = now.getMinutes().toString().padStart(2, '0');
-                                    const seconds = now.getSeconds().toString().padStart(2, '0');
-                                    const period = hours >= 12 ? '下午' : '上午';
-                                    const displayHours = hours % 12 || 12;
-                                    return `${date} ${period} ${displayHours}:${minutes}`;
+                                    return now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
                                 })()}
                             </p>
                         </div>
@@ -16189,6 +16257,9 @@
                     {showInventoryMgmtModal && (
                         <InventoryManagementModal
                             isAdminView={isAdminView}
+                            inventoryFeatureEnabled={inventoryFeatureEnabled}
+                            inventoryFeatureToggling={inventoryFeatureToggling}
+                            onToggleInventoryFeature={handleToggleInventoryFeature}
                             onClose={() => setShowInventoryMgmtModal(false)}
                         />
                     )}

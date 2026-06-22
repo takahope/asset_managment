@@ -419,6 +419,39 @@ function isGroupProxyTransferEnabled() {
 }
 
 /**
+ * ✨ [系統功能] 檢查是否啟用「盤點功能」載入
+ * 透過「管理員名單」工作表 E2 儲存格控制。
+ * 預設啟用（保留現狀）：空白或非「否」皆視為開啟，只有明確為「否」才關閉。
+ * 關閉時頁面載入會跳過盤點資料，加快載入速度。
+ */
+function isInventoryFeatureEnabled() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
+    if (!adminSheet) return true; // 找不到表時預設開啟
+    const e2 = adminSheet.getRange('E2').getValue();
+    return String(e2).trim() !== '否'; // 空白/未設定 = 開啟
+  } catch (e) {
+    Logger.log(`isInventoryFeatureEnabled 錯誤: ${e.message}`);
+    return true; // 出錯時預設開啟，避免誤關
+  }
+}
+
+/**
+ * ✨ [管理員專用] 設定「盤點功能」開關，寫入「管理員名單」E2。
+ * 需通過 checkAdminPermissions 二次檢查，避免 IDOR。
+ */
+function setInventoryFeatureEnabled(enabled) {
+  if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可變更盤點功能設定。');
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
+  if (!adminSheet) throw new Error('找不到「管理員名單」工作表。');
+  adminSheet.getRange('E2').setValue(enabled ? '是' : '否');
+  Logger.log(`盤點功能設定為: ${enabled ? '啟用' : '停用'}`);
+  return { success: true, enabled: !!enabled };
+}
+
+/**
  * 轉移類型正規化：移除代理標記與原保管人註記，方便權限判斷
  * @param {string} transferType 原始轉移類型
  * @returns {string} 正規化後的轉移類型
@@ -1069,14 +1102,17 @@ function getUserStateBundle(forceUserScope) {
         return fallback;
       }
     };
+    // ✨ 盤點功能開關：關閉時跳過 getInventoryData 以加快載入
+    const inventoryEnabled = isInventoryFeatureEnabled();
     return {
-      appUrl:        safe(() => getAppUrl(), ''),
-      userState:     getUserStateData(forceUserScope), // 主資料，失敗則整體失敗
-      inventory:     safe(() => getInventoryData(forceUserScope), null),
-      transferCount: safe(() => getTransferableItemsCount(forceUserScope), null),
-      transfer:      safe(() => getTransferData(forceUserScope), null),
-      lending:       safe(() => getLendingData(), null),
-      lentOut:       safe(() => getLentOutAssets(forceUserScope), null)
+      appUrl:           safe(() => getAppUrl(), ''),
+      userState:        getUserStateData(forceUserScope), // 主資料，失敗則整體失敗
+      inventory:        inventoryEnabled ? safe(() => getInventoryData(forceUserScope), null) : null,
+      inventoryEnabled: inventoryEnabled, // ✨ 回傳旗標供前端判斷
+      transferCount:    safe(() => getTransferableItemsCount(forceUserScope), null),
+      transfer:         safe(() => getTransferData(forceUserScope), null),
+      lending:          safe(() => getLendingData(), null),
+      lentOut:          safe(() => getLentOutAssets(forceUserScope), null)
     };
   } finally {
     disarmAllAssetsMemo_();
