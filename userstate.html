@@ -15954,17 +15954,19 @@
 
                     <DashboardCards counts={cardCounts} onClick={handleCardClick} isLoading={isLoadingCards} />
 
-                    {/* ✨ 新增：盤點進度監控儀表板 */}
-                    <InventoryDashboardCard 
-                        isAdminView={isAdminView}
-                        currentUserEmail={currentUserEmail}
-                        currentUserGroup={currentUserGroup}
-                        inventorySessions={inventorySessions}
-                        onRefresh={() => {
-                            refreshCardData();
-                            loadPendingInventoryAssignments(viewMode === 'user');
-                        }} 
-                    />
+                    {/* ✨ 盤點進度監控儀表板（盤點功能關閉時整張隱藏） */}
+                    {inventoryFeatureEnabled && (
+                        <InventoryDashboardCard
+                            isAdminView={isAdminView}
+                            currentUserEmail={currentUserEmail}
+                            currentUserGroup={currentUserGroup}
+                            inventorySessions={inventorySessions}
+                            onRefresh={() => {
+                                refreshCardData();
+                                loadPendingInventoryAssignments(viewMode === 'user');
+                            }}
+                        />
+                    )}
 
                     <FilterSection
                         filters={filters}

@@ -18,7 +18,7 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  z-index: 999;
+  z-index: 10000; /* ✨ 高於整頁載入遮罩(9999)，載入中購物車仍持續顯示 */
   color: white;
   font-size: 24px;
 }
@@ -56,7 +56,7 @@
   background: white;
   box-shadow: -4px 0 12px rgba(0,0,0,0.2);
   transition: right 0.3s ease;
-  z-index: 1001;
+  z-index: 10002; /* ✨ 高於載入遮罩，維持 fab < overlay < sidebar 相對層級 */
   display: flex;
   flex-direction: column;
 }
@@ -245,7 +245,7 @@
   height: 100%;
   background: rgba(0,0,0,0.5);
   display: none;
-  z-index: 1000;
+  z-index: 10001; /* ✨ 高於載入遮罩，維持 fab < overlay < sidebar 相對層級 */
   transition: opacity 0.3s ease;
 }
 
