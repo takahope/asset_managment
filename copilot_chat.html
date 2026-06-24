@@ -1,0 +1,340 @@
+<!--
+  copilot_chat.html — 智慧導覽助理 (Copilot) 前端 Widget（自包含 partial）
+  以 <?!= include('copilot_chat'); ?> 掛入 userstate.html。
+  自帶樣式、自帶 #copilot-root，並在腳本尾端自行 createRoot().render()，
+  與主 App 的 React tree 解耦（獨立 root），不需改動 App 的 JSX。
+-->
+<style>
+  /* ===== 浮動按鈕 (FAB) ===== */
+  .copilot-fab {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 10050;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    color: #fff;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--accent-400, #3d8c9c) 0%, var(--accent-500, #2f6c7f) 100%);
+    box-shadow: 0 8px 24px rgba(47, 108, 127, 0.42);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .copilot-fab:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 12px 30px rgba(47, 108, 127, 0.55); }
+  .copilot-fab:active { transform: scale(0.97); }
+  .copilot-fab .copilot-fab-dot {
+    position: absolute;
+    top: 2px; right: 2px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #34d399;
+    border: 2px solid #fff;
+  }
+
+  /* ===== 聊天視窗 ===== */
+  .copilot-panel {
+    position: fixed;
+    bottom: 96px;
+    right: 30px;
+    z-index: 10050;
+    width: 370px;
+    max-width: calc(100vw - 40px);
+    height: 540px;
+    max-height: calc(100vh - 140px);
+    display: flex;
+    flex-direction: column;
+    background: var(--surface, #fff);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    transform-origin: bottom right;
+    animation: copilotPop 0.18s ease-out;
+  }
+  @keyframes copilotPop {
+    from { opacity: 0; transform: translateY(12px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .copilot-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent-400, #3d8c9c) 0%, var(--accent-500, #2f6c7f) 100%);
+  }
+  .copilot-header .copilot-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+  }
+  .copilot-header .copilot-title { font-weight: 700; font-size: 15px; line-height: 1.2; }
+  .copilot-header .copilot-subtitle { font-size: 11px; opacity: 0.85; }
+  .copilot-header .copilot-close {
+    margin-left: auto;
+    background: transparent; border: none; color: #fff;
+    font-size: 18px; cursor: pointer; opacity: 0.85;
+    width: 30px; height: 30px; border-radius: 8px;
+  }
+  .copilot-header .copilot-close:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+
+  /* ===== 訊息區 ===== */
+  .copilot-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--surface-muted, #f8fafc);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .copilot-msg {
+    max-width: 84%;
+    padding: 10px 13px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    white-space: pre-wrap;     /* 保留 AI 回覆換行；以純文字呈現避免 XSS */
+    word-break: break-word;
+  }
+  .copilot-msg.ai {
+    align-self: flex-start;
+    background: #fff;
+    color: var(--ink-900, #0f172a);
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-bottom-left-radius: 4px;
+  }
+  .copilot-msg.user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, var(--accent-400, #3d8c9c) 0%, var(--accent-500, #2f6c7f) 100%);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .copilot-msg.error {
+    align-self: flex-start;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    border-bottom-left-radius: 4px;
+  }
+
+  /* 思考中動畫 */
+  .copilot-typing { display: inline-flex; gap: 4px; align-items: center; }
+  .copilot-typing span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ink-500, #64748b);
+    animation: copilotBlink 1.2s infinite ease-in-out both;
+  }
+  .copilot-typing span:nth-child(2) { animation-delay: 0.2s; }
+  .copilot-typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes copilotBlink {
+    0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  /* ===== 快捷提示 ===== */
+  .copilot-quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 16px 12px;
+    background: var(--surface-muted, #f8fafc);
+  }
+  .copilot-quick button {
+    font-size: 12.5px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--accent-300, #7dd3c7);
+    background: #fff;
+    color: var(--accent-500, #2f6c7f);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .copilot-quick button:hover { background: var(--accent-500, #2f6c7f); color: #fff; }
+  .copilot-quick button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== 輸入列 ===== */
+  .copilot-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+    background: #fff;
+  }
+  .copilot-input {
+    flex: 1;
+    resize: none;
+    max-height: 96px;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    border-radius: 12px;
+    padding: 9px 12px;
+    font-size: 13.5px;
+    font-family: inherit;
+    line-height: 1.5;
+    outline: none;
+  }
+  .copilot-input:focus { border-color: var(--accent-400, #3d8c9c); box-shadow: 0 0 0 3px rgba(61, 140, 156, 0.15); }
+  .copilot-send {
+    flex: 0 0 auto;
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    color: #fff;
+    font-size: 16px;
+    background: linear-gradient(135deg, var(--accent-400, #3d8c9c) 0%, var(--accent-500, #2f6c7f) 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .copilot-send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  @media (max-width: 480px) {
+    .copilot-panel { right: 12px; left: 12px; width: auto; bottom: 88px; }
+    .copilot-fab { right: 18px; bottom: 22px; }
+  }
+</style>
+
+<div id="copilot-root"></div>
+
+<script type="text/babel">
+  (function () {
+    const { useState, useRef, useEffect, useCallback } = React;
+
+    // 快捷提示（對應 NavigationManual.md 第 6 章常見流程）
+    const QUICK_PROMPTS = [
+      '如何批次轉移？',
+      '我要怎麼報廢？',
+      '如何歸還出借資產？',
+      '盤點怎麼操作？'
+    ];
+
+    const WELCOME = '您好！我是系統導覽助理 🤖\n有任何操作問題都可以問我，例如轉移、出借、報廢、盤點或新增資產。\n也可以直接點下方的快捷問題試試看。';
+
+    function CopilotWidget() {
+      const [open, setOpen] = useState(false);
+      const [messages, setMessages] = useState([{ role: 'ai', text: WELCOME }]);
+      const [input, setInput] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const bodyRef = useRef(null);
+      const reqIdRef = useRef(0);
+
+      // 新訊息時自動捲到底
+      useEffect(() => {
+        if (bodyRef.current) {
+          bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+        }
+      }, [messages, loading, open]);
+
+      const send = useCallback((rawText) => {
+        const text = (rawText != null ? rawText : input).trim();
+        if (!text || loading) return;
+
+        setMessages((prev) => prev.concat([{ role: 'user', text: text }]));
+        setInput('');
+        setLoading(true);
+
+        const myReqId = ++reqIdRef.current;
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (reqIdRef.current !== myReqId) return; // 忽略過時回應
+            setLoading(false);
+            const safe = res || {};
+            if (safe.ok && safe.reply) {
+              setMessages((prev) => prev.concat([{ role: 'ai', text: safe.reply }]));
+            } else {
+              setMessages((prev) => prev.concat([{ role: 'error', text: safe.error || '抱歉，發生未知問題，請稍後再試。' }]));
+            }
+          })
+          .withFailureHandler((err) => {
+            if (reqIdRef.current !== myReqId) return;
+            setLoading(false);
+            const msg = (err && err.message) ? err.message : '連線伺服器失敗，請稍後再試。';
+            setMessages((prev) => prev.concat([{ role: 'error', text: msg }]));
+          })
+          .askCopilot(text);
+      }, [input, loading]);
+
+      const onKeyDown = (e) => {
+        // Enter 送出；Shift+Enter 換行
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          send();
+        }
+      };
+
+      return (
+        <React.Fragment>
+          {open && (
+            <div className="copilot-panel" role="dialog" aria-label="系統導覽助理">
+              <div className="copilot-header">
+                <div className="copilot-avatar"><i className="fa-solid fa-robot"></i></div>
+                <div>
+                  <div className="copilot-title">智慧導覽助理</div>
+                  <div className="copilot-subtitle">問我系統怎麼操作</div>
+                </div>
+                <button className="copilot-close" onClick={() => setOpen(false)} aria-label="收合">
+                  <i className="fa-solid fa-chevron-down"></i>
+                </button>
+              </div>
+
+              <div className="copilot-body" ref={bodyRef}>
+                {messages.map((m, i) => (
+                  <div key={i} className={'copilot-msg ' + m.role}>{m.text}</div>
+                ))}
+                {loading && (
+                  <div className="copilot-msg ai">
+                    <span className="copilot-typing"><span></span><span></span><span></span></span>
+                  </div>
+                )}
+              </div>
+
+              <div className="copilot-quick">
+                {QUICK_PROMPTS.map((q) => (
+                  <button key={q} onClick={() => send(q)} disabled={loading}>{q}</button>
+                ))}
+              </div>
+
+              <div className="copilot-input-row">
+                <textarea
+                  className="copilot-input"
+                  rows={1}
+                  placeholder="輸入你的問題，按 Enter 送出…"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  disabled={loading}
+                />
+                <button className="copilot-send" onClick={() => send()} disabled={loading || !input.trim()} aria-label="送出">
+                  <i className="fa-solid fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button
+            className="copilot-fab"
+            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? '收合導覽助理' : '開啟導覽助理'}
+            title="智慧導覽助理"
+          >
+            <i className={open ? 'fa-solid fa-chevron-down' : 'fa-solid fa-robot'}></i>
+            {!open && <span className="copilot-fab-dot"></span>}
+          </button>
+        </React.Fragment>
+      );
+    }
+
+    const rootEl = document.getElementById('copilot-root');
+    if (rootEl && window.ReactDOM && ReactDOM.createRoot) {
+      ReactDOM.createRoot(rootEl).render(<CopilotWidget />);
+    }
+  })();
+</script>
