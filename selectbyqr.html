@@ -1,4 +1,4 @@
-<!-- 條碼掃描改由 GitHub Pages popup 實現，不再使用 Quagga2 CDN -->
+<!-- Quagga2 條碼掃描庫 (依據 GAS CDN 攔截解決方案，改由主頁面透過本地 quagga.html 內嵌引入) -->
 
 <style>
 /* ========== 掃描區域樣式 ========== */
@@ -48,27 +48,66 @@
   color: #e74c3c;
 }
 
-/* 掃描等待提示容器 */
-.scanner-popup-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 16px;
-  gap: 10px;
-  color: #555;
-  text-align: center;
+/* 掃描器容器 */
+.scanner-reader-container {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 15px auto;
 }
 
-.scanner-popup-hint i {
-  font-size: 32px;
-  color: #4a90e2;
+#Scanner_reader {
+  width: 100%;
+  height: 300px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
 }
 
-.scanner-popup-hint p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
+#Scanner_reader video,
+#Scanner_reader canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 掃描框線覆蓋層 */
+.scanner-frame-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid #4a90e2;
+  border-radius: 8px;
+  margin: 30px;
+  opacity: 0.6;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
+}
+
+/* 水平掃描線 */
+.scanner-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #e74c3c;
+  opacity: 0.8;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: scanLine 2s ease-in-out infinite;
+}
+
+@keyframes scanLine {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 #Scanner_scanStatus {
@@ -108,9 +147,12 @@
     </button>
   </div>
 
-  <div class="scanner-popup-hint">
-    <i class="fas fa-external-link-alt"></i>
-    <p>掃描器已在外部視窗開啟<br><small>掃描完成後結果會自動傳回</small></p>
+  <div class="scanner-reader-container">
+    <div id="Scanner_reader"></div>
+    <!-- 掃描框線 -->
+    <div class="scanner-frame-overlay"></div>
+    <!-- 水平掃描線 -->
+    <div class="scanner-line"></div>
   </div>
 
   <div id="Scanner_scanStatus"></div>
@@ -127,16 +169,12 @@
     console.warn('[Scanner] 請確保在 apply.html 中先引入 batch_processing_list.html');
   }
 
-  // ========== 掃描器頁面 URL ==========
-  const SCANNER_PAGE_URL = 'https://takahope.github.io/1D_camera_scan/';
-  const SCANNER_PAGE_ORIGIN = new URL(SCANNER_PAGE_URL).origin;
-
   // ========== 全局變數 ==========
   let Scanner_active = false;
+  let Scanner_lastScanned = '';
+  let Scanner_cooldown = false;
+  let Scanner_currentStream = null;
   let Scanner_initialized = false;
-  let Scanner_popupWindow = null;
-  let Scanner_messageListener = null;
-  let Scanner_popupWatcher = null;
 
   // ========== 音效 Base64 (嗶聲) ==========
   const BEEP_SOUND = 'data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAAESAAzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMz////////////////////////////////////////////////////////////AAABLAMAAIEQAABgAAACRAAAAAAAAARIAAAAAAAAAAAAAAAAAAAAAA==';
@@ -258,8 +296,8 @@
       return false;
     }
 
-    // 檢查模板是否已插入（以 scanner-header 類別判斷）
-    if (zone.querySelector('.scanner-header')) {
+    // 檢查 Scanner_reader 是否已存在
+    if (document.getElementById('Scanner_reader')) {
       return true; // 模板已插入
     }
 
@@ -300,129 +338,108 @@
     }
   };
 
-  function Scanner_notifyApp(eventName, payload) {
-    const handler = window[eventName];
-    if (typeof handler !== 'function') return;
-    try {
-      handler(payload || {});
-    } catch (error) {
-      console.error(`[Scanner] ${eventName} 執行失敗:`, error);
-    }
-  }
-
-  function Scanner_cleanupListener() {
-    if (Scanner_messageListener) {
-      window.removeEventListener('message', Scanner_messageListener);
-      Scanner_messageListener = null;
-    }
-  }
-
-  function Scanner_handlePopupBlocked() {
-    const message = '瀏覽器封鎖了掃描視窗，請允許彈出視窗後重試';
-    console.warn('[Scanner] popup 被封鎖');
-    Scanner_updateStatus(message, 'error');
-    Scanner_notifyApp('AppScanner_onError', {
-      message: message,
-      reason: 'popup-blocked'
-    });
-    Scanner_stop({
-      reason: 'popup-blocked',
-      preserveStatus: true
-    });
-  }
-
   function Scanner_start() {
     if (Scanner_active) return;
 
-    Scanner_cleanupListener();
-
-    const popup = window.open(
-      SCANNER_PAGE_URL,
-      'barcode_scanner',
-      'width=480,height=640,toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=yes'
-    );
-
-    if (!popup || popup.closed) {
-      Scanner_handlePopupBlocked();
+    if (typeof Quagga === 'undefined') {
+      alert('Quagga2 庫未載入，請檢查網路連線');
       return;
     }
 
-    Scanner_popupWindow = popup;
-    Scanner_active = true;
-    Scanner_updateStatus('外部掃描器已開啟，請在新視窗中掃描...', 'success');
+    const readerEl = document.getElementById('Scanner_reader');
+    if (!readerEl) {
+      console.error('[Scanner] 找不到掃描區元素');
+      return;
+    }
 
-    // 接收掃描結果
-    Scanner_messageListener = function(event) {
-      if (!event.data || event.data.type !== 'BARCODE_SCANNED') return;
-      if (event.data.source !== 'github-pages-scanner') return;
-      if (event.origin !== SCANNER_PAGE_ORIGIN || event.source !== Scanner_popupWindow) {
-        console.warn('[Scanner] 忽略非預期來源的掃描訊息', {
-          origin: event.origin,
-          expectedOrigin: SCANNER_PAGE_ORIGIN,
-          isExpectedSource: event.source === Scanner_popupWindow
-        });
+    Quagga.init({
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: readerEl,
+        constraints: {
+          width: { min: 640 },
+          height: { min: 480 },
+          aspectRatio: { min: 1, max: 2 },
+          facingMode: "environment"
+        }
+      },
+      decoder: {
+        readers: ["code_128_reader", "ean_reader", "code_39_reader", "upc_reader"]
+      },
+      locate: true,
+      numOfWorkers: 2
+    }, (err) => {
+      if (err) {
+        console.error('[Scanner] 無法啟動相機:', err);
+        alert('無法啟動相機：' + err.message);
+        Scanner_updateStatus('相機啟動失敗：' + err.message, 'error');
         return;
       }
-      console.log('[Scanner] 收到掃描結果:', event.data.raw);
-      Scanner_processBarcode(event.data.raw);
-      Scanner_stop({ reason: 'scan-complete' });
-    };
-    window.addEventListener('message', Scanner_messageListener);
 
-    // 監控 popup 是否被使用者手動關閉
-    if (Scanner_popupWatcher) {
-      clearInterval(Scanner_popupWatcher);
-    }
-    Scanner_popupWatcher = setInterval(() => {
-      if (Scanner_popupWindow && Scanner_popupWindow.closed) {
-        Scanner_stop({ reason: 'popup-closed' });
-      }
-    }, 500);
+      Quagga.start();
+      Scanner_active = true;
+      Quagga.onDetected(Scanner_onDetected);
 
-    console.log('[Scanner] 外部掃描器 popup 已開啟');
+      // 儲存當前串流
+      setTimeout(() => {
+        const video = document.querySelector('#Scanner_reader video');
+        if (video && video.srcObject) {
+          Scanner_currentStream = video.srcObject;
+        }
+      }, 500);
+
+      console.log('[Scanner] 掃描器已啟動');
+      Scanner_updateStatus('掃描器運作中...', 'success');
+    });
   }
   window.Scanner_start = Scanner_start;
 
-  function Scanner_stop(options) {
-    const {
-      reason = 'stopped',
-      preserveStatus = false,
-      notifyApp = true
-    } = options || {};
+  function Scanner_stop() {
+    if (!Scanner_active) return;
 
-    if (Scanner_popupWatcher) {
-      clearInterval(Scanner_popupWatcher);
-      Scanner_popupWatcher = null;
+    Quagga.offDetected(Scanner_onDetected);
+    Quagga.stop();
+
+    // 停止所有媒體串流
+    if (Scanner_currentStream) {
+      Scanner_currentStream.getTracks().forEach(track => track.stop());
+      Scanner_currentStream = null;
     }
-    if (Scanner_popupWindow && !Scanner_popupWindow.closed) {
-      Scanner_popupWindow.close();
+
+    // 清空 DOM
+    const reader = document.getElementById('Scanner_reader');
+    if (reader) {
+      while (reader.firstChild) reader.removeChild(reader.firstChild);
     }
-    Scanner_popupWindow = null;
-
-    Scanner_cleanupListener();
-
-    const zone = document.getElementById('Scanner_zone');
-    if (zone) zone.style.display = 'none';
 
     Scanner_active = false;
     console.log('[Scanner] 掃描器已停止');
-    if (!preserveStatus) {
-      Scanner_updateStatus('', '');
-    }
-    if (notifyApp) {
-      Scanner_notifyApp('AppScanner_onClosed', { reason: reason });
-    }
+    Scanner_updateStatus('', '');
   }
   window.Scanner_stop = Scanner_stop;
 
-  function Scanner_processBarcode(rawCode) {
-    // 進階模式：使用專用的 handleScan，正確設定 scannerCompletionRef
-    if (typeof window.AdvancedMode_handleScan === 'function' &&
-        window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
-      window.AdvancedMode_handleScan(rawCode, { source: 'camera' });
+  function Scanner_onDetected(data) {
+    const rawCode = data.codeResult.code;
+
+    // 防重複機制（2 秒冷卻）
+    if (rawCode === Scanner_lastScanned && Scanner_cooldown) {
+      console.log('[Scanner] 重複掃描已忽略:', rawCode);
       return;
     }
 
+    Scanner_lastScanned = rawCode;
+    Scanner_cooldown = true;
+    setTimeout(() => {
+      Scanner_cooldown = false;
+      Scanner_lastScanned = '';
+    }, 2000);
+
+    console.log('[Scanner] 掃描到條碼:', rawCode);
+    Scanner_processBarcode(rawCode);
+  }
+
+  function Scanner_processBarcode(rawCode) {
     // 格式化條碼
     const formattedCode = Scanner_formatBarcode(rawCode);
     console.log('[Scanner] 格式化條碼:', rawCode, '->', formattedCode);
@@ -439,17 +456,15 @@
       Scanner_updateStatus(`✓ 已加入：${asset.assetName}`, 'success');
 
       // 播放飛行動畫（從掃描區飛向清單按鈕）
-      const scannerEl = document.getElementById('Scanner_zone');
+      const scannerEl = document.getElementById('Scanner_reader');
       if (scannerEl) {
         BatchList_animateFlyToCart(scannerEl);
       }
 
       Scanner_playSound();
-      return { success: true, asset: asset, assetId: asset.id, code: formattedCode };
     } else {
       BatchList_showToast(`未找到資產：${formattedCode}`, 'error');
       Scanner_updateStatus(`✗ 未找到資產：${formattedCode}`, 'error');
-      return { success: false, asset: null, assetId: formattedCode, code: formattedCode };
     }
   }
   window.Scanner_processBarcode = Scanner_processBarcode;
