@@ -1667,9 +1667,185 @@
                 }
             },
 
-            /* ── 後續 Phase 掛入點(P5 以真實實作取代) ── */
-            openActionPanel: function () { /* P5 進階模式 */ },
-            closeActionPanel: function () { /* P5 進階模式 */ },
+            /* ── 進階模式 / 動作面板(舊頁 13173-13373, 15316-15364) ── */
+            resolveAssetDetail: function (assetId) {
+                var normalizedId = String(assetId || '').trim();
+                if (!normalizedId) return null;
+                var asset = this.allAssets.find(function (a) { return a.assetId === normalizedId; });
+                if (asset) return asset;
+                var fallback = (window.allAssets || []).find(function (entry) {
+                    return entry.id === normalizedId || entry.assetId === normalizedId;
+                });
+                if (fallback) {
+                    return {
+                        assetId: fallback.id || fallback.assetId,
+                        assetName: fallback.assetName || '',
+                        assetAlias: fallback.assetAlias || '',
+                        productSerial: fallback.productSerial || '',
+                        leader: fallback.keeperName || fallback.leader || '',
+                        leaderEmail: fallback.leaderEmail || '',
+                        userName: fallback.userName || '',
+                        userEmail: fallback.userEmail || '',
+                        location: fallback.location || '',
+                        status: fallback.status || '',
+                        category: fallback.category || '',
+                        sourceSheet: fallback.sourceSheet || '',
+                        isItAsset: fallback.isItAsset || '',
+                        isIsoScope: fallback.isIsoScope || '',
+                        ismsAssetId: fallback.ismsAssetId || ''
+                    };
+                }
+                return {
+                    assetId: normalizedId, assetName: '', assetAlias: '', productSerial: '',
+                    leader: '', leaderEmail: '', userName: '', userEmail: '', location: '',
+                    status: '', category: '', sourceSheet: '', isItAsset: '', isIsoScope: '', ismsAssetId: ''
+                };
+            },
+            closeActionPanel: function (options) {
+                options = options || {};
+                var skipScannerStatus = options.skipScannerStatus || false;
+                var keepPending = options.keepPending || false;
+                this.actionPanelState = { isOpen: false, assetId: '', asset: null, displayMode: 'modal' };
+                if (!keepPending && window.AssetCartStore) {
+                    window.AssetCartStore.clearPendingAsset();
+                }
+                if (!skipScannerStatus && this.isScannerOpen && typeof window.Scanner_updateStatus === 'function') {
+                    window.Scanner_updateStatus('掃描器運作中...', 'success');
+                }
+            },
+            openActionPanel: function (assetId, options) {
+                options = options || {};
+                if (!window.AssetCartStore || !window.AssetCartStore.isAdvancedMode()) return;
+                var normalizedId = String(assetId || '').trim();
+                if (!normalizedId) return;
+                if (window.AssetCartStore.isPendingAction()) return;
+                var displayMode = options.displayMode || (this.isScannerOpen ? 'embedded' : 'modal');
+                var asset = this.resolveAssetDetail(normalizedId);
+                window.AssetCartStore.setPendingAssetId(normalizedId);
+                this.actionPanelState = { isOpen: true, assetId: normalizedId, asset: asset, displayMode: displayMode };
+                if (options.source === 'camera' && typeof window.Scanner_updateStatus === 'function') {
+                    window.Scanner_updateStatus('已掃描，請選擇動作', 'success');
+                }
+            },
+            commitActionSelection: function (actionType, statusValue) {
+                statusValue = statusValue || null;
+                if (!window.AssetCartStore || !this.actionPanelState.assetId) return;
+                var assetId = this.actionPanelState.assetId;
+                var isTaskOnly = actionType !== 'INVENTORY' && this.resolveAssetIsTask(assetId);
+                if (isTaskOnly) {
+                    this.toastOrAlert('此資產屬於同組成員，僅能進行盤點', 'warning');
+                    return;
+                }
+                if (actionType === 'INVENTORY' && !this.hasInventoryTaskForActionPanel(assetId)) {
+                    this.toastOrAlert('此資產目前沒有盤點任務', 'warning');
+                    return;
+                }
+                if (actionType === 'INVENTORY' && !statusValue) {
+                    if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast('請選擇盤點結果', 'warning');
+                    return;
+                }
+                var asset = this.actionPanelState.asset || this.resolveAssetDetail(assetId);
+                var summary = actionType === 'INVENTORY' ? ('盤點｜' + (statusValue || '')) : '';
+                var added = window.AssetCartStore.addOrUpdateItem({
+                    assetId: assetId,
+                    assetName: (asset && asset.assetName) || '',
+                    actionType: actionType,
+                    status: statusValue,
+                    actionSummary: summary
+                });
+                if (!added) return;
+                if (typeof window.BatchList_showToast === 'function') {
+                    window.BatchList_showToast('已加入：' + ((asset && asset.assetName) || assetId), 'success');
+                }
+                this.closeActionPanel();
+            },
+            handleQueueAction: function (actionType, payload, summary, assetOverride) {
+                if (!window.AssetCartStore) return;
+                var asset = assetOverride || this.resolveAssetDetail(this.actionPanelState.assetId || '');
+                if (!asset || !asset.assetId) return;
+                var normalizedPayload = payload ? JSON.parse(JSON.stringify(payload)) : null;
+                var added = window.AssetCartStore.addOrUpdateItem({
+                    assetId: asset.assetId,
+                    assetName: asset.assetName || '',
+                    actionType: actionType,
+                    actionPayload: normalizedPayload,
+                    actionSummary: summary || ''
+                });
+                if (!added) return;
+                refs.queueReturnContext = { assetId: asset.assetId, shouldRestoreActionPanel: true };
+                if (typeof window.BatchList_showToast === 'function') {
+                    window.BatchList_showToast('已加入進階清單：' + (asset.assetName || asset.assetId), 'success');
+                }
+            },
+            handleQueueModalClose: function () {
+                var ctx = refs.queueReturnContext;
+                refs.queueReturnContext = { assetId: '', shouldRestoreActionPanel: false };
+                if (this.quickActionMode === 'queue' && window.AssetCartStore) {
+                    window.AssetCartStore.clearPendingAsset();
+                }
+                this.quickActionModalType = null;
+                this.selectedAsset = null;
+                this.quickActionMode = 'submit';
+                if (ctx.shouldRestoreActionPanel && ctx.assetId) {
+                    this.openActionPanel(ctx.assetId, { displayMode: 'modal', source: 'queue-restore' });
+                }
+            },
+            openQueueActionModal: function (actionType) {
+                var modalType = ACTION_MODAL_BY_TYPE[actionType];
+                if (!modalType) return;
+                if (actionType === 'TRANSFER' && !this.transferOptions) { alert('轉移選項尚未載入，請稍後再試'); return; }
+                if (actionType === 'LEND' && !this.lendingOptions) { alert('出借選項尚未載入，請稍後再試'); return; }
+                var asset = this.actionPanelState.asset || this.resolveAssetDetail(this.actionPanelState.assetId);
+                if (!asset || !asset.assetId) return;
+                if (this.resolveAssetIsTask(asset.assetId)) {
+                    this.toastOrAlert('此資產屬於同組成員，僅能進行盤點', 'warning');
+                    return;
+                }
+                refs.queueReturnContext = { assetId: asset.assetId, shouldRestoreActionPanel: false };
+                this.selectedAsset = asset;
+                this.quickActionMode = 'queue';
+                this.quickActionModalType = modalType;
+                this.closeActionPanel({ keepPending: true });
+            },
+            handleInventoryQueue: function (payload, summary) {
+                var self = this;
+                if (!window.AssetCartStore) return;
+                var actionType = (payload && payload.actionType === 'INVENTORY_RESET') ? 'INVENTORY_RESET' : 'INVENTORY';
+                var queueAssetIds = Array.isArray(payload && payload.assetIds)
+                    ? payload.assetIds
+                    : [this.inventoryModalAsset && this.inventoryModalAsset.assetId];
+                var normalizedAssetIds = queueAssetIds.map(function (id) { return String(id || '').trim(); }).filter(Boolean);
+                if (normalizedAssetIds.length === 0) return;
+                var normalizedPayload = (payload && payload.actionPayload) ? JSON.parse(JSON.stringify(payload.actionPayload)) : {};
+                var statusValue = String((payload && payload.status) || '').trim();
+                if (actionType === 'INVENTORY' && !statusValue) {
+                    this.toastOrAlert('請選擇盤點結果', 'warning');
+                    return;
+                }
+                var addedAssetNames = [];
+                normalizedAssetIds.forEach(function (assetId) {
+                    var assetDetail = self.resolveAssetDetail(assetId);
+                    var added = window.AssetCartStore.addOrUpdateItem({
+                        assetId: assetId,
+                        assetName: (assetDetail && assetDetail.assetName) || '',
+                        actionType: actionType,
+                        status: actionType === 'INVENTORY' ? statusValue : null,
+                        actionPayload: actionType === 'INVENTORY' ? normalizedPayload : null,
+                        actionSummary: summary || (actionType === 'INVENTORY' ? ('盤點｜' + statusValue) : '取消確認｜重設為未盤點')
+                    });
+                    if (added) addedAssetNames.push((assetDetail && assetDetail.assetName) || assetId);
+                });
+                if (addedAssetNames.length > 0 && typeof window.BatchList_showToast === 'function') {
+                    var label = normalizedAssetIds.length > 1
+                        ? ('已加入進階清單：' + normalizedAssetIds.length + ' 筆' + (actionType === 'INVENTORY_RESET' ? '重設項目' : '盤點項目'))
+                        : ('已加入進階清單：' + addedAssetNames[0]);
+                    window.BatchList_showToast(label, 'success');
+                }
+            },
+            toastOrAlert: function (message, level) {
+                if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast(message, level || 'info');
+                else alert(message);
+            },
 
             /* ── 全域契約同步(舊頁 14446-14459, 14828-14875) ── */
             syncPendingApprovalsGlobal: function () {
@@ -1746,11 +1922,15 @@
                     window.duplicateGroups = self.duplicateInfo.groups;
                 });
                 // 進階模式購物車(舊頁 13073-13082):訂閱快照 + 初始化(alpine_cart.html 提供)
+                // ⚠ 訂閱回呼只更新快照;「離開進階模式關閉面板」需以「模式轉變」為條件(舊頁是
+                //   獨立的 useEffect[isAdvancedMode],僅值變化時觸發)。若在每次 notify 都關面板,
+                //   closeActionPanel→clearPendingAsset→notify 會無限遞迴。故以 prevAdvanced 做守衛。
                 if (window.AssetCartStore) {
                     window.AssetCartStore.subscribe(function (snapshot) {
+                        var prevAdvanced = self.isAdvancedMode;
                         self.cartSnapshot = snapshot;
-                        // 舊頁 13469-13476:離開進階模式時關閉掃描面板
-                        if (snapshot.mode !== 'ADVANCED') {
+                        var nowAdvanced = snapshot.mode === 'ADVANCED';
+                        if (prevAdvanced && !nowAdvanced) { // 舊頁 13469-13476
                             self.isScannerOpen = false;
                             if (refs.closeActionPanelFn) {
                                 refs.closeActionPanelFn({ skipScannerStatus: true });
@@ -1776,6 +1956,87 @@
                     if (!window.AssetCartStore) return;
                     window.AssetCartStore.removeItem(assetId);
                 };
+                // closeActionPanel ref(舊頁 13465-13467)+ 進階模式開關 ActionPanel 動作面板契約
+                refs.closeActionPanelFn = function (opts) { self.closeActionPanel(opts); };
+                window.AdvancedMode_openActionPanel = function (assetId, opts) { self.openActionPanel(assetId, opts || {}); };
+                window.AdvancedMode_handleScan = function (rawCode, opts) {
+                    opts = opts || {};
+                    if (!window.AssetCartStore || !window.AssetCartStore.isAdvancedMode()) return;
+                    if (window.AssetCartStore.isPendingAction()) {
+                        if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast('請先完成上一筆動作', 'warning');
+                        return;
+                    }
+                    var rawValue = String(rawCode || '').trim();
+                    var formatted = typeof window.Scanner_formatBarcode === 'function' ? window.Scanner_formatBarcode(rawValue) : rawValue;
+                    var asset = (typeof window.BatchList_findAsset === 'function'
+                        ? (window.BatchList_findAsset(formatted) || window.BatchList_findAsset(rawValue))
+                        : null) || (window.allAssets || []).find(function (entry) { return entry.id === formatted || entry.id === rawValue; });
+                    if (!asset) {
+                        var message = '未找到資產：' + formatted;
+                        if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast(message, 'error');
+                        if (typeof window.Scanner_updateStatus === 'function' && opts.source === 'camera') window.Scanner_updateStatus(message, 'error');
+                        return;
+                    }
+                    var assetId = asset.id || asset.assetId || formatted;
+                    var displayMode = opts.source === 'camera' ? 'embedded' : 'modal';
+                    self.openActionPanel(assetId, { displayMode: displayMode, source: opts.source });
+                    if (typeof window.Scanner_playSound === 'function') window.Scanner_playSound();
+                };
+
+                // 進階模式:購物車 items → 選取狀態鏡射(舊頁 13089-13093)
+                Alpine.effect(function () {
+                    if (!self.isAdvancedMode) return;
+                    self.selectedAssetIds = self.cartSnapshot.items.map(function (item) { return item.assetId; });
+                });
+                // 進階模式:攔截 checkbox change 冒泡(舊頁 13095-13104)
+                document.addEventListener('change', function (event) {
+                    if (!self.isAdvancedMode) return;
+                    var target = event.target;
+                    if (!target || !target.classList || !target.classList.contains('asset-checkbox')) return;
+                    event.stopPropagation();
+                }, true);
+                // 進階模式:硬體掃描器鍵盤緩衝(舊頁 13106-13146)
+                (function () {
+                    var buffer = '';
+                    var timerId = null;
+                    var resetBuffer = function () { buffer = ''; if (timerId) { clearTimeout(timerId); timerId = null; } };
+                    document.addEventListener('keydown', function (event) {
+                        if (!self.isAdvancedMode) return;
+                        var target = event.target;
+                        var isEditable = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+                        if (isEditable) return;
+                        if (event.key === 'Enter') {
+                            if (buffer.length >= 4 && typeof window.AdvancedMode_handleScan === 'function') {
+                                window.AdvancedMode_handleScan(buffer, { source: 'hardware' });
+                            }
+                            resetBuffer();
+                            return;
+                        }
+                        if (event.key.length === 1) {
+                            buffer += event.key;
+                            if (timerId) clearTimeout(timerId);
+                            timerId = setTimeout(resetBuffer, 120);
+                        }
+                    });
+                })();
+                // 進階模式:搜尋框 Enter 當作掃描(舊頁 13148-13171;搜尋框於 alpine_views 掛載後才存在,延遲綁定)
+                var bindSearchEnter = function () {
+                    var searchBox = document.getElementById('search-box');
+                    if (!searchBox) { setTimeout(bindSearchEnter, 300); return; }
+                    searchBox.addEventListener('keypress', function (event) {
+                        if (!self.isAdvancedMode) return;
+                        if (event.key !== 'Enter') return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.stopImmediatePropagation();
+                        var value = String(searchBox.value || '').trim();
+                        if (!value) return;
+                        if (typeof window.AdvancedMode_handleScan === 'function') window.AdvancedMode_handleScan(value, { source: 'manual' });
+                        if (typeof window.clearSearchBox === 'function') window.clearSearchBox();
+                        else { searchBox.value = ''; searchBox.dispatchEvent(new Event('input', { bubbles: true })); }
+                    }, true);
+                };
+                bindSearchEnter();
             }
         });
     });
