@@ -208,7 +208,8 @@
         inventoryToastTimer: null,
         advancedSubmit: false,
         closeActionPanelFn: null,            // closeActionPanelRef
-        queueReturnContext: { assetId: '', shouldRestoreActionPanel: false }
+        queueReturnContext: { assetId: '', shouldRestoreActionPanel: false },
+        ismsCreatedCallback: null            // 共用 CreateIsms modal 的建立回呼
     };
     var cancelScheduled = function (slot) {
         if (!refs[slot]) return;
@@ -296,6 +297,7 @@
             inventoryStatusByAsset: {},
             ismsAssets: [],
             ismsEnabled: false,
+            createIsmsOpen: false,      // 共用「新增資訊資產」modal(EditAsset/盤點表單開啟)
             cartSnapshot: { mode: 'ADVANCED', items: [], pendingAssetId: null },
             isScannerOpen: false,
             actionPanelState: { isOpen: false, assetId: '', asset: null, displayMode: 'modal' },
@@ -545,6 +547,19 @@
                 if (!newAsset || !newAsset.ismsAssetId) return;
                 var exists = this.ismsAssets.some(function (a) { return a.ismsAssetId === newAsset.ismsAssetId; });
                 if (!exists) this.ismsAssets = this.ismsAssets.concat([newAsset]);
+            },
+            // 共用「新增資訊資產」modal:開啟時登記回呼(建立成功後由開啟者接手選取)
+            openCreateIsms: function (onCreated) {
+                refs.ismsCreatedCallback = typeof onCreated === 'function' ? onCreated : null;
+                this.createIsmsOpen = true;
+            },
+            closeCreateIsms: function () {
+                this.createIsmsOpen = false;
+                refs.ismsCreatedCallback = null;
+            },
+            onIsmsAssetCreated: function (newAsset) {
+                this.handleIsmsAssetCreated(newAsset);
+                if (refs.ismsCreatedCallback) refs.ismsCreatedCallback(newAsset);
             },
 
             /* ── 盤點待辦載入(舊頁 13560-13689;快取/請求代/併發去重逐一保留) ── */

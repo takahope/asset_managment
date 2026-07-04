@@ -1332,8 +1332,10 @@ document.addEventListener('alpine:init', function () {
 
 <!-- ===== Modal 掛載區(置於 x-if=isReady 之外、main 之內:script 註冊需在 template 外才會執行;
      各 modal 皆有自身 x-if 觸發條件,未觸發不渲染) ===== -->
-<!-- 單筆操作 modal(P3:Quick 轉移/出借/報廢;Add/Edit/CreateIsms 後續補上) -->
+<!-- 單筆操作 modal(P3:Quick 轉移/出借/報廢) -->
 <?!= include('alpine_modals_single'); ?>
+<!-- 資產 modal(P3:CreateIsms 共用 / 新增資產 / 編輯資產 / 批次匯入手冊) -->
+<?!= include('alpine_modals_asset'); ?>
 <!-- [P4 掛載點] 批次操作 modal(Batch*/匯入指南) -->
 <!-- [P5 掛載點] 盤點 modal(管理/待盤點/確認) -->
 <!-- [P6 掛載點] 文件與列印 modal(轉移中/歸還/三種列印/操作手冊) -->
