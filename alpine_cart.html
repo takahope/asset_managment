@@ -1,0 +1,498 @@
+<!--
+  alpine_cart.html — AssetCartStore(進階模式購物車)+ BatchList/Scanner 覆寫
+  逐字移植自舊頁 userstate.html:2800-3124(LocalDB/AssetCartStore)、3175-3331(overrides)。
+  純 JS、無框架依賴;僅將 ACTION_LABELS/escapeHtml 改為取自 window.AppShared(alpine_store 提供)。
+-->
+<script>
+(function () {
+    'use strict';
+    const ACTION_LABELS = window.AppShared.ACTION_LABELS;
+    const escapeHtml = window.AppShared.escapeHtml;
+
+    /* ===== LocalDB(舊頁 2800-2845 逐字) ===== */
+    class LocalDB {
+        constructor(dbName, storeName) {
+            this.dbName = dbName;
+            this.storeName = storeName;
+            this._dbPromise = null;
+        }
+
+        init() {
+            if (this._dbPromise) return this._dbPromise;
+            this._dbPromise = new Promise((resolve, reject) => {
+                const request = indexedDB.open(this.dbName, 1);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(this.storeName)) {
+                        db.createObjectStore(this.storeName, { keyPath: 'key' });
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            return this._dbPromise;
+        }
+
+        async saveCart(payload) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(this.storeName, 'readwrite');
+                const store = tx.objectStore(this.storeName);
+                store.put(payload);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async loadCart() {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(this.storeName, 'readonly');
+                const store = tx.objectStore(this.storeName);
+                const request = store.get('cart');
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => reject(request.error);
+            });
+        }
+    }
+
+    /* ===== AssetCartStore(舊頁 2846-3122 逐字) ===== */
+    const AssetCartStore = (() => {
+        let mode = 'ADVANCED';
+        let items = [];
+        let pendingAssetId = null;
+        let listeners = new Set();
+        let syncing = false;
+        let ready = false;
+        let persistTimer = null;
+        const db = new LocalDB('assetCartDB', 'assetCartStore');
+
+        const normalizeItem = (raw) => {
+            if (!raw) return null;
+            const assetId = String(raw.assetId || '').trim();
+            if (!assetId) return null;
+            const actionType = ACTION_LABELS[raw.actionType] ? raw.actionType : 'NONE';
+            const hasActionPayload = Object.prototype.hasOwnProperty.call(raw, 'actionPayload');
+            const hasActionSummary = Object.prototype.hasOwnProperty.call(raw, 'actionSummary');
+            const actionPayload = hasActionPayload && raw.actionPayload
+                ? JSON.parse(JSON.stringify(raw.actionPayload))
+                : (hasActionPayload ? null : undefined);
+            const actionSummary = hasActionSummary ? String(raw.actionSummary || '') : undefined;
+            return {
+                assetId: assetId,
+                assetName: String(raw.assetName || ''),
+                actionType: actionType,
+                status: raw.status ? String(raw.status) : null,
+                timestamp: typeof raw.timestamp === 'number' ? raw.timestamp : Date.now(),
+                actionPayload: actionPayload,
+                actionSummary: actionSummary
+            };
+        };
+
+        const getSnapshot = () => ({
+            mode,
+            items: items.slice(),
+            pendingAssetId
+        });
+
+        const notify = (event, payload) => {
+            const snapshot = getSnapshot();
+            listeners.forEach(handler => handler(snapshot, event, payload));
+        };
+
+        const schedulePersist = () => {
+            if (!ready) return;
+            if (persistTimer) clearTimeout(persistTimer);
+            persistTimer = setTimeout(() => {
+                db.saveCart({
+                    key: 'cart',
+                    mode,
+                    items,
+                    updatedAt: Date.now()
+                }).catch(error => console.warn('[AssetCartStore] 儲存失敗：', error));
+            }, 200);
+        };
+
+        const applyBatchListUpdate = () => {
+            if (typeof window.BatchList_updateUI === 'function') {
+                window.BatchList_updateUI();
+            }
+        };
+
+        const applyBatchListAdd = (assetId) => {
+            if (typeof window.BatchList_addItemSilent === 'function') {
+                syncing = true;
+                window.BatchList_addItemSilent(assetId);
+                syncing = false;
+                applyBatchListUpdate();
+                return;
+            }
+            if (window.BatchList_base && typeof window.BatchList_base.addItem === 'function') {
+                syncing = true;
+                window.BatchList_base.addItem(assetId);
+                syncing = false;
+            }
+        };
+
+        const applyBatchListRemove = (assetId) => {
+            if (window.BatchList_base && typeof window.BatchList_base.removeItem === 'function') {
+                syncing = true;
+                window.BatchList_base.removeItem(assetId);
+                syncing = false;
+            }
+        };
+
+        const applyBatchListClear = (options = {}) => {
+            const { silent = false } = options;
+            if (silent && typeof window.BatchList_resetOnSubmit === 'function') {
+                syncing = true;
+                window.BatchList_resetOnSubmit();
+                syncing = false;
+                return;
+            }
+            if (window.BatchList_base && typeof window.BatchList_base.clearAll === 'function') {
+                syncing = true;
+                window.BatchList_base.clearAll();
+                syncing = false;
+            }
+        };
+
+        const syncBatchListFromStore = () => {
+            if (!window.BatchList_base) return;
+            applyBatchListClear({ silent: true });
+            items.forEach(item => applyBatchListAdd(item.assetId));
+            applyBatchListUpdate();
+        };
+
+        const init = async () => {
+            if (ready) return getSnapshot();
+            try {
+                await db.init();
+                const payload = await db.loadCart();
+                if (payload) {
+                    mode = payload.mode === 'STANDARD' ? 'STANDARD' : 'ADVANCED';
+                    const restored = Array.isArray(payload.items) ? payload.items : [];
+                    items = restored.map(normalizeItem).filter(Boolean);
+                }
+            } catch (error) {
+                console.warn('[AssetCartStore] IndexedDB 初始化失敗：', error);
+            }
+            ready = true;
+            schedulePersist();
+            notify('init');
+            if (items.length > 0) {
+                const message = `已從離線暫存恢復 ${items.length} 筆清單`;
+                if (typeof window.BatchList_showToast === 'function') {
+                    window.BatchList_showToast(message, 'info');
+                } else {
+                    console.log(message);
+                }
+            }
+            const syncWhenReady = () => {
+                if (window.BatchList_base) {
+                    syncBatchListFromStore();
+                    return;
+                }
+                setTimeout(syncWhenReady, 300);
+            };
+            syncWhenReady();
+            return getSnapshot();
+        };
+
+        const addOrUpdateItem = (rawItem) => {
+            const item = normalizeItem(rawItem);
+            if (!item) return false;
+            const existingIndex = items.findIndex(entry => entry.assetId === item.assetId);
+            const hasActionPayload = Object.prototype.hasOwnProperty.call(rawItem || {}, 'actionPayload');
+            const hasActionSummary = Object.prototype.hasOwnProperty.call(rawItem || {}, 'actionSummary');
+            if (existingIndex < 0) {
+                const maxSize = typeof window.BatchList_getMaxSize === 'function'
+                    ? window.BatchList_getMaxSize()
+                    : 500;
+                if (items.length >= maxSize) {
+                    const message = `已達上限 ${maxSize} 筆，無法新增更多`;
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast(message, 'warning');
+                    } else {
+                        alert(message);
+                    }
+                    return false;
+                }
+            }
+            if (existingIndex >= 0) {
+                const base = items[existingIndex];
+                const next = {
+                    ...base,
+                    ...item,
+                    timestamp: Date.now()
+                };
+                if (!hasActionPayload) {
+                    next.actionPayload = base.actionPayload;
+                }
+                if (!hasActionSummary) {
+                    next.actionSummary = base.actionSummary;
+                }
+                items[existingIndex] = next;
+                applyBatchListUpdate();
+            } else {
+                items.push({
+                    ...item,
+                    actionPayload: item.actionPayload ?? null,
+                    actionSummary: item.actionSummary ?? ''
+                });
+                applyBatchListAdd(item.assetId);
+            }
+            schedulePersist();
+            notify('add', item);
+            return true;
+        };
+
+        const removeItem = (assetId) => {
+            const normalizedId = String(assetId || '').trim();
+            if (!normalizedId) return false;
+            const nextItems = items.filter(item => item.assetId !== normalizedId);
+            if (nextItems.length === items.length) return false;
+            items = nextItems;
+            applyBatchListRemove(normalizedId);
+            schedulePersist();
+            notify('remove', normalizedId);
+            return true;
+        };
+
+        const removeItemsByAction = (actionType) => {
+            const removedIds = items.filter(item => item.actionType === actionType).map(item => item.assetId);
+            if (removedIds.length === 0) return [];
+            items = items.filter(item => item.actionType !== actionType);
+            removedIds.forEach(id => applyBatchListRemove(id));
+            schedulePersist();
+            notify('remove-action', actionType);
+            return removedIds;
+        };
+
+        const removeItemsByIds = (assetIds) => {
+            const targets = new Set((assetIds || []).map(id => String(id || '').trim()).filter(Boolean));
+            if (targets.size === 0) return [];
+            const removed = [];
+            items = items.filter(item => {
+                if (targets.has(item.assetId)) {
+                    removed.push(item.assetId);
+                    return false;
+                }
+                return true;
+            });
+            removed.forEach(id => applyBatchListRemove(id));
+            schedulePersist();
+            notify('remove-ids', removed);
+            return removed;
+        };
+
+        const clearAll = (options = {}) => {
+            items = [];
+            pendingAssetId = null;
+            applyBatchListClear(options);
+            schedulePersist();
+            notify('clear');
+        };
+
+        const setMode = (nextMode) => {
+            mode = nextMode === 'ADVANCED' ? 'ADVANCED' : 'STANDARD';
+            schedulePersist();
+            notify('mode', mode);
+        };
+
+        const subscribe = (handler) => {
+            listeners.add(handler);
+            handler(getSnapshot(), 'subscribe');
+            return () => listeners.delete(handler);
+        };
+
+        return {
+            init,
+            subscribe,
+            getSnapshot,
+            getMode: () => mode,
+            isAdvancedMode: () => mode === 'ADVANCED',
+            getItems: () => items.slice(),
+            hasItem: (assetId) => items.some(item => item.assetId === assetId),
+            addOrUpdateItem,
+            removeItem,
+            removeItemsByAction,
+            removeItemsByIds,
+            clearAll,
+            setMode,
+            setPendingAssetId: (assetId) => {
+                pendingAssetId = assetId ? String(assetId) : null;
+                notify('pending', pendingAssetId);
+            },
+            clearPendingAsset: () => {
+                pendingAssetId = null;
+                notify('pending');
+            },
+            isPendingAction: () => Boolean(pendingAssetId),
+            isInternalSync: () => syncing
+        };
+    })();
+
+    window.AssetCartStore = AssetCartStore;
+
+    /* ===== BatchList 覆寫(舊頁 3175-3292 逐字;進階模式路由) ===== */
+    window.setupBatchListOverrides = () => {
+        if (window.BatchList_overridesReady) return;
+        if (typeof window.BatchList_addItem !== 'function') {
+            setTimeout(window.setupBatchListOverrides, 300);
+            return;
+        }
+        window.BatchList_overridesReady = true;
+        window.BatchList_base = {
+            addItem: window.BatchList_addItem,
+            addItems: window.BatchList_addItems,
+            removeItem: window.BatchList_removeItem,
+            clearAll: window.BatchList_clearAll,
+            updateUI: window.BatchList_updateUI
+        };
+
+        window.BatchList_addItem = function (assetId) {
+            if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                if (window.AssetCartStore.isInternalSync()) {
+                    return window.BatchList_base.addItem(assetId);
+                }
+                if (typeof window.AdvancedMode_openActionPanel === 'function') {
+                    window.AdvancedMode_openActionPanel(assetId, { source: 'batchlist' });
+                }
+                return false;
+            }
+            return window.BatchList_base.addItem(assetId);
+        };
+
+        window.BatchList_addItems = function (assetIds) {
+            if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                if (typeof window.BatchList_showToast === 'function') {
+                    window.BatchList_showToast('進階模式不支援全選加入，請逐筆選擇動作', 'warning');
+                } else {
+                    alert('進階模式不支援全選加入，請逐筆選擇動作');
+                }
+                return 0;
+            }
+            return window.BatchList_base.addItems(assetIds);
+        };
+
+        window.BatchList_removeItem = function (assetId) {
+            if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                if (window.AssetCartStore.isInternalSync()) {
+                    return window.BatchList_base.removeItem(assetId);
+                }
+                return window.AssetCartStore.removeItem(assetId);
+            }
+            return window.BatchList_base.removeItem(assetId);
+        };
+
+        window.BatchList_clearAll = function () {
+            if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                return window.AssetCartStore.clearAll();
+            }
+            return window.BatchList_base.clearAll();
+        };
+
+        window.BatchList_updateUI = function () {
+            if (!window.AssetCartStore || !window.AssetCartStore.isAdvancedMode()) {
+                return window.BatchList_base.updateUI();
+            }
+            const listContainer = document.getElementById('BatchList_itemList');
+            const badge = document.getElementById('BatchList_badge');
+            const count = document.getElementById('BatchList_count');
+            if (!listContainer || !badge || !count) return;
+
+            const items = window.AssetCartStore.getItems();
+            const itemCount = items.length;
+            badge.textContent = itemCount;
+            count.textContent = itemCount;
+
+            if (itemCount === 0) {
+                listContainer.innerHTML = `
+                    <div class="batch-list-empty">
+                        <i class="fas fa-shopping-cart"></i>
+                        <p>尚未加入資產</p>
+                    </div>`;
+                return;
+            }
+
+            const submitSection = `
+                <div class="px-3 py-2 border-b border-slate-100">
+                    <button class="btn btn-primary btn-sm" onclick="window.AdvancedCart_submit && window.AdvancedCart_submit()">
+                        <i class="fa-solid fa-paper-plane mr-1"></i>送出清單
+                    </button>
+                </div>
+            `;
+
+            listContainer.innerHTML = submitSection + items.map(item => {
+                const label = ACTION_LABELS[item.actionType] || ACTION_LABELS.NONE;
+                const statusLabel = item.actionType === 'INVENTORY' && item.status ? item.status : '未設定';
+                const timeText = item.timestamp ? new Date(item.timestamp).toLocaleString('zh-TW') : '-';
+                const assetName = escapeHtml(item.assetName || '');
+                const assetIdRaw = String(item.assetId || '');
+                const assetIdText = escapeHtml(assetIdRaw);
+                const assetIdArg = escapeHtml(JSON.stringify(assetIdRaw));
+                const summaryText = item.actionSummary ? escapeHtml(item.actionSummary) : '';
+                const summaryHtml = summaryText ? `<div class="advanced-batch-summary">${summaryText}</div>` : '';
+                return `
+                    <div class="batch-list-item">
+                        <div class="item-info advanced-batch-item">
+                            <strong>${assetIdText}</strong>
+                            <small>${assetName || '（無名稱）'}</small>
+                            ${summaryHtml}
+                            <div class="advanced-batch-meta">
+                                <span class="advanced-batch-tag">${escapeHtml(label)}</span>
+                                ${item.actionType === 'INVENTORY' ? `<span class="advanced-batch-tag">${escapeHtml(statusLabel)}</span>` : ''}
+                                <span>${escapeHtml(timeText)}</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="window.AdvancedCart_removeItem && window.AdvancedCart_removeItem(${assetIdArg})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        };
+    };
+
+    /* ===== Scanner 覆寫(舊頁 3294-3331 逐字;進階模式掃描路由) ===== */
+    window.setupScannerOverrides = () => {
+        if (window.Scanner_overridesReady) return;
+        if (typeof window.Scanner_processBarcode !== 'function') {
+            setTimeout(window.setupScannerOverrides, 300);
+            return;
+        }
+        window.Scanner_overridesReady = true;
+        window.Scanner_processBarcode_base = window.Scanner_processBarcode;
+        window.Scanner_processBarcode = function (rawCode) {
+            if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                if (window.AssetCartStore.isPendingAction()) {
+                    if (typeof window.BatchList_showToast === 'function') {
+                        window.BatchList_showToast('請先完成上一筆動作', 'warning');
+                    }
+                    return;
+                }
+                if (typeof window.AdvancedMode_handleScan === 'function') {
+                    window.AdvancedMode_handleScan(rawCode, { source: 'camera' });
+                    return;
+                }
+            }
+            return window.Scanner_processBarcode_base(rawCode);
+        };
+
+        if (typeof window.Scanner_toggle === 'function') {
+            window.Scanner_toggle_base = window.Scanner_toggle;
+            window.Scanner_toggle = function () {
+                if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
+                    if (typeof window.AdvancedMode_toggleScanner === 'function') {
+                        return window.AdvancedMode_toggleScanner();
+                    }
+                } else if (typeof window.App_toggleScanner === 'function') {
+                    return window.App_toggleScanner();
+                }
+                return window.Scanner_toggle_base();
+            };
+        }
+    };
+})();
+</script>

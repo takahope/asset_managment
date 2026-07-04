@@ -1,0 +1,1337 @@
+<!--
+  alpine_views.html — P2 唯讀視圖層:頁面主結構、儀表板卡片、篩選卡、資產表格、狀態詳情
+  markup 與 class 字串逐字對應舊頁 App render(userstate.html:15748-16280)與各元件。
+  元件邏輯以 Alpine.data 註冊;後續 Phase 的 modal 於檔尾標記的掛載點加入。
+-->
+<script>
+document.addEventListener('alpine:init', function () {
+    var S = window.AppShared;
+
+    /* ===== FilterSection(舊頁 5356-6039) ===== */
+    Alpine.data('filterSection', function () {
+        return {
+            localSearch: '',
+            debounceTimer: null,
+            dropdownOpen: { status: false, leader: false, user: false, group: false, location: false },
+            optionSearch: { leader: '', user: '', group: '', location: '' },
+            // 下拉卡設定(渲染順序與舊頁一致;status 在 category/systemCategory 之前)
+            msBefore: [
+                { key: 'status', label: '依狀態篩選', placeholder: '請選擇狀態...', empty: '找不到符合的狀態', searchable: false, searchPlaceholder: '' }
+            ],
+            msAfter: [
+                { key: 'leader', label: '依保管人篩選', placeholder: '請選擇保管人...', empty: '找不到符合的保管人', searchable: true, searchPlaceholder: '搜尋保管人...' },
+                { key: 'user', label: '依使用人篩選', placeholder: '請選擇使用人...', empty: '找不到符合的使用人', searchable: true, searchPlaceholder: '搜尋使用人...' },
+                { key: 'group', label: '依組別篩選', placeholder: '請選擇組別...', empty: '找不到符合的組別', searchable: true, searchPlaceholder: '搜尋組別...' },
+                { key: 'location', label: '依保管位置篩選', placeholder: '請選擇保管位置...', empty: '找不到符合的保管位置', searchable: true, searchPlaceholder: '搜尋保管位置...' }
+            ],
+            _outsideHandler: null,
+
+            init: function () {
+                var self = this;
+                this.localSearch = this.$store.app.filters.search;
+                // 外部 filters.search 變化時同步(例如 Scanner 清空搜尋框;舊頁 5376-5378)
+                this.$watch('$store.app.filters.search', function (value) {
+                    self.localSearch = value;
+                });
+                // 暴露清空搜尋框契約(舊頁 5405-5418)
+                window.clearSearchBox = function () {
+                    if (self.debounceTimer) {
+                        clearTimeout(self.debounceTimer);
+                        self.debounceTimer = null;
+                    }
+                    self.localSearch = '';
+                    self.$store.app.handleFilterChange('search', '');
+                };
+                // 點擊外部關閉下拉(舊頁 5491-5506;mousedown 語意保留)
+                this._outsideHandler = function (event) {
+                    var root = event.target && event.target.closest ? event.target.closest('.fs-dropdown-root') : null;
+                    if (root && self.$root.contains(root)) return;
+                    self.closeAllDropdowns();
+                };
+                document.addEventListener('mousedown', this._outsideHandler);
+            },
+            destroy: function () {
+                if (this._outsideHandler) document.removeEventListener('mousedown', this._outsideHandler);
+                if (this.debounceTimer) clearTimeout(this.debounceTimer);
+                delete window.clearSearchBox;
+            },
+
+            /* 選項(舊頁 5420-5489 useMemo 群) */
+            get statusOptions() {
+                return Array.from(new Set(this.$store.app.allAssets.map(function (a) { return a.status; }))).filter(Boolean).sort();
+            },
+            get categoryOptions() {
+                return Array.from(new Set(this.$store.app.allAssets.map(function (a) { return a.category; }))).filter(Boolean).sort();
+            },
+            baseOptionsFor: function (key) {
+                var assets = this.$store.app.allAssets;
+                if (key === 'status') return this.statusOptions;
+                if (key === 'leader') {
+                    return Array.from(new Set(assets.map(function (a) { return a.leader; }))).filter(Boolean).sort();
+                }
+                if (key === 'user') {
+                    var userOptions = new Set();
+                    assets.forEach(function (asset) {
+                        var userName = String(asset.userName || '').trim();
+                        if (userName) userOptions.add(userName);
+                    });
+                    userOptions.add('無');
+                    return Array.from(userOptions).sort();
+                }
+                if (key === 'group') {
+                    var groupOptions = new Set();
+                    assets.forEach(function (asset) {
+                        var groupName = String(asset.group || '').trim();
+                        if (groupName) groupOptions.add(groupName);
+                    });
+                    return Array.from(groupOptions).sort();
+                }
+                if (key === 'location') {
+                    return Array.from(new Set(assets.map(function (a) { return a.location; }))).filter(Boolean).sort();
+                }
+                return [];
+            },
+            optionsFor: function (key) {
+                var base = this.baseOptionsFor(key);
+                var keyword = String(this.optionSearch[key] || '').trim().toLowerCase();
+                if (!keyword) return base;
+                return base.filter(function (option) {
+                    return String(option || '').toLowerCase().indexOf(keyword) !== -1;
+                });
+            },
+            selectedFor: function (key) {
+                return S.ensureArray(this.$store.app.filters[key]);
+            },
+
+            /* 開合與選取(舊頁 5541-5564) */
+            toggleDropdown: function (filterKey) {
+                var self = this;
+                Object.keys(this.dropdownOpen).forEach(function (key) {
+                    var next = key === filterKey ? !self.dropdownOpen[key] : false;
+                    if (!next && self.dropdownOpen[key] && self.optionSearch[key] !== undefined && self.optionSearch[key]) {
+                        self.optionSearch[key] = ''; // 關閉時清空搜尋(舊頁 5508-5530)
+                    }
+                    self.dropdownOpen[key] = next;
+                });
+            },
+            closeAllDropdowns: function () {
+                var self = this;
+                Object.keys(this.dropdownOpen).forEach(function (key) {
+                    if (self.dropdownOpen[key] && self.optionSearch[key] !== undefined && self.optionSearch[key]) {
+                        self.optionSearch[key] = '';
+                    }
+                    self.dropdownOpen[key] = false;
+                });
+            },
+            toggleFilterOption: function (filterKey, value) {
+                var current = S.ensureArray(this.$store.app.filters[filterKey]);
+                var next = current.indexOf(value) !== -1
+                    ? current.filter(function (item) { return item !== value; })
+                    : current.concat([value]);
+                this.$store.app.handleFilterChange(filterKey, next);
+            },
+            removeFilterOption: function (filterKey, value) {
+                var current = S.ensureArray(this.$store.app.filters[filterKey]);
+                this.$store.app.handleFilterChange(filterKey, current.filter(function (item) { return item !== value; }));
+            },
+            selectAllFilterOptions: function (filterKey) {
+                this.$store.app.handleFilterChange(filterKey, this.optionsFor(filterKey).slice());
+            },
+            clearFilterOptions: function (filterKey) {
+                this.$store.app.handleFilterChange(filterKey, []);
+            },
+
+            /* 搜尋 debounce(舊頁 5381-5393) */
+            handleSearchChange: function (value) {
+                var self = this;
+                this.localSearch = value;
+                if (this.debounceTimer) clearTimeout(this.debounceTimer);
+                this.debounceTimer = setTimeout(function () {
+                    self.$store.app.handleFilterChange('search', value);
+                }, 180);
+            },
+
+            /* 已套用條件(舊頁 5713-5780) */
+            get hasActiveFilter() {
+                var filters = this.$store.app.filters;
+                if (!filters) return false;
+                if ((filters.search || '').trim() !== '') return true;
+                if ((filters.category || '').trim() !== '') return true;
+                if ((filters.systemCategory || '').trim() !== '') return true;
+                if (filters.inventoryTaskOnly) return true;
+                return ['status', 'leader', 'user', 'group', 'location'].some(function (key) {
+                    return Array.isArray(filters[key]) && filters[key].length > 0;
+                });
+            },
+            get activeFilterChips() {
+                var self = this;
+                var filters = this.$store.app.filters;
+                if (!filters) return [];
+                var chips = [];
+                var searchTrimmed = (filters.search || '').trim();
+                if (searchTrimmed) {
+                    chips.push({ type: 'search', label: '關鍵字', value: searchTrimmed });
+                }
+                if ((filters.category || '').trim()) {
+                    chips.push({ type: 'category', label: '財產類別', value: filters.category });
+                }
+                if ((filters.systemCategory || '').trim()) {
+                    chips.push({ type: 'systemCategory', label: '系統類別', value: filters.systemCategory });
+                }
+                var multiLabels = { status: '狀態', leader: '保管人', user: '使用人', group: '組別', location: '保管位置' };
+                Object.keys(multiLabels).forEach(function (key) {
+                    var arr = Array.isArray(filters[key]) ? filters[key] : [];
+                    arr.forEach(function (v) {
+                        chips.push({ type: key, label: multiLabels[key], value: v });
+                    });
+                });
+                if (filters.inventoryTaskOnly) {
+                    chips.push({ type: 'inventoryTaskOnly', label: '盤點任務', value: '僅顯示' });
+                }
+                return chips;
+            },
+            removeChip: function (chip) {
+                var store = this.$store.app;
+                if (chip.type === 'search') {
+                    if (this.debounceTimer) {
+                        clearTimeout(this.debounceTimer);
+                        this.debounceTimer = null;
+                    }
+                    this.localSearch = '';
+                    store.handleFilterChange('search', '');
+                    return;
+                }
+                if (chip.type === 'category' || chip.type === 'systemCategory') {
+                    store.handleFilterChange(chip.type, '');
+                    return;
+                }
+                if (chip.type === 'inventoryTaskOnly') {
+                    store.handleFilterChange('inventoryTaskOnly', false);
+                    return;
+                }
+                this.removeFilterOption(chip.type, chip.value);
+            },
+            handleResetAllFilters: function () {
+                if (this.debounceTimer) {
+                    clearTimeout(this.debounceTimer);
+                    this.debounceTimer = null;
+                }
+                this.localSearch = '';
+                this.$store.app.handleResetFilters();
+            },
+            get totalExportCount() {
+                var count = this.$store.app.filteredAssets.length;
+                return Number.isFinite(count) ? count : 0;
+            },
+            get exportDisabled() {
+                return this.totalExportCount === 0 || this.$store.app.isExporting;
+            }
+        };
+    });
+
+    /* ===== AssetTable(舊頁 6356-6946) ===== */
+    Alpine.data('assetTable', function () {
+        return {
+            ROWS_PER_PAGE: 500,
+            currentPage: 1,
+            expandedAssetIds: [],
+            inventoryStatusStyles: {
+                '未盤點': 'text-slate-400 hover:text-slate-600',
+                '正常': 'text-emerald-600 hover:text-emerald-800',
+                '遺失': 'text-rose-600 hover:text-rose-800',
+                '損壞': 'text-orange-600 hover:text-orange-800',
+                '過舊': 'text-amber-600 hover:text-amber-800'
+            },
+            _lastSig: null,
+
+            init: function () {
+                var self = this;
+                // 對應舊頁 useEffect [assets]→重設頁碼、[assets,currentPage]→收合展開
+                //(filteredAssets 為 getter 無穩定識別,以「資產版本+篩選內容」作為變更訊號)
+                Alpine.effect(function () {
+                    var store = Alpine.store('app');
+                    var sig = store.assetsVersion + '|' + S.stableStringify(store.filters);
+                    if (self._lastSig !== null && sig !== self._lastSig) {
+                        self.currentPage = 1;
+                        self.expandedAssetIds = [];
+                    }
+                    self._lastSig = sig;
+                });
+                this.$watch('currentPage', function () {
+                    self.expandedAssetIds = [];
+                });
+            },
+
+            get assets() { return this.$store.app.filteredAssets; },
+            get totalPages() {
+                return Math.max(1, Math.ceil(((this.assets && this.assets.length) || 0) / this.ROWS_PER_PAGE));
+            },
+            get paginatedAssets() {
+                if (!this.assets) return [];
+                var start = (this.currentPage - 1) * this.ROWS_PER_PAGE;
+                return this.assets.slice(start, start + this.ROWS_PER_PAGE);
+            },
+            get selectableAssets() {
+                return this.assets ? this.assets.filter(function (a) { return a.status === '在庫'; }) : [];
+            },
+            get isAllSelected() {
+                var selected = this.$store.app.selectedAssetIds;
+                return this.selectableAssets.length > 0 &&
+                    this.selectableAssets.every(function (a) { return selected.indexOf(a.assetId) !== -1; });
+            },
+            get isPartialSelected() {
+                var selected = this.$store.app.selectedAssetIds;
+                return this.selectableAssets.some(function (a) { return selected.indexOf(a.assetId) !== -1; }) && !this.isAllSelected;
+            },
+            // 每列預計算(對應舊頁 buildAssetState 6408-6483)
+            get rows() {
+                var self = this;
+                var store = this.$store.app;
+                var normalizedCurrentEmail = String(store.currentUserEmail || '').toLowerCase().trim();
+                var groupProxyEnabled = (store.transferOptions && store.transferOptions.groupProxyEnabled) || false;
+                var groupMemberEmailsLower = (store.transferOptions && store.transferOptions.groupMemberEmailsLower) || [];
+                var isAdmin = store.isAdminView;
+                return this.paginatedAssets.map(function (asset, index) {
+                    var isTask = store.isInventoryTaskOnly(asset);
+                    var isOwner = normalizedCurrentEmail &&
+                        (normalizedCurrentEmail === String(asset.leaderEmail || '').toLowerCase().trim() ||
+                            normalizedCurrentEmail === String(asset.userEmail || '').toLowerCase().trim());
+                    var canCancel = !isTask && (isAdmin || isOwner);
+                    var isSelectable = asset.status === '在庫';
+                    var isSelected = store.selectedAssetIds.indexOf(asset.assetId) !== -1;
+                    var assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+                    var isGroupMemberAsset = groupProxyEnabled &&
+                        assetLeaderEmail !== normalizedCurrentEmail &&
+                        groupMemberEmailsLower.indexOf(assetLeaderEmail) !== -1;
+
+                    var rowBaseClass = '';
+                    var borderClass = '';
+                    var cardSurfaceClass = 'border-slate-200 bg-white';
+                    if (isTask && isGroupMemberAsset) {
+                        rowBaseClass = 'bg-teal-50';
+                        borderClass = 'border-l-4 border-l-blue-500';
+                        cardSurfaceClass = 'border-sky-200 bg-gradient-to-br from-teal-50 via-white to-sky-50';
+                    } else if (isTask) {
+                        rowBaseClass = 'bg-teal-50';
+                        cardSurfaceClass = 'border-teal-200 bg-gradient-to-br from-teal-50 via-white to-white';
+                    } else if (isGroupMemberAsset) {
+                        rowBaseClass = 'bg-blue-50';
+                        borderClass = 'border-l-4 border-l-blue-400';
+                        cardSurfaceClass = 'border-blue-200 bg-gradient-to-br from-blue-50 via-white to-white';
+                    }
+                    var inventoryEntry = store.inventoryStatusByAsset ? store.inventoryStatusByAsset[asset.assetId] : null;
+                    var inventoryStatus = inventoryEntry ? (inventoryEntry.status || '未盤點') : '';
+                    var inventorySessionCount = inventoryEntry && typeof inventoryEntry.sessionCount === 'number'
+                        ? inventoryEntry.sessionCount : 0;
+                    var statusDetailType = S.STATUS_DETAIL_TYPES[asset.status];
+                    return {
+                        asset: asset,
+                        index: index,
+                        rowKey: asset.assetId + '-' + index,
+                        isTask: isTask,
+                        canCancel: canCancel,
+                        isSelectable: isSelectable,
+                        isSelected: isSelected,
+                        isGroupMemberAsset: isGroupMemberAsset,
+                        rowBaseClass: rowBaseClass,
+                        borderClass: borderClass,
+                        rowHoverClass: isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50',
+                        rowSelectedClass: isSelected ? 'ring-1 ring-blue-200 ring-inset' : '',
+                        cardSurfaceClass: cardSurfaceClass,
+                        statusBadgeClass: S.STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200',
+                        canOpenStatusDetail: !!statusDetailType,
+                        inventoryEntry: inventoryEntry,
+                        inventoryStatus: inventoryStatus,
+                        inventorySessionCount: inventorySessionCount,
+                        inventoryTitle: inventoryStatus
+                            ? ('盤點狀態：' + inventoryStatus + (inventorySessionCount > 0 ? '（進行中會話 ' + inventorySessionCount + ' 個）' : ''))
+                            : '盤點確認',
+                        inventoryButtonClass: self.inventoryStatusStyles[inventoryStatus] || 'text-slate-500 hover:text-slate-700',
+                        aliasLabel: S.getAssetAliasLabel(asset),
+                        aliasDisplay: S.getAssetAliasDisplay(asset),
+                        isExpanded: self.expandedAssetIds.indexOf(asset.assetId + '-' + index) !== -1
+                    };
+                });
+            },
+            toggleExpandedAsset: function (rowKey) {
+                this.expandedAssetIds = this.expandedAssetIds.indexOf(rowKey) !== -1
+                    ? this.expandedAssetIds.filter(function (id) { return id !== rowKey; })
+                    : this.expandedAssetIds.concat([rowKey]);
+            },
+            prevPage: function () { this.currentPage = Math.max(1, this.currentPage - 1); },
+            nextPage: function () { this.currentPage = Math.min(this.totalPages, this.currentPage + 1); }
+        };
+    });
+
+    /* ===== StatusDetailModal(舊頁 9246-9397) ===== */
+    Alpine.data('statusDetailModal', function () {
+        var normalizeText = function (value) { return String(value || '').trim(); };
+        var formatValue = function (value) {
+            var text = normalizeText(value);
+            return text ? text : '-';
+        };
+        var formatChange = function (oldValue, newValue) {
+            var oldText = normalizeText(oldValue);
+            var newText = normalizeText(newValue);
+            if (!oldText && !newText) return '-';
+            if (!newText || oldText === newText) return oldText || newText || '-';
+            return (oldText || '-') + ' → ' + newText;
+        };
+        return {
+            get state() { return this.$store.app.statusDetailState; },
+            get theme() {
+                var type = this.state && this.state.type;
+                return S.STATUS_DETAIL_THEMES[type] || {
+                    title: '狀態詳情', icon: 'fa-circle-info', headerClass: 'bg-slate-50', textClass: 'text-slate-800'
+                };
+            },
+            get statusBadgeClass() {
+                var asset = this.state && this.state.asset;
+                return S.STATUS_COLORS[asset && asset.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+            },
+            get aliasLabel() { return S.getAssetAliasLabel(this.state && this.state.asset); },
+            get aliasDisplay() { return S.getAssetAliasDisplay(this.state && this.state.asset); },
+            get hasAlias() {
+                var asset = this.state && this.state.asset;
+                return !!(asset && (asset.assetAlias || asset.productSerial));
+            },
+            get detailRows() {
+                var state = this.state;
+                if (!state || !state.detail) return [];
+                var detail = state.detail;
+                var type = state.type;
+                if (type === 'transfer') {
+                    var rows = [
+                        { label: '流程狀態', value: formatValue(detail.workflowStatus || detail.status) },
+                        { label: '申請時間', value: formatValue(detail.applicationTime) },
+                        { label: '轉移類型', value: formatValue(detail.transferType) },
+                        { label: '保管人變更', value: formatChange(detail.oldKeeper, detail.newKeeper), full: true },
+                        { label: '使用人變更', value: formatChange(detail.oldUser, detail.newUser), full: true },
+                        { label: '地點變更', value: formatChange(detail.oldLocation, detail.newLocation), full: true }
+                    ];
+                    if (detail.applicantEmail) {
+                        rows.push({ label: '申請人', value: formatValue(detail.applicantEmail), full: true });
+                    }
+                    return rows;
+                }
+                if (type === 'lending') {
+                    var lendingRows = [];
+                    var borrowerTypeLabel = detail.borrowerType === 'external' ? '外部'
+                        : detail.borrowerType === 'internal' ? '內部' : '';
+                    if (borrowerTypeLabel) {
+                        lendingRows.push({ label: '借用類型', value: formatValue(borrowerTypeLabel) });
+                    }
+                    lendingRows.push(
+                        { label: '出借人', value: formatValue(detail.lenderName) },
+                        { label: '借用人', value: formatValue(detail.borrower) },
+                        { label: '出借日期', value: formatValue(detail.applyTime) },
+                        { label: '預計歸還日', value: formatValue(detail.expectedReturnDate) },
+                        { label: '原放置地點', value: formatValue(detail.originalLocation) },
+                        { label: '出借後地點', value: formatValue(detail.lendingLocation) },
+                        { label: '出借事由', value: formatValue(detail.reason), full: true }
+                    );
+                    if (detail.contactPhone) {
+                        lendingRows.splice(2, 0, { label: '聯絡電話', value: formatValue(detail.contactPhone) });
+                    }
+                    return lendingRows;
+                }
+                if (type === 'scrap') {
+                    return [
+                        { label: '報廢日期', value: formatValue(detail.scrapDate) },
+                        { label: '報廢原因', value: formatValue(detail.scrapReason), full: true },
+                        { label: '原保管人', value: formatValue(detail.originalKeeper) },
+                        { label: '原使用人', value: formatValue(detail.originalUser) },
+                        { label: '保管位置', value: formatValue(detail.location) }
+                    ];
+                }
+                return [];
+            }
+        };
+    });
+
+    /* ===== 頁首(問候日期;對應舊頁 15756-15759 即時計算) ===== */
+    Alpine.data('pageHero', function () {
+        return {
+            get todayText() {
+                return new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
+        };
+    });
+
+    /* ===== DashboardCards 卡片定義(舊頁 3451-3500) ===== */
+    Alpine.data('dashboardCards', function () {
+        return {
+            cards: [
+                { id: 'transferring', label: '轉移中', countKey: 'transferring', color: 'bg-cyan-500', icon: '🔁', description: '我申請轉出、等待對方接收' },
+                { id: 'pending', label: '待接收', countKey: 'pending', color: 'bg-blue-500', icon: '📥', description: '需要您確認接收的資產' },
+                { id: 'lent', label: '出借中', countKey: 'lent', color: 'bg-green-500', icon: '📤', description: '目前出借的資產' },
+                { id: 'scrapPending', label: '待列印報廢申請單', countKey: 'scrapPending', color: 'bg-orange-500', icon: '🗑️', description: '報廢中的資產（需列印申請單）' },
+                { id: 'transferPending', label: '待列印轉移申請單', countKey: 'transferPending', color: 'bg-purple-500', icon: '🔄', description: '已被接收的資產（需列印轉移申請單）' },
+                { id: 'inventory', label: '待盤點', countKey: 'inventory', color: 'bg-red-500', icon: '📋', description: '需要您完成的盤點任務' }
+            ]
+        };
+    });
+});
+</script>
+
+<!-- ================= Alpine 應用主畫面(對應舊頁 App render 15748-16280) ================= -->
+<main id="app-root" x-data>
+<template x-if="$store.app.isReady">
+    <div class="page-shell max-w-[1600px] mx-auto">
+        <!-- 頁首 hero -->
+        <div class="page-hero mb-6" x-data="pageHero">
+            <div class="page-hero__text">
+                <h1 class="page-title">財產狀態管理</h1>
+                <p class="page-subtitle">
+                    <span class="font-medium text-slate-700" x-show="$store.app.currentUserName" x-text="$store.app.currentUserName"></span><span x-show="$store.app.currentUserName">，</span>歡迎回來，今天是 <span x-text="todayText"></span>
+                </p>
+            </div>
+            <div class="page-hero__actions">
+                <template x-if="$store.app.isAdmin">
+                    <div class="hero-status">
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold border"
+                              :class="$store.app.isAdminView ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-teal-50 text-teal-700 border-teal-200'"
+                              x-text="$store.app.isAdminView ? '管理員檢視：全域模式' : '一般檢視：群組模式'"></span>
+                        <div class="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
+                            <button @click="$store.app.handleViewModeChange('user')"
+                                    class="px-3 py-1 text-sm rounded-full transition-colors"
+                                    :class="$store.app.viewMode === 'user' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
+                                    title="一般使用者視角">一般</button>
+                            <button @click="$store.app.handleViewModeChange('admin')"
+                                    class="px-3 py-1 text-sm rounded-full transition-colors"
+                                    :class="$store.app.viewMode === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
+                                    title="管理者視角">管理者</button>
+                        </div>
+                    </div>
+                </template>
+
+                <div class="hero-actions">
+                    <span class="hero-loading" x-show="$store.app.isLoadingCards">
+                        <i class="fas fa-spinner fa-spin text-blue-500"></i>
+                        正在載入統計數據...
+                    </span>
+
+                    <!-- ModeToggleCard(舊頁 6057-6071) -->
+                    <div class="mode-toggle-card mode-toggle-card--compact">
+                        <div class="mode-toggle-text">
+                            <h3>進階批次功能</h3>
+                        </div>
+                        <label class="toggle-switch" title="切換進階批次模式">
+                            <input type="checkbox"
+                                   :checked="$store.app.isAdvancedMode"
+                                   @change="$store.app.handleModeToggle($event.target.checked ? 'ADVANCED' : 'STANDARD')">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <button id="btn-inventory-mgmt" x-show="$store.app.isAdminView"
+                            @click="$store.app.showInventoryMgmtModal = true"
+                            class="hero-btn hero-btn--ghost" title="盤點管理">
+                        <i class="fa-solid fa-clipboard-list text-slate-500"></i>
+                        <span class="hidden sm:inline">盤點管理</span>
+                    </button>
+
+                    <button x-show="$store.app.isAdminView"
+                            @click="$store.app.showAddAssetModal = true"
+                            class="hero-btn hero-btn--primary" title="新增財產/物品">
+                        <i class="fas fa-plus"></i>
+                        <span class="hidden sm:inline">新增資產</span>
+                    </button>
+
+                    <button @click="if (!window.__WEB_APP_URL) { alert('正在準備列印頁面連結，請稍候再點一次。'); } else { window.open(window.__WEB_APP_URL + '?page=barcodeprint', '_blank'); }"
+                            class="hero-btn hero-btn--ghost" title="開啟列印條碼頁面">
+                        <i class="fa-solid fa-barcode text-emerald-600"></i>
+                        <span class="hidden sm:inline">列印條碼</span>
+                    </button>
+
+                    <button @click="$store.app.showOperationManualModal = true"
+                            class="hero-btn hero-btn--ghost" title="開啟操作說明">
+                        <i class="fa-solid fa-book text-slate-500"></i>
+                        <span class="hidden sm:inline">操作說明</span>
+                    </button>
+
+                    <button @click="$store.app.handleRefreshCards()"
+                            :disabled="$store.app.isLoadingCards"
+                            class="hero-refresh bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center group"
+                            title="重新整理統計數據" aria-label="重新整理">
+                        <i class="fas fa-sync-alt text-lg transition-transform"
+                           :class="$store.app.isLoadingCards ? 'animate-spin' : 'group-hover:rotate-180'"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 行動掃描卡(舊頁 15881-15894) -->
+        <div class="mobile-scan-card">
+            <button type="button" class="mobile-scan-card__button"
+                    @click="window.Scanner_toggle && window.Scanner_toggle()"
+                    aria-label="開啟相機掃描">
+                <span class="mobile-scan-card__icon" aria-hidden="true"><i class="fa-solid fa-camera"></i></span>
+                <span class="mobile-scan-card__title">Tap to Scan Item</span>
+                <span class="mobile-scan-card__subtitle">開啟相機掃描資產條碼</span>
+            </button>
+        </div>
+
+        <!-- 儀表板卡片(舊頁 3441-3531) -->
+        <div x-data="dashboardCards">
+            <template x-if="$store.app.isLoadingCards">
+                <div class="dashboard-grid mb-6">
+                    <template x-for="i in 6" :key="i">
+                        <div class="status-card px-4 py-3 rounded-2xl">
+                            <div class="flex items-center gap-3">
+                                <div class="flex flex-col items-center gap-1">
+                                    <div class="w-5 h-5 bg-slate-200 rounded animate-pulse"></div>
+                                    <div class="status-card__bar bg-slate-200 rounded-full animate-pulse"></div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="h-4 bg-slate-200 rounded w-16 mb-1 animate-pulse"></div>
+                                    <div class="h-3 bg-slate-100 rounded w-24 animate-pulse"></div>
+                                </div>
+                                <div class="w-8 h-7 bg-slate-200 rounded animate-pulse"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <template x-if="!$store.app.isLoadingCards">
+                <div class="dashboard-grid mb-6">
+                    <template x-for="(card, index) in cards" :key="card.id">
+                        <button @click="$store.app.handleCardClick(card.id)"
+                                :style="'--delay:' + (index * 60) + 'ms'"
+                                class="status-card rounded-2xl px-4 py-3 cursor-pointer text-left group focus:outline-none focus:ring-2 focus:ring-teal-200">
+                            <div class="flex items-center gap-3">
+                                <div class="flex flex-col items-center gap-1">
+                                    <span class="text-2xl" x-text="card.icon"></span>
+                                    <div class="status-card__bar opacity-80" :class="card.color"></div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-slate-600 group-hover:text-slate-800 transition-colors" x-text="card.label"></p>
+                                    <p class="text-xs text-slate-400 whitespace-pre-wrap" :title="card.description" x-text="card.description"></p>
+                                </div>
+                                <div class="status-card__count text-2xl font-bold text-slate-800 tabular-nums"
+                                     x-text="$store.app.cardCounts[card.countKey]"></div>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <!-- [P5 掛載點] InventoryDashboardCard 盤點進度監控儀表板 -->
+
+        <!-- 篩選卡(舊頁 5794-6037) -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6" x-data="filterSection">
+            <div class="flex flex-col gap-4">
+                <!-- 第 1 行:關鍵字搜尋 + 動作按鈕 -->
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <div class="relative flex-1 min-w-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                        <input id="search-box" type="text"
+                               :value="localSearch"
+                               @input="handleSearchChange($event.target.value)"
+                               placeholder="搜尋產編、名稱、保管人、組別... (可掃描條碼按 Enter)"
+                               class="w-full pl-10 pr-11 py-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button"
+                                @click="window.Scanner_toggle && window.Scanner_toggle()"
+                                class="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-1.5 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors inline-flex items-center justify-center leading-none"
+                                title="開啟條碼掃描器" aria-label="開啟條碼掃描器">
+                            <i class="fa-solid fa-barcode"></i>
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2 flex-shrink-0">
+                        <button type="button" @click="handleResetAllFilters()" :disabled="!hasActiveFilter"
+                                class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+                                :class="hasActiveFilter ? 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50' : 'border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed'"
+                                :title="hasActiveFilter ? '清除所有篩選與搜尋字' : '目前沒有套用的篩選'" aria-label="清除篩選">
+                            <i class="fa-solid fa-filter-circle-xmark"></i>
+                            清除篩選
+                        </button>
+                        <button type="button" @click="$store.app.handleExportExcel()" :disabled="exportDisabled"
+                                class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+                                :class="exportDisabled ? 'border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed' : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'"
+                                :title="exportDisabled ? '沒有可匯出的資料' : '匯出 Excel'" aria-label="匯出 Excel">
+                            <i class="fa-solid fa-file-excel"></i>
+                            匯出 Excel
+                        </button>
+                        <button type="button" @click="$store.app.handleExportCsv()" :disabled="exportDisabled"
+                                class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+                                :class="exportDisabled ? 'border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed' : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'"
+                                :title="exportDisabled ? '沒有可匯出的資料' : '匯出 CSV'" aria-label="匯出 CSV">
+                            <i class="fa-solid fa-file-csv"></i>
+                            匯出 CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 第 2 行:下拉選單 + 盤點任務開關 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 items-stretch">
+                    <!-- 多選:狀態 -->
+                    <template x-for="cfg in msBefore" :key="cfg.key">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
+                            <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
+                                <span class="truncate" x-text="cfg.label"></span>
+                                <span class="text-[11px] text-slate-500 shrink-0" x-text="'已選 ' + selectedFor(cfg.key).length + ' 項'"></span>
+                            </label>
+                            <div class="space-y-2 flex-1">
+                                <div class="relative fs-dropdown-root">
+                                    <button type="button" @click="toggleDropdown(cfg.key)"
+                                            class="w-full min-h-[42px] px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                                            :class="dropdownOpen[cfg.key] ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'">
+                                        <span :class="selectedFor(cfg.key).length === 0 ? 'text-slate-400' : 'text-slate-700'"
+                                              x-text="selectedFor(cfg.key).length === 0 ? cfg.placeholder : '已選擇 ' + selectedFor(cfg.key).length + ' 項'"></span>
+                                        <i class="fa-solid fa-chevron-down text-slate-400 transition-transform" :class="dropdownOpen[cfg.key] ? 'rotate-180' : ''"></i>
+                                    </button>
+                                    <div x-show="dropdownOpen[cfg.key]" class="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
+                                        <div class="p-2 border-b border-slate-100 bg-slate-50">
+                                            <div class="flex justify-between px-1 text-xs">
+                                                <button type="button" @click="selectAllFilterOptions(cfg.key)"
+                                                        class="text-blue-600 hover:text-blue-800 font-medium"
+                                                        :disabled="optionsFor(cfg.key).length === 0">全選</button>
+                                                <button type="button" @click="clearFilterOptions(cfg.key)" class="text-slate-500 hover:text-slate-700">清除所有</button>
+                                            </div>
+                                        </div>
+                                        <div class="max-h-72 overflow-y-auto p-1">
+                                            <template x-for="option in optionsFor(cfg.key)" :key="option">
+                                                <label class="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700">
+                                                    <input type="checkbox" class="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
+                                                           :checked="selectedFor(cfg.key).indexOf(option) !== -1"
+                                                           @change="toggleFilterOption(cfg.key, option)">
+                                                    <span class="flex-1" x-text="option"></span>
+                                                    <i class="fa-solid fa-check text-blue-600 text-xs" x-show="selectedFor(cfg.key).indexOf(option) !== -1"></i>
+                                                </label>
+                                            </template>
+                                            <div class="py-4 text-center text-sm text-slate-500" x-show="optionsFor(cfg.key).length === 0" x-text="cfg.empty"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap gap-2" x-show="selectedFor(cfg.key).length > 0">
+                                    <template x-for="value in selectedFor(cfg.key)" :key="value">
+                                        <span class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
+                                            <span x-text="value"></span>
+                                            <button type="button" @click="removeFilterOption(cfg.key, value)"
+                                                    class="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
+                                                    :aria-label="'移除 ' + value">
+                                                <i class="fa-solid fa-xmark text-[10px]"></i>
+                                            </button>
+                                        </span>
+                                    </template>
+                                    <button type="button" @click="clearFilterOptions(cfg.key)" class="text-xs text-slate-500 hover:text-rose-600 underline">清除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- 單選:財產類別 -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
+                        <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
+                            <span class="truncate">依財產類別篩選</span>
+                        </label>
+                        <select :value="$store.app.filters.category"
+                                @change="$store.app.handleFilterChange('category', $event.target.value)"
+                                class="w-full min-h-[42px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm hover:border-slate-300 bg-white"
+                                :class="$store.app.filters.category ? 'text-slate-700' : 'text-slate-400'">
+                            <option value="">-- 顯示全部 --</option>
+                            <template x-for="opt in categoryOptions" :key="opt">
+                                <option :value="opt" x-text="opt" :selected="$store.app.filters.category === opt"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- 單選:系統類別 -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
+                        <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
+                            <span class="truncate">依系統類別篩選</span>
+                        </label>
+                        <select :value="$store.app.filters.systemCategory"
+                                @change="$store.app.handleFilterChange('systemCategory', $event.target.value)"
+                                class="w-full min-h-[42px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm hover:border-slate-300 bg-white"
+                                :class="$store.app.filters.systemCategory ? 'text-slate-700' : 'text-slate-400'">
+                            <option value="">-- 顯示全部 --</option>
+                            <option value="新系統">新系統</option>
+                            <option value="舊系統">舊系統</option>
+                        </select>
+                    </div>
+
+                    <!-- 多選:保管人/使用人/組別/保管位置(可搜尋) -->
+                    <template x-for="cfg in msAfter" :key="cfg.key">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
+                            <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
+                                <span class="truncate" x-text="cfg.label"></span>
+                                <span class="text-[11px] text-slate-500 shrink-0" x-text="'已選 ' + selectedFor(cfg.key).length + ' 項'"></span>
+                            </label>
+                            <div class="space-y-2 flex-1">
+                                <div class="relative fs-dropdown-root">
+                                    <button type="button" @click="toggleDropdown(cfg.key)"
+                                            class="w-full min-h-[42px] px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                                            :class="dropdownOpen[cfg.key] ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'">
+                                        <span :class="selectedFor(cfg.key).length === 0 ? 'text-slate-400' : 'text-slate-700'"
+                                              x-text="selectedFor(cfg.key).length === 0 ? cfg.placeholder : '已選擇 ' + selectedFor(cfg.key).length + ' 項'"></span>
+                                        <i class="fa-solid fa-chevron-down text-slate-400 transition-transform" :class="dropdownOpen[cfg.key] ? 'rotate-180' : ''"></i>
+                                    </button>
+                                    <div x-show="dropdownOpen[cfg.key]" class="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
+                                        <div class="p-2 border-b border-slate-100 bg-slate-50">
+                                            <div class="flex justify-between px-1 text-xs">
+                                                <button type="button" @click="selectAllFilterOptions(cfg.key)"
+                                                        class="text-blue-600 hover:text-blue-800 font-medium"
+                                                        :disabled="optionsFor(cfg.key).length === 0">全選</button>
+                                                <button type="button" @click="clearFilterOptions(cfg.key)" class="text-slate-500 hover:text-slate-700">清除所有</button>
+                                            </div>
+                                        </div>
+                                        <div class="p-2 border-b border-slate-100 bg-white">
+                                            <div class="relative">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                <input type="text"
+                                                       :value="optionSearch[cfg.key]"
+                                                       @input="optionSearch[cfg.key] = $event.target.value"
+                                                       :placeholder="cfg.searchPlaceholder"
+                                                       class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            </div>
+                                        </div>
+                                        <div class="max-h-72 overflow-y-auto p-1">
+                                            <template x-for="option in optionsFor(cfg.key)" :key="option">
+                                                <label class="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700">
+                                                    <input type="checkbox" class="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
+                                                           :checked="selectedFor(cfg.key).indexOf(option) !== -1"
+                                                           @change="toggleFilterOption(cfg.key, option)">
+                                                    <span class="flex-1" x-text="option"></span>
+                                                    <i class="fa-solid fa-check text-blue-600 text-xs" x-show="selectedFor(cfg.key).indexOf(option) !== -1"></i>
+                                                </label>
+                                            </template>
+                                            <div class="py-4 text-center text-sm text-slate-500" x-show="optionsFor(cfg.key).length === 0" x-text="cfg.empty"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap gap-2" x-show="selectedFor(cfg.key).length > 0">
+                                    <template x-for="value in selectedFor(cfg.key)" :key="value">
+                                        <span class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
+                                            <span x-text="value"></span>
+                                            <button type="button" @click="removeFilterOption(cfg.key, value)"
+                                                    class="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
+                                                    :aria-label="'移除 ' + value">
+                                                <i class="fa-solid fa-xmark text-[10px]"></i>
+                                            </button>
+                                        </span>
+                                    </template>
+                                    <button type="button" @click="clearFilterOptions(cfg.key)" class="text-xs text-slate-500 hover:text-rose-600 underline">清除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- 盤點任務開關(舊頁 5976-6004) -->
+                    <template x-if="$store.app.hasActiveInventory">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2"
+                             :class="$store.app.filters.inventoryTaskOnly ? 'border-teal-200 bg-teal-50/70' : ''">
+                            <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
+                                <span class="truncate">盤點任務篩選</span>
+                                <span class="text-[11px] text-slate-500 shrink-0" x-text="'目前 ' + $store.app.inventoryTaskCount + ' 筆'"></span>
+                            </label>
+                            <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 min-h-[42px] flex-1">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-medium text-slate-700 truncate">只顯示盤點任務</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5 truncate">聚焦待處理項目</div>
+                                </div>
+                                <button type="button" role="switch"
+                                        :aria-checked="!!$store.app.filters.inventoryTaskOnly"
+                                        @click="$store.app.handleFilterChange('inventoryTaskOnly', !$store.app.filters.inventoryTaskOnly)"
+                                        class="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-teal-400"
+                                        :class="$store.app.filters.inventoryTaskOnly ? 'bg-teal-500' : 'bg-slate-300'"
+                                        title="切換盤點任務篩選">
+                                    <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform"
+                                          :class="$store.app.filters.inventoryTaskOnly ? 'translate-x-5' : 'translate-x-1'"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- 第 3 行:已套用篩選條件 + 結果筆數 -->
+                <div class="flex items-center flex-wrap gap-2 border-t border-slate-100 pt-3">
+                    <template x-if="activeFilterChips.length > 0">
+                        <span class="text-xs font-medium text-slate-500 flex items-center gap-1.5 mr-1">
+                            <i class="fa-solid fa-filter text-blue-500"></i>
+                            已選條件
+                        </span>
+                    </template>
+                    <template x-for="(chip, i) in activeFilterChips" :key="chip.type + '-' + chip.value + '-' + i">
+                        <button type="button" @click="removeChip(chip)"
+                                class="group inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-500 text-blue-700 hover:text-white border border-blue-200 hover:border-blue-500 rounded-full text-xs font-medium transition-colors"
+                                :title="'移除「' + chip.label + '：' + chip.value + '」'">
+                            <span class="text-[11px] text-slate-500 group-hover:text-white/85" x-text="chip.label"></span>
+                            <span x-text="chip.value"></span>
+                            <i class="fa-solid fa-xmark text-[10px] opacity-70 group-hover:opacity-100"></i>
+                        </button>
+                    </template>
+                    <span class="text-xs text-slate-400 italic" x-show="activeFilterChips.length === 0">尚未套用任何篩選條件</span>
+                    <span class="ml-auto text-sm text-slate-600">
+                        已篩選 <span class="font-semibold text-slate-800" x-text="totalExportCount"></span> 筆
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 掃描區(舊頁 15926-15948;ActionPanel 於 P5 加入) -->
+        <div x-show="$store.app.isScannerOpen" class="advanced-scanner-overlay"
+             @click="window.Scanner_toggle && window.Scanner_toggle()"></div>
+        <div class="advanced-scanner-shell" :class="$store.app.isScannerOpen ? 'advanced-scanner-shell--open' : ''">
+            <div id="Scanner_zone" class="scanner-zone mb-6" style="display: none;"></div>
+            <!-- [P5 掛載點] 進階模式內嵌 ActionPanel -->
+        </div>
+
+        <!-- 同組功能提示(舊頁 15951-15976) -->
+        <template x-if="$store.app.transferOptions && $store.app.transferOptions.groupProxyEnabled && $store.app.transferOptions.currentGroup">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <div class="flex items-start gap-2">
+                    <i class="fa-solid fa-info-circle text-blue-600 mt-0.5"></i>
+                    <div class="flex-1">
+                        <p class="text-sm text-blue-800">
+                            <strong>同組協助功能已啟用</strong>（<span x-text="$store.app.transferOptions.currentGroup"></span>）
+                            - 表格中包含同組成員的資產，您可以協助轉移。
+                        </p>
+                        <p class="text-xs text-blue-700 mt-1">
+                            💡 提示：
+                            <span class="inline-flex items-center gap-1 ml-2">
+                                <span class="inline-block w-3 h-3 bg-blue-50 border-2 border-blue-400 rounded"></span>
+                                藍色背景 = 同組成員資產
+                            </span>
+                            <span class="inline-flex items-center gap-1 ml-3" x-show="$store.app.hasActiveInventory">
+                                <span class="inline-block w-3 h-3 bg-teal-50 rounded"></span>
+                                青綠色背景 = 盤點任務
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- [P4 掛載點] BatchActionButtons 批次操作按鈕卡片 -->
+
+        <!-- 重複產編警示(舊頁 6042-6055, 15988-15993) -->
+        <template x-if="$store.app.duplicateInfo.duplicateCount > 0">
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 py-2 px-4 mb-6 cursor-pointer hover:bg-yellow-100 transition-colors"
+                 @click="window.openDuplicateAssetsModal()">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
+                    <span class="text-yellow-800">
+                        偵測到 <span x-text="$store.app.duplicateInfo.duplicateCount"></span> 筆重複產編。
+                        <span class="text-blue-600 ml-2 underline">點擊查看詳情</span>
+                    </span>
+                </div>
+            </div>
+        </template>
+
+        <!-- [P5 掛載點] 進階模式 ActionPanel(modal 形式) -->
+
+        <!-- 資產表格(舊頁 6356-6946) -->
+        <div x-data="assetTable">
+            <template x-if="!assets || assets.length === 0">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
+                    <p class="text-slate-500">沒有符合條件的資料。</p>
+                </div>
+            </template>
+            <template x-if="assets && assets.length > 0">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="flex flex-col gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200 md:flex-row md:items-center md:justify-between">
+                        <div class="flex flex-col gap-2">
+                            <span class="text-sm text-slate-600">
+                                第 <span class="font-semibold text-blue-600" x-text="currentPage"></span> / <span x-text="totalPages"></span> 頁（共 <span class="font-semibold text-blue-600" x-text="assets.length"></span> 筆）
+                            </span>
+                            <div class="md:hidden flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                <label class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600">
+                                    <input type="checkbox"
+                                           :checked="isAllSelected"
+                                           x-effect="$el.indeterminate = isPartialSelected"
+                                           @change="$store.app.handleSelectAll($event.target.checked)"
+                                           class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                           :title="'全選所有「在庫」資產 (' + selectableAssets.length + ' 筆)'">
+                                    <span>全選在庫</span>
+                                </label>
+                                <span x-text="'本頁 ' + paginatedAssets.length + ' 筆'"></span>
+                                <span x-text="'已選 ' + $store.app.selectedAssetIds.length + ' 筆'"></span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 md:flex" x-show="totalPages > 1">
+                            <button @click="prevPage()" :disabled="currentPage <= 1"
+                                    class="px-3 py-2 text-sm rounded-lg border"
+                                    :class="currentPage <= 1 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">上一頁</button>
+                            <button @click="nextPage()" :disabled="currentPage >= totalPages"
+                                    class="px-3 py-2 text-sm rounded-lg border"
+                                    :class="currentPage >= totalPages ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'">下一頁</button>
+                        </div>
+                    </div>
+
+                    <!-- 行動版卡片 -->
+                    <div class="md:hidden p-3 space-y-3 bg-slate-50/60">
+                        <template x-for="row in rows" :key="row.rowKey">
+                            <div class="rounded-xl border shadow-sm overflow-hidden transition-all"
+                                 :class="row.cardSurfaceClass + ' ' + row.borderClass + ' ' + row.rowSelectedClass">
+                                <div role="button" tabindex="0"
+                                     @click="toggleExpandedAsset(row.rowKey)"
+                                     @keydown="if ($event.currentTarget !== $event.target) return; if ($event.key === 'Enter' || $event.key === ' ') { $event.preventDefault(); toggleExpandedAsset(row.rowKey); }"
+                                     class="w-full text-left px-3 py-2.5 cursor-pointer"
+                                     :aria-expanded="row.isExpanded">
+                                    <div class="flex items-start gap-2.5">
+                                        <div class="pt-0.5">
+                                            <template x-if="row.isSelectable">
+                                                <input type="checkbox" class="asset-checkbox w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                       :value="row.asset.assetId" :checked="row.isSelected"
+                                                       @click.stop
+                                                       @change="$store.app.handleAssetSelect(row.asset.assetId)"
+                                                       :data-is-task="row.isTask ? 'true' : 'false'">
+                                            </template>
+                                            <template x-if="!row.isSelectable">
+                                                <span class="inline-flex h-4 w-4 items-center justify-center text-slate-300" title="僅「在庫」資產可選取">-</span>
+                                            </template>
+                                        </div>
+                                        <div class="min-w-0 flex-1 space-y-2">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="font-mono text-sm font-semibold text-slate-800 break-all leading-tight" x-text="row.asset.assetId"></div>
+                                                </div>
+                                                <div class="flex flex-wrap items-center justify-end gap-1.5 pl-2">
+                                                    <template x-if="row.canOpenStatusDetail">
+                                                        <button type="button"
+                                                                @click.stop="$store.app.handleOpenStatusDetail(row.asset)"
+                                                                class="inline-flex items-center gap-1.5 rounded-full border font-medium whitespace-nowrap px-2.5 py-1 text-[11px] cursor-pointer transition-shadow hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-200"
+                                                                :class="row.statusBadgeClass"
+                                                                :title="'查看' + row.asset.status + '詳情'"
+                                                                :aria-label="'查看 ' + row.asset.assetId + ' ' + row.asset.status + ' 詳情'">
+                                                            <span x-text="row.asset.status"></span>
+                                                            <i class="fa-solid fa-circle-info text-[10px]"></i>
+                                                        </button>
+                                                    </template>
+                                                    <template x-if="!row.canOpenStatusDetail">
+                                                        <span class="inline-flex items-center gap-1.5 rounded-full border font-medium whitespace-nowrap px-2.5 py-1 text-[11px]"
+                                                              :class="row.statusBadgeClass" x-text="row.asset.status"></span>
+                                                    </template>
+                                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                                          :class="row.asset.systemCategory === '舊系統' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-200'"
+                                                          x-text="row.asset.systemCategory"></span>
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-snug text-slate-600">
+                                                <span class="min-w-0 truncate"><span class="text-slate-400">使用</span> <span x-text="row.asset.userName || '-'"></span></span>
+                                                <span class="min-w-0 truncate"><span class="text-slate-400">保管</span> <span x-text="row.asset.leader || '-'"></span></span>
+                                                <span class="min-w-0 flex-[1_1_100%] truncate"><span class="text-slate-400">位置</span> <span x-text="row.asset.location || '-'"></span></span>
+                                            </div>
+                                            <div class="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                                                <div class="flex flex-wrap items-center gap-1.5">
+                                                    <span x-show="row.isTask" class="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 font-medium text-teal-700">
+                                                        <i class="fa-solid fa-clipboard-check text-[10px]"></i>
+                                                        <span>盤點任務</span>
+                                                    </span>
+                                                    <span x-show="row.isGroupMemberAsset" class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-700">
+                                                        <i class="fa-solid fa-users text-[10px]"></i>
+                                                        <span>同組資產</span>
+                                                    </span>
+                                                </div>
+                                                <span class="inline-flex items-center gap-1 font-medium text-slate-500">
+                                                    <span x-text="row.isExpanded ? '收合明細' : '展開明細'"></span>
+                                                    <i class="fa-solid text-[10px]" :class="row.isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <template x-if="row.isExpanded">
+                                    <div class="border-t border-slate-200/80 bg-white/90 px-3 py-3 space-y-3">
+                                        <div class="grid grid-cols-1 gap-2">
+                                            <div class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                                <div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">財產名稱</div>
+                                                <div class="mt-0.5 text-sm font-semibold leading-snug text-slate-800 break-words" x-text="row.asset.assetName || '-'"></div>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                                    <div class="text-[10px] font-medium uppercase tracking-wide text-slate-400" x-text="row.aliasLabel"></div>
+                                                    <div class="mt-0.5 text-xs leading-snug text-slate-700 break-all" x-text="row.aliasDisplay"></div>
+                                                </div>
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                                    <div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">型號/廠牌</div>
+                                                    <div class="mt-0.5 text-xs leading-snug text-slate-700 break-all" x-text="row.asset.modelBrand || '-'"></div>
+                                                </div>
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                                    <div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">組別</div>
+                                                    <div class="mt-0.5 text-xs leading-snug text-slate-700" x-text="row.asset.group || '未分組'"></div>
+                                                </div>
+                                                <div class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                                    <div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">財產類別</div>
+                                                    <div class="mt-0.5 text-xs leading-snug text-slate-700" x-text="row.asset.category || '-'"></div>
+                                                </div>
+                                            </div>
+                                            <template x-if="row.inventoryEntry">
+                                                <div class="rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-2 text-xs text-teal-800">
+                                                    <div class="font-medium" x-text="'盤點狀態：' + (row.inventoryStatus || '未盤點')"></div>
+                                                    <div class="mt-0.5 text-[11px] text-teal-700" x-show="row.inventorySessionCount > 0" x-text="'進行中會話 ' + row.inventorySessionCount + ' 個'"></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <div class="space-y-1.5">
+                                            <div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">快速操作</div>
+                                            <div class="flex flex-wrap gap-2">
+                                                <button type="button" x-show="$store.app.isAdminView"
+                                                        @click.stop="$store.app.handleOpenEditModal(row.asset)"
+                                                        class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-amber-200 bg-amber-50 text-amber-700" title="修改基本資料">
+                                                    <i class="fa-solid fa-pen-to-square text-base"></i><span>修改</span>
+                                                </button>
+                                                <template x-if="!row.isTask && row.asset.status === '在庫'">
+                                                    <div class="flex flex-wrap gap-2">
+                                                        <button type="button" @click.stop="$store.app.handleOpenTransferModal(row.asset)"
+                                                                class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-blue-200 bg-blue-50 text-blue-700" title="轉移">
+                                                            <i class="fa-solid fa-right-left text-base"></i><span>轉移</span>
+                                                        </button>
+                                                        <button type="button" @click.stop="$store.app.handleOpenLendingModal(row.asset)"
+                                                                class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-purple-200 bg-purple-50 text-purple-700" title="出借">
+                                                            <i class="fa-solid fa-hand-holding-hand text-base"></i><span>出借</span>
+                                                        </button>
+                                                        <button type="button" @click.stop="$store.app.handleOpenScrapModal(row.asset)"
+                                                                class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-rose-200 bg-rose-50 text-rose-700" title="報廢">
+                                                            <i class="fa-regular fa-trash-can text-base"></i><span>報廢</span>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                <button type="button" x-show="row.inventoryEntry"
+                                                        @click.stop="$store.app.handleOpenInventoryModal(row.asset)"
+                                                        class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-teal-200 bg-teal-50 text-teal-700"
+                                                        :title="row.inventoryTitle" :aria-label="row.inventoryTitle">
+                                                    <i class="fa-solid fa-clipboard-check text-base"></i><span>盤點</span>
+                                                </button>
+                                                <span x-show="row.isTask" class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-[11px] font-medium text-slate-500">
+                                                    <i class="fa-solid fa-lock text-sm"></i><span>僅限盤點</span>
+                                                </span>
+                                                <button type="button" x-show="row.canCancel && (row.asset.status === '待接收' || row.asset.status === '轉移中' || row.asset.status === '報廢中')"
+                                                        @click.stop="$store.app.handleCancel(row.asset.assetId, row.asset.status)"
+                                                        class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700">
+                                                    <i class="fa-solid fa-ban text-sm"></i><span>取消</span>
+                                                </button>
+                                                <button type="button" x-show="$store.app.isAdminView && row.asset.status === '已報廢'"
+                                                        @click.stop="$store.app.handleRestore(row.asset.assetId)"
+                                                        class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1.5 text-[11px] font-semibold text-yellow-700">
+                                                    <i class="fa-solid fa-rotate-left text-sm"></i><span>回溯</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- 桌面版表格 -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="w-full text-left text-sm" id="asset-list">
+                            <thead class="bg-slate-50 border-b border-slate-200 sticky top-0">
+                                <tr>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 text-center w-10">
+                                        <input type="checkbox"
+                                               :checked="isAllSelected"
+                                               x-effect="$el.indeterminate = isPartialSelected"
+                                               @change="$store.app.handleSelectAll($event.target.checked)"
+                                               class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                               :title="'全選所有「在庫」資產 (' + selectableAssets.length + ' 筆)'">
+                                    </th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產編號</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">系統類別</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產名稱</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產別名</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 w-[180px] max-w-[180px]">型號/廠牌</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">使用者</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">保管人</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 min-w-[100px]">保管位置</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">組別</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產類別</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">狀態</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 text-left whitespace-nowrap min-w-[160px]">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template x-for="row in rows" :key="row.rowKey">
+                                    <tr class="transition-colors"
+                                        :class="row.rowHoverClass + ' ' + row.rowBaseClass + ' ' + row.borderClass + ' ' + row.rowSelectedClass + (!row.isTask && row.isSelected ? ' bg-blue-50' : '')">
+                                        <td class="px-2 py-3 text-center align-top">
+                                            <template x-if="row.isSelectable">
+                                                <input type="checkbox" class="asset-checkbox w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                       :value="row.asset.assetId" :checked="row.isSelected"
+                                                       @change="$store.app.handleAssetSelect(row.asset.assetId)"
+                                                       :data-is-task="row.isTask ? 'true' : 'false'">
+                                            </template>
+                                            <template x-if="!row.isSelectable">
+                                                <span class="text-slate-300" title="僅「在庫」資產可選取">-</span>
+                                            </template>
+                                        </td>
+                                        <td class="px-2 py-3 font-mono text-slate-600 whitespace-nowrap align-top" x-text="row.asset.assetId"></td>
+                                        <td class="px-2 py-3 whitespace-nowrap align-top">
+                                            <span :class="row.asset.systemCategory === '舊系統'
+                                                    ? 'inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold px-2 py-0.5'
+                                                    : 'inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold px-2 py-0.5'"
+                                                  x-text="row.asset.systemCategory"></span>
+                                        </td>
+                                        <td class="px-2 py-3 font-medium text-slate-800 align-top w-[160px] max-w-[160px]">
+                                            <div class="flex items-start gap-2">
+                                                <div class="flex items-center gap-1 flex-shrink-0">
+                                                    <i x-show="row.isTask" class="fa-solid fa-clipboard-check text-teal-600" title="盤點任務"></i>
+                                                    <i x-show="row.isGroupMemberAsset" class="fa-solid fa-users text-blue-500" :title="'同組成員資產（保管人：' + row.asset.leader + '）'"></i>
+                                                </div>
+                                                <div class="line-clamp-2 min-w-0 flex-1" :title="row.asset.assetName" x-text="row.asset.assetName"></div>
+                                                <span x-show="row.isTask" class="inline-flex items-center rounded-full bg-teal-100 text-teal-700 text-xs font-semibold px-2 py-0.5 whitespace-nowrap">盤點任務</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-2 py-3 text-slate-600 align-top w-[160px] max-w-[160px]">
+                                            <div class="line-clamp-2 text-xs break-all" :title="row.aliasDisplay" x-text="row.aliasDisplay"></div>
+                                        </td>
+                                        <td class="px-2 py-3 text-slate-600 align-top w-[180px] max-w-[180px]">
+                                            <div class="line-clamp-2 text-xs break-all" :title="row.asset.modelBrand" x-text="row.asset.modelBrand || '-'"></div>
+                                        </td>
+                                        <td class="px-2 py-3 text-slate-600 whitespace-nowrap align-top" x-text="row.asset.userName"></td>
+                                        <td class="px-2 py-3 text-slate-600 whitespace-nowrap align-top" x-text="row.asset.leader"></td>
+                                        <td class="px-2 py-3 text-slate-600 align-top">
+                                            <div class="line-clamp-2" :title="row.asset.location" x-text="row.asset.location"></div>
+                                        </td>
+                                        <td class="px-2 py-3 text-slate-600 align-top">
+                                            <span class="bg-sky-50 text-sky-700 border border-sky-200 px-2 py-1 rounded text-xs whitespace-nowrap" x-text="row.asset.group || '未分組'"></span>
+                                        </td>
+                                        <td class="px-2 py-3 text-slate-600 align-top">
+                                            <span class="bg-slate-100 px-2 py-1 rounded text-xs whitespace-nowrap" x-text="row.asset.category"></span>
+                                        </td>
+                                        <td class="px-2 py-3 align-top">
+                                            <template x-if="row.canOpenStatusDetail">
+                                                <button type="button"
+                                                        @click="$store.app.handleOpenStatusDetail(row.asset)"
+                                                        class="inline-flex items-center gap-1.5 rounded-full border font-medium whitespace-nowrap px-2.5 py-1 text-xs cursor-pointer transition-shadow hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-200"
+                                                        :class="row.statusBadgeClass"
+                                                        :title="'查看' + row.asset.status + '詳情'"
+                                                        :aria-label="'查看 ' + row.asset.assetId + ' ' + row.asset.status + ' 詳情'">
+                                                    <span x-text="row.asset.status"></span>
+                                                    <i class="fa-solid fa-circle-info text-[10px]"></i>
+                                                </button>
+                                            </template>
+                                            <template x-if="!row.canOpenStatusDetail">
+                                                <span class="inline-flex items-center gap-1.5 rounded-full border font-medium whitespace-nowrap px-2.5 py-1 text-xs"
+                                                      :class="row.statusBadgeClass" x-text="row.asset.status"></span>
+                                            </template>
+                                        </td>
+                                        <td class="px-2 py-3 text-left align-top whitespace-nowrap">
+                                            <div class="flex justify-start gap-2">
+                                                <button type="button" x-show="$store.app.isAdminView"
+                                                        @click="$store.app.handleOpenEditModal(row.asset)"
+                                                        class="text-amber-600 hover:text-amber-800 transition-colors p-1" title="修改基本資料">
+                                                    <i class="fa-solid fa-pen-to-square text-base"></i>
+                                                </button>
+                                                <template x-if="!row.isTask && row.asset.status === '在庫'">
+                                                    <div class="flex justify-start gap-2">
+                                                        <button type="button" @click="$store.app.handleOpenTransferModal(row.asset)"
+                                                                class="text-blue-600 hover:text-blue-800 transition-colors p-1" title="轉移">
+                                                            <i class="fa-solid fa-right-left text-base"></i>
+                                                        </button>
+                                                        <button type="button" @click="$store.app.handleOpenLendingModal(row.asset)"
+                                                                class="text-purple-600 hover:text-purple-800 transition-colors p-1" title="出借">
+                                                            <i class="fa-solid fa-hand-holding-hand text-base"></i>
+                                                        </button>
+                                                        <button type="button" @click="$store.app.handleOpenScrapModal(row.asset)"
+                                                                class="text-red-600 hover:text-red-800 transition-colors p-1" title="報廢">
+                                                            <i class="fa-regular fa-trash-can text-base"></i>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                <button type="button" x-show="row.inventoryEntry"
+                                                        @click="$store.app.handleOpenInventoryModal(row.asset)"
+                                                        class="transition-colors p-1" :class="row.inventoryButtonClass"
+                                                        :title="row.inventoryTitle" :aria-label="row.inventoryTitle">
+                                                    <i class="fa-solid fa-clipboard-check text-base"></i>
+                                                </button>
+                                                <span x-show="row.isTask" class="text-slate-400 p-1" title="僅限盤點">
+                                                    <i class="fa-solid fa-lock text-lg"></i>
+                                                </span>
+                                                <button type="button" x-show="row.canCancel && (row.asset.status === '待接收' || row.asset.status === '轉移中' || row.asset.status === '報廢中')"
+                                                        @click="$store.app.handleCancel(row.asset.assetId, row.asset.status)"
+                                                        class="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium">
+                                                    <i class="fa-solid fa-ban text-sm"></i>
+                                                    取消
+                                                </button>
+                                                <button type="button" x-show="$store.app.isAdminView && row.asset.status === '已報廢'"
+                                                        @click="$store.app.handleRestore(row.asset.assetId)"
+                                                        class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium">
+                                                    <i class="fa-solid fa-rotate-left text-sm"></i>
+                                                    回溯
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- 狀態詳情 Modal(舊頁 9246-9397) -->
+        <template x-if="$store.app.statusDetailState">
+            <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="statusDetailModal">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                    <div class="px-6 py-4 border-b flex justify-between items-center" :class="theme.headerClass">
+                        <div>
+                            <h3 class="text-lg font-bold" :class="theme.textClass">
+                                <i class="fa-solid mr-2" :class="theme.icon"></i>
+                                <span x-text="theme.title"></span>
+                            </h3>
+                            <div class="text-xs text-slate-500 mt-1">
+                                <span x-text="(state.asset && state.asset.assetId) || ''"></span>
+                                <span x-show="state.asset && state.asset.assetName" x-text="'・' + state.asset.assetName"></span>
+                                <span x-show="hasAlias" x-text="'・' + aliasLabel + '：' + aliasDisplay"></span>
+                            </div>
+                        </div>
+                        <button @click="$store.app.handleCloseStatusDetail()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 mb-4">
+                            <div class="text-xs text-slate-500 mb-1">資產狀態</div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono text-slate-700" x-text="(state.asset && state.asset.assetId) || '-'"></span>
+                                <span class="text-slate-700" x-text="(state.asset && state.asset.assetName) || '-'"></span>
+                                <span class="text-slate-500" x-text="aliasLabel + '：' + aliasDisplay"></span>
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap"
+                                      :class="statusBadgeClass" x-text="(state.asset && state.asset.status) || '-'"></span>
+                            </div>
+                        </div>
+                        <template x-if="state.isLoading">
+                            <div class="flex flex-col items-center justify-center py-10 gap-3">
+                                <i class="fas fa-spinner fa-spin text-3xl text-slate-400"></i>
+                                <p class="text-slate-500 font-medium">載入狀態詳情中...</p>
+                            </div>
+                        </template>
+                        <template x-if="!state.isLoading && state.error">
+                            <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" x-text="state.error"></div>
+                        </template>
+                        <template x-if="!state.isLoading && !state.error && detailRows.length === 0">
+                            <div class="text-center py-10 text-slate-500">
+                                <i class="fas fa-info-circle text-3xl mb-2 text-slate-300"></i>
+                                <p>目前沒有可顯示的詳情。</p>
+                            </div>
+                        </template>
+                        <template x-if="!state.isLoading && !state.error && detailRows.length > 0">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <template x-for="row in detailRows" :key="row.label">
+                                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2" :class="row.full ? 'md:col-span-2' : ''">
+                                        <div class="text-xs font-semibold text-slate-500" x-text="row.label"></div>
+                                        <div class="text-sm text-slate-700 mt-1 whitespace-pre-line" x-text="row.value"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="px-6 py-4 border-t bg-slate-50 flex justify-end">
+                        <button @click="$store.app.handleCloseStatusDetail()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">關閉</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- [P3 掛載點] 單筆操作 modal(Quick*/Add/Edit/CreateIsms) -->
+        <!-- [P4 掛載點] 批次操作 modal(Batch*/匯入指南) -->
+        <!-- [P5 掛載點] 盤點 modal(管理/待盤點/確認) -->
+        <!-- [P6 掛載點] 文件與列印 modal(轉移中/歸還/三種列印/操作手冊) -->
+    </div>
+</template>
+</main>

@@ -1353,22 +1353,8 @@
     <!-- 原生 Modal shim:取代 jQuery + bootstrap.bundle.js(僅 vanilla 區 $('#x').modal() 需要) -->
     <?!= include('js_modal_shim'); ?>
 
-    <!-- ========== Alpine 應用掛載點(Phase 1 骨架;Phase 2 起替換為正式視圖) ========== -->
-    <main id="app-root" class="max-w-7xl mx-auto px-4 py-6" x-data>
-        <template x-if="$store.app.ready">
-            <div class="bg-white rounded-xl shadow p-6 space-y-2">
-                <h1 class="text-xl font-bold text-slate-800">Alpine 骨架掛載成功(Phase 1 煙霧測試)</h1>
-                <p class="text-sm text-slate-600">使用者:<span class="font-mono" x-text="$store.app.currentUserEmail"></span>
-                    <span x-show="$store.app.isAdmin" class="ml-2 px-2 py-0.5 text-xs rounded bg-indigo-100 text-indigo-700">管理員</span></p>
-                <p class="text-sm text-slate-600">資產筆數:<span class="font-mono" x-text="$store.app.allAssets.length"></span></p>
-                <p class="text-sm text-slate-600">盤點功能:<span x-text="$store.app.inventoryEnabled ? '啟用' : '停用'"></span>、待列印轉移:<span class="font-mono" x-text="$store.app.transferPendingCount"></span></p>
-                <p class="text-xs text-slate-400">此為 Phase 1 臨時驗證畫面,Phase 2 起以正式唯讀視圖取代;舊版頁面不受影響(網址去掉 ?ui=alpine 即回舊版)。</p>
-            </div>
-        </template>
-        <template x-if="$store.app.loadError">
-            <div class="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-4 text-sm" x-text="'載入失敗:' + $store.app.loadError"></div>
-        </template>
-    </main>
+    <!-- ========== Alpine 應用主畫面(markup + 視圖元件,alpine_views.html) ========== -->
+    <?!= include('alpine_views'); ?>
     <template id="operationManualSrcDocTemplate"><?!= include('operation_manual_srcdoc'); ?></template>
 
     <!-- Bootstrap Modals (保留現有結構) -->
@@ -2137,6 +2123,7 @@
 
     <!-- Alpine 應用邏輯(取代原 React text/babel 區塊;零編譯,改完直接 clasp push) -->
     <?!= include('alpine_store'); ?>
+    <?!= include('alpine_cart'); ?>
 
     <!-- ========== 浮動快速導航按鈕 (FAB) ========== -->
     <style>
