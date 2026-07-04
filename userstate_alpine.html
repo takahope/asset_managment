@@ -1,0 +1,2491 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <base target="_top">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@600;700&display=swap" rel="stylesheet">
+
+
+    <!-- Alpine.js 3.x:線上載入,鎖版本 + SRI 完整性驗證(規格書 §3.1;零編譯原則) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"
+        integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L"
+        crossorigin="anonymous"></script>
+
+    <!-- Excel 匯出/匯入模組(xlsx-js-style)按需載入:點匯出/匯入時才下載,初始載入零成本 -->
+    <script>
+        window.ensureXLSX = function () {
+            if (window.XLSX) return Promise.resolve(window.XLSX);
+            if (window.__xlsxLoading) return window.__xlsxLoading;
+            window.__xlsxLoading = new Promise(function (resolve, reject) {
+                var s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+                s.integrity = 'sha384-OUW9euuUyxyHcAhTqbhI+Iyb8LMssXt/cpz0yXhs9UWG2/R/uaWdakx/4cfww7Vb';
+                s.crossOrigin = 'anonymous';
+                s.onload = function () { resolve(window.XLSX); };
+                s.onerror = function () {
+                    window.__xlsxLoading = null;
+                    s.remove();
+                    reject(new Error('Excel 模組載入失敗，請檢查網路後重試。'));
+                };
+                document.head.appendChild(s);
+            });
+            return window.__xlsxLoading;
+        };
+    </script>
+
+    <!-- Bootstrap CSS(僅用於 vanilla 區 Modal;同舊頁連結 + SRI) -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+        integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z"
+        crossorigin="anonymous">
+    <!-- Tailwind CSS 凍結靜態產物(涵蓋全站 utility class;重生成:npm run build:css,可選工具) -->
+    <?!= include('css_tailwind'); ?>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0"
+        crossorigin="anonymous">
+
+    <style>
+        :root {
+            --ink-900: #0f172a;
+            --ink-700: #334155;
+            --ink-500: #64748b;
+            --surface: #ffffff;
+            --surface-muted: #f8fafc;
+            --accent-500: #2f6c7f;
+            --accent-400: #3d8c9c;
+            --accent-300: #7dd3c7;
+            --warm-200: #f7d7b5;
+            --shadow-soft: 0 24px 60px rgba(15, 23, 42, 0.12);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: "Noto Sans TC", "Noto Sans", sans-serif;
+            color: var(--ink-900);
+            background:
+                radial-gradient(circle at 12% 12%, rgba(125, 211, 199, 0.25), transparent 55%),
+                radial-gradient(circle at 88% 0%, rgba(247, 215, 181, 0.32), transparent 48%),
+                linear-gradient(180deg, #f8fafc 0%, #eef2f7 60%, #ecf4f2 100%);
+        }
+
+        /* 自定義滾動條樣式 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* 配合 shared-nav 側邊欄 */
+        .duplicate-group-row {
+            background-color: #fff7e6;
+            font-weight: 600;
+        }
+
+        .page-shell {
+            position: relative;
+            padding: 28px 24px 40px;
+            z-index: 0;
+            background-image: radial-gradient(circle, rgba(61, 140, 156, 0.35), transparent 70%);
+            background-repeat: no-repeat;
+            background-size: 320px 320px;
+            background-position: right -140px top -120px;
+        }
+
+        .page-hero {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(244, 250, 250, 0.92));
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 24px;
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(6px);
+        }
+
+        .page-hero__text {
+            max-width: 640px;
+        }
+
+        .page-title {
+            font-family: "Noto Serif TC", "Noto Serif", serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--ink-900);
+        }
+
+        .page-subtitle {
+            color: var(--ink-500);
+            margin-top: 6px;
+            line-height: 1.6;
+        }
+
+        .page-hero__actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .hero-status,
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .hero-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--ink-500);
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.72);
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        .hero-btn {
+            border-radius: 14px;
+            padding: 10px 16px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .hero-btn--ghost {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: var(--ink-700);
+        }
+
+        .hero-btn--primary {
+            background: linear-gradient(135deg, #1aa39f, #2f6c7f);
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 14px 32px rgba(26, 163, 159, 0.25);
+        }
+
+        .hero-btn--primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 18px 38px rgba(26, 163, 159, 0.3);
+        }
+
+        .hero-refresh {
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+        }
+
+        @media (min-width: 640px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
+
+        .status-card {
+            position: relative;
+            overflow: hidden;
+            background: #ffffff;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            animation: cardRise 0.45s ease-out both;
+            animation-delay: var(--delay, 0ms);
+        }
+
+        .status-card::after {
+            content: "";
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(61, 140, 156, 0.18), transparent 70%);
+        }
+
+        .status-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(46, 120, 140, 0.35);
+            box-shadow: 0 20px 44px rgba(15, 23, 42, 0.12);
+        }
+
+        .status-card__bar {
+            width: 4px;
+            height: 34px;
+            border-radius: 999px;
+        }
+
+        .status-card__count {
+            font-family: "Noto Serif TC", "Noto Serif", serif;
+        }
+
+        @keyframes cardRise {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .status-card {
+                animation: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .page-shell {
+                padding: 20px 16px 86px;
+                background-size: 260px 260px;
+                background-position: right -200px top -160px;
+            }
+
+            .page-hero {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 20px;
+            }
+
+            .page-hero__actions {
+                width: 100%;
+                align-items: flex-start;
+            }
+
+            .hero-status,
+            .hero-actions {
+                justify-content: flex-start;
+            }
+
+            .page-title {
+                font-size: 1.7rem;
+            }
+
+            .page-subtitle {
+                font-size: 0.95rem;
+            }
+
+            .hero-refresh {
+                width: 40px;
+                height: 40px;
+            }
+
+            .mode-toggle-card--compact {
+                width: 100%;
+                height: auto;
+                min-width: 0;
+                padding: 10px 14px;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .mode-toggle-card--compact .mode-toggle-text {
+                display: block;
+            }
+
+            .mode-toggle-card--compact .mode-toggle-text p {
+                display: none;
+            }
+        }
+
+        /* 盤點管理 Modal */
+        .inventory-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 60;
+            backdrop-filter: blur(2px);
+        }
+
+        .inventory-modal {
+            background: #ffffff;
+            border-radius: 16px;
+            width: min(1040px, 96vw);
+            max-height: 94vh;
+            box-shadow: 0 32px 80px rgba(15, 23, 42, 0.25);
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+        }
+
+        .inventory-modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #f8fafc;
+        }
+
+        .inventory-modal-body {
+            padding: 24px;
+            display: grid;
+            gap: 20px;
+            overflow: visible;
+            grid-template-columns: minmax(0, 1fr);
+            flex: 1;
+            min-height: 0;
+        }
+
+        @media (min-width: 1024px) {
+            .inventory-modal-body {
+                grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+            }
+        }
+
+        .inventory-column {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 0;
+        }
+
+        .inventory-section-switch {
+            display: none;
+        }
+
+        .inventory-section-switch__button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #dbe3ee;
+            background: #ffffff;
+            color: #475569;
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .inventory-section-switch__button.is-active {
+            background: #0f766e;
+            color: #ffffff;
+            border-color: #0f766e;
+            box-shadow: 0 10px 24px rgba(15, 118, 110, 0.2);
+        }
+
+        .inventory-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .inventory-card--stretch {
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+        }
+
+        .inventory-card--stretch .inventory-card-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .inventory-action-footer {
+            margin-top: auto;
+            padding-top: 8px;
+        }
+
+        @media (min-width: 1024px) {
+            #inventory-action-area {
+                min-height: 560px;
+            }
+        }
+
+        .inventory-card-header {
+            padding: 10px 16px;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+        }
+
+        .inventory-card-header--primary {
+            background: #3b82f6;
+        }
+
+        .inventory-card-header--neutral {
+            background: #6b7280;
+        }
+
+        .inventory-card-body {
+            padding: 16px;
+        }
+
+        .inventory-card-body--primary {
+            background: #ffffff;
+        }
+
+        .inventory-card-body--neutral {
+            background: #f3f4f6;
+        }
+
+        .inventory-empty-state {
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+            padding: 12px 0;
+        }
+
+        .inventory-start-alert {
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            color: #92400e;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .inventory-option-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .inventory-option-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #475569;
+        }
+
+        .inventory-primary-button {
+            background: #3b82f6;
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 8px 18px;
+            font-weight: 600;
+        }
+
+        .inventory-primary-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .inventory-modal-footer {
+            padding: 12px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .inventory-secondary-button {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #475569;
+            border-radius: 8px;
+            padding: 6px 16px;
+            font-size: 14px;
+        }
+
+        .inventory-secondary-button:hover {
+            background: #f1f5f9;
+        }
+
+        .inventory-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: min(62vh, 640px);
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .inventory-history-item {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px 14px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+        }
+
+        .inventory-history-item.is-completed {
+            opacity: 0.7;
+        }
+
+        .inventory-history-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .inventory-history-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .inventory-history-session {
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .inventory-history-count {
+            text-align: right;
+        }
+
+        .inventory-history-right {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .inventory-history-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .inventory-history-count-number {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .inventory-history-count-label {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .inventory-history-delete {
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #64748b;
+            border-radius: 8px;
+            padding: 6px 8px;
+            font-size: 14px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .inventory-history-export {
+            border: 1px solid #dbeafe;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .inventory-history-export:hover {
+            background: #dbeafe;
+            border-color: #93c5fd;
+        }
+
+        .inventory-history-export--csv {
+            border-color: #d1fae5;
+            background: #ecfdf5;
+            color: #047857;
+        }
+
+        .inventory-history-export--csv:hover {
+            background: #d1fae5;
+            border-color: #86efac;
+        }
+
+        .inventory-history-delete:hover {
+            background: #f8fafc;
+            color: #dc2626;
+            border-color: #fecaca;
+        }
+
+        .inventory-history-delete:disabled,
+        .inventory-history-export:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .inventory-history-meta {
+            font-size: 13px;
+            color: #6b7280;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .inventory-history-footer {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #0f766e;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 8px;
+        }
+
+        .inventory-filter-dropdown-panel {
+            position: absolute;
+            z-index: 50;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .inventory-selected-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .inventory-badge {
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .inventory-badge--open {
+            background: #f6c344;
+            color: #4b3d00;
+        }
+
+        .inventory-badge--completed {
+            background: #e5e7eb;
+            color: #4b5563;
+        }
+
+        .inventory-badge--unknown {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        @media (max-width: 768px) {
+            .inventory-modal-overlay {
+                align-items: flex-end;
+                padding: 0;
+            }
+
+            .inventory-modal {
+                width: 100vw;
+                max-width: 100vw;
+                height: min(100dvh, 100vh);
+                max-height: min(100dvh, 100vh);
+                border-radius: 24px 24px 0 0;
+                overflow: hidden;
+            }
+
+            .inventory-modal-header {
+                padding: 14px 16px 12px;
+            }
+
+            .inventory-modal-body {
+                padding: 16px;
+                gap: 16px;
+                display: block;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .inventory-column {
+                gap: 12px;
+            }
+
+            .inventory-column.is-mobile-hidden {
+                display: none;
+            }
+
+            .inventory-section-switch {
+                display: flex;
+                gap: 8px;
+                padding: 12px 16px 0;
+                background: #ffffff;
+                border-bottom: 1px solid #e2e8f0;
+            }
+
+            .inventory-section-switch__button {
+                flex: 1;
+                justify-content: center;
+                min-height: 42px;
+            }
+
+            .inventory-card {
+                border-radius: 16px;
+                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+            }
+
+            .inventory-card-header {
+                padding: 12px 14px;
+                font-size: 14px;
+            }
+
+            .inventory-card-body {
+                padding: 14px;
+            }
+
+            .inventory-option-label {
+                align-items: flex-start;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+
+            .inventory-option-label input {
+                margin-top: 2px;
+                flex-shrink: 0;
+            }
+
+            .inventory-filter-dropdown-panel {
+                position: static;
+                margin-top: 10px;
+                z-index: auto;
+            }
+
+            .inventory-selected-chips {
+                max-height: 120px;
+                overflow-y: auto;
+                padding-right: 2px;
+            }
+
+            .inventory-action-footer {
+                position: sticky;
+                bottom: 0;
+                margin: 0 -14px -14px;
+                padding: 12px 14px 14px;
+                background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, #ffffff 20%);
+                border-top: 1px solid #e2e8f0;
+            }
+
+            .inventory-primary-button {
+                width: 100%;
+                min-height: 44px;
+                border-radius: 12px;
+            }
+
+            .inventory-history-list {
+                max-height: none;
+                overflow: visible;
+                padding-right: 0;
+            }
+
+            .inventory-history-item {
+                padding: 14px;
+            }
+
+            .inventory-history-head,
+            .inventory-history-right {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .inventory-history-title {
+                flex-wrap: wrap;
+            }
+
+            .inventory-history-count {
+                text-align: left;
+            }
+
+            .inventory-history-actions {
+                justify-content: stretch;
+            }
+
+            .inventory-history-export,
+            .inventory-history-delete {
+                min-height: 40px;
+            }
+
+            .inventory-history-export {
+                flex: 1;
+            }
+
+            .inventory-history-delete {
+                width: 100%;
+            }
+
+            .inventory-modal-footer {
+                padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+                background: rgba(248, 250, 252, 0.96);
+            }
+
+            .inventory-secondary-button {
+                width: 100%;
+                min-height: 42px;
+                border-radius: 12px;
+            }
+        }
+
+        .mode-toggle-card {
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 18px;
+            padding: 16px 20px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .mode-toggle-card--compact {
+            padding: 12px 16px;
+            margin-bottom: 0;
+            min-width: 280px;
+        }
+
+        .mode-toggle-card--compact .mode-toggle-text h3 {
+            font-size: 14px;
+        }
+
+        .mode-toggle-card--compact .mode-toggle-text p {
+            font-size: 12px;
+        }
+
+        .mode-toggle-text h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .mode-toggle-text p {
+            margin: 0;
+            font-size: 13px;
+            color: var(--ink-500);
+        }
+
+        .toggle-switch {
+            position: relative;
+            --toggle-width: 54px;
+            --toggle-height: 30px;
+            --toggle-padding: 4px;
+            --toggle-thumb: calc(var(--toggle-height) - (var(--toggle-padding) * 2));
+            width: var(--toggle-width);
+            height: var(--toggle-height);
+            display: inline-flex;
+            align-items: center;
+            flex-shrink: 0;
+            min-width: var(--toggle-width);
+            min-height: var(--toggle-height);
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: 0.25s ease;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .toggle-slider::after {
+            content: "";
+            position: absolute;
+            height: var(--toggle-thumb);
+            width: var(--toggle-thumb);
+            left: var(--toggle-padding);
+            top: var(--toggle-padding);
+            background-color: #ffffff;
+            transition: 0.25s ease;
+            border-radius: 50%;
+            box-shadow: 0 3px 8px rgba(15, 23, 42, 0.18);
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #1aa39f;
+        }
+
+        .toggle-switch input:checked + .toggle-slider::after {
+            transform: translateX(calc(var(--toggle-width) - var(--toggle-thumb) - (var(--toggle-padding) * 2)));
+        }
+
+        .mobile-scan-card {
+            display: none;
+            margin: 0 0 18px;
+        }
+
+        .mobile-scan-card__button {
+            width: 100%;
+            border: 0;
+            border-radius: 22px;
+            padding: 22px 18px;
+            background: linear-gradient(160deg, #2f6c7f 0%, #1aa39f 55%, #23b7a9 100%);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            text-align: center;
+            box-shadow: 0 18px 38px rgba(26, 163, 159, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+
+        .mobile-scan-card__button:active {
+            transform: translateY(1px);
+            box-shadow: 0 14px 30px rgba(26, 163, 159, 0.25);
+        }
+
+        .mobile-scan-card__button:focus-visible {
+            outline: 3px solid rgba(125, 211, 199, 0.7);
+            outline-offset: 3px;
+        }
+
+        .mobile-scan-card__icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+        }
+
+        .mobile-scan-card__title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .mobile-scan-card__subtitle {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        @media (max-width: 768px) {
+            .mobile-scan-card {
+                display: block;
+            }
+        }
+
+        .advanced-scanner-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            z-index: 2000;
+        }
+
+        .advanced-scanner-shell {
+            position: relative;
+        }
+
+        .advanced-scanner-shell--open {
+            position: fixed;
+            top: 6vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(760px, 94vw);
+            max-height: 88vh;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 22px;
+            padding: 16px 18px 18px;
+            box-shadow: var(--shadow-soft);
+            z-index: 2001;
+        }
+
+        .action-panel-modal {
+            position: fixed;
+            top: 8vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(640px, 94vw);
+            z-index: 2001;
+        }
+
+        .action-panel {
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            padding: 16px;
+            background: #ffffff;
+            max-height: 84vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .action-panel--embedded {
+            background: #f8fafc;
+            border-style: dashed;
+        }
+
+        .action-panel__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .action-panel__header h5 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .action-panel__back {
+            border: 0;
+            background: transparent;
+            color: #0f766e;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .action-panel__body {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        .action-panel__info {
+            display: grid;
+            gap: 6px;
+            font-size: 13px;
+            color: #475569;
+            margin-bottom: 12px;
+        }
+
+        .action-panel__info strong {
+            color: #0f172a;
+        }
+
+        .action-panel__status-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid #fde68a;
+            background: #fefce8;
+            margin-bottom: 14px;
+        }
+
+        .action-panel__status-card small {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #b45309;
+            margin-bottom: 4px;
+        }
+
+        .action-panel__status-card h4 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .action-panel__status-card p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .action-panel__status-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 999px;
+            border: 1px solid #d1fae5;
+            background: #ecfdf3;
+            display: grid;
+            place-items: center;
+            color: #16a34a;
+            font-size: 18px;
+        }
+
+        .action-panel__meta {
+            font-size: 12px;
+            color: #475569;
+            margin-bottom: 10px;
+        }
+
+        .action-panel__meta span {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .action-panel__section-title {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin: 8px 0;
+        }
+
+        .action-panel__actions {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .action-panel__button {
+            border-radius: 14px;
+            border: 1px solid #cbd5f5;
+            background: #f8fafc;
+            padding: 10px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1f2937;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .action-panel__button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .action-panel__button--transfer {
+            border-color: #a5b4fc;
+            color: #4338ca;
+            background: #eef2ff;
+        }
+
+        .action-panel__button--lend {
+            border-color: #c4b5fd;
+            color: #6d28d9;
+            background: #f5f3ff;
+        }
+
+        .action-panel__button--scrap {
+            border-color: #fca5a5;
+            color: #b91c1c;
+            background: #fef2f2;
+        }
+
+        .action-panel__button--inventory {
+            background: linear-gradient(135deg, #0f9d58, #0b8043);
+        }
+
+        .action-panel__inventory-group {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .action-panel__chip {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 10px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            background: #ffffff;
+            cursor: pointer;
+            display: inline-flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .action-panel__chip--normal { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+        .action-panel__chip--lost { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
+        .action-panel__chip--damaged { color: #c2410c; border-color: #fdba74; background: #fff7ed; }
+        .action-panel__chip--old { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
+
+        .action-panel__chip i {
+            font-size: 16px;
+        }
+
+        .action-panel__footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .action-panel__secondary {
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #475569;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .action-panel__primary {
+            border: 0;
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #ffffff;
+            background: linear-gradient(135deg, #0f9d58, #0b8043);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .action-panel__hint {
+            font-size: 12px;
+            color: #94a3b8;
+            text-align: center;
+            margin-top: 6px;
+        }
+
+        .action-panel__inventory-intro {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .action-panel__inventory-note {
+            font-size: 12px;
+            color: #0f766e;
+            background: #f0fdfa;
+            border: 1px solid #99f6e4;
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .advanced-batch-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .advanced-batch-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .advanced-batch-summary {
+            font-size: 12px;
+            color: #475569;
+            line-height: 1.4;
+        }
+
+        .advanced-batch-tag {
+            background: #f1f5f9;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+    </style>
+</head>
+<body>
+    <?!= include('progress_bar_fly'); ?>
+    <?!= include('toast_progress'); ?>
+    <script>
+        window.BatchList_skipPaginationHook = true;
+    </script>
+    <?!= include('batch_processing_list'); ?>
+    <?!= include('quagga'); ?>
+    <?!= include('selectbyqr'); ?>
+    <?!= include('copilot_chat'); ?>
+
+    <!-- 原生 Modal shim:取代 jQuery + bootstrap.bundle.js(僅 vanilla 區 $('#x').modal() 需要) -->
+    <?!= include('js_modal_shim'); ?>
+
+    <!-- ========== Alpine 應用掛載點(Phase 1 骨架;Phase 2 起替換為正式視圖) ========== -->
+    <main id="app-root" class="max-w-7xl mx-auto px-4 py-6" x-data>
+        <template x-if="$store.app.ready">
+            <div class="bg-white rounded-xl shadow p-6 space-y-2">
+                <h1 class="text-xl font-bold text-slate-800">Alpine 骨架掛載成功(Phase 1 煙霧測試)</h1>
+                <p class="text-sm text-slate-600">使用者:<span class="font-mono" x-text="$store.app.currentUserEmail"></span>
+                    <span x-show="$store.app.isAdmin" class="ml-2 px-2 py-0.5 text-xs rounded bg-indigo-100 text-indigo-700">管理員</span></p>
+                <p class="text-sm text-slate-600">資產筆數:<span class="font-mono" x-text="$store.app.allAssets.length"></span></p>
+                <p class="text-sm text-slate-600">盤點功能:<span x-text="$store.app.inventoryEnabled ? '啟用' : '停用'"></span>、待列印轉移:<span class="font-mono" x-text="$store.app.transferPendingCount"></span></p>
+                <p class="text-xs text-slate-400">此為 Phase 1 臨時驗證畫面,Phase 2 起以正式唯讀視圖取代;舊版頁面不受影響(網址去掉 ?ui=alpine 即回舊版)。</p>
+            </div>
+        </template>
+        <template x-if="$store.app.loadError">
+            <div class="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-4 text-sm" x-text="'載入失敗:' + $store.app.loadError"></div>
+        </template>
+    </main>
+    <template id="operationManualSrcDocTemplate"><?!= include('operation_manual_srcdoc'); ?></template>
+
+    <!-- Bootstrap Modals (保留現有結構) -->
+    <div class="modal fade" id="duplicateAssetsModal" tabindex="-1" role="dialog" aria-labelledby="duplicateAssetsTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="duplicateAssetsTitle">重複產編清單</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="duplicate-assets-meta" class="text-muted mb-2"></div>
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="thead-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th>財產編號</th>
+                                    <th>財產名稱</th>
+                                    <th>財產別名</th>
+                                    <th>使用者</th>
+                                    <th>保管人</th>
+                                    <th>保管位置</th>
+                                </tr>
+                            </thead>
+                            <tbody id="duplicate-assets-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="pendingApprovalModal" tabindex="-1" role="dialog" aria-labelledby="pendingApprovalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pendingApprovalTitle">待接收資產清單</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-row mb-2">
+                        <div class="form-group col-md-5">
+                            <label for="pending-location-filter">依原保管地點篩選</label>
+                            <select id="pending-location-filter" class="form-control">
+                                <option value="">-- 顯示全部 --</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-7">
+                            <label for="pending-search-box">關鍵字搜尋 (產編/產名/原保管人)</label>
+                            <input type="text" id="pending-search-box" class="form-control" placeholder="輸入關鍵字">
+                        </div>
+                    </div>
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="thead-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th style="width: 4%;"><input type="checkbox" id="pending-select-all"></th>
+                                    <th style="width: 10%;">財產編號</th>
+                                    <th style="width: 11%;">財產名稱</th>
+                                    <th style="width: 11%;">財產別名</th>
+                                    <th style="width: 12%;">型號/廠牌</th>
+                                    <th style="width: 14%;">保管人變更</th>
+                                    <th style="width: 14%;">使用人變更</th>
+                                    <th style="width: 13%;">地點變更</th>
+                                    <th style="width: 11%;">轉移類型</th>
+                                    <th style="width: 11%;">申請時間</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pending-approval-list"></tbody>
+                        </table>
+                    </div>
+                    <div id="pending-pagination" class="d-flex justify-content-between align-items-center mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger" onclick="submitPendingRejection()">拒絕所選</button>
+                    <button type="button" class="btn btn-success" onclick="submitPendingApproval()">接受所選</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="assignmentModeModal" tabindex="-1" role="dialog" aria-labelledby="assignmentModeTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assignmentModeTitle">選擇分派方式</h5>
+                    <button type="button" class="close" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">請選擇本次盤點的分派方式：</p>
+                    <div class="custom-control custom-radio mb-2">
+                        <input type="radio" id="assignment-mode-group" name="assignmentMode" class="custom-control-input" value="group" checked>
+                        <label class="custom-control-label" for="assignment-mode-group">依照組別分派</label>
+                    </div>
+                    <div class="custom-control custom-radio">
+                        <input type="radio" id="assignment-mode-person" name="assignmentMode" class="custom-control-input" value="person">
+                        <label class="custom-control-label" for="assignment-mode-person">依照人名分派</label>
+                    </div>
+                    <div class="custom-control custom-radio mt-2">
+                        <input type="radio" id="assignment-mode-custom" name="assignmentMode" class="custom-control-input" value="custom">
+                        <label class="custom-control-label" for="assignment-mode-custom">指定對象分派</label>
+                    </div>
+                    <div id="assignment-custom-fields" class="mt-3 d-none">
+                        <div class="form-group">
+                            <label for="assignment-target-type">分派對象類型</label>
+                            <select id="assignment-target-type" class="form-control form-control-sm">
+                                <option value="user">使用者</option>
+                                <option value="group">組別</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                            <label for="assignment-target-value">指定對象</label>
+                            <select id="assignment-target-value" class="form-control form-control-sm">
+                                <option value="">-- 請選擇 --</option>
+                            </select>
+                            <small class="form-text text-muted">使用者以 Email 為準</small>
+                        </div>
+                        <div id="assignment-custom-error" class="text-danger mt-2" style="display: none;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="window.inventoryConfirmAssignmentMode && window.inventoryConfirmAssignmentMode()">開始盤點</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="assignmentAssetsModal" tabindex="-1" role="dialog" aria-labelledby="assignmentAssetsTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assignmentAssetsTitle">分派清單</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="assignment-assets-meta" class="text-muted mb-2"></div>
+                    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="thead-light" style="position: sticky; top: 0;">
+                                <tr>
+                                    <th>財產編號</th>
+                                    <th>財產名稱</th>
+                                    <th>財產別名</th>
+                                    <th>使用人</th>
+                                    <th>保管人</th>
+                                    <th>地點</th>
+                                    <th>盤點結果</th>
+                                    <th>資訊資產</th>
+                                    <th>ISMS 編號</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignment-assets-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="assignment-assets-pagination" class="d-flex justify-content-between align-items-center mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全域函數橋接 jQuery Modal -->
+    <script>
+        // 全域變數供 React 與 jQuery 共享
+        window.pendingApprovals = [];
+        window.filteredPendingApprovals = [];
+        window.pendingCurrentPage = 1;
+        window.pendingRowsPerPage = 50;
+        window.duplicateGroups = [];
+        window.assignmentRowsPerPage = 500;
+        window.assignmentModalState = {
+            key: '',
+            title: '',
+            sessionId: '',
+            assets: [],
+            page: 1,
+            loading: false,
+            error: ''
+        };
+        window.inventoryAssignmentOptions = { users: [], groups: [] };
+
+        function setAssignmentCustomError(message) {
+            const errorEl = document.getElementById('assignment-custom-error');
+            if (!errorEl) return;
+            if (message) {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+            } else {
+                errorEl.textContent = '';
+                errorEl.style.display = 'none';
+            }
+        }
+
+        function toggleAssignmentCustomFields(isCustom) {
+            const container = document.getElementById('assignment-custom-fields');
+            if (!container) return;
+            if (isCustom) {
+                container.classList.remove('d-none');
+            } else {
+                container.classList.add('d-none');
+            }
+        }
+
+        function updateAssignmentTargetOptions(options = window.inventoryAssignmentOptions, keepSelection = true) {
+            const typeEl = document.getElementById('assignment-target-type');
+            const valueEl = document.getElementById('assignment-target-value');
+            if (!typeEl || !valueEl) return;
+
+            const targetType = typeEl.value || 'user';
+            const previousValue = keepSelection ? valueEl.value : '';
+            valueEl.innerHTML = '<option value="">-- 請選擇 --</option>';
+
+            if (targetType === 'group') {
+                const groups = Array.isArray(options.groups) ? options.groups : [];
+                groups.forEach(group => {
+                    const option = document.createElement('option');
+                    option.value = group;
+                    option.textContent = group;
+                    valueEl.appendChild(option);
+                });
+            } else {
+                const users = Array.isArray(options.users) ? options.users : [];
+                users.forEach(user => {
+                    const email = user?.email || '';
+                    if (!email) return;
+                    const name = user?.name || email.split('@')[0];
+                    const group = user?.group ? ` - ${user.group}` : '';
+                    const option = document.createElement('option');
+                    option.value = email;
+                    option.textContent = `${name} (${email})${group}`;
+                    valueEl.appendChild(option);
+                });
+            }
+
+            if (previousValue) {
+                const hasOption = Array.from(valueEl.options).some(option => option.value === previousValue);
+                if (hasOption) valueEl.value = previousValue;
+            }
+        }
+
+        window.updateAssignmentTargetOptions = updateAssignmentTargetOptions;
+        window.prepareAssignmentModeModal = () => {
+            const isCustom = !!document.getElementById('assignment-mode-custom')?.checked;
+            toggleAssignmentCustomFields(isCustom);
+            setAssignmentCustomError('');
+            updateAssignmentTargetOptions(window.inventoryAssignmentOptions, true);
+        };
+        window.setAssignmentCustomError = setAssignmentCustomError;
+
+        (function initAssignmentModeModal() {
+            const modal = document.getElementById('assignmentModeModal');
+            if (!modal || modal.dataset.initialized) return;
+            modal.dataset.initialized = 'true';
+
+            modal.querySelectorAll('input[name="assignmentMode"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const isCustom = !!document.getElementById('assignment-mode-custom')?.checked;
+                    toggleAssignmentCustomFields(isCustom);
+                    setAssignmentCustomError('');
+                });
+            });
+
+            const typeEl = document.getElementById('assignment-target-type');
+            if (typeEl) {
+                typeEl.addEventListener('change', () => {
+                    setAssignmentCustomError('');
+                    updateAssignmentTargetOptions(window.inventoryAssignmentOptions, false);
+                });
+            }
+
+            const valueEl = document.getElementById('assignment-target-value');
+            if (valueEl) {
+                valueEl.addEventListener('change', () => {
+                    setAssignmentCustomError('');
+                });
+            }
+        })();
+
+        window.openPendingApprovalModal = () => {
+            if (!Array.isArray(window.pendingApprovals)) {
+                window.pendingApprovals = [];
+            }
+
+            if (!document.getElementById('pendingApprovalModal').dataset.initialized) {
+                document.getElementById('pending-location-filter').addEventListener('change', filterPendingApprovals);
+                document.getElementById('pending-search-box').addEventListener('input', filterPendingApprovals);
+                document.getElementById('pending-select-all').addEventListener('change', (event) => {
+                    document.querySelectorAll('.pending-approval-checkbox').forEach(cb => {
+                        cb.checked = event.target.checked;
+                    });
+                });
+                document.getElementById('pendingApprovalModal').dataset.initialized = 'true';
+            }
+
+            populatePendingFilters();
+            filterPendingApprovals();
+            $('#pendingApprovalModal').modal('show');
+        };
+
+        window.openDuplicateAssetsModal = () => {
+            if (!window.duplicateGroups || window.duplicateGroups.length === 0) return;
+            renderDuplicateAssetsModal();
+            $('#duplicateAssetsModal').modal('show');
+        };
+
+        window.openInventoryAssignmentModal = (state = {}) => {
+            window.assignmentModalState = {
+                key: '',
+                title: '',
+                sessionId: '',
+                assets: [],
+                page: 1,
+                loading: false,
+                error: '',
+                ...state
+            };
+            renderAssignmentAssetsModal();
+            $('#assignmentAssetsModal').modal('show');
+        };
+
+        window.updateInventoryAssignmentModal = (state = {}) => {
+            window.assignmentModalState = {
+                ...window.assignmentModalState,
+                ...state
+            };
+            renderAssignmentAssetsModal();
+        };
+
+        function legacyGetAssetAliasValue(asset) {
+            if (!asset) return '';
+            const sourceSheet = String(asset.sourceSheet || '').trim();
+            const rawValue = sourceSheet === '物品總表'
+                ? asset.productSerial
+                : asset.assetAlias;
+            return String(rawValue || '').trim();
+        }
+
+        function legacyGetAssetAliasDisplay(asset, empty = '') {
+            const value = legacyGetAssetAliasValue(asset);
+            return value || empty;
+        }
+
+        function populatePendingFilters() {
+            const locationFilter = document.getElementById('pending-location-filter');
+            locationFilter.innerHTML = '<option value="">-- 顯示全部 --</option>';
+            const uniqueLocations = [...new Set(window.pendingApprovals.map(item => item.oldLocation))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+            uniqueLocations.forEach(loc => {
+                const option = document.createElement('option');
+                option.value = loc;
+                option.textContent = loc;
+                locationFilter.appendChild(option);
+            });
+        }
+
+        function filterPendingApprovals() {
+            const locationFilter = document.getElementById('pending-location-filter').value.toUpperCase();
+            const searchFilter = document.getElementById('pending-search-box').value.toUpperCase();
+
+            window.filteredPendingApprovals = window.pendingApprovals.filter(item => {
+                const locationMatch = (locationFilter === '') || (item.oldLocation && item.oldLocation.toUpperCase() === locationFilter);
+                const searchMatch = item.assetId.toUpperCase().includes(searchFilter) ||
+                                    (item.assetName && item.assetName.toUpperCase().includes(searchFilter)) ||
+                                    (legacyGetAssetAliasValue(item) && legacyGetAssetAliasValue(item).toUpperCase().includes(searchFilter)) ||
+                                    (item.oldKeeper && item.oldKeeper.toUpperCase().includes(searchFilter));
+                return locationMatch && searchMatch;
+            });
+
+            window.pendingCurrentPage = 1;
+            renderPendingPage(window.pendingCurrentPage);
+        }
+
+        function renderPendingPage(page) {
+            window.pendingCurrentPage = page;
+            const listBody = document.getElementById('pending-approval-list');
+            const pagination = document.getElementById('pending-pagination');
+            listBody.innerHTML = '';
+
+            if (window.filteredPendingApprovals.length === 0) {
+                const hasAnyPending = Array.isArray(window.pendingApprovals) && window.pendingApprovals.length > 0;
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 10;
+                cell.className = 'text-center text-muted';
+                cell.textContent = hasAnyPending ? '沒有符合條件的項目。' : '無待接收項目。';
+                row.appendChild(cell);
+                listBody.appendChild(row);
+                pagination.textContent = '';
+                return;
+            }
+
+            const start = (page - 1) * window.pendingRowsPerPage;
+            const end = start + window.pendingRowsPerPage;
+            const items = window.filteredPendingApprovals.slice(start, end);
+
+            const fragment = document.createDocumentFragment();
+            items.forEach(item => {
+                const row = document.createElement('tr');
+
+                const checkboxTd = document.createElement('td');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'pending-approval-checkbox';
+                checkbox.value = item.appId;
+                checkboxTd.appendChild(checkbox);
+                row.appendChild(checkboxTd);
+
+                const assetIdTd = document.createElement('td');
+                assetIdTd.textContent = item.assetId;
+                row.appendChild(assetIdTd);
+
+                const assetNameTd = document.createElement('td');
+                assetNameTd.textContent = item.assetName;
+                row.appendChild(assetNameTd);
+
+                const assetAliasTd = document.createElement('td');
+                assetAliasTd.textContent = legacyGetAssetAliasDisplay(item, '');
+                row.appendChild(assetAliasTd);
+
+                const modelBrandTd = document.createElement('td');
+                modelBrandTd.textContent = item.modelBrand || '';
+                row.appendChild(modelBrandTd);
+
+                function createChangeTd(oldVal, newVal, hasChange) {
+                    const td = document.createElement('td');
+                    if (hasChange) {
+                        td.appendChild(document.createTextNode(oldVal || ''));
+                        const arrow = document.createElement('span');
+                        arrow.className = 'text-primary';
+                        arrow.textContent = ' → ';
+                        td.appendChild(arrow);
+                        td.appendChild(document.createTextNode(newVal || ''));
+                    } else {
+                        td.textContent = oldVal || '';
+                    }
+                    return td;
+                }
+
+                const keeperHasChange = item.newKeeper && item.oldKeeper !== item.newKeeper;
+                row.appendChild(createChangeTd(item.oldKeeper, item.newKeeper, keeperHasChange));
+
+                const oldUser = item.oldUser || item.userName || '';
+                const newUser = item.newUser || '';
+                const userHasChange = newUser && oldUser !== newUser;
+                row.appendChild(createChangeTd(oldUser, newUser, userHasChange));
+
+                const locationHasChange = item.newLocation && item.oldLocation !== item.newLocation;
+                row.appendChild(createChangeTd(item.oldLocation, item.newLocation, locationHasChange));
+
+                const transferType = item.transferType || '地點';
+                const typeTd = document.createElement('td');
+                const typeBadgeEl = document.createElement('span');
+                if (transferType.includes('保管人') && transferType.includes('使用人')) {
+                    typeBadgeEl.className = 'badge badge-danger';
+                    typeBadgeEl.textContent = '保管人+使用人';
+                } else if (transferType.includes('保管人')) {
+                    typeBadgeEl.className = 'badge badge-warning';
+                    typeBadgeEl.textContent = '保管人';
+                } else if (transferType.includes('使用人')) {
+                    typeBadgeEl.className = 'badge badge-info';
+                    typeBadgeEl.textContent = '使用人';
+                } else {
+                    typeBadgeEl.className = 'badge badge-secondary';
+                    typeBadgeEl.textContent = '地點';
+                }
+                typeTd.appendChild(typeBadgeEl);
+                row.appendChild(typeTd);
+
+                const applyTimeTd = document.createElement('td');
+                applyTimeTd.textContent = item.applyTime;
+                row.appendChild(applyTimeTd);
+
+                fragment.appendChild(row);
+            });
+
+            listBody.appendChild(fragment);
+            renderPendingPagination();
+            document.getElementById('pending-select-all').checked = false;
+        }
+
+        function renderPendingPagination() {
+            const pagination = document.getElementById('pending-pagination');
+            const totalPages = Math.ceil(window.filteredPendingApprovals.length / window.pendingRowsPerPage);
+
+            if (window.filteredPendingApprovals.length === 0) {
+                const hasAnyPending = Array.isArray(window.pendingApprovals) && window.pendingApprovals.length > 0;
+                pagination.innerHTML = hasAnyPending
+                    ? '<span class="text-muted">沒有符合篩選條件的項目。</span>'
+                    : '<span class="text-muted">無待接收項目。</span>';
+                return;
+            }
+            if (totalPages <= 1) {
+                pagination.innerHTML = `<span class="text-muted">共 ${window.filteredPendingApprovals.length} 筆資料</span>`;
+                return;
+            }
+
+            const info = document.createElement('span');
+            info.className = 'text-muted';
+            info.textContent = `共 ${window.filteredPendingApprovals.length} 筆資料，第 ${window.pendingCurrentPage} / ${totalPages} 頁`;
+
+            const nav = document.createElement('ul');
+            nav.className = 'pagination mb-0';
+
+            const prev = document.createElement('li');
+            prev.className = `page-item ${window.pendingCurrentPage === 1 ? 'disabled' : ''}`;
+            const prevLink = document.createElement('a');
+            prevLink.className = 'page-link';
+            prevLink.textContent = '上一頁';
+            prevLink.addEventListener('click', () => {
+                if (window.pendingCurrentPage > 1) renderPendingPage(window.pendingCurrentPage - 1);
+            });
+            prev.appendChild(prevLink);
+
+            const next = document.createElement('li');
+            next.className = `page-item ${window.pendingCurrentPage === totalPages ? 'disabled' : ''}`;
+            const nextLink = document.createElement('a');
+            nextLink.className = 'page-link';
+            nextLink.textContent = '下一頁';
+            nextLink.addEventListener('click', () => {
+                if (window.pendingCurrentPage < totalPages) renderPendingPage(window.pendingCurrentPage + 1);
+            });
+            next.appendChild(nextLink);
+
+            nav.appendChild(prev);
+            nav.appendChild(next);
+
+            pagination.innerHTML = '';
+            pagination.appendChild(info);
+            pagination.appendChild(nav);
+        }
+
+        function renderAssignmentAssetsModal() {
+            const titleEl = document.getElementById('assignmentAssetsTitle');
+            const metaEl = document.getElementById('assignment-assets-meta');
+            const bodyEl = document.getElementById('assignment-assets-body');
+            const paginationEl = document.getElementById('assignment-assets-pagination');
+            const state = window.assignmentModalState || {};
+
+            const normalizedKey = state.key || '未指派';
+            const titleLabel = normalizedKey === '未指派'
+                ? '未指派'
+                : (String(normalizedKey).includes('@')
+                    ? `${state.title || normalizedKey} (${normalizedKey})`
+                    : (state.title || normalizedKey));
+
+            if (titleEl) titleEl.textContent = `分派清單 - ${titleLabel}`;
+            if (metaEl) metaEl.textContent = state.loading
+                ? '載入中...'
+                : (state.error ? '' : `共 ${(state.assets || []).length} 筆資產`);
+
+            if (!bodyEl || !paginationEl) return;
+            bodyEl.innerHTML = '';
+            paginationEl.innerHTML = '';
+
+            if (state.loading) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 9;
+                cell.className = 'text-center text-muted';
+                cell.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>載入中...';
+                row.appendChild(cell);
+                bodyEl.appendChild(row);
+                return;
+            }
+
+            if (state.error) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 9;
+                cell.className = 'text-center text-danger';
+                cell.textContent = state.error;
+                row.appendChild(cell);
+                bodyEl.appendChild(row);
+                return;
+            }
+
+            const assets = Array.isArray(state.assets) ? state.assets : [];
+            const total = assets.length;
+            if (total === 0) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 9;
+                cell.className = 'text-center text-muted';
+                cell.textContent = '沒有符合條件的資產';
+                row.appendChild(cell);
+                bodyEl.appendChild(row);
+                return;
+            }
+
+            const pageCount = Math.max(1, Math.ceil(total / window.assignmentRowsPerPage));
+            let page = Number(state.page || 1);
+            if (page > pageCount) page = pageCount;
+
+            const start = (page - 1) * window.assignmentRowsPerPage;
+            const end = start + window.assignmentRowsPerPage;
+            const pageAssets = assets.slice(start, end);
+            const fragment = document.createDocumentFragment();
+
+            pageAssets.forEach(asset => {
+                const row = document.createElement('tr');
+                const cells = [
+                    asset.assetId,
+                    asset.assetName,
+                    legacyGetAssetAliasDisplay(asset, ''),
+                    asset.userName,
+                    asset.keeperName,
+                    asset.location,
+                    asset.inventoryResult,
+                    asset.isItAsset || '',
+                    asset.ismsAssetId || ''
+                ];
+                cells.forEach(value => {
+                    const td = document.createElement('td');
+                    td.textContent = value || '';
+                    row.appendChild(td);
+                });
+                fragment.appendChild(row);
+            });
+
+            bodyEl.appendChild(fragment);
+
+            if (pageCount <= 1) return;
+
+            const info = document.createElement('div');
+            info.className = 'text-muted';
+            info.textContent = `第 ${page} / ${pageCount} 頁`;
+            paginationEl.appendChild(info);
+
+            const nav = document.createElement('div');
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'btn btn-sm btn-outline-secondary mr-2';
+            prevBtn.textContent = '上一頁';
+            prevBtn.disabled = page <= 1;
+            prevBtn.addEventListener('click', () => {
+                if (page > 1) {
+                    window.assignmentModalState.page = page - 1;
+                    renderAssignmentAssetsModal();
+                }
+            });
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn btn-sm btn-outline-secondary';
+            nextBtn.textContent = '下一頁';
+            nextBtn.disabled = page >= pageCount;
+            nextBtn.addEventListener('click', () => {
+                if (page < pageCount) {
+                    window.assignmentModalState.page = page + 1;
+                    renderAssignmentAssetsModal();
+                }
+            });
+
+            nav.appendChild(prevBtn);
+            nav.appendChild(nextBtn);
+            paginationEl.appendChild(nav);
+        }
+
+        function submitPendingApproval() {
+            const selected = Array.from(document.querySelectorAll('.pending-approval-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('請至少勾選一個項目再送出。');
+                return;
+            }
+
+            showToastProgress('正在處理接收作業...');
+            google.script.run
+                .withSuccessHandler(message => {
+                    hideToastProgress('處理完成！', 300);
+                    $('#pendingApprovalModal').modal('hide');
+                    alert(message);
+                    window.refreshReactData && window.refreshReactData();
+                })
+                .withFailureHandler(error => {
+                    hideToastProgress('處理失敗！', 300);
+                    alert('處理失敗：' + error.message);
+                })
+                .processBatchApproval(selected);
+        }
+
+        function submitPendingRejection() {
+            const selected = Array.from(document.querySelectorAll('.pending-approval-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('請至少勾選一個項目再送出。');
+                return;
+            }
+            if (!confirm(`確定要拒絕所選的 ${selected.length} 筆待接收資產嗎？`)) {
+                return;
+            }
+
+            showToastProgress('正在處理拒絕作業...');
+            google.script.run
+                .withSuccessHandler(message => {
+                    hideToastProgress('處理完成！', 300);
+                    $('#pendingApprovalModal').modal('hide');
+                    alert(message);
+                    window.refreshReactData && window.refreshReactData();
+                })
+                .withFailureHandler(error => {
+                    hideToastProgress('處理失敗！', 300);
+                    alert('處理失敗：' + error.message);
+                })
+                .processBatchRejection(selected);
+        }
+
+        function renderDuplicateAssetsModal() {
+            const metaEl = document.getElementById('duplicate-assets-meta');
+            const bodyEl = document.getElementById('duplicate-assets-body');
+
+            const groups = window.duplicateGroups.slice().sort((a, b) => {
+                if (!a.assetId && !b.assetId) return 0;
+                if (!a.assetId) return 1;
+                if (!b.assetId) return -1;
+                return String(a.assetId).localeCompare(String(b.assetId), 'zh-Hant');
+            });
+
+            const totalGroups = groups.length;
+            const totalRows = groups.reduce((sum, group) => sum + group.items.length, 0);
+            metaEl.textContent = `共 ${totalGroups} 組，${totalRows} 筆資產`;
+
+            bodyEl.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+
+            groups.forEach(group => {
+                const groupRow = document.createElement('tr');
+                groupRow.className = 'duplicate-group-row';
+                const groupCell = document.createElement('td');
+                groupCell.colSpan = 6;
+                groupCell.textContent = `產編：${group.assetId || '(空白)'}（${group.items.length} 筆）`;
+                groupRow.appendChild(groupCell);
+                fragment.appendChild(groupRow);
+
+                group.items.forEach(asset => {
+                    const row = document.createElement('tr');
+                const cells = [
+                    asset.assetId,
+                    asset.assetName,
+                    legacyGetAssetAliasDisplay(asset, ''),
+                    asset.userName,
+                    asset.leader,
+                    asset.location
+                    ];
+                    cells.forEach(value => {
+                        const td = document.createElement('td');
+                        td.textContent = value || '';
+                        row.appendChild(td);
+                    });
+                    fragment.appendChild(row);
+                });
+            });
+
+            bodyEl.appendChild(fragment);
+        }
+    </script>
+
+    <!-- Alpine 應用邏輯(取代原 React text/babel 區塊;零編譯,改完直接 clasp push) -->
+    <?!= include('alpine_store'); ?>
+
+    <!-- ========== 浮動快速導航按鈕 (FAB) ========== -->
+    <style>
+      /* FAB 容器 */
+      .fab-container {
+        position: fixed;
+        z-index: 9999;
+        bottom: 32px;
+        left: 32px;
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: center;
+        gap: 0;
+        user-select: none;
+        touch-action: none;
+        /* 容器本身不攔截點擊；互動僅透過 .fab-main 與展開後的 .fab-menu */
+        pointer-events: none;
+      }
+      .fab-container .fab-main {
+        pointer-events: auto;
+      }
+
+      /* 主按鈕 — 使用主專案 teal 配色 */
+      .fab-main {
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        border: none;
+        background: linear-gradient(135deg, #1aa39f 0%, #2f6c7f 50%, #1aa39f 100%);
+        background-size: 200% 200%;
+        color: #fff;
+        font-size: 20px;
+        cursor: grab;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow:
+          0 6px 24px rgba(26, 163, 159, 0.4),
+          0 0 0 0 rgba(47, 108, 127, 0);
+        transition: transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s;
+        position: relative;
+        animation:
+          fabPulse 3s ease-in-out infinite,
+          fabGradient 4s ease infinite;
+      }
+      /* 外圈脈動光環 */
+      .fab-main::before {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 2px solid rgba(26, 163, 159, 0.35);
+        animation: fabRingPulse 3s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .fab-main:hover {
+        box-shadow: 0 8px 30px rgba(26, 163, 159, 0.55);
+      }
+      .fab-main:active {
+        cursor: grabbing;
+      }
+
+      /* 閒置呼吸脈動 */
+      @keyframes fabPulse {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.06); }
+      }
+      /* 漸層緩慢流動 */
+      @keyframes fabGradient {
+        0%, 100% { background-position: 0% 50%; }
+        50%      { background-position: 100% 50%; }
+      }
+      /* 外圈光環擴散 */
+      @keyframes fabRingPulse {
+        0%, 100% { opacity: 0.5; transform: scale(1); }
+        50%      { opacity: 0; transform: scale(1.25); }
+      }
+
+      /* 圖示：閒置緩慢旋轉 */
+      .fab-main .fab-icon-svg {
+        pointer-events: none;
+        transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+        animation: fabIconSpin 8s linear infinite;
+      }
+      @keyframes fabIconSpin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+
+      /* 展開時：停止所有閒置動畫 */
+      .fab-container.open .fab-main {
+        animation: none;
+      }
+      .fab-container.open .fab-main::before {
+        animation: none;
+        opacity: 0;
+      }
+      .fab-container.open .fab-main .fab-icon-svg {
+        animation: none;
+        transform: rotate(180deg);
+      }
+
+      /* 拖曳視覺提示 */
+      .fab-main.dragging {
+        opacity: 0.85;
+        box-shadow: 0 10px 40px rgba(26, 163, 159, 0.5);
+        transform: scale(1.08);
+        animation: none;
+      }
+      .fab-main.dragging::before {
+        animation: none;
+        opacity: 0;
+      }
+      .fab-main.dragging .fab-icon-svg {
+        animation: none;
+      }
+
+      /* 子按鈕容器 */
+      .fab-menu {
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(20px) scale(0.8);
+        transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1);
+      }
+      .fab-container.open .fab-menu {
+        pointer-events: auto;
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      /* 單一子按鈕 */
+      .fab-nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        white-space: nowrap;
+        animation: fabItemIn 0.3s both;
+      }
+      .fab-container.open .fab-nav-item:nth-child(1) { animation-delay: 0.04s; }
+      .fab-container.open .fab-nav-item:nth-child(2) { animation-delay: 0.1s; }
+      .fab-container.open .fab-nav-item:nth-child(3) { animation-delay: 0.16s; }
+      .fab-container.open .fab-nav-item:nth-child(4) { animation-delay: 0.22s; }
+
+      @keyframes fabItemIn {
+        from { opacity: 0; transform: translateY(12px) scale(0.85); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      .fab-nav-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: none;
+        color: #fff;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .fab-nav-btn:hover {
+        transform: scale(1.12);
+        box-shadow: 0 5px 18px rgba(0,0,0,0.25);
+      }
+      .fab-nav-label {
+        background: rgba(15, 23, 42, 0.88);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 5px 12px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        pointer-events: none;
+      }
+
+      /* 遮罩層 */
+      .fab-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9998;
+        background: rgba(15, 23, 42, 0.12);
+        backdrop-filter: blur(2px);
+        transition: opacity 0.25s;
+      }
+      .fab-overlay.show {
+        display: block;
+      }
+    </style>
+
+    <!-- 遮罩 -->
+    <div class="fab-overlay" id="fabOverlay"></div>
+
+    <!-- FAB 按鈕群組（預設隱藏，僅管理員可見） -->
+    <div class="fab-container" id="fabContainer" style="display: none;">
+      <button class="fab-main" id="fabMain" title="快速導航">
+        <svg class="fab-icon-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12,2 20,7 20,17 12,22 4,17 4,7" />
+          <circle cx="12" cy="12" r="3" />
+          <line x1="12" y1="2" x2="12" y2="9" />
+          <line x1="12" y1="15" x2="12" y2="22" />
+        </svg>
+      </button>
+      <div class="fab-menu" id="fabMenu">
+        <!-- 子按鈕 1：資訊資產清單（URL 由 env.js 的 FAB_URL_ISMS_ASSET 透過 getFabNavigationUrls() 注入） -->
+        <a class="fab-nav-item" id="fabLinkIsmsAsset" href="#" target="_blank">
+          <span class="fab-nav-label">資訊資產清單</span>
+          <span class="fab-nav-btn" style="background: linear-gradient(135deg, #2f6c7f, #1e5568);">
+            <i class="fa-solid fa-list-check"></i>
+          </span>
+        </a>
+        <!-- 子按鈕 2：資產對照管理（URL 由 env.js 的 FAB_URL_ISMS_CONNECT 透過 getFabNavigationUrls() 注入） -->
+        <a class="fab-nav-item" id="fabLinkIsmsConnect" href="#" target="_blank">
+          <span class="fab-nav-label">資產對照管理</span>
+          <span class="fab-nav-btn" style="background: linear-gradient(135deg, #0891b2, #0e7490);">
+            <i class="fa-solid fa-link"></i>
+          </span>
+        </a>
+        <!-- 子按鈕 3：軟體清冊（URL 由 env.js 的 FAB_URL_SOFTWARE_LIST 透過 getFabNavigationUrls() 注入） -->
+        <a class="fab-nav-item" id="fabLinkSoftware" href="#" target="_blank">
+          <span class="fab-nav-label">軟體清冊</span>
+          <span class="fab-nav-btn" style="background: linear-gradient(135deg, #7c3aed, #6d28d9);">
+            <i class="fa-solid fa-compact-disc"></i>
+          </span>
+        </a>
+        <!-- 子按鈕 4：列印條碼（動態 URL，主專案內頁） -->
+        <a class="fab-nav-item" id="fabLinkBarcodePrint" href="#" target="_blank">
+          <span class="fab-nav-label">列印條碼</span>
+          <span class="fab-nav-btn" style="background: linear-gradient(135deg, #059669, #047857);">
+            <i class="fa-solid fa-barcode"></i>
+          </span>
+        </a>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      'use strict';
+
+      // ===== 設定快速導航連結（僅管理員可見 FAB） =====
+      // 所有 URL 皆由後端 getFabNavigationUrls() 提供（子專案 URL 定義於 env.js）。
+      google.script.run
+        .withSuccessHandler(function(urls) {
+          if (!urls || !urls.isAdmin) return; // 非管理員不顯示 FAB
+          if (urls.ismsAssetUrl)    document.getElementById('fabLinkIsmsAsset').href = urls.ismsAssetUrl;
+          if (urls.ismsConnectUrl)  document.getElementById('fabLinkIsmsConnect').href = urls.ismsConnectUrl;
+          if (urls.softwareListUrl) document.getElementById('fabLinkSoftware').href = urls.softwareListUrl;
+          if (urls.barcodePrintUrl) document.getElementById('fabLinkBarcodePrint').href = urls.barcodePrintUrl;
+          document.getElementById('fabContainer').style.display = '';
+        })
+        .withFailureHandler(function() {})
+        .getFabNavigationUrls();
+
+      // ===== FAB 開關 =====
+      var container = document.getElementById('fabContainer');
+      var mainBtn   = document.getElementById('fabMain');
+      var overlay   = document.getElementById('fabOverlay');
+      var isOpen    = false;
+
+      function toggleFab() {
+        isOpen = !isOpen;
+        container.classList.toggle('open', isOpen);
+        overlay.classList.toggle('show', isOpen);
+      }
+      function closeFab() {
+        if (!isOpen) return;
+        isOpen = false;
+        container.classList.remove('open');
+        overlay.classList.remove('show');
+      }
+
+      overlay.addEventListener('click', closeFab);
+
+      // ===== 拖曳功能 =====
+      var isDragging = false;
+      var hasMoved   = false;
+      var startX, startY, origX, origY;
+      var DRAG_THRESHOLD = 6;
+
+      function onPointerDown(e) {
+        if (e.target.closest('.fab-menu')) return;
+        e.preventDefault();
+        var t = e.touches ? e.touches[0] : e;
+        startX = t.clientX;
+        startY = t.clientY;
+        origX = container.offsetLeft || 32;
+        origY = container.offsetTop  || (window.innerHeight - container.offsetHeight - 32);
+        container.style.left   = origX + 'px';
+        container.style.top    = origY + 'px';
+        container.style.right  = 'auto';
+        container.style.bottom = 'auto';
+        isDragging = true;
+        hasMoved   = false;
+      }
+
+      function onPointerMove(e) {
+        if (!isDragging) return;
+        var t = e.touches ? e.touches[0] : e;
+        var dx = t.clientX - startX;
+        var dy = t.clientY - startY;
+        if (!hasMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        hasMoved = true;
+        mainBtn.classList.add('dragging');
+        closeFab();
+
+        var newX = origX + dx;
+        var newY = origY + dy;
+        var maxX = window.innerWidth  - container.offsetWidth;
+        var maxY = window.innerHeight - container.offsetHeight;
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+
+        container.style.left = newX + 'px';
+        container.style.top  = newY + 'px';
+      }
+
+      function onPointerUp() {
+        if (!isDragging) return;
+        isDragging = false;
+        mainBtn.classList.remove('dragging');
+        if (!hasMoved) {
+          toggleFab();
+        }
+      }
+
+      // 桌面
+      mainBtn.addEventListener('mousedown', onPointerDown);
+      document.addEventListener('mousemove', onPointerMove);
+      document.addEventListener('mouseup',   onPointerUp);
+      // 行動裝置
+      mainBtn.addEventListener('touchstart', onPointerDown, { passive: false });
+      document.addEventListener('touchmove',  onPointerMove, { passive: false });
+      document.addEventListener('touchend',   onPointerUp);
+
+      // 子按鈕點擊後自動收合
+      document.querySelectorAll('.fab-nav-item').forEach(function(link) {
+        link.addEventListener('click', function() {
+          setTimeout(closeFab, 150);
+        });
+      });
+    })();
+    </script>
+</body>
+</html>

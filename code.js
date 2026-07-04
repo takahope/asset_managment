@@ -901,8 +901,8 @@ function doGet(e) {
       title = "列印條碼";
       break;
     default:
-      // 預設顯示入口網站
-      template = HtmlService.createTemplateFromFile('userstate');
+      // 預設顯示入口網站;?ui=alpine 走 Alpine 重構版(雙軌並行,驗收完成前舊版為預設)
+      template = HtmlService.createTemplateFromFile(e.parameter.ui === 'alpine' ? 'userstate_alpine' : 'userstate');
       title = "財產管理";
       break;
   }

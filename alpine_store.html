@@ -1,0 +1,108 @@
+<!--
+  alpine_store.html — Alpine 全域狀態(Store)與後端通訊層
+  Phase 1:骨架 + 首屏 bundle 載入(對應舊頁 App.loadData 的初載路徑,userstate.html:14081-14182)
+  狀態名沿用 React 版(對照表:example/alpine_migration_checklist.md),後續 Phase 逐步擴充。
+  日常修改本檔零編譯,直接 clasp push。
+-->
+<script>
+(function () {
+    'use strict';
+
+    // ── 同步「在庫」資產到全域變數,供 BatchList / Scanner 模組使用 ──
+    //(逐行對應舊頁 useEffect,userstate.html:14834-14875;僅含「在庫」限制可選取範圍)
+    function syncAssetGlobals(store) {
+        window.allAssets = store.allAssets
+            .filter(function (asset) { return asset.status === '在庫'; })
+            .map(function (asset) {
+                return {
+                    id: asset.assetId,
+                    assetId: asset.assetId,
+                    assetName: asset.assetName,
+                    assetAlias: asset.assetAlias || '',
+                    productSerial: asset.productSerial || '',
+                    keeperName: asset.leader,
+                    leader: asset.leader,
+                    leaderEmail: asset.leaderEmail || '',
+                    userName: asset.userName || '',
+                    userEmail: asset.userEmail || '',
+                    group: asset.group || '未分組',
+                    location: asset.location,
+                    status: asset.status,
+                    category: asset.category || '',
+                    sourceSheet: asset.sourceSheet || '',
+                    isItAsset: asset.isItAsset || '',
+                    isIsoScope: asset.isIsoScope || '',
+                    ismsAssetId: asset.ismsAssetId || ''
+                };
+            });
+        if (typeof window.BatchList_rebuildIndex === 'function') {
+            window.BatchList_rebuildIndex();
+        }
+        if (typeof window.Scanner_enhanceSearchBox === 'function') {
+            setTimeout(function () { window.Scanner_enhanceSearchBox(); }, 100);
+        }
+        console.log('[App] 已更新 window.allAssets，共', window.allAssets.length, '筆「在庫」資產');
+    }
+
+    // ── 首屏載入(對應舊頁 loadData 初載:forceUserScope=false,單次往返取得首屏資料) ──
+    function loadBundle(store) {
+        if (store.loading) return; // 異步防禦鎖:防止重複觸發
+        store.loading = true;
+        store.loadError = '';
+        if (typeof showFlyProgressBar === 'function') {
+            showFlyProgressBar('正在載入財產狀態資料...', { mask: true });
+        }
+        google.script.run
+            .withSuccessHandler(function (bundle) {
+                var response = bundle && bundle.userState;
+                if (!response || response.error) { // Guard Clause:同舊頁錯誤攔截
+                    store.loading = false;
+                    store.loadError = (response && response.error) || '無資料';
+                    if (typeof hideFlyProgressBar === 'function') hideFlyProgressBar('載入失敗', 0);
+                    return;
+                }
+                store.webAppUrl = bundle.appUrl || '';
+                store.isAdmin = !!response.isAdmin;
+                store.currentUserEmail = response.userEmail || '';
+                store.currentUserName = response.userName || '';
+                store.allAssets = response.assets || [];
+                store.inventoryEnabled = bundle.inventoryEnabled !== false;
+                store.transferPendingCount = typeof bundle.transferCount === 'number' ? bundle.transferCount : 0;
+                store.loading = false;
+                store.ready = true;
+                syncAssetGlobals(store);
+                if (typeof hideFlyProgressBar === 'function') hideFlyProgressBar('資料載入完成！', 300);
+            })
+            .withFailureHandler(function (error) {
+                store.loading = false;
+                store.loadError = (error && error.message) || String(error);
+                if (typeof hideFlyProgressBar === 'function') hideFlyProgressBar('載入失敗', 0);
+            })
+            .getUserStateBundle(false);
+    }
+
+    document.addEventListener('alpine:init', function () {
+        Alpine.store('app', {
+            // ── 狀態(名稱沿用 React 版) ──
+            ready: false,
+            loading: false,
+            loadError: '',
+            isAdmin: false,
+            currentUserEmail: '',
+            currentUserName: '',
+            allAssets: [],
+            inventoryEnabled: true,
+            transferPendingCount: 0,
+            webAppUrl: '',
+
+            init() {
+                var self = this;
+                loadBundle(self);
+                // 對應舊頁 window.refreshReactData = () => loadData()(userstate.html:14417)
+                // vanilla 待審核區審核完成後會呼叫此函式重載資料
+                window.refreshReactData = function () { loadBundle(self); };
+            }
+        });
+    });
+})();
+</script>
