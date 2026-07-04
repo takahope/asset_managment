@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 .specstory/
 .cursorindexingignore
 .env
@@ -25,11 +24,8 @@ test/
 plan/
 .gemini/
 gha-creds-*.json
-=======
-.gemini/
 temp/
 promo-video/
->>>>>>> bmain/main
 
 table_example.md
 qrcode.js
@@ -37,3 +33,7 @@ graphify-out/
 example/
 .memsearch/
 files/
+
+# 前端可選建置工具(非日常流程;凍結 CSS 重生成用)
+node_modules/
+dist/

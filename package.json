@@ -1,0 +1,14 @@
+{
+  "name": "asset-management-frontend-build",
+  "version": "2.0.0",
+  "private": true,
+  "description": "【可選工具,非日常流程】GAS 資產管理系統的 Tailwind 凍結產物(css_tailwind.html)重生成工具。日常開發零編譯:改 HTML/JS 直接 clasp push。僅在想使用凍結集合外的新 utility class 時才需要 npm run build:css(或改寫自訂 CSS 免編譯)",
+  "type": "module",
+  "scripts": {
+    "build:css": "node scripts/build.mjs css",
+    "build": "node scripts/build.mjs all"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.19"
+  }
+}

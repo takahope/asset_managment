@@ -1,0 +1,11 @@
+# 建置區不推送到 GAS(產物 lib_*/css_*/app_*.html 在根目錄,會正常推送)
+node_modules/**
+src/**
+scripts/**
+dist/**
+package.json
+package-lock.json
+tailwind.config.js
+tailwind.manual.config.js
+.git/**
+.claude/**
