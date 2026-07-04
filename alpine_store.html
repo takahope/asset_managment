@@ -1862,6 +1862,243 @@
                 else alert(message);
             },
 
+            /* ── 批次操作(舊頁 12993-13019, 15366-15517, 15308-15364) ── */
+            getSelectedAssetsForAction: function (actionType) {
+                var self = this;
+                if (typeof BatchList_getItems !== 'function') return [];
+                var selectedIds = BatchList_getItems();
+                if (actionType === 'INVENTORY') return selectedIds;
+                var blockedCount = 0;
+                var allowed = selectedIds.filter(function (assetId) {
+                    var isTask = self.resolveAssetIsTask(assetId);
+                    if (isTask) { blockedCount += 1; return false; }
+                    return true;
+                });
+                if (blockedCount > 0) {
+                    this.toastOrAlert('已自動排除 ' + blockedCount + ' 筆同組成員資產，僅保留可操作的項目。', 'warning');
+                }
+                return allowed;
+            },
+            handleBatchTransfer: function () {
+                if (!this.transferOptions) { alert('轉移選項尚未載入，請稍後再試'); return; }
+                if (this.isAdvancedMode) {
+                    var items = window.AssetCartStore
+                        ? window.AssetCartStore.getItems().filter(function (i) { return i.actionType === 'TRANSFER'; }).map(function (i) { return i.assetId; })
+                        : [];
+                    if (items.length === 0) { alert('進階模式尚未標記轉移動作'); return; }
+                    this.batchActionAssetIds = items;
+                    this.batchModalType = 'transfer';
+                    return;
+                }
+                if (typeof BatchList_getItems !== 'function') { alert('批次選取功能尚未載入'); return; }
+                if (BatchList_getItems().length === 0) { alert('請先選取要處理的資產'); return; }
+                var allowed = this.getSelectedAssetsForAction('TRANSFER');
+                if (allowed.length === 0) { alert('選取的資產皆為同組成員資產，無法批次轉移。'); return; }
+                this.batchActionAssetIds = allowed;
+                this.batchModalType = 'transfer';
+            },
+            handleBatchLending: function () {
+                if (!this.lendingOptions) { alert('出借選項尚未載入，請稍後再試'); return; }
+                if (this.isAdvancedMode) {
+                    var items = window.AssetCartStore
+                        ? window.AssetCartStore.getItems().filter(function (i) { return i.actionType === 'LEND'; }).map(function (i) { return i.assetId; })
+                        : [];
+                    if (items.length === 0) { alert('進階模式尚未標記出借動作'); return; }
+                    this.batchActionAssetIds = items;
+                    this.batchModalType = 'lending';
+                    return;
+                }
+                if (typeof BatchList_getItems !== 'function') { alert('批次選取功能尚未載入'); return; }
+                if (BatchList_getItems().length === 0) { alert('請先選取要處理的資產'); return; }
+                var allowed = this.getSelectedAssetsForAction('LENDING');
+                if (allowed.length === 0) { alert('選取的資產皆為同組成員資產，無法批次出借。'); return; }
+                this.batchActionAssetIds = allowed;
+                this.batchModalType = 'lending';
+            },
+            handleBatchScrap: function () {
+                if (this.isAdvancedMode) {
+                    var items = window.AssetCartStore
+                        ? window.AssetCartStore.getItems().filter(function (i) { return i.actionType === 'SCRAP'; }).map(function (i) { return i.assetId; })
+                        : [];
+                    if (items.length === 0) { alert('進階模式尚未標記報廢動作'); return; }
+                    this.batchActionAssetIds = items;
+                    this.batchModalType = 'scrap';
+                    return;
+                }
+                if (typeof BatchList_getItems !== 'function') { alert('批次選取功能尚未載入'); return; }
+                if (BatchList_getItems().length === 0) { alert('請先選取要處理的資產'); return; }
+                var allowed = this.getSelectedAssetsForAction('SCRAP');
+                if (allowed.length === 0) { alert('選取的資產皆為同組成員資產，無法批次報廢。'); return; }
+                this.batchActionAssetIds = allowed;
+                this.batchModalType = 'scrap';
+            },
+            handleCloseBatchModal: function () {
+                this.batchModalType = null;
+                this.batchActionAssetIds = [];
+            },
+            handleBatchActionSuccess: function () {
+                var currentType = this.batchModalType;
+                this.batchModalType = null;
+                this.batchActionAssetIds = [];
+                if (this.isAdvancedMode) {
+                    var actionType = ACTION_TYPE_BY_MODAL[currentType];
+                    if (actionType && window.AssetCartStore) window.AssetCartStore.removeItemsByAction(actionType);
+                } else {
+                    if (typeof BatchList_resetOnSubmit === 'function') BatchList_resetOnSubmit();
+                    this.selectedAssetIds = [];
+                }
+                this.loadData();
+            },
+            // 盤點成功回調(舊頁 15309-15314)
+            handleInventorySuccess: function () {
+                this.loadPendingInventoryAssignments(this.viewMode === 'user');
+                this.refreshCardData();
+            },
+            // 批次盤點入口(舊頁 15237-15306)
+            handleBatchInventory: function () {
+                var self = this;
+                if (this.isAdvancedMode) {
+                    var inventoryItems = window.AssetCartStore
+                        ? window.AssetCartStore.getItems().filter(function (i) { return i.actionType === 'INVENTORY'; })
+                        : [];
+                    if (inventoryItems.length === 0) { alert('進階模式尚未標記盤點動作'); return; }
+                    var activeItems = inventoryItems.filter(function (i) { return self.hasInventoryTaskForActionPanel(i.assetId); });
+                    if (activeItems.length === 0) { alert('標記盤點的資產中沒有進行中的盤點會話'); return; }
+                    var missingStatus = activeItems.filter(function (i) { return !i.status; });
+                    if (missingStatus.length > 0) { alert('仍有未選擇盤點結果的資產，請先完成選擇'); return; }
+                    if (!confirm('即將送出 ' + activeItems.length + ' 筆盤點結果，是否繼續？')) return;
+                    showFlyProgressBar('正在提交盤點結果...');
+                    var payload = activeItems.map(function (item) {
+                        var o = { assetId: item.assetId, result: item.status, remarks: (item.actionPayload && item.actionPayload.remarks) || '' };
+                        if (item.actionPayload && item.actionPayload.ismsData) o.ismsData = item.actionPayload.ismsData;
+                        return o;
+                    });
+                    var methodName = payload.some(function (i) { return Object.prototype.hasOwnProperty.call(i, 'ismsData'); })
+                        ? 'markBatchInventoryWithIsms' : 'markBatchInventoryInActiveSessions';
+                    var runner = google.script.run
+                        .withSuccessHandler(function (response) {
+                            hideFlyProgressBar('盤點完成！', 300);
+                            if (response && response.error) { alert('盤點送出失敗：' + response.error); return; }
+                            if (window.AssetCartStore) window.AssetCartStore.removeItemsByIds(activeItems.map(function (i) { return i.assetId; }));
+                            self.handleInventorySuccess();
+                        })
+                        .withFailureHandler(function (error) {
+                            hideFlyProgressBar('盤點失敗', 0);
+                            alert('盤點送出失敗：' + ((error && error.message) || error));
+                        });
+                    runner[methodName](payload);
+                    return;
+                }
+                if (typeof BatchList_getItems !== 'function') { alert('批次選取功能尚未載入'); return; }
+                var items = this.getSelectedAssetsForAction('INVENTORY');
+                if (items.length === 0) { alert('請先選取要處理的資產'); return; }
+                var activeStd = items.filter(function (id) { return self.hasActiveInventoryForAsset(id); });
+                if (activeStd.length === 0) { alert('選取的資產中沒有進行中的盤點會話項目'); return; }
+                this.selectedInventoryAssetIds = activeStd;
+                this.showBatchInventoryModal = true;
+            },
+            // 進階清單一次送出(舊頁 15519-15664;runScript + 分組 payload)
+            runScriptPromise: function (methodName, payload) {
+                return new Promise(function (resolve, reject) {
+                    if (!(window.google && google.script && google.script.run)) { reject(new Error('google.script.run 未載入')); return; }
+                    var runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+                    if (typeof runner[methodName] !== 'function') { reject(new Error('找不到後端方法：' + methodName)); return; }
+                    runner[methodName](payload);
+                });
+            },
+            submitAdvancedCart: function () {
+                var self = this;
+                if (!window.AssetCartStore) return Promise.resolve();
+                if (refs.advancedSubmit) return Promise.resolve();
+                var items = window.AssetCartStore.getItems();
+                if (items.length === 0) { this.toastOrAlert('清單沒有可送出的項目', 'warning'); return Promise.resolve(); }
+                refs.advancedSubmit = true;
+                showFlyProgressBar('正在送出進階清單...');
+                var successIds = [], failedIds = [], invalidIds = [];
+                var groupByPayload = function (actionItems) {
+                    var groups = new Map();
+                    actionItems.forEach(function (item) {
+                        var payload = item.actionPayload ? Object.assign({}, item.actionPayload) : null;
+                        if (!payload || typeof payload !== 'object') { invalidIds.push(item.assetId); return; }
+                        if (Object.prototype.hasOwnProperty.call(payload, 'assetIds')) delete payload.assetIds;
+                        var key = stableStringify(payload);
+                        if (!groups.has(key)) groups.set(key, { payload: payload, assetIds: [] });
+                        groups.get(key).assetIds.push(item.assetId);
+                    });
+                    return Array.from(groups.values());
+                };
+                var runGroups = function (actionItems, methodName) {
+                    var groups = groupByPayload(actionItems);
+                    return groups.reduce(function (chain, group) {
+                        return chain.then(function () {
+                            var formData = Object.assign({}, group.payload, { assetIds: group.assetIds });
+                            return self.runScriptPromise(methodName, formData)
+                                .then(function () { successIds.push.apply(successIds, group.assetIds); })
+                                .catch(function (error) { console.warn(methodName + ' 送出失敗：', error); failedIds.push.apply(failedIds, group.assetIds); });
+                        });
+                    }, Promise.resolve());
+                };
+                var inventoryItems = items.filter(function (i) { return i.actionType === 'INVENTORY'; });
+                var inventoryResetItems = items.filter(function (i) { return i.actionType === 'INVENTORY_RESET'; });
+                var readyInventoryItems = inventoryItems.filter(function (i) { return i.status; });
+                var missingInventoryItems = inventoryItems.filter(function (i) { return !i.status; });
+                if (missingInventoryItems.length > 0) invalidIds.push.apply(invalidIds, missingInventoryItems.map(function (i) { return i.assetId; }));
+
+                var chain = Promise.resolve();
+                if (inventoryResetItems.length > 0) {
+                    chain = chain.then(function () {
+                        return self.runScriptPromise('resetBatchInventoryInActiveSessions', inventoryResetItems.map(function (i) { return i.assetId; }))
+                            .then(function () { successIds.push.apply(successIds, inventoryResetItems.map(function (i) { return i.assetId; })); self.handleInventorySuccess(); });
+                    });
+                }
+                if (readyInventoryItems.length > 0) {
+                    chain = chain.then(function () {
+                        var inventoryPayload = readyInventoryItems.map(function (item) {
+                            var o = { assetId: item.assetId, result: item.status || '', remarks: (item.actionPayload && item.actionPayload.remarks) || '' };
+                            if (item.actionPayload && item.actionPayload.ismsData) o.ismsData = item.actionPayload.ismsData;
+                            return o;
+                        });
+                        var hasIsmsData = inventoryPayload.some(function (i) { return Object.prototype.hasOwnProperty.call(i, 'ismsData'); });
+                        return self.runScriptPromise(hasIsmsData ? 'markBatchInventoryWithIsms' : 'markBatchInventoryInActiveSessions', inventoryPayload)
+                            .then(function () { successIds.push.apply(successIds, readyInventoryItems.map(function (i) { return i.assetId; })); self.handleInventorySuccess(); });
+                    });
+                }
+                chain = chain
+                    .then(function () { return runGroups(items.filter(function (i) { return i.actionType === 'TRANSFER'; }), 'processBatchTransferApplication'); })
+                    .then(function () { return runGroups(items.filter(function (i) { return i.actionType === 'LEND'; }), 'processBatchLending'); })
+                    .then(function () { return runGroups(items.filter(function (i) { return i.actionType === 'SCRAP'; }), 'processBatchScrapping'); })
+                    .catch(function (error) { console.warn('進階清單送出失敗：', error); })
+                    .finally(function () {
+                        if (successIds.length > 0) window.AssetCartStore.removeItemsByIds(successIds);
+                        if (successIds.length > 0) self.loadData();
+                        var messageParts = [];
+                        if (successIds.length > 0) messageParts.push('成功 ' + successIds.length + ' 筆');
+                        if (failedIds.length > 0) messageParts.push('失敗 ' + failedIds.length + ' 筆');
+                        if (invalidIds.length > 0) messageParts.push('缺少設定 ' + invalidIds.length + ' 筆');
+                        var message = messageParts.length > 0 ? ('送出完成：' + messageParts.join('，')) : '送出完成';
+                        if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast(message, (failedIds.length > 0 || invalidIds.length > 0) ? 'warning' : 'success');
+                        else alert(message);
+                        hideFlyProgressBar('送出完成', 300);
+                        refs.advancedSubmit = false;
+                    });
+                return chain;
+            },
+            // 更新購物車橋接(舊頁 15480-15496;供 batch_processing_list 側欄呼叫)
+            updateCartBridge: function () {
+                var self = this;
+                window.UserstateCartBridge = {
+                    isAdvancedMode: this.isAdvancedMode,
+                    hasPendingInventory: this.hasActiveInventory,
+                    handlers: {
+                        transfer: function () { self.handleBatchTransfer(); },
+                        lending: function () { self.handleBatchLending(); },
+                        scrap: function () { self.handleBatchScrap(); },
+                        inventory: function () { self.handleBatchInventory(); }
+                    }
+                };
+                try { window.dispatchEvent(new Event('UserstateCartBridge:update')); } catch (err) { /* ignore */ }
+            },
+
             /* ── 全域契約同步(舊頁 14446-14459, 14828-14875) ── */
             syncPendingApprovalsGlobal: function () {
                 window.pendingApprovals = this.pendingApprovalsData;
@@ -2052,6 +2289,15 @@
                     }, true);
                 };
                 bindSearchEnter();
+
+                // 進階清單送出契約(舊頁 15666-15673)
+                window.AdvancedCart_submit = function () { self.submitAdvancedCart(); };
+                // 購物車橋接(舊頁 15480-15496):模式或盤點狀態變化時更新
+                Alpine.effect(function () {
+                    // 觸發依賴:isAdvancedMode、hasActiveInventory
+                    var _ = self.isAdvancedMode; var __ = self.hasActiveInventory;
+                    self.updateCartBridge();
+                });
             }
         });
     });
