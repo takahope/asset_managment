@@ -1,0 +1,920 @@
+<!--
+  alpine_inventory.html — P5 盤點全套:InventoryDashboardCard / ActionPanel / InventoryConfirmModal(單筆+批次)
+                          / PendingInventoryModal / InventoryManagementModal
+  逐行對應舊頁 3534-3987(儀表板卡)/6073-6275(動作面板)/12511-12803(盤點確認)/
+             7326-7589(待盤點清單)/3988-5353(盤點管理)。
+  ISMS 表單邏輯(舊頁 useInventoryFormState hook)在 ActionPanel 與 InventoryConfirmModal 內各自
+  獨立實作(與 alpine_modals_single.html 的 Quick modal 慣例一致,不做跨元件狀態共享)。
+-->
+<script>
+document.addEventListener('alpine:init', function () {
+    var S = window.AppShared;
+
+    /* ===== InventoryDashboardCard(舊頁 3534-3986) ===== */
+    Alpine.data('inventoryDashboardCard', function () {
+        return {
+            selectedSessionId: '', groupStats: [], isLoadingStats: false, statsError: '', isExpanded: false,
+            _sessionDetailsCache: new Map(), _dashboardRequest: 0,
+
+            init: function () {
+                var self = this;
+                Alpine.effect(function () {
+                    var sessions = self.sessions;
+                    if (sessions.length === 0) {
+                        self.selectedSessionId = ''; self.groupStats = []; self.statsError = ''; self.isLoadingStats = false;
+                        return;
+                    }
+                    var exists = sessions.some(function (s) { return s.inventoryId === self.selectedSessionId; });
+                    if (!exists) self.selectedSessionId = self.pickLatestSessionId(sessions);
+                });
+                this.$watch('selectedSessionId', function (id) { self.fetchDashboardData(id); });
+            },
+            get sessions() { return (this.$store.app.inventorySessions && this.$store.app.inventorySessions.activeSessions) || []; },
+            get isLoadingSessions() { return !this.$store.app.inventorySessions; },
+            get isLoadingDashboard() { return this.isLoadingSessions || (this.sessions.length > 0 && !this.selectedSessionId); },
+            get selectedSession() {
+                var id = this.selectedSessionId;
+                return this.sessions.find(function (s) { return s.inventoryId === id; });
+            },
+            get totalCount() { return Number((this.selectedSession && this.selectedSession.totalCount) || 0); },
+            get verifiedCount() { return Number((this.selectedSession && this.selectedSession.verifiedCount) || 0); },
+            get progressPercent() { return this.totalCount > 0 ? Math.round((this.verifiedCount / this.totalCount) * 100) : 0; },
+            getSessionSortKey: function (session) {
+                var idValue = String((session && session.inventoryId) || '');
+                var idNumber = Number(idValue.replace(/^INV/i, ''));
+                if (!Number.isNaN(idNumber) && idNumber > 0) return idNumber;
+                var parsed = Date.parse((session && session.inventoryDate) || '');
+                return Number.isNaN(parsed) ? 0 : parsed;
+            },
+            pickLatestSessionId: function (sessionList) {
+                var self = this;
+                if (!sessionList || sessionList.length === 0) return '';
+                var sorted = sessionList.slice().sort(function (a, b) { return self.getSessionSortKey(b) - self.getSessionSortKey(a); });
+                return (sorted[0] && sorted[0].inventoryId) || '';
+            },
+            normalizeAssignmentKey: function (value) {
+                var raw = String(value || '').trim();
+                if (!raw) return '';
+                return raw.indexOf('@') !== -1 ? raw.toLowerCase() : raw;
+            },
+            resolveAssignmentKey: function (value) {
+                var normalized = this.normalizeAssignmentKey(value);
+                return normalized || '未指派';
+            },
+            canViewAssignmentDetails: function (assignmentKey) {
+                var store = this.$store.app;
+                if (store.isAdminView) return true;
+                if (!assignmentKey || assignmentKey === '未指派') return false;
+                if (assignmentKey.indexOf('@') !== -1) return assignmentKey === S.normalizeEmail(store.currentUserEmail);
+                return assignmentKey === String(store.currentUserGroup || '').trim();
+            },
+            updateAssignmentModalError: function (assignmentKey, displayName, message, sessionId) {
+                if (typeof window.updateInventoryAssignmentModal === 'function') {
+                    window.updateInventoryAssignmentModal({ key: assignmentKey, title: displayName, sessionId: sessionId || '', assets: [], page: 1, loading: false, error: message });
+                } else {
+                    alert('載入詳細清單失敗：' + message);
+                }
+            },
+            renderAssignmentAssets: function (details, assignmentKey, displayName, sessionId) {
+                var self = this;
+                var list = Array.isArray(details) ? details : [];
+                var assets = list.filter(function (asset) { return self.resolveAssignmentKey(asset.assignedUser) === assignmentKey; });
+                if (typeof window.updateInventoryAssignmentModal === 'function') {
+                    window.updateInventoryAssignmentModal({ key: assignmentKey, title: displayName, sessionId: sessionId || '', assets: assets, page: 1, loading: false, error: '' });
+                }
+            },
+            fetchDashboardData: function (sessionId, options) {
+                var self = this;
+                options = options || {};
+                if (!sessionId) { this.groupStats = []; this.statsError = ''; this.isLoadingStats = false; return; }
+                var showLoading = options.showLoading !== false;
+                var assignmentKey = options.assignmentKey || '';
+                var displayName = options.displayName || '';
+                var refreshModal = options.refreshModal || false;
+                var requestId = (this._dashboardRequest += 1);
+                if (showLoading) { this.isLoadingStats = true; this.statsError = ''; }
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        if (self._dashboardRequest !== requestId) return;
+                        var safeResult = result || {};
+                        if (safeResult.error) {
+                            self.isLoadingStats = false;
+                            if (showLoading) { self.groupStats = []; self.statsError = safeResult.error; }
+                            if (assignmentKey) self.updateAssignmentModalError(assignmentKey, displayName, safeResult.error, sessionId);
+                            return;
+                        }
+                        var stats = Array.isArray(safeResult.stats) ? safeResult.stats : [];
+                        var details = Array.isArray(safeResult.details) ? safeResult.details : [];
+                        self.groupStats = stats; self.statsError = ''; self.isLoadingStats = false;
+                        self._sessionDetailsCache.set(sessionId, details);
+                        if (assignmentKey) { self.renderAssignmentAssets(details, assignmentKey, displayName, sessionId); return; }
+                        if (refreshModal) {
+                            var modalState = window.assignmentModalState || {};
+                            if (modalState.sessionId === sessionId && modalState.key) {
+                                self.renderAssignmentAssets(details, modalState.key, modalState.title || modalState.key, sessionId);
+                            }
+                        }
+                    })
+                    .withFailureHandler(function (error) {
+                        if (self._dashboardRequest !== requestId) return;
+                        var message = (error && error.message) || '載入失敗';
+                        console.error('載入盤點儀表板資料失敗:', error);
+                        self.isLoadingStats = false;
+                        if (showLoading) { self.groupStats = []; self.statsError = message; }
+                        if (assignmentKey) self.updateAssignmentModalError(assignmentKey, displayName, message, sessionId);
+                    })
+                    .getInventoryDashboardData(sessionId);
+            },
+            openAssignmentDetails: function (stat) {
+                var self = this;
+                if (!this.selectedSessionId) { alert('尚未選擇盤點會話'); return; }
+                var sessionId = this.selectedSessionId;
+                var assignmentKey = this.resolveAssignmentKey((stat && (stat.email || stat.name || stat.displayName)));
+                if (!this.canViewAssignmentDetails(assignmentKey)) { alert('一般使用者僅能查看分配給自己或所屬組別的清單。'); return; }
+                var displayName = (stat && (stat.displayName || stat.name || stat.email)) || assignmentKey;
+                if (typeof window.openInventoryAssignmentModal === 'function') {
+                    window.openInventoryAssignmentModal({ key: assignmentKey, title: displayName, sessionId: sessionId, assets: [], page: 1, loading: true, error: '' });
+                }
+                var cached = this._sessionDetailsCache.get(sessionId);
+                if (cached) { this.renderAssignmentAssets(cached, assignmentKey, displayName, sessionId); return; }
+                this.fetchDashboardData(sessionId, { showLoading: false, assignmentKey: assignmentKey, displayName: displayName });
+            },
+            statLabel: function (stat) { return stat.displayName || stat.name || stat.email || '未指派'; },
+            statPercent: function (stat) {
+                var assignedCount = Number(stat.assignedCount || 0);
+                var verifiedCountValue = Number(stat.verifiedCount || 0);
+                return assignedCount > 0 ? Math.round((verifiedCountValue / assignedCount) * 100) : 0;
+            },
+            statColorClass: function (stat) {
+                var percent = this.statPercent(stat);
+                if (percent >= 100) return 'bg-green-500';
+                if (percent >= 50) return 'bg-yellow-500';
+                return 'bg-red-500';
+            },
+            statAssignmentKey: function (stat) { return this.resolveAssignmentKey(stat.email || stat.name || stat.displayName); },
+            handleCompleteSession: function () {
+                var self = this;
+                this.$store.app.completeInventorySession(this.selectedSessionId, this.totalCount, this.verifiedCount, function () {
+                    self.$store.app.refreshCardData();
+                });
+            }
+        };
+    });
+
+    /* ===== ActionPanel(舊頁 6073-6275;含內嵌 InventoryFormFields 邏輯) ===== */
+    Alpine.data('actionPanel', function (opts) {
+        opts = opts || {};
+        return {
+            displayMode: opts.displayMode || 'modal',
+            panelView: 'actions',
+            // ISMS 表單欄位(對應舊頁 useInventoryFormState)
+            invResult: '', invRemarks: '', invIsmsExpanded: true, invIsItAsset: false, invIsIsoScope: false,
+            invSelectedIsmsAssetId: '', invIsmsSearchKeyword: '',
+
+            init: function () {
+                var self = this;
+                Alpine.effect(function () {
+                    var state = self.$store.app.actionPanelState;
+                    var hasTask = self.hasInventoryTask;
+                    var statusLabel = self.inventoryStatusLabel;
+                    // 對應舊頁 useEffect[asset.assetId, hasInventoryTask, inventoryStatusLabel]
+                    self._resetForm(state.asset, statusLabel);
+                    self.panelView = hasTask ? 'inventory' : 'actions';
+                });
+            },
+            _resetForm: function (asset, statusLabel) {
+                var defaults = S.createInventoryFormDefaults({ asset: asset, isBatch: false, initialResult: S.normalizeInventoryInitialResult(statusLabel) });
+                this.invResult = defaults.result;
+                this.invRemarks = defaults.remarks;
+                this.invIsmsExpanded = defaults.ismsExpanded;
+                this.invIsItAsset = defaults.isItAsset;
+                this.invIsIsoScope = defaults.isIsoScope;
+                this.invSelectedIsmsAssetId = defaults.selectedIsmsAssetId;
+                this.invIsmsSearchKeyword = '';
+            },
+            get state() { return this.$store.app.actionPanelState; },
+            get asset() { return this.state.asset; },
+            get hasAsset() { return !!(this.asset && this.asset.assetId); },
+            get hasInventoryTask() { return this.state.assetId ? this.$store.app.hasInventoryTaskForActionPanel(this.state.assetId) : false; },
+            get inventoryStatusLabel() { return this.state.assetId ? this.$store.app.resolveInventoryStatusLabel(this.state.assetId) : '無盤點任務'; },
+            get ismsEnabled() { return this.$store.app.ismsEnabled; },
+            get ismsAssets() { return this.$store.app.ismsAssets; },
+            get aliasLabel() { return S.getAssetAliasLabel(this.asset); },
+            get aliasDisplay() { return S.getAssetAliasDisplay(this.asset); },
+            get filteredIsmsAssets() {
+                if (!this.invIsmsSearchKeyword) return this.ismsAssets;
+                var keyword = this.invIsmsSearchKeyword.toLowerCase();
+                return this.ismsAssets.filter(function (a) {
+                    return (a.ismsAssetId && a.ismsAssetId.toLowerCase().indexOf(keyword) !== -1) ||
+                        (a.name && a.name.toLowerCase().indexOf(keyword) !== -1) ||
+                        (a.category && a.category.toLowerCase().indexOf(keyword) !== -1) ||
+                        (a.responsibleUnit && a.responsibleUnit.toLowerCase().indexOf(keyword) !== -1);
+                });
+            },
+            get filteredIsmsAssetsTop() { return this.filteredIsmsAssets.slice(0, 50); },
+            get selectedIsmsAsset() {
+                var id = this.invSelectedIsmsAssetId;
+                if (!id) return null;
+                return this.ismsAssets.find(function (a) { return a.ismsAssetId === id; }) || null;
+            },
+            toggleIsItAsset: function () {
+                var next = !this.invIsItAsset;
+                this.invIsItAsset = next;
+                if (!next) { this.invSelectedIsmsAssetId = ''; this.invIsIsoScope = false; }
+            },
+            openCreateIsms: function () {
+                var self = this;
+                this.$store.app.openCreateIsms(function (newAsset) {
+                    self.invSelectedIsmsAssetId = newAsset.ismsAssetId;
+                    self.invIsmsSearchKeyword = '';
+                });
+            },
+            buildIsmsData: function () {
+                if (!this.ismsEnabled || !this.invIsmsExpanded) return null;
+                return { isItAsset: this.invIsItAsset, ismsAssetId: this.invIsItAsset ? this.invSelectedIsmsAssetId : '', isIsoScope: this.invIsItAsset ? this.invIsIsoScope : false };
+            },
+            buildQueuePayload: function () {
+                var payload = { remarks: this.invRemarks.trim() };
+                var ismsData = this.buildIsmsData();
+                if (ismsData) payload.ismsData = ismsData;
+                return payload;
+            },
+            buildQueueSummary: function () {
+                var parts = ['盤點｜' + this.invResult];
+                var trimmedRemarks = this.invRemarks.trim();
+                if (trimmedRemarks) parts.push('備註:' + trimmedRemarks);
+                var ismsData = this.buildIsmsData();
+                if (ismsData) {
+                    var ismsLabel = ismsData.isItAsset ? '資訊資產' : '非資訊資產';
+                    var ismsParts = [ismsLabel];
+                    if (ismsData.isItAsset && ismsData.isIsoScope) ismsParts.push('驗證範圍');
+                    if (ismsData.isItAsset && ismsData.ismsAssetId) ismsParts.push(ismsData.ismsAssetId);
+                    parts.push('ISMS:' + ismsParts.join('/'));
+                }
+                return parts.join('｜');
+            },
+            openInventorySettings: function (status) {
+                if (!this.hasAsset) return;
+                if (!this.hasInventoryTask) { this.$store.app.toastOrAlert('此資產目前沒有盤點任務', 'warning'); return; }
+                var defaults = S.createInventoryFormDefaults({ asset: this.asset, isBatch: false, initialResult: S.normalizeInventoryInitialResult(status || '') });
+                this.invResult = defaults.result;
+                this.panelView = 'inventory';
+            },
+            handleInventorySubmit: function () {
+                if (!this.hasAsset) return;
+                if (!this.invResult) { this.$store.app.toastOrAlert('請選擇盤點結果', 'warning'); return; }
+                this.$store.app.handleInventoryQueue({
+                    assetIds: [this.asset.assetId], status: this.invResult, actionPayload: this.buildQueuePayload()
+                }, this.buildQueueSummary());
+                this.$store.app.closeActionPanel();
+            },
+            handleInventoryReset: function () {
+                if (!this.hasAsset) return;
+                this.$store.app.handleInventoryQueue({ actionType: 'INVENTORY_RESET', assetIds: [this.asset.assetId] }, '取消確認｜重設為未盤點');
+                this.$store.app.closeActionPanel();
+            }
+        };
+    });
+
+    /* ===== InventoryConfirmModal(舊頁 12511-12803;單筆/批次共用;含內嵌 ISMS 表單) ===== */
+    Alpine.data('inventoryConfirmModal', function (opts) {
+        opts = opts || {}; // { isBatch: bool }
+        return {
+            isSubmitting: false, isResetting: false,
+            invResult: '', invRemarks: '', invIsmsExpanded: true, invIsItAsset: false, invIsIsoScope: false,
+            invSelectedIsmsAssetId: '', invIsmsSearchKeyword: '',
+
+            init: function () {
+                var store = this.$store.app;
+                var isBatch = this.isBatch;
+                var asset = isBatch ? null : store.inventoryModalAsset;
+                var defaults = S.createInventoryFormDefaults({ asset: asset, isBatch: isBatch, initialResult: isBatch ? '' : store.inventoryModalInitialResult });
+                this.invResult = defaults.result;
+                this.invRemarks = defaults.remarks;
+                this.invIsmsExpanded = defaults.ismsExpanded;
+                this.invIsItAsset = defaults.isItAsset;
+                this.invIsIsoScope = defaults.isIsoScope;
+                this.invSelectedIsmsAssetId = defaults.selectedIsmsAssetId;
+                this.invIsmsSearchKeyword = '';
+            },
+            get isBatch() { return !!opts.isBatch; },
+            get asset() { return this.$store.app.inventoryModalAsset; },
+            get assetIds() { return this.$store.app.selectedInventoryAssetIds; },
+            get sessionCount() { return this.isBatch ? 0 : this.$store.app.inventoryModalSessionCount; },
+            get isQueueMode() { return this.$store.app.isAdvancedMode; },
+            get ismsEnabled() { return this.$store.app.ismsEnabled; },
+            get ismsAssets() { return this.$store.app.ismsAssets; },
+            get aliasLabel() { return S.getAssetAliasLabel(this.asset); },
+            get aliasDisplay() { return S.getAssetAliasDisplay(this.asset); },
+            get filteredIsmsAssets() {
+                if (!this.invIsmsSearchKeyword) return this.ismsAssets;
+                var keyword = this.invIsmsSearchKeyword.toLowerCase();
+                return this.ismsAssets.filter(function (a) {
+                    return (a.ismsAssetId && a.ismsAssetId.toLowerCase().indexOf(keyword) !== -1) ||
+                        (a.name && a.name.toLowerCase().indexOf(keyword) !== -1) ||
+                        (a.category && a.category.toLowerCase().indexOf(keyword) !== -1) ||
+                        (a.responsibleUnit && a.responsibleUnit.toLowerCase().indexOf(keyword) !== -1);
+                });
+            },
+            get filteredIsmsAssetsTop() { return this.filteredIsmsAssets.slice(0, 50); },
+            get selectedIsmsAsset() {
+                var id = this.invSelectedIsmsAssetId;
+                if (!id) return null;
+                return this.ismsAssets.find(function (a) { return a.ismsAssetId === id; }) || null;
+            },
+            toggleIsItAsset: function () {
+                var next = !this.invIsItAsset;
+                this.invIsItAsset = next;
+                if (!next) { this.invSelectedIsmsAssetId = ''; this.invIsIsoScope = false; }
+            },
+            openCreateIsms: function () {
+                var self = this;
+                this.$store.app.openCreateIsms(function (newAsset) {
+                    self.invSelectedIsmsAssetId = newAsset.ismsAssetId;
+                    self.invIsmsSearchKeyword = '';
+                });
+            },
+            buildIsmsData: function () {
+                if (!this.ismsEnabled || !this.invIsmsExpanded) return null;
+                return { isItAsset: this.invIsItAsset, ismsAssetId: this.invIsItAsset ? this.invSelectedIsmsAssetId : '', isIsoScope: this.invIsItAsset ? this.invIsIsoScope : false };
+            },
+            buildQueuePayload: function () {
+                var payload = { remarks: this.invRemarks.trim() };
+                var ismsData = this.buildIsmsData();
+                if (ismsData) payload.ismsData = ismsData;
+                return payload;
+            },
+            buildQueueSummary: function () {
+                var parts = ['盤點｜' + this.invResult];
+                var trimmedRemarks = this.invRemarks.trim();
+                if (trimmedRemarks) parts.push('備註:' + trimmedRemarks);
+                var ismsData = this.buildIsmsData();
+                if (ismsData) {
+                    var ismsLabel = ismsData.isItAsset ? '資訊資產' : '非資訊資產';
+                    var ismsParts = [ismsLabel];
+                    if (ismsData.isItAsset && ismsData.isIsoScope) ismsParts.push('驗證範圍');
+                    if (ismsData.isItAsset && ismsData.ismsAssetId) ismsParts.push(ismsData.ismsAssetId);
+                    parts.push('ISMS:' + ismsParts.join('/'));
+                }
+                return parts.join('｜');
+            },
+            buildResetQueueSummary: function () {
+                return this.isBatch ? ('取消確認｜重設為未盤點｜共 ' + (this.assetIds ? this.assetIds.length : 0) + ' 筆') : '取消確認｜重設為未盤點';
+            },
+            close: function () {
+                if (this.isBatch) this.$store.app.closeBatchInventoryModal();
+                else this.$store.app.closeInventoryModal();
+            },
+            onSuccess: function () { this.$store.app.handleInventorySuccess(); },
+            handleSubmit: function () {
+                var self = this;
+                var store = this.$store.app;
+                if (!this.invResult) { alert('請選擇盤點結果'); return; }
+                if (this.isQueueMode) {
+                    var queueAssetIds = this.isBatch ? (this.assetIds || []) : [this.asset && this.asset.assetId];
+                    var normalizedAssetIds = queueAssetIds.map(function (id) { return String(id || '').trim(); }).filter(Boolean);
+                    if (normalizedAssetIds.length === 0) { alert('沒有可加入清單的資產'); return; }
+                    store.handleInventoryQueue({ assetIds: normalizedAssetIds, status: this.invResult, actionPayload: this.buildQueuePayload() }, this.buildQueueSummary());
+                    this.close();
+                    return;
+                }
+                this.isSubmitting = true;
+                showFlyProgressBar('正在提交盤點結果...');
+                var ismsData = this.buildIsmsData();
+                var hasIsmsData = ismsData !== null;
+                var successHandler = function (response) {
+                    if (response && response.success) {
+                        hideFlyProgressBar('盤點完成！', 300);
+                        alert(response.message || '盤點完成');
+                        self.onSuccess();
+                        self.close();
+                    } else {
+                        hideFlyProgressBar('盤點失敗', 0);
+                        alert('盤點失敗：' + ((response && (response.error || response.message)) || '未知錯誤'));
+                    }
+                    self.isSubmitting = false;
+                };
+                var failureHandler = function (error) {
+                    hideFlyProgressBar('盤點失敗', 0);
+                    alert('盤點失敗：' + error.message);
+                    self.isSubmitting = false;
+                };
+                if (this.isBatch) {
+                    if (!this.assetIds || this.assetIds.length === 0) {
+                        hideFlyProgressBar('盤點失敗', 0); alert('沒有可盤點的資產'); this.isSubmitting = false; return;
+                    }
+                    var assetResults = this.assetIds.map(function (id) {
+                        var o = { assetId: id, result: self.invResult, remarks: self.invRemarks };
+                        if (hasIsmsData) o.ismsData = ismsData;
+                        return o;
+                    });
+                    if (hasIsmsData) google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markBatchInventoryWithIsms(assetResults);
+                    else google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markBatchInventoryInActiveSessions(assetResults);
+                } else {
+                    if (hasIsmsData) google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markAssetInventoryWithIsms(this.asset.assetId, this.invResult, this.invRemarks, ismsData);
+                    else google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markAssetInventoryInActiveSessions(this.asset.assetId, this.invResult, this.invRemarks);
+                }
+            },
+            handleReset: function () {
+                var self = this;
+                if (this.isQueueMode) {
+                    var queueAssetIds = this.isBatch ? (this.assetIds || []) : [this.asset && this.asset.assetId];
+                    var normalizedAssetIds = queueAssetIds.map(function (id) { return String(id || '').trim(); }).filter(Boolean);
+                    if (normalizedAssetIds.length === 0) { alert('沒有可加入清單的資產'); return; }
+                    this.$store.app.handleInventoryQueue({ actionType: 'INVENTORY_RESET', assetIds: normalizedAssetIds }, this.buildResetQueueSummary());
+                    this.close();
+                    return;
+                }
+                var totalCount = this.isBatch ? ((this.assetIds && this.assetIds.length) || 0) : 1;
+                var confirmMessage = this.isBatch
+                    ? ('確定要取消所選的 ' + totalCount + ' 筆盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。')
+                    : '確定要取消此資產的盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。';
+                if (!confirm(confirmMessage)) return;
+                this.isResetting = true;
+                showFlyProgressBar('正在取消盤點結果...');
+                var successHandler = function (response) {
+                    if (response && response.success) {
+                        hideFlyProgressBar('取消完成！', 300);
+                        alert(response.message || '已取消盤點結果');
+                        self.onSuccess();
+                        self.close();
+                    } else {
+                        hideFlyProgressBar('取消失敗', 0);
+                        alert('取消失敗：' + ((response && (response.message || response.error)) || '未知錯誤'));
+                    }
+                    self.isResetting = false;
+                };
+                var failureHandler = function (error) {
+                    hideFlyProgressBar('取消失敗', 0);
+                    alert('取消失敗：' + error.message);
+                    self.isResetting = false;
+                };
+                if (this.isBatch) {
+                    if (!this.assetIds || this.assetIds.length === 0) { hideFlyProgressBar('取消失敗', 0); alert('沒有可取消的資產'); this.isResetting = false; return; }
+                    google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetBatchInventoryInActiveSessions(this.assetIds);
+                } else {
+                    google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetAssetInventoryInActiveSessions(this.asset.assetId);
+                }
+            }
+        };
+    });
+
+    /* ===== PendingInventoryModal(舊頁 7326-7587) ===== */
+    Alpine.data('pendingInventoryModal', function () {
+        return {
+            activeSessionId: '',
+
+            init: function () {
+                var self = this;
+                Alpine.effect(function () {
+                    var sessions = self.sessions;
+                    if (sessions.length === 0) { self.activeSessionId = ''; return; }
+                    if (!self.activeSessionId || !sessions.some(function (s) { return s.inventoryId === self.activeSessionId; })) {
+                        self.activeSessionId = sessions[0].inventoryId;
+                    }
+                });
+            },
+            get isAdmin() { return this.$store.app.isAdminView; },
+            get pendingItems() { return this.$store.app.pendingInventoryItems; },
+            get isLoading() { return this.$store.app.isLoadingPendingInventory; },
+            get error() { return this.$store.app.pendingInventoryError; },
+            get sessions() {
+                var map = new Map();
+                (this.pendingItems || []).forEach(function (item) {
+                    var sessionId = item.inventoryId || 'unknown';
+                    if (!map.has(sessionId)) {
+                        map.set(sessionId, { inventoryId: sessionId, inventoryDate: item.inventoryDate || '', inventoryPerson: item.inventoryPerson || '', inventoryEmail: item.inventoryEmail || '', items: [] });
+                    }
+                    map.get(sessionId).items.push(item);
+                });
+                return Array.from(map.values()).sort(function (a, b) {
+                    return (b.inventoryDate || '').localeCompare(a.inventoryDate || '', 'zh-Hant');
+                });
+            },
+            get activeSession() {
+                var self = this;
+                return this.sessions.find(function (s) { return s.inventoryId === self.activeSessionId; }) || this.sessions[0];
+            },
+            get totalCount() { return (this.pendingItems || []).length; },
+            normalizeAssigned: function (item) {
+                var raw = String(item.assignedUser || '').trim();
+                var type = item.assignedUserType;
+                if (!type || type === 'none') {
+                    type = raw ? (raw.indexOf('@') !== -1 ? 'user' : 'group') : 'none';
+                }
+                var userLabel = item.assignedUserLabel || (type === 'user' && raw ? raw.split('@')[0] : '');
+                var groupLabel = item.assignedGroup || (type === 'group' ? (item.assignedUserLabel || raw) : '');
+                return { type: type, userLabel: userLabel, groupLabel: groupLabel, raw: raw };
+            },
+            get sessionAssignmentMode() {
+                var self = this;
+                var session = this.activeSession;
+                if (!session) return 'group';
+                var hasUser = false, hasGroup = false;
+                (session.items || []).forEach(function (item) {
+                    var info = self.normalizeAssigned(item);
+                    if (info.type === 'user') hasUser = true;
+                    if (info.type === 'group') hasGroup = true;
+                });
+                if (hasUser && !hasGroup) return 'user';
+                if (hasGroup && !hasUser) return 'group';
+                if (hasUser && hasGroup) return 'mixed';
+                return 'group';
+            },
+            formatSessionLabel: function (session) {
+                var datePart = session.inventoryDate || '未提供日期';
+                var personPart = session.inventoryPerson || session.inventoryEmail || '未指定盤點人';
+                return datePart + ' / ' + personPart;
+            },
+            resolveAssignedDisplay: function (item) {
+                var info = this.normalizeAssigned(item);
+                if (info.type === 'group') return info.groupLabel || '未指派';
+                if (info.type === 'user') return info.userLabel || info.raw || '未指派';
+                return '未指派';
+            },
+            get groupedItems() {
+                var self = this;
+                var session = this.activeSession;
+                if (!session) return [];
+                var items = session.items || [];
+                if (!this.isAdmin) {
+                    return [{ key: 'all', label: '全部', items: items.slice().sort(function (a, b) { return String(a.assetId || '').localeCompare(String(b.assetId || ''), 'zh-Hant'); }) }];
+                }
+                var mode = this.sessionAssignmentMode;
+                var groupMap = new Map();
+                items.forEach(function (item) {
+                    var info = self.normalizeAssigned(item);
+                    var label = '';
+                    if (mode === 'user') {
+                        label = info.type === 'group' ? ('群組：' + (info.groupLabel || '未指派')) : (info.userLabel || info.raw || '未指派');
+                    } else if (mode === 'group') {
+                        label = info.groupLabel || '未指派';
+                    } else {
+                        if (info.type === 'group') label = '群組：' + (info.groupLabel || '未指派');
+                        else if (info.type === 'user') label = info.userLabel || info.raw || '未指派';
+                        else label = '未指派';
+                    }
+                    if (!groupMap.has(label)) groupMap.set(label, []);
+                    groupMap.get(label).push(item);
+                });
+                return Array.from(groupMap.entries()).map(function (entry) {
+                    return { key: entry[0], label: entry[0], items: entry[1].slice().sort(function (a, b) { return String(a.assetId || '').localeCompare(String(b.assetId || ''), 'zh-Hant'); }) };
+                }).sort(function (a, b) { return a.label.localeCompare(b.label, 'zh-Hant'); });
+            },
+            close: function () {
+                this.$store.app.activeModal = null;
+                this.$store.app.pendingInventoryError = '';
+                this.$store.app.isLoadingPendingInventory = false;
+            }
+        };
+    });
+
+    /* ===== InventoryManagementModal(舊頁 3988-5353) ===== */
+    Alpine.data('inventoryManagementModal', function () {
+        return {
+            historyItems: [], isHistoryLoading: true, historyError: '',
+            mobileSection: 'start', filterType: 'all', systemScope: 'all', filterValue: [],
+            filterOptions: { locations: [], keepers: [], users: [], groups: [] },
+            optionsError: '', isOptionsLoading: true,
+            isStarting: false, startError: '', startMessage: '',
+            deleteMessage: '', deleteError: '', deletingSessionId: '',
+            exportingSessionKey: '',
+            locationDropdownOpen: false, keeperDropdownOpen: false, userDropdownOpen: false, groupDropdownOpen: false,
+            dropdownSearchKeyword: '',
+            _pendingStartOptions: null,
+            _outsideHandler: null,
+
+            init: function () {
+                var self = this;
+                this.loadModalData();
+                document.body.style.overflow = 'hidden';
+                this._outsideHandler = function (event) {
+                    // 對應舊頁以四個 ref 各自判斷 contains;此處以 data-dropdown 容器類別統一判斷
+                    if (event.target.closest && event.target.closest('.im-dropdown-root')) return;
+                    self.locationDropdownOpen = false; self.keeperDropdownOpen = false;
+                    self.userDropdownOpen = false; self.groupDropdownOpen = false;
+                };
+                document.addEventListener('pointerdown', this._outsideHandler);
+                window.inventoryConfirmAssignmentMode = function () { self.handleAssignmentModeConfirm(); };
+                window.inventoryCancelAssignmentMode = function () { self.handleAssignmentModeCancel(); };
+                this.$watch('filterType', function () {
+                    var multiSelectTypes = ['location', 'keeper', 'user', 'group'];
+                    self.filterValue = multiSelectTypes.indexOf(self.filterType) !== -1 ? [] : '';
+                    self.closeAllFilterDropdowns();
+                });
+                this.$watch('mobileSection', function () { self.closeAllFilterDropdowns(); });
+            },
+            destroy: function () {
+                document.body.style.overflow = '';
+                if (this._outsideHandler) document.removeEventListener('pointerdown', this._outsideHandler);
+                delete window.inventoryConfirmAssignmentMode;
+                delete window.inventoryCancelAssignmentMode;
+                this.hideAssignmentModal();
+            },
+            get isAdminView() { return this.$store.app.isAdminView; },
+            get inventoryFeatureEnabled() { return this.$store.app.inventoryFeatureEnabled; },
+            get inventoryFeatureToggling() { return this.$store.app.inventoryFeatureToggling; },
+            toggleInventoryFeature: function () { this.$store.app.handleToggleInventoryFeature(!this.inventoryFeatureEnabled); },
+            runScript: function (fnName) {
+                var args = Array.prototype.slice.call(arguments, 1);
+                return new Promise(function (resolve, reject) {
+                    var runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+                    runner[fnName].apply(runner, args);
+                });
+            },
+            closeAllFilterDropdowns: function () {
+                this.locationDropdownOpen = false; this.keeperDropdownOpen = false;
+                this.userDropdownOpen = false; this.groupDropdownOpen = false;
+                this.dropdownSearchKeyword = '';
+            },
+            loadModalData: function (options) {
+                var self = this;
+                options = options || {};
+                this.isHistoryLoading = true; this.historyError = ''; this.optionsError = '';
+                this.startError = ''; this.startMessage = ''; this.isOptionsLoading = true;
+                if (!options.keepDeleteMessage) { this.deleteMessage = ''; this.deleteError = ''; }
+                Promise.allSettled([this.runScript('getInventoryHistory', true), this.runScript('getInventoryData')]).then(function (results) {
+                    var historyResult = results[0], optionsResult = results[1];
+                    if (historyResult.status === 'fulfilled') {
+                        var history = historyResult.value;
+                        if (history === null) { self.historyError = '載入歷史記錄失敗：資料格式錯誤'; self.historyItems = []; }
+                        else self.historyItems = Array.isArray(history) ? history : [];
+                    } else {
+                        var msg = (historyResult.reason && historyResult.reason.message) || String(historyResult.reason || '載入失敗');
+                        self.historyError = '載入歷史記錄失敗：' + msg;
+                        self.historyItems = [];
+                    }
+                    var optionsErrorMessage = '';
+                    if (optionsResult.status === 'fulfilled' && optionsResult.value) {
+                        var v = optionsResult.value;
+                        self.filterOptions = { locations: v.locations || [], keepers: v.keepers || [], users: v.users || [], groups: v.groups || [] };
+                        window.inventoryAssignmentOptions = { users: v.assigneeUsers || [], groups: v.groups || [] };
+                        if (window.updateAssignmentTargetOptions) window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, true);
+                    } else {
+                        var oMsg = (optionsResult.reason && optionsResult.reason.message) || String(optionsResult.reason || '載入失敗');
+                        optionsErrorMessage = '盤點範圍載入失敗：' + oMsg;
+                        self.filterOptions = { locations: [], keepers: [], users: [], groups: [] };
+                        window.inventoryAssignmentOptions = { users: [], groups: [] };
+                        if (window.updateAssignmentTargetOptions) window.updateAssignmentTargetOptions(window.inventoryAssignmentOptions, false);
+                    }
+                    self.optionsError = optionsErrorMessage;
+                    self.isOptionsLoading = false; self.isHistoryLoading = false;
+                });
+            },
+            hideAssignmentModal: function () {
+                if (window.$ && typeof window.$.fn.modal === 'function') window.$('#assignmentModeModal').modal('hide');
+            },
+            handleOverlayClick: function (event) {
+                if (event.target === event.currentTarget) { this.closeAllFilterDropdowns(); this.hideAssignmentModal(); this.close(); }
+            },
+            close: function () { this.closeAllFilterDropdowns(); this.hideAssignmentModal(); this.$store.app.showInventoryMgmtModal = false; },
+            get selectedValues() { return Array.isArray(this.filterValue) ? this.filterValue : []; },
+            get availableLocations() { return this.filterOptions.locations || []; },
+            get availableKeepers() { return this.filterOptions.keepers || []; },
+            get availableUsers() { return this.filterOptions.users || []; },
+            get availableGroups() { return this.filterOptions.groups || []; },
+            get isLocationOptionsLoading() { return this.isOptionsLoading && this.availableLocations.length === 0; },
+            get isKeeperOptionsLoading() { return this.isOptionsLoading && this.availableKeepers.length === 0; },
+            get isUserOptionsLoading() { return this.isOptionsLoading && this.availableUsers.length === 0; },
+            get isGroupOptionsLoading() { return this.isOptionsLoading && this.availableGroups.length === 0; },
+            filterDropdownOptions: function (options) {
+                if (!this.dropdownSearchKeyword) return options;
+                var kw = this.dropdownSearchKeyword.toLowerCase();
+                return options.filter(function (item) { return String(item).toLowerCase().indexOf(kw) !== -1; });
+            },
+            get filteredLocations() { return this.filterDropdownOptions(this.availableLocations); },
+            get filteredKeepers() { return this.filterDropdownOptions(this.availableKeepers); },
+            get filteredUsers() { return this.filterDropdownOptions(this.availableUsers); },
+            get filteredGroups() { return this.filterDropdownOptions(this.availableGroups); },
+            toggleFilterOption: function (value) {
+                var current = this.selectedValues;
+                this.filterValue = current.indexOf(value) !== -1 ? current.filter(function (v) { return v !== value; }) : current.concat([value]);
+            },
+            removeFilterOption: function (value) { this.filterValue = this.selectedValues.filter(function (v) { return v !== value; }); },
+            selectAllFilterOptions: function (optionsList) { this.filterValue = optionsList.slice(); },
+            clearFilterOptions: function () { this.filterValue = []; },
+            toggleDropdownPanel: function (type) {
+                this.dropdownSearchKeyword = '';
+                this.locationDropdownOpen = type === 'location' ? !this.locationDropdownOpen : false;
+                this.keeperDropdownOpen = type === 'keeper' ? !this.keeperDropdownOpen : false;
+                this.userDropdownOpen = type === 'user' ? !this.userDropdownOpen : false;
+                this.groupDropdownOpen = type === 'group' ? !this.groupDropdownOpen : false;
+            },
+            submitStartSession: function (options) {
+                var self = this;
+                this.isStarting = true;
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        self.isStarting = false;
+                        if (result && result.success) {
+                            self.loadModalData();
+                            self.closeAllFilterDropdowns();
+                            self.mobileSection = 'history';
+                            self.startMessage = result.message || '盤點會話已成功建立。';
+                        } else {
+                            self.startError = (result && result.error) || '開始盤點失敗';
+                        }
+                    })
+                    .withFailureHandler(function (error) { self.isStarting = false; self.startError = error.message || '開始盤點失敗'; })
+                    .startInventorySession(options);
+            },
+            handleAssignmentModeConfirm: function () {
+                var selectedMode = document.querySelector('input[name="assignmentMode"]:checked');
+                var assignmentMode = selectedMode ? selectedMode.value : 'person';
+                var options = this._pendingStartOptions;
+                if (!options) { this.hideAssignmentModal(); return; }
+                if (assignmentMode === 'custom') {
+                    var targetTypeEl = document.getElementById('assignment-target-type');
+                    var targetValueEl = document.getElementById('assignment-target-value');
+                    var assignmentTargetType = targetTypeEl ? targetTypeEl.value : 'user';
+                    var assignmentTargetValue = targetValueEl ? targetValueEl.value : '';
+                    if (!assignmentTargetValue) {
+                        if (window.setAssignmentCustomError) window.setAssignmentCustomError('請選擇指定對象'); else alert('請選擇指定對象');
+                        return;
+                    }
+                    if (assignmentTargetType === 'user' && assignmentTargetValue.indexOf('@') === -1) {
+                        if (window.setAssignmentCustomError) window.setAssignmentCustomError('使用者 Email 不正確'); else alert('使用者 Email 不正確');
+                        return;
+                    }
+                    this._pendingStartOptions = null;
+                    this.hideAssignmentModal();
+                    this.submitStartSession(Object.assign({}, options, { assignmentMode: assignmentMode, assignmentTargetType: assignmentTargetType, assignmentTargetValue: assignmentTargetValue }));
+                    return;
+                }
+                this._pendingStartOptions = null;
+                this.hideAssignmentModal();
+                this.submitStartSession(Object.assign({}, options, { assignmentMode: assignmentMode }));
+            },
+            handleAssignmentModeCancel: function () {
+                this._pendingStartOptions = null;
+                if (window.setAssignmentCustomError) window.setAssignmentCustomError('');
+                this.hideAssignmentModal();
+            },
+            handleStartSession: function () {
+                this.startError = ''; this.startMessage = '';
+                var selectedValue = '';
+                if (this.filterType === 'location') {
+                    selectedValue = this.selectedValues;
+                    if (selectedValue.length === 0) { this.startError = '請選擇地點'; return; }
+                } else if (this.filterType === 'keeper') {
+                    selectedValue = this.selectedValues;
+                    if (selectedValue.length === 0) { this.startError = '請選擇保管人'; return; }
+                } else if (this.filterType === 'user') {
+                    selectedValue = this.selectedValues;
+                    if (selectedValue.length === 0) { this.startError = '請選擇使用人'; return; }
+                } else if (this.filterType === 'group') {
+                    if (this.selectedValues.length === 0) { this.startError = '請選擇組別'; return; }
+                    selectedValue = this.selectedValues;
+                }
+                var options = { filterType: this.filterType, filterValue: selectedValue, assetIds: [], systemScope: this.systemScope };
+                if (this.isAdminView) {
+                    this._pendingStartOptions = options;
+                    if (window.$ && typeof window.$.fn.modal === 'function') {
+                        if (window.prepareAssignmentModeModal) window.prepareAssignmentModeModal();
+                        window.$('#assignmentModeModal').modal('show');
+                    } else {
+                        this.submitStartSession(Object.assign({}, options, { assignmentMode: 'person' }));
+                    }
+                    return;
+                }
+                this.submitStartSession(Object.assign({}, options, { assignmentMode: 'person' }));
+            },
+            get startDisabled() { return this.isStarting; },
+            handleDeleteSession: function (sessionId) {
+                var self = this;
+                if (!sessionId) return;
+                if (!confirm('確定要刪除盤點會話「' + sessionId + '」嗎？\n\n此操作會刪除盤點紀錄與明細，無法復原。')) return;
+                this.deleteMessage = ''; this.deleteError = ''; this.deletingSessionId = sessionId;
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        self.deletingSessionId = '';
+                        if (result && result.success) { self.deleteMessage = result.message || '盤點會話已刪除。'; self.loadModalData({ keepDeleteMessage: true }); }
+                        else self.deleteError = (result && result.error) || '刪除失敗';
+                    })
+                    .withFailureHandler(function (error) { self.deletingSessionId = ''; self.deleteError = error.message || '刪除失敗'; })
+                    .deleteInventorySession(sessionId);
+            },
+            buildInventoryExportTimestamp: function () {
+                var now = new Date();
+                var pad = function (v) { return String(v).padStart(2, '0'); };
+                return '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '_' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+            },
+            buildInventoryExportFilename: function (sessionId, timestamp, extension) { return 'inventory_' + sessionId + '_' + timestamp + '.' + extension; },
+            escapeCsvValue: function (value) {
+                if (value === null || value === undefined) return '';
+                var text = String(value);
+                var escaped = text.replace(/"/g, '""');
+                return /[",\r\n]/.test(escaped) ? '"' + escaped + '"' : escaped;
+            },
+            downloadExportBlob: function (content, filename, mimeType) {
+                var blob = new Blob([content], { type: mimeType });
+                var url = URL.createObjectURL(blob);
+                var link = document.createElement('a');
+                link.href = url; link.download = filename;
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+            },
+            buildInventoryColumnWidths: function (rows) {
+                var columnCount = rows.reduce(function (max, row) { return Math.max(max, row.length); }, 0);
+                return Array.from({ length: columnCount }, function (_, columnIndex) {
+                    var maxLength = 0;
+                    rows.forEach(function (row) {
+                        var cell = row[columnIndex];
+                        if (cell === null || cell === undefined) return;
+                        var length = String(cell).split(/\r?\n/).reduce(function (lineMax, line) { return Math.max(lineMax, line.length); }, 0);
+                        if (length > maxLength) maxLength = length;
+                    });
+                    return { wch: Math.min(32, Math.max(8, Math.round(maxLength * 1.5))) };
+                });
+            },
+            buildInventoryExcelRows: function (headers, rows) {
+                var excelRows = [headers];
+                (rows || []).forEach(function (row) {
+                    var nextRow = Array.isArray(row) ? row.slice() : [];
+                    var displayDate = String(nextRow[7] || '').trim();
+                    if (displayDate) nextRow[7] = displayDate + '\n' + displayDate;
+                    excelRows.push(nextRow);
+                });
+                return excelRows;
+            },
+            applyInventoryExcelFormatting: function (sheet, rows) {
+                if (!sheet || !(window.XLSX && window.XLSX.utils && window.XLSX.utils.encode_cell)) return;
+                var totalRows = Array.isArray(rows) ? rows.length : 0;
+                if (totalRows === 0) return;
+                [2, 7].forEach(function (columnIndex) {
+                    for (var rowIndex = 1; rowIndex < totalRows; rowIndex++) {
+                        var cellAddress = window.XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+                        var cell = sheet[cellAddress];
+                        if (!cell || String(cell.v || '').indexOf('\n') === -1) continue;
+                        cell.s = Object.assign({}, cell.s || {}, { alignment: Object.assign({}, (cell.s && cell.s.alignment) || {}, { wrapText: true, vertical: 'center' }) });
+                    }
+                });
+                sheet['!rows'] = rows.map(function (row, index) {
+                    if (index === 0) return { hpt: 24 };
+                    var hasMultilineCell = [2, 7].some(function (columnIndex) { return String((row && row[columnIndex]) || '').indexOf('\n') !== -1; });
+                    return hasMultilineCell ? { hpt: 34 } : { hpt: 22 };
+                });
+            },
+            handleExportInventorySession: function (sessionId, format) {
+                var self = this;
+                if (!sessionId) return;
+                var proceed = function () {
+                    var exportKey = sessionId + ':' + format;
+                    self.exportingSessionKey = exportKey;
+                    if (typeof showToastProgress === 'function') showToastProgress('正在匯出 ' + sessionId + ' ' + (format === 'excel' ? 'Excel' : 'CSV') + '...');
+                    self.runScript('getInventoryExportData', sessionId).then(function (response) {
+                        var headers = Array.isArray(response && response.headers) ? response.headers : [];
+                        var rows = Array.isArray(response && response.rows) ? response.rows : [];
+                        if (headers.length === 0 || rows.length === 0) {
+                            if (typeof hideToastProgress === 'function') hideToastProgress('沒有可匯出的資料', 300);
+                            alert('此盤點會話沒有可匯出的資料');
+                            return;
+                        }
+                        var timestamp = self.buildInventoryExportTimestamp();
+                        var exportSessionId = (response && response.inventoryId) || sessionId;
+                        var sheetRows = [headers].concat(rows);
+                        if (format === 'excel') {
+                            var excelRows = self.buildInventoryExcelRows(headers, rows);
+                            var workbook = window.XLSX.utils.book_new();
+                            var sheet = window.XLSX.utils.aoa_to_sheet(excelRows);
+                            sheet['!cols'] = self.buildInventoryColumnWidths(excelRows);
+                            self.applyInventoryExcelFormatting(sheet, excelRows);
+                            window.XLSX.utils.book_append_sheet(workbook, sheet, '盤點資料');
+                            window.XLSX.writeFile(workbook, self.buildInventoryExportFilename(exportSessionId, timestamp, 'xlsx'), { cellStyles: true });
+                        } else {
+                            var csvContent = sheetRows.map(function (row) { return row.map(function (c) { return self.escapeCsvValue(c); }).join(','); }).join('\r\n');
+                            self.downloadExportBlob('﻿' + csvContent, self.buildInventoryExportFilename(exportSessionId, timestamp, 'csv'), 'text/csv;charset=utf-8;');
+                        }
+                        if (typeof hideToastProgress === 'function') hideToastProgress('匯出完成！', 300);
+                    }).catch(function (error) {
+                        console.error('盤點匯出失敗：', error);
+                        if (typeof hideToastProgress === 'function') hideToastProgress('匯出失敗', 300);
+                        alert('匯出失敗：' + ((error && error.message) || error));
+                    }).finally(function () { self.exportingSessionKey = ''; });
+                };
+                if (format === 'excel') {
+                    window.ensureXLSX().then(proceed).catch(function (e) { alert(e.message || 'Excel 匯出元件載入失敗，請重新整理後再試。'); });
+                } else {
+                    proceed();
+                }
+            },
+            historyBadgeClass: function (record) {
+                var isCompleted = record.status === '已完成' || record.statusCode === 'COMPLETED';
+                var isOpen = record.status === '進行中' || record.statusCode === 'OPEN';
+                return isCompleted ? 'inventory-badge inventory-badge--completed' : isOpen ? 'inventory-badge inventory-badge--open' : 'inventory-badge inventory-badge--unknown';
+            },
+            historyBadgeLabel: function (record) {
+                var isCompleted = record.status === '已完成' || record.statusCode === 'COMPLETED';
+                var isOpen = record.status === '進行中' || record.statusCode === 'OPEN';
+                return record.status || (isCompleted ? '已完成' : isOpen ? '進行中' : '未定義');
+            },
+            historySessionId: function (record, index) { return record.sessionId || record.inventoryId || ('session-' + index); },
+            historyPersonLabel: function (record) {
+                var personName = record.inventoryPerson || '';
+                var personEmail = record.inventoryEmail || '';
+                return personEmail ? ((personName || personEmail.split('@')[0]) + ' (' + personEmail + ')') : (personName || '未指定');
+            }
+        };
+    });
+});
+</script>

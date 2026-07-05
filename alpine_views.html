@@ -617,7 +617,8 @@ document.addEventListener('alpine:init', function () {
             </template>
         </div>
 
-        <!-- [P5 掛載點] InventoryDashboardCard 盤點進度監控儀表板 -->
+        <!-- InventoryDashboardCard 盤點進度監控儀表板(P5;含元件註冊 script) -->
+        <?!= include('alpine_inventory'); ?>
 
         <!-- 篩選卡(舊頁 5794-6037) -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6" x-data="filterSection">
@@ -875,7 +876,8 @@ document.addEventListener('alpine:init', function () {
              @click="window.Scanner_toggle && window.Scanner_toggle()"></div>
         <div class="advanced-scanner-shell" :class="$store.app.isScannerOpen ? 'advanced-scanner-shell--open' : ''">
             <div id="Scanner_zone" class="scanner-zone mb-6" style="display: none;"></div>
-            <!-- [P5 掛載點] 進階模式內嵌 ActionPanel -->
+            <!-- 進階模式內嵌 ActionPanel(P5;需在 .advanced-scanner-shell 內以正確排版) -->
+            <?!= include('alpine_action_panel_embedded'); ?>
         </div>
 
         <!-- 同組功能提示(舊頁 15951-15976) -->
@@ -920,7 +922,9 @@ document.addEventListener('alpine:init', function () {
             </div>
         </template>
 
-        <!-- [P5 掛載點] 進階模式 ActionPanel(modal 形式) -->
+        <!-- 進階模式 ActionPanel(modal 形式)+ 盤點相關 modal(P5;皆為 position:fixed,DOM 位置不影響顯示;
+             元件註冊 script 已移至檔尾 Modal 掛載區,此處仍在 isReady template 內,script 會是 inert) -->
+        <?!= include('alpine_inventory_modals'); ?>
 
         <!-- 資產表格(舊頁 6356-6946) -->
         <div x-data="assetTable">
@@ -1338,6 +1342,10 @@ document.addEventListener('alpine:init', function () {
 <?!= include('alpine_modals_asset'); ?>
 <!-- 批次操作(P4:底部按鈕列 + 批次轉移/出借/報廢 modal) -->
 <?!= include('alpine_modals_batch'); ?>
-<!-- [P5 掛載點] 盤點 modal(管理/待盤點/確認) -->
+<!-- 盤點元件註冊 script(P5:InventoryDashboardCard/ActionPanel/InventoryConfirmModal/
+     PendingInventoryModal/InventoryManagementModal 共 5 個 Alpine.data,markup 分散在
+     alpine_inventory.html(in-flow 儀表板卡)/alpine_action_panel_embedded.html(掃描器內嵌)/
+     alpine_inventory_modals.html(其餘 modal),script 集中於此才會執行) -->
+<?!= include('alpine_inventory_script'); ?>
 <!-- [P6 掛載點] 文件與列印 modal(轉移中/歸還/三種列印/操作手冊) -->
 </main>

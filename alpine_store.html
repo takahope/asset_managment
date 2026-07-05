@@ -1666,6 +1666,18 @@
                 this.inventoryModalAsset = asset;
                 this.showInventoryModal = true;
             },
+            // 舊頁 16249-16254(單筆盤點 modal 關閉)
+            closeInventoryModal: function () {
+                this.showInventoryModal = false;
+                this.inventoryModalAsset = null;
+                this.inventoryModalInitialResult = '';
+                this.inventoryModalSessionCount = 0;
+            },
+            // 舊頁 16270-16273(批次盤點 modal 關閉)
+            closeBatchInventoryModal: function () {
+                this.showBatchInventoryModal = false;
+                this.selectedInventoryAssetIds = [];
+            },
 
             /* ── 模式切換(舊頁 13375-13387) ── */
             handleModeToggle: function (nextMode) {
@@ -1860,6 +1872,26 @@
             toastOrAlert: function (message, level) {
                 if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast(message, level || 'info');
                 else alert(message);
+            },
+
+            /* ── 盤點會話完成(舊頁 3759-3797,由 InventoryDashboardCard 呼叫) ── */
+            completeInventorySession: function (sessionId, totalCount, verifiedCount, onDone) {
+                if (!this.isAdminView) { alert('僅管理員可執行此操作'); return; }
+                if (!sessionId) { alert('尚未選擇盤點會話'); return; }
+                if (totalCount === 0) { alert('此盤點會話沒有可處理的資產'); return; }
+                if (verifiedCount < totalCount) { alert('尚有 ' + (totalCount - verifiedCount) + ' 筆未盤點，無法完成會話。'); return; }
+                if (!confirm('確定要完成盤點會話「' + sessionId + '」嗎？\n\n此操作將結束此會話，無法再修改盤點結果。')) return;
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        if (result.success) {
+                            alert('盤點會話已完成！\n\n統計：\n正常：' + result.stats.normal + '\n遺失：' + result.stats.missing + '\n損壞：' + result.stats.damaged + '\n過舊：' + (result.stats.old || 0));
+                            if (typeof onDone === 'function') onDone();
+                        } else {
+                            alert(result.message || '操作失敗');
+                        }
+                    })
+                    .withFailureHandler(function (error) { alert('完成盤點失敗：' + error.message); })
+                    .completeInventorySession(sessionId);
             },
 
             /* ── 批次操作(舊頁 12993-13019, 15366-15517, 15308-15364) ── */
