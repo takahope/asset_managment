@@ -1048,27 +1048,61 @@
                 this.refreshCardData();
             },
 
-            // ✨ 盤點功能開關切換(管理員;舊頁 14317-14335):寫入後端設定,開啟時重新載入,關閉時清空
+            // ✨ 盤點功能開關切換(管理員):寫入後端設定,開啟時靜默背景載入盤點資料,關閉時清空
+            // (改良自舊頁 14317-14335:舊頁開啟時呼叫 loadData() 整頁重載+全螢幕遮罩進度條;
+            //  改為只呼叫 loadInventoryFeatureData() 背景載入盤點資料,用右上角 toast 顯示進度,
+            //  儀表板卡片/統計數字因 store 狀態更新而原地出現,不打斷使用者當前畫面)
             handleToggleInventoryFeature: function (next) {
                 var self = this;
                 this.inventoryFeatureToggling = true;
                 google.script.run
                     .withSuccessHandler(function () {
                         self.inventoryFeatureEnabled = next;
+                        self.inventoryFeatureToggling = false;
                         if (next) {
-                            // 開啟：重新載入頁面資料（後端旗標已為開,loadData 會載入盤點）
-                            self.loadData();
+                            self.loadInventoryFeatureData();
                         } else {
                             // 關閉：直接清空盤點 state,無需重新載入其他資料
                             self.clearInventoryState();
                         }
-                        self.inventoryFeatureToggling = false;
                     })
                     .withFailureHandler(function (error) {
                         self.inventoryFeatureToggling = false;
                         alert('變更盤點功能設定失敗：' + (error && error.message ? error.message : error));
                     })
                     .setInventoryFeatureEnabled(next);
+            },
+
+            // 盤點功能開啟後的靜默背景載入(對應 loadData() 906-919 行盤點分支,
+            // 但獨立呼叫、用 toast 取代全螢幕遮罩進度條)
+            loadInventoryFeatureData: function () {
+                var self = this;
+                var forceUserScope = this.viewMode === 'user';
+                if (typeof showToastProgress === 'function') {
+                    showToastProgress('正在載入盤點資料...');
+                }
+                google.script.run
+                    .withSuccessHandler(function (inventoryResponse) {
+                        if (inventoryResponse && !inventoryResponse.error) {
+                            self.inventorySessions = inventoryResponse;
+                            self.currentUserGroup = inventoryResponse.currentUserGroup || '';
+                            if (inventoryResponse.ismsAssets) self.ismsAssets = inventoryResponse.ismsAssets;
+                            if (inventoryResponse.ismsEnabled !== undefined) self.ismsEnabled = inventoryResponse.ismsEnabled;
+                            var activeSessions = inventoryResponse.activeSessions || [];
+                            var sessionId = activeSessions.length > 0 ? activeSessions[0].inventoryId : null;
+                            self.updateCurrentInventorySessionId(sessionId);
+                            if (typeof hideToastProgress === 'function') hideToastProgress('盤點資料載入完成！', 300);
+                        } else {
+                            console.warn('載入盤點資料失敗或無資料');
+                            if (typeof hideToastProgress === 'function') hideToastProgress('盤點資料載入失敗', 300);
+                        }
+                        self.schedulePendingInventoryLoad(forceUserScope);
+                    })
+                    .withFailureHandler(function (error) {
+                        console.warn('載入盤點資料失敗：', (error && error.message) || error);
+                        if (typeof hideToastProgress === 'function') hideToastProgress('盤點資料載入失敗', 300);
+                    })
+                    .getInventoryData(forceUserScope);
             },
 
             // 選取查詢(效能優化,行為中立):以非響應式 Set 快取取代逐列 indexOf,
