@@ -37,3 +37,4 @@ files/
 # 前端可選建置工具(非日常流程;凍結 CSS 重生成用)
 node_modules/
 dist/
+.playwright-mcp/
