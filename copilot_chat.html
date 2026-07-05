@@ -1,8 +1,7 @@
 <!--
-  copilot_chat.html — 智慧導覽助理 (Copilot) 前端 Widget（自包含 partial）
-  以 <?!= include('copilot_chat'); ?> 掛入 userstate.html。
-  自帶樣式、自帶 #copilot-root，並在腳本尾端自行 createRoot().render()，
-  與主 App 的 React tree 解耦（獨立 root），不需改動 App 的 JSX。
+  copilot_chat.html — 智慧導覽助理 (Copilot) 前端 Widget（自包含 partial,Alpine 版）
+  以 <?!= include('copilot_chat'); ?> 掛入 userstate_alpine.html(直接在 body 內,不在
+  任何 <template x-if> 之中,script 可正常執行)。獨立 x-data,不依賴主 App 的 $store。
 -->
 <style>
   /* ===== 浮動按鈕 (FAB) ===== */
@@ -201,140 +200,112 @@
   }
 </style>
 
-<div id="copilot-root"></div>
+<script>
+document.addEventListener('alpine:init', function () {
+    var QUICK_PROMPTS = ['如何批次轉移？', '我要怎麼報廢？', '如何歸還出借資產？', '盤點怎麼操作？'];
+    var WELCOME = '您好！我是系統導覽助理 🤖\n有任何操作問題都可以問我，例如轉移、出借、報廢、盤點或新增資產。\n也可以直接點下方的快捷問題試試看。';
 
-<script type="text/babel">
-  (function () {
-    const { useState, useRef, useEffect, useCallback } = React;
+    Alpine.data('copilotWidget', function () {
+        return {
+            open: false,
+            messages: [{ role: 'ai', text: WELCOME }],
+            input: '',
+            loading: false,
+            quickPrompts: QUICK_PROMPTS,
+            _reqId: 0,
 
-    // 快捷提示（對應 NavigationManual.md 第 6 章常見流程）
-    const QUICK_PROMPTS = [
-      '如何批次轉移？',
-      '我要怎麼報廢？',
-      '如何歸還出借資產？',
-      '盤點怎麼操作？'
-    ];
-
-    const WELCOME = '您好！我是系統導覽助理 🤖\n有任何操作問題都可以問我，例如轉移、出借、報廢、盤點或新增資產。\n也可以直接點下方的快捷問題試試看。';
-
-    function CopilotWidget() {
-      const [open, setOpen] = useState(false);
-      const [messages, setMessages] = useState([{ role: 'ai', text: WELCOME }]);
-      const [input, setInput] = useState('');
-      const [loading, setLoading] = useState(false);
-
-      const bodyRef = useRef(null);
-      const reqIdRef = useRef(0);
-
-      // 新訊息時自動捲到底
-      useEffect(() => {
-        if (bodyRef.current) {
-          bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-        }
-      }, [messages, loading, open]);
-
-      const send = useCallback((rawText) => {
-        const text = (rawText != null ? rawText : input).trim();
-        if (!text || loading) return;
-
-        setMessages((prev) => prev.concat([{ role: 'user', text: text }]));
-        setInput('');
-        setLoading(true);
-
-        const myReqId = ++reqIdRef.current;
-        google.script.run
-          .withSuccessHandler((res) => {
-            if (reqIdRef.current !== myReqId) return; // 忽略過時回應
-            setLoading(false);
-            const safe = res || {};
-            if (safe.ok && safe.reply) {
-              setMessages((prev) => prev.concat([{ role: 'ai', text: safe.reply }]));
-            } else {
-              setMessages((prev) => prev.concat([{ role: 'error', text: safe.error || '抱歉，發生未知問題，請稍後再試。' }]));
+            init: function () {
+                var self = this;
+                // 新訊息時自動捲到底(舊頁 useEffect[messages, loading, open])
+                Alpine.effect(function () {
+                    var _ = self.messages.length; var __ = self.loading; var ___ = self.open;
+                    self.$nextTick(function () {
+                        var body = self.$refs.copilotBody;
+                        if (body) body.scrollTop = body.scrollHeight;
+                    });
+                });
+            },
+            toggleOpen: function () { this.open = !this.open; },
+            send: function (rawText) {
+                var self = this;
+                var text = (rawText != null ? rawText : this.input).trim();
+                if (!text || this.loading) return;
+                this.messages = this.messages.concat([{ role: 'user', text: text }]);
+                this.input = '';
+                this.loading = true;
+                var myReqId = ++this._reqId;
+                google.script.run
+                    .withSuccessHandler(function (res) {
+                        if (self._reqId !== myReqId) return;
+                        self.loading = false;
+                        var safe = res || {};
+                        if (safe.ok && safe.reply) {
+                            self.messages = self.messages.concat([{ role: 'ai', text: safe.reply }]);
+                        } else {
+                            self.messages = self.messages.concat([{ role: 'error', text: safe.error || '抱歉，發生未知問題，請稍後再試。' }]);
+                        }
+                    })
+                    .withFailureHandler(function (err) {
+                        if (self._reqId !== myReqId) return;
+                        self.loading = false;
+                        var msg = (err && err.message) ? err.message : '連線伺服器失敗，請稍後再試。';
+                        self.messages = self.messages.concat([{ role: 'error', text: msg }]);
+                    })
+                    .askCopilot(text);
+            },
+            onKeyDown: function (event) {
+                // Enter 送出;Shift+Enter 換行
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    this.send();
+                }
             }
-          })
-          .withFailureHandler((err) => {
-            if (reqIdRef.current !== myReqId) return;
-            setLoading(false);
-            const msg = (err && err.message) ? err.message : '連線伺服器失敗，請稍後再試。';
-            setMessages((prev) => prev.concat([{ role: 'error', text: msg }]));
-          })
-          .askCopilot(text);
-      }, [input, loading]);
-
-      const onKeyDown = (e) => {
-        // Enter 送出；Shift+Enter 換行
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          send();
-        }
-      };
-
-      return (
-        <React.Fragment>
-          {open && (
-            <div className="copilot-panel" role="dialog" aria-label="系統導覽助理">
-              <div className="copilot-header">
-                <div className="copilot-avatar"><i className="fa-solid fa-robot"></i></div>
-                <div>
-                  <div className="copilot-title">智慧導覽助理</div>
-                  <div className="copilot-subtitle">問我系統怎麼操作</div>
-                </div>
-                <button className="copilot-close" onClick={() => setOpen(false)} aria-label="收合">
-                  <i className="fa-solid fa-chevron-down"></i>
-                </button>
-              </div>
-
-              <div className="copilot-body" ref={bodyRef}>
-                {messages.map((m, i) => (
-                  <div key={i} className={'copilot-msg ' + m.role}>{m.text}</div>
-                ))}
-                {loading && (
-                  <div className="copilot-msg ai">
-                    <span className="copilot-typing"><span></span><span></span><span></span></span>
-                  </div>
-                )}
-              </div>
-
-              <div className="copilot-quick">
-                {QUICK_PROMPTS.map((q) => (
-                  <button key={q} onClick={() => send(q)} disabled={loading}>{q}</button>
-                ))}
-              </div>
-
-              <div className="copilot-input-row">
-                <textarea
-                  className="copilot-input"
-                  rows={1}
-                  placeholder="輸入你的問題，按 Enter 送出…"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={onKeyDown}
-                  disabled={loading}
-                />
-                <button className="copilot-send" onClick={() => send()} disabled={loading || !input.trim()} aria-label="送出">
-                  <i className="fa-solid fa-paper-plane"></i>
-                </button>
-              </div>
-            </div>
-          )}
-
-          <button
-            className="copilot-fab"
-            onClick={() => setOpen((v) => !v)}
-            aria-label={open ? '收合導覽助理' : '開啟導覽助理'}
-            title="智慧導覽助理"
-          >
-            <i className={open ? 'fa-solid fa-chevron-down' : 'fa-solid fa-robot'}></i>
-            {!open && <span className="copilot-fab-dot"></span>}
-          </button>
-        </React.Fragment>
-      );
-    }
-
-    const rootEl = document.getElementById('copilot-root');
-    if (rootEl && window.ReactDOM && ReactDOM.createRoot) {
-      ReactDOM.createRoot(rootEl).render(<CopilotWidget />);
-    }
-  })();
+        };
+    });
+});
 </script>
+
+<div id="copilot-root" x-data="copilotWidget">
+    <template x-if="open">
+        <div class="copilot-panel" role="dialog" aria-label="系統導覽助理">
+            <div class="copilot-header">
+                <div class="copilot-avatar"><i class="fa-solid fa-robot"></i></div>
+                <div>
+                    <div class="copilot-title">智慧導覽助理</div>
+                    <div class="copilot-subtitle">問我系統怎麼操作</div>
+                </div>
+                <button class="copilot-close" @click="open = false" aria-label="收合"><i class="fa-solid fa-chevron-down"></i></button>
+            </div>
+
+            <div class="copilot-body" x-ref="copilotBody">
+                <template x-for="(m, i) in messages" :key="i">
+                    <div class="copilot-msg" :class="m.role" x-text="m.text"></div>
+                </template>
+                <template x-if="loading">
+                    <div class="copilot-msg ai">
+                        <span class="copilot-typing"><span></span><span></span><span></span></span>
+                    </div>
+                </template>
+            </div>
+
+            <div class="copilot-quick">
+                <template x-for="q in quickPrompts" :key="q">
+                    <button @click="send(q)" :disabled="loading" x-text="q"></button>
+                </template>
+            </div>
+
+            <div class="copilot-input-row">
+                <textarea class="copilot-input" rows="1" placeholder="輸入你的問題，按 Enter 送出…"
+                          x-model="input" @keydown="onKeyDown($event)" :disabled="loading"></textarea>
+                <button class="copilot-send" @click="send()" :disabled="loading || !input.trim()" aria-label="送出">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </template>
+
+    <button class="copilot-fab" @click="toggleOpen()" :aria-label="open ? '收合導覽助理' : '開啟導覽助理'" title="智慧導覽助理">
+        <i :class="open ? 'fa-solid fa-chevron-down' : 'fa-solid fa-robot'"></i>
+        <span x-show="!open" class="copilot-fab-dot"></span>
+    </button>
+</div>
