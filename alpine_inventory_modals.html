@@ -1,7 +1,7 @@
 <!-- ===== ActionPanel:Modal 形式(舊頁 15995-16013) ===== -->
 <template x-if="$store.app.isAdvancedMode && $store.app.actionPanelState.isOpen && $store.app.actionPanelState.displayMode === 'modal'">
     <div class="advanced-scanner-overlay" @click="$store.app.closeActionPanel()">
-        <div class="action-panel-modal" @click.stop x-data="actionPanel({ displayMode: 'modal' })">
+        <div class="action-panel-modal action-panel" @click.stop x-data="actionPanel({ displayMode: 'modal' })">
             <div class="action-panel__header">
                 <div class="flex items-center gap-3">
                     <button x-show="panelView === 'inventory'" type="button" class="action-panel__back" @click="panelView = 'actions'">
