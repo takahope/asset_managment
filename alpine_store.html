@@ -1048,6 +1048,41 @@
                 this.refreshCardData();
             },
 
+            // ✨ 盤點功能開關切換(管理員;舊頁 14317-14335):寫入後端設定,開啟時重新載入,關閉時清空
+            handleToggleInventoryFeature: function (next) {
+                var self = this;
+                this.inventoryFeatureToggling = true;
+                google.script.run
+                    .withSuccessHandler(function () {
+                        self.inventoryFeatureEnabled = next;
+                        if (next) {
+                            // 開啟：重新載入頁面資料（後端旗標已為開,loadData 會載入盤點）
+                            self.loadData();
+                        } else {
+                            // 關閉：直接清空盤點 state,無需重新載入其他資料
+                            self.clearInventoryState();
+                        }
+                        self.inventoryFeatureToggling = false;
+                    })
+                    .withFailureHandler(function (error) {
+                        self.inventoryFeatureToggling = false;
+                        alert('變更盤點功能設定失敗：' + (error && error.message ? error.message : error));
+                    })
+                    .setInventoryFeatureEnabled(next);
+            },
+
+            // 選取查詢(效能優化,行為中立):以非響應式 Set 快取取代逐列 indexOf,
+            // 讓表格列綁定對「單次勾選」的重算成本從 O(n²) 降為 O(n)
+            isAssetSelected: function (assetId) {
+                var ids = this.selectedAssetIds;   // 保持對陣列的響應式依賴
+                if (refs.selSetSource !== ids) {
+                    refs.selSetSource = ids;
+                    refs.selSet = {};
+                    for (var i = 0; i < ids.length; i++) refs.selSet[ids[i]] = true;
+                }
+                return !!refs.selSet[assetId];
+            },
+
             /* ── 視角切換(舊頁 14338-14402) ── */
             handleViewModeChange: function (mode) {
                 if (!this.isAdmin) return;
@@ -1179,12 +1214,17 @@
             },
 
             /* ── 資產選取(舊頁 13022-13071, 14735-14798) ── */
-            handleAssetSelect: function (assetId) {
+            handleAssetSelect: function (assetId, event) {
                 if (this.isAdvancedMode) {
                     if (window.AssetCartStore && window.AssetCartStore.hasItem(assetId)) {
                         window.AssetCartStore.removeItem(assetId);
                     } else {
                         this.openActionPanel(assetId, { displayMode: 'modal', source: 'manual' });
+                    }
+                    // 進階模式下勾選框非受控:把 DOM 狀態同步回購物車實況
+                    // (舊頁 React controlled input 於 re-render 時自動回復,Alpine 需手動)
+                    if (event && event.target) {
+                        event.target.checked = !!(window.AssetCartStore && window.AssetCartStore.hasItem(assetId));
                     }
                     return;
                 }

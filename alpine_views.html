@@ -275,13 +275,13 @@ document.addEventListener('alpine:init', function () {
                 return this.assets ? this.assets.filter(function (a) { return a.status === '在庫'; }) : [];
             },
             get isAllSelected() {
-                var selected = this.$store.app.selectedAssetIds;
+                var store = this.$store.app;
                 return this.selectableAssets.length > 0 &&
-                    this.selectableAssets.every(function (a) { return selected.indexOf(a.assetId) !== -1; });
+                    this.selectableAssets.every(function (a) { return store.isAssetSelected(a.assetId); });
             },
             get isPartialSelected() {
-                var selected = this.$store.app.selectedAssetIds;
-                return this.selectableAssets.some(function (a) { return selected.indexOf(a.assetId) !== -1; }) && !this.isAllSelected;
+                var store = this.$store.app;
+                return this.selectableAssets.some(function (a) { return store.isAssetSelected(a.assetId); }) && !this.isAllSelected;
             },
             // 每列預計算(對應舊頁 buildAssetState 6408-6483)
             get rows() {
@@ -298,7 +298,9 @@ document.addEventListener('alpine:init', function () {
                             normalizedCurrentEmail === String(asset.userEmail || '').toLowerCase().trim());
                     var canCancel = !isTask && (isAdmin || isOwner);
                     var isSelectable = asset.status === '在庫';
-                    var isSelected = store.selectedAssetIds.indexOf(asset.assetId) !== -1;
+                    // 注意:選取/展開狀態刻意「不」放進 row 物件 — 否則每次勾選都會重建
+                    // 整頁 row 物件並重算所有列綁定(~500ms 停頓)。markup 改用
+                    // $store.app.isAssetSelected() / isRowExpanded() 逐列 O(1) 查詢。
                     var assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
                     var isGroupMemberAsset = groupProxyEnabled &&
                         assetLeaderEmail !== normalizedCurrentEmail &&
@@ -331,12 +333,10 @@ document.addEventListener('alpine:init', function () {
                         isTask: isTask,
                         canCancel: canCancel,
                         isSelectable: isSelectable,
-                        isSelected: isSelected,
                         isGroupMemberAsset: isGroupMemberAsset,
                         rowBaseClass: rowBaseClass,
                         borderClass: borderClass,
                         rowHoverClass: isTask ? 'hover:bg-teal-100' : 'hover:bg-slate-50',
-                        rowSelectedClass: isSelected ? 'ring-1 ring-blue-200 ring-inset' : '',
                         cardSurfaceClass: cardSurfaceClass,
                         statusBadgeClass: S.STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-700 border-slate-200',
                         canOpenStatusDetail: !!statusDetailType,
@@ -348,10 +348,12 @@ document.addEventListener('alpine:init', function () {
                             : '盤點確認',
                         inventoryButtonClass: self.inventoryStatusStyles[inventoryStatus] || 'text-slate-500 hover:text-slate-700',
                         aliasLabel: S.getAssetAliasLabel(asset),
-                        aliasDisplay: S.getAssetAliasDisplay(asset),
-                        isExpanded: self.expandedAssetIds.indexOf(asset.assetId + '-' + index) !== -1
+                        aliasDisplay: S.getAssetAliasDisplay(asset)
                     };
                 });
+            },
+            isRowExpanded: function (rowKey) {
+                return this.expandedAssetIds.indexOf(rowKey) !== -1;
             },
             toggleExpandedAsset: function (rowKey) {
                 this.expandedAssetIds = this.expandedAssetIds.indexOf(rowKey) !== -1
@@ -1243,19 +1245,18 @@ document.addEventListener('alpine:init', function () {
                     <div class="md:hidden p-3 space-y-3 bg-slate-50/60">
                         <template x-for="row in rows" :key="row.rowKey">
                             <div class="rounded-xl border shadow-sm overflow-hidden transition-all"
-                                 :class="row.cardSurfaceClass + ' ' + row.borderClass + ' ' + row.rowSelectedClass">
+                                 :class="row.cardSurfaceClass + ' ' + row.borderClass + ' ' + ($store.app.isAssetSelected(row.asset.assetId) ? 'ring-1 ring-blue-200 ring-inset' : '')">
                                 <div role="button" tabindex="0"
                                      @click="toggleExpandedAsset(row.rowKey)"
                                      @keydown="if ($event.currentTarget !== $event.target) return; if ($event.key === 'Enter' || $event.key === ' ') { $event.preventDefault(); toggleExpandedAsset(row.rowKey); }"
                                      class="w-full text-left px-3 py-2.5 cursor-pointer"
-                                     :aria-expanded="row.isExpanded">
+                                     :aria-expanded="isRowExpanded(row.rowKey)">
                                     <div class="flex items-start gap-2.5">
                                         <div class="pt-0.5">
                                             <template x-if="row.isSelectable">
                                                 <input type="checkbox" class="asset-checkbox w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                       :value="row.asset.assetId" :checked="row.isSelected"
-                                                       @click.stop
-                                                       @change="$store.app.handleAssetSelect(row.asset.assetId)"
+                                                       :value="row.asset.assetId" :checked="$store.app.isAssetSelected(row.asset.assetId)"
+                                                       @click.stop="$store.app.handleAssetSelect(row.asset.assetId, $event)"
                                                        :data-is-task="row.isTask ? 'true' : 'false'">
                                             </template>
                                             <template x-if="!row.isSelectable">
@@ -1305,14 +1306,14 @@ document.addEventListener('alpine:init', function () {
                                                     </span>
                                                 </div>
                                                 <span class="inline-flex items-center gap-1 font-medium text-slate-500">
-                                                    <span x-text="row.isExpanded ? '收合明細' : '展開明細'"></span>
-                                                    <i class="fa-solid text-[10px]" :class="row.isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                                    <span x-text="isRowExpanded(row.rowKey) ? '收合明細' : '展開明細'"></span>
+                                                    <i class="fa-solid text-[10px]" :class="isRowExpanded(row.rowKey) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                <template x-if="row.isExpanded">
+                                <template x-if="isRowExpanded(row.rowKey)">
                                     <div class="border-t border-slate-200/80 bg-white/90 px-3 py-3 space-y-3">
                                         <div class="grid grid-cols-1 gap-2">
                                             <div class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
@@ -1425,12 +1426,12 @@ document.addEventListener('alpine:init', function () {
                             <tbody class="divide-y divide-slate-100">
                                 <template x-for="row in rows" :key="row.rowKey">
                                     <tr class="transition-colors"
-                                        :class="row.rowHoverClass + ' ' + row.rowBaseClass + ' ' + row.borderClass + ' ' + row.rowSelectedClass + (!row.isTask && row.isSelected ? ' bg-blue-50' : '')">
+                                        :class="row.rowHoverClass + ' ' + row.rowBaseClass + ' ' + row.borderClass + ($store.app.isAssetSelected(row.asset.assetId) ? ' ring-1 ring-blue-200 ring-inset' + (!row.isTask ? ' bg-blue-50' : '') : '')">
                                         <td class="px-2 py-3 text-center align-top">
                                             <template x-if="row.isSelectable">
                                                 <input type="checkbox" class="asset-checkbox w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                       :value="row.asset.assetId" :checked="row.isSelected"
-                                                       @change="$store.app.handleAssetSelect(row.asset.assetId)"
+                                                       :value="row.asset.assetId" :checked="$store.app.isAssetSelected(row.asset.assetId)"
+                                                       @click="$store.app.handleAssetSelect(row.asset.assetId, $event)"
                                                        :data-is-task="row.isTask ? 'true' : 'false'">
                                             </template>
                                             <template x-if="!row.isSelectable">
