@@ -1357,18 +1357,22 @@
     <?!= include('alpine_views'); ?>
 
     <!-- ===== 以下原在 alpine_views.html 內,為避免第二層 scriptlet 問題提升至此 ===== -->
-    <!-- 進階模式 ActionPanel(modal 形式)+ 盤點相關 modal(P5;皆為 position:fixed) -->
-    <?!= include('alpine_inventory_modals'); ?>
-    <!-- 單筆操作 modal(P3:Quick 轉移/出借/報廢) -->
-    <?!= include('alpine_modals_single'); ?>
-    <!-- 資產 modal(P3:CreateIsms 共用 / 新增資產 / 編輯資產 / 批次匯入手冊) -->
-    <?!= include('alpine_modals_asset'); ?>
-    <!-- 批次操作(P4:底部按鈕列 + 批次轉移/出借/報廢 modal) -->
-    <?!= include('alpine_modals_batch'); ?>
-    <!-- 盤點元件註冊 script(P5:5 個 Alpine.data 元件) -->
-    <?!= include('alpine_inventory_script'); ?>
-    <!-- 文件與列印 modal(P6:轉移中追蹤/歸還/三種列印/操作手冊) -->
-    <?!= include('alpine_modals_print'); ?>
+    <!-- 注意:必須包在 x-data 容器內 — Alpine 只初始化 x-data 元素的子樹,
+         裸露在 body 下的 <template x-if="$store..."> 不會被處理(modal 永遠不渲染)。 -->
+    <div id="modal-mount-root" x-data>
+        <!-- 進階模式 ActionPanel(modal 形式)+ 盤點相關 modal(P5;皆為 position:fixed) -->
+        <?!= include('alpine_inventory_modals'); ?>
+        <!-- 單筆操作 modal(P3:Quick 轉移/出借/報廢) -->
+        <?!= include('alpine_modals_single'); ?>
+        <!-- 資產 modal(P3:CreateIsms 共用 / 新增資產 / 編輯資產 / 批次匯入手冊) -->
+        <?!= include('alpine_modals_asset'); ?>
+        <!-- 批次操作(P4:底部按鈕列 + 批次轉移/出借/報廢 modal) -->
+        <?!= include('alpine_modals_batch'); ?>
+        <!-- 盤點元件註冊 script(P5:5 個 Alpine.data 元件) -->
+        <?!= include('alpine_inventory_script'); ?>
+        <!-- 文件與列印 modal(P6:轉移中追蹤/歸還/三種列印/操作手冊) -->
+        <?!= include('alpine_modals_print'); ?>
+    </div>
 
     <template id="operationManualSrcDocTemplate"><?!= include('operation_manual_srcdoc'); ?></template>
 

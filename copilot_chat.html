@@ -1,6 +1,6 @@
 <!--
   copilot_chat.html — 智慧導覽助理 (Copilot) 前端 Widget（自包含 partial,Alpine 版）
-  以 <?!= include('copilot_chat'); ?> 掛入 userstate_alpine.html(直接在 body 內,不在
+  由 userstate_alpine.html 第一層 include('copilot_chat') 掛入(直接在 body 內,不在
   任何 <template x-if> 之中,script 可正常執行)。獨立 x-data,不依賴主 App 的 $store。
 -->
 <style>
