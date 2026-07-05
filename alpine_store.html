@@ -1874,6 +1874,19 @@
                 else alert(message);
             },
 
+            /* ── P6:列印/文件 modal 關閉與刷新(舊頁 16043-16139 App render 的 inline callback) ── */
+            closeTransferringModal: function () { this.activeModal = null; },
+            handleCancelTransferSuccess: function () { this.activeModal = null; this.refreshCardData(); },
+            closeLentModal: function () { this.activeModal = null; },
+            openLendingPrintFromLent: function () { this.activeModal = 'lendingPrint'; },
+            handleReturnSuccess: function () { this.activeModal = null; this.refreshCardData(); },
+            closeLendingPrintModal: function () { this.activeModal = null; },
+            closeScrapPrintModal: function () { this.activeModal = null; this.scrapPendingDetails = null; },
+            handleScrapPrintRefresh: function () { this.activeModal = null; this.scrapPendingDetails = null; this.refreshCardData(); },
+            closeTransferPrintModal: function () { this.activeModal = null; this.transferPendingDetails = null; },
+            handleTransferPrintRefresh: function () { this.activeModal = null; this.transferPendingDetails = null; this.refreshCardData(); },
+            closeOperationManualModal: function () { this.showOperationManualModal = false; },
+
             /* ── 盤點會話完成(舊頁 3759-3797,由 InventoryDashboardCard 呼叫) ── */
             completeInventorySession: function (sessionId, totalCount, verifiedCount, onDone) {
                 if (!this.isAdminView) { alert('僅管理員可執行此操作'); return; }

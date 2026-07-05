@@ -906,7 +906,7 @@ document.addEventListener('alpine:init', function () {
             </div>
         </template>
 
-        <!-- [P4 掛載點] BatchActionButtons 批次操作按鈕卡片 -->
+        <!-- BatchActionButtons 已隨 alpine_modals_batch.html 掛載於檔尾(position:fixed,DOM 位置不影響顯示) -->
 
         <!-- 重複產編警示(舊頁 6042-6055, 15988-15993) -->
         <template x-if="$store.app.duplicateInfo.duplicateCount > 0">
@@ -1347,5 +1347,6 @@ document.addEventListener('alpine:init', function () {
      alpine_inventory.html(in-flow 儀表板卡)/alpine_action_panel_embedded.html(掃描器內嵌)/
      alpine_inventory_modals.html(其餘 modal),script 集中於此才會執行) -->
 <?!= include('alpine_inventory_script'); ?>
-<!-- [P6 掛載點] 文件與列印 modal(轉移中/歸還/三種列印/操作手冊) -->
+<!-- 文件與列印 modal(P6:轉移中追蹤/歸還/三種列印/操作手冊) -->
+<?!= include('alpine_modals_print'); ?>
 </main>

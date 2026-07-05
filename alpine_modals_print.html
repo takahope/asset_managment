@@ -1,0 +1,1154 @@
+<!--
+  alpine_modals_print.html — P6 列印/文件 modal:TransferringModal / LentAssetsModal / ScrapPrintModal /
+                              TransferPrintModal / LendingPrintModal / OperationManualModal
+  逐行對應舊頁 6949-7325(轉移中)/7590-7959(出借歸還)/7961-8551(報廢列印)/
+             8553-8981(轉移列印)/8983-9244(出借列印)/11081-11207(操作手冊)。
+-->
+<script>
+document.addEventListener('alpine:init', function () {
+    var S = window.AppShared;
+
+    /* ===== TransferringModal(舊頁 6949-7325) ===== */
+    Alpine.data('transferringModal', function () {
+        return {
+            selectedAssetIds: [], selectAll: false, isSubmitting: false,
+            filters: { newKeeper: '', search: '' },
+
+            init: function () {
+                var self = this;
+                this.$watch('assets', function () { self.selectedAssetIds = []; self.selectAll = false; });
+            },
+            get assets() { return this.$store.app.transferringAssets; },
+            get isLoading() { return this.$store.app.isLoadingTransferring; },
+            get filteredAssets() {
+                var assets = this.assets;
+                var f = this.filters;
+                if (!assets) return [];
+                return assets.filter(function (asset) {
+                    var matchNewKeeper = !f.newKeeper || asset.newKeeper === f.newKeeper;
+                    var kw = (f.search || '').toUpperCase();
+                    var matchSearch = !kw ||
+                        asset.assetId.toUpperCase().indexOf(kw) !== -1 ||
+                        (asset.assetName && asset.assetName.toUpperCase().indexOf(kw) !== -1) ||
+                        S.getAssetAliasValue(asset).toUpperCase().indexOf(kw) !== -1 ||
+                        (asset.newKeeper && asset.newKeeper.toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.newLocation && asset.newLocation.toUpperCase().indexOf(kw) !== -1);
+                    return matchNewKeeper && matchSearch;
+                });
+            },
+            get uniqueNewKeepers() {
+                var assets = this.assets;
+                if (!assets) return [];
+                var set = {};
+                assets.forEach(function (a) { if (a.newKeeper) set[a.newKeeper] = true; });
+                return Object.keys(set).sort();
+            },
+            handleSelectAll: function (checked) {
+                this.selectAll = checked;
+                this.selectedAssetIds = checked ? this.filteredAssets.map(function (a) { return a.assetId; }) : [];
+            },
+            handleCheckboxChange: function (assetId) {
+                var idx = this.selectedAssetIds.indexOf(assetId);
+                if (idx !== -1) {
+                    this.selectedAssetIds = this.selectedAssetIds.filter(function (id) { return id !== assetId; });
+                    if (this.filteredAssets && this.selectedAssetIds.length < this.filteredAssets.length) this.selectAll = false;
+                } else {
+                    this.selectedAssetIds = this.selectedAssetIds.concat([assetId]);
+                    if (this.filteredAssets && this.selectedAssetIds.length === this.filteredAssets.length) this.selectAll = true;
+                }
+            },
+            keeperHasChange: function (a) { return a.newKeeper && a.oldKeeper !== a.newKeeper; },
+            oldUser: function (a) { return a.oldUser || a.userName || ''; },
+            userHasChange: function (a) { var newUser = a.newUser || ''; return newUser && this.oldUser(a) !== newUser; },
+            locationHasChange: function (a) { return a.newLocation && a.oldLocation !== a.newLocation; },
+            transferTypeLabel: function (a) {
+                var t = a.transferType || '地點';
+                if (t.indexOf('保管人') !== -1 && t.indexOf('使用人') !== -1) return '保管人+使用人';
+                if (t.indexOf('保管人') !== -1) return '保管人';
+                if (t.indexOf('使用人') !== -1) return '使用人';
+                return '地點';
+            },
+            transferTypeClass: function (a) {
+                var t = a.transferType || '地點';
+                if (t.indexOf('保管人') !== -1 && t.indexOf('使用人') !== -1) return 'bg-red-100 text-red-800';
+                if (t.indexOf('保管人') !== -1) return 'bg-yellow-100 text-yellow-800';
+                if (t.indexOf('使用人') !== -1) return 'bg-sky-100 text-sky-800';
+                return 'bg-slate-100 text-slate-800';
+            },
+            handleCancelTransfer: function () {
+                var self = this;
+                if (this.selectedAssetIds.length === 0) { alert('請至少勾選一筆要取消的項目。'); return; }
+                if (!confirm('確定要取消所選的 ' + this.selectedAssetIds.length + ' 筆轉移申請嗎？\n\n⚠️ 取消後資產狀態將恢復為「在庫」。')) return;
+                this.isSubmitting = true;
+                showToastProgress('正在處理取消作業...');
+                var successCount = 0, failCount = 0, errorMessages = [];
+                var ids = this.selectedAssetIds;
+                var processNext = function (index) {
+                    if (index >= ids.length) {
+                        hideToastProgress('取消完成！', 300);
+                        self.isSubmitting = false;
+                        var message = '取消完成！\n成功：' + successCount + ' 筆';
+                        if (failCount > 0) {
+                            message += '\n失敗：' + failCount + ' 筆';
+                            if (errorMessages.length > 0) {
+                                message += '\n\n失敗原因：\n' + errorMessages.slice(0, 3).join('\n');
+                                if (errorMessages.length > 3) message += '\n...及其他 ' + (errorMessages.length - 3) + ' 項';
+                            }
+                        }
+                        alert(message);
+                        if (successCount > 0) self.$store.app.handleCancelTransferSuccess();
+                        return;
+                    }
+                    google.script.run
+                        .withSuccessHandler(function (result) {
+                            if (result.success) successCount++;
+                            else { failCount++; errorMessages.push(ids[index] + ': ' + (result.error || '未知錯誤')); }
+                            processNext(index + 1);
+                        })
+                        .withFailureHandler(function (error) {
+                            failCount++; errorMessages.push(ids[index] + ': ' + (error.message || '未知錯誤'));
+                            processNext(index + 1);
+                        })
+                        .cancelTransferOrScrap(ids[index]);
+                };
+                processNext(0);
+            }
+        };
+    });
+
+    /* ===== LentAssetsModal(舊頁 7590-7959) ===== */
+    Alpine.data('lentAssetsModal', function () {
+        return {
+            selectedLendIds: [], selectAll: false, isSubmitting: false,
+            filters: { location: '', startDate: '', endDate: '', overdueOnly: '', search: '' },
+
+            init: function () {
+                var self = this;
+                this.$watch('lentAssetsDetails', function () { self.selectedLendIds = []; self.selectAll = false; });
+            },
+            get lentAssetsDetails() { return this.$store.app.lentAssetsDetails; },
+            get isLoading() { return this.$store.app.isLoadingLentDetails; },
+            get hasExternalLends() {
+                var d = this.lentAssetsDetails;
+                return Array.isArray(d) && d.some(function (a) { return a.borrowerType === 'external'; });
+            },
+            get filteredAssets() {
+                var d = this.lentAssetsDetails;
+                var f = this.filters;
+                if (!d) return [];
+                return d.filter(function (asset) {
+                    var matchLocation = !f.location || asset.lendingLocation === f.location;
+                    var returnDate = new Date(asset.expectedReturnDate);
+                    var matchDateRange = (!f.startDate || returnDate >= new Date(f.startDate)) && (!f.endDate || returnDate <= new Date(f.endDate));
+                    var matchOverdue = true;
+                    if (f.overdueOnly === 'overdue' || f.overdueOnly === 'notOverdue') {
+                        var today = new Date(); today.setHours(0, 0, 0, 0);
+                        var assetReturnDate = new Date(asset.expectedReturnDate); assetReturnDate.setHours(0, 0, 0, 0);
+                        var isOverdue = assetReturnDate < today;
+                        matchOverdue = f.overdueOnly === 'overdue' ? isOverdue : !isOverdue;
+                    }
+                    var kw = (f.search || '').toUpperCase();
+                    var matchSearch = !kw ||
+                        asset.assetId.toUpperCase().indexOf(kw) !== -1 ||
+                        S.getAssetAliasValue(asset).toUpperCase().indexOf(kw) !== -1 ||
+                        (asset.borrower && asset.borrower.toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.reason && asset.reason.toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.keeperName && asset.keeperName.toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.userName && asset.userName.toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.lenderName && asset.lenderName.toUpperCase().indexOf(kw) !== -1);
+                    return matchLocation && matchDateRange && matchOverdue && matchSearch;
+                });
+            },
+            get uniqueLocations() {
+                var d = this.lentAssetsDetails;
+                if (!d) return [];
+                var set = {};
+                d.forEach(function (a) { if (a.lendingLocation) set[a.lendingLocation] = true; });
+                return Object.keys(set).sort();
+            },
+            isOverdue: function (asset) {
+                var today = new Date(); today.setHours(0, 0, 0, 0);
+                var returnDate = new Date(asset.expectedReturnDate); returnDate.setHours(0, 0, 0, 0);
+                return returnDate < today;
+            },
+            handleSelectAll: function (checked) {
+                this.selectAll = checked;
+                this.selectedLendIds = checked ? this.filteredAssets.map(function (a) { return a.lendId; }) : [];
+            },
+            handleCheckboxChange: function (lendId) {
+                var idx = this.selectedLendIds.indexOf(lendId);
+                if (idx !== -1) {
+                    this.selectedLendIds = this.selectedLendIds.filter(function (id) { return id !== lendId; });
+                    if (this.filteredAssets && this.selectedLendIds.length < this.filteredAssets.length) this.selectAll = false;
+                } else {
+                    this.selectedLendIds = this.selectedLendIds.concat([lendId]);
+                    if (this.filteredAssets && this.selectedLendIds.length === this.filteredAssets.length) this.selectAll = true;
+                }
+            },
+            handleSubmitReturn: function () {
+                var self = this;
+                if (this.selectedLendIds.length === 0) { alert('請至少勾選一筆要歸還的項目。'); return; }
+                if (!confirm('確定要歸還所選的 ' + this.selectedLendIds.length + ' 筆資產嗎？\n\n⚠️ 請確認此資產已歸還至原存放地點。')) return;
+                this.isSubmitting = true;
+                showToastProgress('正在處理歸還作業...');
+                google.script.run
+                    .withSuccessHandler(function (message) {
+                        hideToastProgress('歸還完成！', 300);
+                        setTimeout(function () {
+                            alert(message);
+                            self.isSubmitting = false;
+                            self.$store.app.handleReturnSuccess();
+                        }, 400);
+                    })
+                    .withFailureHandler(function (error) {
+                        hideToastProgress('歸還失敗！', 300);
+                        self.isSubmitting = false;
+                        alert('歸還失敗：' + error.message);
+                    })
+                    .processBatchReturn(this.selectedLendIds);
+            }
+        };
+    });
+
+    /* ===== ScrapPrintModal(舊頁 7961-8551) ===== */
+    Alpine.data('scrapPrintModal', function () {
+        return {
+            selectedCategory: '財產', selectedIds: [], selectAll: false, isGenerating: false,
+            activeTab: 'pending',
+            historyFiles: [], isLoadingHistory: false,
+            startDate: '', endDate: '', previewAssets: [], isLoadingPreview: false, isGeneratingByDate: false,
+
+            init: function () {
+                var self = this;
+                this.$watch('selectedCategory', function () { self.selectedIds = []; self.selectAll = false; });
+                this.$watch('activeTab', function (v) { if (v === 'history' && self.historyFiles.length === 0) self.loadHistoryFiles(); });
+                if (!this.isLoading && this.details === null) {
+                    console.error('收到的報廢資料為 null，可能是後端序列化失敗');
+                    alert('載入失敗：資料格式錯誤');
+                    this.$store.app.closeScrapPrintModal();
+                }
+            },
+            get details() { return this.$store.app.scrapPendingDetails; },
+            get isLoading() { return this.$store.app.isLoadingScrapDetails; },
+            get webAppUrl() { return this.$store.app.webAppUrl; },
+            get currentAssets() {
+                var d = this.details;
+                if (!d) return [];
+                return this.selectedCategory === '財產' ? d.property : d.items;
+            },
+            handleSelectAll: function (checked) {
+                this.selectAll = checked;
+                this.selectedIds = checked ? this.currentAssets.map(function (a) { return a.assetId; }) : [];
+            },
+            handleSelectOne: function (assetId) {
+                var idx = this.selectedIds.indexOf(assetId);
+                this.selectedIds = idx !== -1 ? this.selectedIds.filter(function (id) { return id !== assetId; }) : this.selectedIds.concat([assetId]);
+            },
+            handleGenerateDoc: function () {
+                var self = this;
+                if (this.selectedIds.length === 0) { alert('請至少勾選一個項目來產生報表。'); return; }
+                this.isGenerating = true;
+                google.script.run
+                    .withSuccessHandler(function (adminName) {
+                        google.script.run
+                            .withSuccessHandler(function (result) {
+                                var shouldUpdate = confirm(
+                                    '📄 彙總報表產生成功！\n\n是否要在列印後同步更新這些財產的狀態為「已報廢」？\n\n⚠️ 重要提醒\n選擇【確定】後，這些記錄將不會再出現在待列印清單中\n\n' +
+                                    '✅ 【確定】= 列印後更新狀態，將 ' + result.assetIds.length + ' 筆財產狀態更新為「已報廢」（財產將標記為已報廢，無法再次列印此申請）\n' +
+                                    '❌ 【取消】= 僅列印報表，不更新狀態（需至"總表更新"更新狀態）'
+                                );
+                                window.open(result.fileUrl, '_blank');
+                                if (shouldUpdate) {
+                                    google.script.run
+                                        .withSuccessHandler(function (message) { alert('✅ ' + message); self.$store.app.handleScrapPrintRefresh(); })
+                                        .withFailureHandler(function (error) {
+                                            alert('❌ 狀態更新失敗：' + error.message + '\n⚠️  文件已成功產生，但狀態未更新。\n💡 請稍後使用「管理後台」手動更新狀態。');
+                                            self.$store.app.handleScrapPrintRefresh();
+                                        })
+                                        .processScrapConfirmation(result.assetIds);
+                                } else {
+                                    self.$store.app.handleScrapPrintRefresh();
+                                }
+                                self.isGenerating = false;
+                            })
+                            .withFailureHandler(function (error) { alert('生成失敗：' + (error.message || error)); self.isGenerating = false; })
+                            .createScrapDoc(adminName, self.selectedCategory, self.selectedIds);
+                    })
+                    .withFailureHandler(function (error) { alert('載入失敗：' + (error.message || error)); self.isGenerating = false; })
+                    .getAdminName();
+            },
+            loadHistoryFiles: function () {
+                var self = this;
+                this.isLoadingHistory = true;
+                google.script.run
+                    .withSuccessHandler(function (files) { self.historyFiles = files || []; self.isLoadingHistory = false; })
+                    .withFailureHandler(function (error) { console.error('載入歷史文件失敗:', error); self.historyFiles = []; self.isLoadingHistory = false; })
+                    .getScrapDriveFiles();
+            },
+            handlePreviewByDate: function () {
+                var self = this;
+                if (!this.startDate || !this.endDate) { alert('請選擇起始和結束日期'); return; }
+                if (new Date(this.startDate) > new Date(this.endDate)) { alert('起始日期不能晚於結束日期'); return; }
+                this.isLoadingPreview = true;
+                this.previewAssets = [];
+                google.script.run
+                    .withSuccessHandler(function (assets) {
+                        if (assets === null) { alert('載入失敗：資料格式錯誤'); self.previewAssets = []; }
+                        else if (!Array.isArray(assets)) { alert('載入失敗：預期為陣列'); self.previewAssets = []; }
+                        else if (assets.length === 0) { alert('該日期範圍內沒有已報廢的資產'); self.previewAssets = []; }
+                        else self.previewAssets = assets;
+                        self.isLoadingPreview = false;
+                    })
+                    .withFailureHandler(function (error) { alert('載入失敗：' + error.message); self.isLoadingPreview = false; })
+                    .getScrapAssetsByDateRange(this.startDate, this.endDate, this.selectedCategory);
+            },
+            handleGenerateByDate: function () {
+                var self = this;
+                if (this.previewAssets.length === 0) { alert('沒有可列印的資產'); return; }
+                this.isGeneratingByDate = true;
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        alert('報廢申請單已成功生成（共 ' + result.assetCount + ' 筆資產）');
+                        window.open(result.fileUrl, '_blank');
+                        self.isGeneratingByDate = false;
+                    })
+                    .withFailureHandler(function (error) { alert('生成失敗：' + error.message); self.isGeneratingByDate = false; })
+                    .createScrapDocByDateRange(this.startDate, this.endDate, this.selectedCategory);
+            }
+        };
+    });
+
+    /* ===== TransferPrintModal(舊頁 8553-8981) ===== */
+    Alpine.data('transferPrintModal', function () {
+        return {
+            selectedCategory: '財產', selectedIds: [], selectAll: false, isGenerating: false,
+            activeTab: 'pending',
+            historyRecords: [], isLoadingHistory: false, historyError: '', hasHistoryLoaded: false, historyLoadedCategory: '',
+
+            init: function () {
+                var self = this;
+                this.$watch('selectedCategory', function () {
+                    self.selectedIds = []; self.selectAll = false;
+                    self.historyRecords = []; self.historyError = ''; self.hasHistoryLoaded = false; self.historyLoadedCategory = '';
+                });
+                Alpine.effect(function () {
+                    if (self.activeTab !== 'history') return;
+                    if (self.isLoadingHistory) return;
+                    if (self.hasHistoryLoaded && self.historyLoadedCategory === self.selectedCategory) return;
+                    self.loadHistoryRecords();
+                });
+                if (!this.isLoading && this.details === null) {
+                    console.error('收到的轉移資料為 null，可能是後端序列化失敗');
+                    alert('載入失敗：資料格式錯誤');
+                    this.$store.app.closeTransferPrintModal();
+                }
+            },
+            get details() { return this.$store.app.transferPendingDetails; },
+            get isLoading() { return this.$store.app.isLoadingTransferDetails; },
+            get webAppUrl() { return this.$store.app.webAppUrl; },
+            get currentAssets() {
+                var d = this.details;
+                if (!d) return [];
+                return this.selectedCategory === '財產' ? d.property : d.items;
+            },
+            handleSelectAll: function (checked) {
+                this.selectAll = checked;
+                this.selectedIds = checked ? this.currentAssets.map(function (a) { return a.assetId; }) : [];
+            },
+            handleSelectOne: function (assetId) {
+                var idx = this.selectedIds.indexOf(assetId);
+                this.selectedIds = idx !== -1 ? this.selectedIds.filter(function (id) { return id !== assetId; }) : this.selectedIds.concat([assetId]);
+            },
+            handleGenerateDoc: function () {
+                var self = this;
+                if (this.selectedIds.length === 0) { alert('請至少勾選一個項目來產生報表。'); return; }
+                this.isGenerating = true;
+                google.script.run
+                    .withSuccessHandler(function (adminName) {
+                        google.script.run
+                            .withSuccessHandler(function (result) {
+                                var shouldUpdate = confirm(
+                                    '📄 彙總轉移記錄產生成功！\n\n❓ 是否要在生成文件後同步更新這些財產的更新狀態？\n\n⚠️  提醒：選擇【確定】後，這些記錄將不會再出現在待列印清單中\n\n' +
+                                    '✅ 【確定】= 標記 ' + result.assetIds.length + ' 筆轉移記錄為已更新（無法再次列印）\n' +
+                                    '❌ 【取消】= 僅開啟文件，不標記狀態（可再次列印，需至"總表更新"更新狀態）'
+                                );
+                                window.open(result.fileUrl, '_blank');
+                                if (shouldUpdate) {
+                                    google.script.run
+                                        .withSuccessHandler(function (message) { alert('✅ ' + message); self.$store.app.handleTransferPrintRefresh(); })
+                                        .withFailureHandler(function (error) {
+                                            alert('❌ 狀態更新失敗：' + error.message + '\n⚠️  文件已成功產生，但未標記為已上傳。\n💡 請稍後使用「管理後台」手動更新狀態。');
+                                            self.$store.app.handleTransferPrintRefresh();
+                                        })
+                                        .processUploadConfirmation(result.assetIds);
+                                } else {
+                                    self.$store.app.handleTransferPrintRefresh();
+                                }
+                                self.isGenerating = false;
+                            })
+                            .withFailureHandler(function (error) { alert('生成失敗：' + (error.message || error)); self.isGenerating = false; })
+                            .createTransferDoc(adminName, self.selectedCategory, self.selectedIds);
+                    })
+                    .withFailureHandler(function (error) { alert('載入失敗：' + (error.message || error)); self.isGenerating = false; })
+                    .getAdminName();
+            },
+            loadHistoryRecords: function () {
+                var self = this;
+                this.isLoadingHistory = true; this.historyError = ''; this.historyRecords = [];
+                var category = this.selectedCategory;
+                google.script.run
+                    .withSuccessHandler(function (records) {
+                        if (records === null || !Array.isArray(records)) { self.historyError = '載入失敗：資料格式錯誤'; self.historyRecords = []; }
+                        else self.historyRecords = records;
+                        self.isLoadingHistory = false; self.hasHistoryLoaded = true; self.historyLoadedCategory = category;
+                    })
+                    .withFailureHandler(function (error) {
+                        self.historyError = '載入失敗：' + (error.message || error); self.historyRecords = [];
+                        self.isLoadingHistory = false; self.hasHistoryLoaded = true; self.historyLoadedCategory = category;
+                    })
+                    .getTransferDocHistory(category);
+            }
+        };
+    });
+
+    /* ===== LendingPrintModal(舊頁 8983-9244) ===== */
+    Alpine.data('lendingPrintModal', function () {
+        return {
+            activeTab: 'pending', groups: [], isLoading: false, error: '', isGenerating: false,
+            historyRecords: [], isLoadingHistory: false, historyError: '',
+
+            init: function () {
+                var self = this;
+                this.loadGroups();
+                this.$watch('activeTab', function (v) { if (v === 'history' && self.historyRecords.length === 0) self.loadHistory(); });
+            },
+            get forceUserScope() { return this.$store.app.viewMode === 'user'; },
+            loadGroups: function () {
+                var self = this;
+                this.isLoading = true; this.error = '';
+                google.script.run
+                    .withSuccessHandler(function (response) {
+                        if (!response || response.error) { self.groups = []; self.error = (response && response.error) || '載入失敗'; }
+                        else self.groups = Array.isArray(response.groups) ? response.groups : [];
+                        self.isLoading = false;
+                    })
+                    .withFailureHandler(function (loadError) { self.groups = []; self.error = (loadError && loadError.message) || '載入失敗'; self.isLoading = false; })
+                    .getExternalLendingPrintGroups(this.forceUserScope);
+            },
+            loadHistory: function () {
+                var self = this;
+                this.isLoadingHistory = true; this.historyError = '';
+                google.script.run
+                    .withSuccessHandler(function (records) { self.historyRecords = Array.isArray(records) ? records : []; self.isLoadingHistory = false; })
+                    .withFailureHandler(function (loadError) { self.historyRecords = []; self.historyError = (loadError && loadError.message) || '載入失敗'; self.isLoadingHistory = false; })
+                    .getLendingDocHistory(this.forceUserScope);
+            },
+            handlePrintGroup: function (group) {
+                var self = this;
+                if (this.isGenerating) return;
+                var lendIds = ((group && group.assets) || []).map(function (a) { return a.lendId; }).filter(Boolean);
+                if (lendIds.length === 0) { alert('此群組沒有可列印的項目。'); return; }
+                this.isGenerating = true;
+                showFlyProgressBar('正在產生出借申請單...');
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        hideFlyProgressBar('出借申請單已產生！', 0);
+                        if (result && result.fileUrl) window.open(result.fileUrl, '_blank');
+                        self.isGenerating = false;
+                        self.loadGroups();
+                        self.historyRecords = [];
+                        if (self.activeTab === 'history') self.loadHistory();
+                    })
+                    .withFailureHandler(function (loadError) {
+                        hideFlyProgressBar('產生失敗', 0);
+                        alert('產生失敗：' + ((loadError && loadError.message) || loadError));
+                        self.isGenerating = false;
+                    })
+                    .createLendingDoc(lendIds);
+            }
+        };
+    });
+
+    /* ===== OperationManualModal(舊頁 11081-11207) ===== */
+    Alpine.data('operationManualModal', function () {
+        return {
+            manualFrameHeight: 1200,
+            _escHandler: null,
+
+            init: function () {
+                var self = this;
+                document.body.style.overflow = 'hidden';
+                this._escHandler = function (event) { if (event.key === 'Escape') self.$store.app.closeOperationManualModal(); };
+                document.addEventListener('keydown', this._escHandler);
+            },
+            destroy: function () {
+                document.body.style.overflow = '';
+                if (this._escHandler) document.removeEventListener('keydown', this._escHandler);
+            },
+            get pageUrls() { return this.$store.app.userStatePageUrls; },
+            get pdfDownloadUrl() { return String((this.pageUrls && this.pageUrls.operationManualPdfDownloadUrl) || '').trim(); },
+            get manualSrcDoc() { return S.getOperationManualSrcDoc(); },
+            resizeManualFrame: function () {
+                var iframe = this.$refs.manualIframe;
+                if (!iframe) return;
+                try {
+                    var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                    if (!doc) return;
+                    var bodyHeight = doc.body ? doc.body.scrollHeight : 0;
+                    var documentHeight = doc.documentElement ? doc.documentElement.scrollHeight : 0;
+                    var nextHeight = Math.max(bodyHeight, documentHeight, 1200);
+                    this.manualFrameHeight = Math.min(nextHeight, 6000);
+                } catch (error) {
+                    console.warn('操作說明內容高度調整失敗：', error);
+                }
+            },
+            handleFrameLoad: function () {
+                var self = this;
+                this.resizeManualFrame();
+                setTimeout(function () { self.resizeManualFrame(); }, 200);
+                setTimeout(function () { self.resizeManualFrame(); }, 800);
+            }
+        };
+    });
+});
+</script>
+
+<!-- ===== TransferringModal ===== -->
+<template x-if="$store.app.activeModal === 'transferring'">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="transferringModal">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-cyan-50">
+                <h3 class="text-lg font-bold text-cyan-800"><i class="fas fa-exchange-alt mr-2"></i>轉移中資產 - 追蹤與取消</h3>
+                <button @click="$store.app.closeTransferringModal()" class="text-cyan-600 hover:text-cyan-800 transition-colors" :disabled="isSubmitting"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6 max-h-[75vh] overflow-y-auto">
+                <template x-if="isLoading">
+                    <div class="flex flex-col items-center justify-center py-12 gap-4"><i class="fas fa-spinner fa-spin text-4xl text-cyan-500"></i><p class="text-slate-500 font-medium">載入轉移中資料...</p></div>
+                </template>
+                <template x-if="!isLoading && (!assets || assets.length === 0)">
+                    <div class="flex flex-col items-center justify-center py-12 gap-4">
+                        <i class="fas fa-check-circle text-5xl text-green-500"></i><p class="text-slate-500 text-lg font-medium">目前沒有轉移中的資產。</p><p class="text-slate-400 text-sm">您申請的所有轉移都已完成或已被取消。</p>
+                    </div>
+                </template>
+                <template x-if="!isLoading && assets && assets.length > 0">
+                    <div>
+                        <div class="mb-4 p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+                            <p class="text-sm text-cyan-800"><i class="fas fa-info-circle mr-2"></i>以下是您申請但尚未被對方接收的轉移資產。您可以選擇取消轉移，資產狀態將恢復為「在庫」。</p>
+                        </div>
+                        <div class="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">新保管人</label>
+                                    <select x-model="filters.newKeeper" :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                        <option value="">-- 顯示全部 --</option>
+                                        <template x-for="keeper in uniqueNewKeepers" :key="keeper"><option :value="keeper" x-text="keeper"></option></template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">關鍵字搜尋</label>
+                                    <input type="text" x-model="filters.search" placeholder="財產編號、名稱、新保管人、新地點..." :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                                </div>
+                            </div>
+                            <div class="mt-3 text-sm text-slate-600">顯示 <span class="font-bold text-cyan-600" x-text="filteredAssets.length"></span> / <span x-text="assets.length"></span> 筆</div>
+                        </div>
+                        <template x-if="filteredAssets.length === 0">
+                            <div class="text-center py-8 text-slate-500"><i class="fas fa-filter text-3xl mb-2"></i><p>目前篩選條件下沒有符合的資料</p></div>
+                        </template>
+                        <template x-if="filteredAssets.length > 0">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm border-collapse">
+                                    <thead class="bg-slate-50 sticky top-0 shadow-sm"><tr>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:5%">
+                                            <input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer accent-cyan-500">
+                                        </th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">財產編號</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">財產名稱</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">財產別名</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">型號/廠牌</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:14%">保管人變更</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:14%">使用人變更</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:13%">地點變更</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">轉移類型</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">申請時間</th>
+                                    </tr></thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <template x-for="(asset, index) in filteredAssets" :key="asset.assetId + '-' + index">
+                                            <tr class="hover:bg-slate-50 transition-colors" :class="selectedAssetIds.indexOf(asset.assetId) !== -1 ? 'bg-cyan-50' : ''">
+                                                <td class="px-3 py-3">
+                                                    <input type="checkbox" :checked="selectedAssetIds.indexOf(asset.assetId) !== -1" @change="handleCheckboxChange(asset.assetId)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer accent-cyan-500">
+                                                </td>
+                                                <td class="px-3 py-3 font-mono text-slate-700" x-text="asset.assetId"></td>
+                                                <td class="px-3 py-3 text-slate-700" x-text="asset.assetName || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.modelBrand || ''"></td>
+                                                <td class="px-3 py-3 text-slate-600">
+                                                    <template x-if="keeperHasChange(asset)"><span><span x-text="asset.oldKeeper || ''"></span><span class="text-cyan-600"> → </span><span x-text="asset.newKeeper || ''"></span></span></template>
+                                                    <template x-if="!keeperHasChange(asset)"><span x-text="asset.oldKeeper || ''"></span></template>
+                                                </td>
+                                                <td class="px-3 py-3 text-slate-600">
+                                                    <template x-if="userHasChange(asset)"><span><span x-text="oldUser(asset)"></span><span class="text-cyan-600"> → </span><span x-text="asset.newUser || ''"></span></span></template>
+                                                    <template x-if="!userHasChange(asset)"><span x-text="oldUser(asset)"></span></template>
+                                                </td>
+                                                <td class="px-3 py-3 text-slate-600">
+                                                    <template x-if="locationHasChange(asset)"><span><span x-text="asset.oldLocation || ''"></span><span class="text-cyan-600"> → </span><span x-text="asset.newLocation || ''"></span></span></template>
+                                                    <template x-if="!locationHasChange(asset)"><span x-text="asset.oldLocation || ''"></span></template>
+                                                </td>
+                                                <td class="px-3 py-3">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" :class="transferTypeClass(asset)" x-text="transferTypeLabel(asset)"></span>
+                                                </td>
+                                                <td class="px-3 py-3 text-slate-500 text-xs" x-text="asset.applicationTime || '-'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                <div class="text-sm text-slate-600">已選擇 <span class="font-bold text-cyan-600" x-text="selectedAssetIds.length"></span> 筆</div>
+                <div class="flex gap-3">
+                    <button @click="$store.app.closeTransferringModal()" :disabled="isSubmitting" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50">關閉</button>
+                    <button @click="handleCancelTransfer()" :disabled="selectedAssetIds.length === 0 || isSubmitting" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                        <template x-if="isSubmitting"><span class="flex items-center gap-2"><i class="fas fa-spinner fa-spin"></i>處理中...</span></template>
+                        <template x-if="!isSubmitting"><span class="flex items-center gap-2"><i class="fas fa-times-circle"></i>取消選取的轉移</span></template>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ===== LentAssetsModal ===== -->
+<template x-if="$store.app.activeModal === 'lent'">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="lentAssetsModal">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-7xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+                <h3 class="text-lg font-bold text-slate-800">出借中資產 - 歸還作業</h3>
+                <button @click="$store.app.closeLentModal()" class="text-slate-400 hover:text-slate-600 transition-colors" :disabled="isSubmitting"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6 max-h-[75vh] overflow-y-auto">
+                <template x-if="isLoading">
+                    <div class="flex flex-col items-center justify-center py-12 gap-4"><i class="fas fa-spinner fa-spin text-4xl text-blue-500"></i><p class="text-slate-500 font-medium">載入出借資料中...</p></div>
+                </template>
+                <template x-if="!isLoading && (!lentAssetsDetails || lentAssetsDetails.length === 0)">
+                    <div class="flex flex-col items-center justify-center py-12 gap-4"><i class="fas fa-check-circle text-5xl text-green-500"></i><p class="text-slate-500 text-lg font-medium">目前沒有出借中的資產。</p><p class="text-slate-400 text-sm">所有資產都已歸還完畢。</p></div>
+                </template>
+                <template x-if="!isLoading && lentAssetsDetails && lentAssetsDetails.length > 0">
+                    <div>
+                        <div class="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">出借後地點</label>
+                                    <select x-model="filters.location" :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="">-- 顯示全部 --</option>
+                                        <template x-for="loc in uniqueLocations" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">預計歸還日（起）</label>
+                                    <input type="date" x-model="filters.startDate" :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">預計歸還日（迄）</label>
+                                    <input type="date" x-model="filters.endDate" :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">逾期狀態</label>
+                                    <select x-model="filters.overdueOnly" :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="">全部</option><option value="overdue">已逾期</option><option value="notOverdue">未逾期</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">關鍵字搜尋（財產編號、保管人、使用人、出借人、借用人、出借事由）</label>
+                                <input type="text" x-model="filters.search" placeholder="輸入關鍵字搜尋..." :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div class="mt-3 text-sm text-slate-600">顯示 <span class="font-bold text-blue-600" x-text="filteredAssets.length"></span> / <span x-text="lentAssetsDetails.length"></span> 筆</div>
+                        </div>
+                        <template x-if="filteredAssets.length === 0">
+                            <div class="text-center py-8 text-slate-500"><i class="fas fa-filter text-3xl mb-2"></i><p>目前篩選條件下沒有符合的資料</p></div>
+                        </template>
+                        <template x-if="filteredAssets.length > 0">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm border-collapse">
+                                    <thead class="bg-slate-50 sticky top-0 shadow-sm"><tr>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:5%"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer"></th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">財產編號</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:15%">財產名稱</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">財產別名</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">型號/廠牌</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">保管人</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">使用人</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">出借人</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">借用人</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">預計歸還日</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">原放置地點</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:15%">出借後地點</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:21%">出借事由</th>
+                                    </tr></thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <template x-for="(asset, index) in filteredAssets" :key="'lent-' + asset.lendId + '-' + index">
+                                            <tr class="hover:bg-slate-50 transition-colors" :class="isOverdue(asset) ? 'bg-red-50' : ''">
+                                                <td class="px-3 py-3"><input type="checkbox" :checked="selectedLendIds.indexOf(asset.lendId) !== -1" @change="handleCheckboxChange(asset.lendId)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer"></td>
+                                                <td class="px-3 py-3 font-mono text-slate-600" x-text="asset.assetId"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.assetName || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.modelBrand || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.keeperName || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.userName || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.lenderName || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.borrower || '-'"></td>
+                                                <td class="px-3 py-3" :class="isOverdue(asset) ? 'text-red-600 font-semibold' : 'text-slate-600'">
+                                                    <span x-text="asset.expectedReturnDate"></span>
+                                                    <i x-show="isOverdue(asset)" class="fas fa-exclamation-triangle ml-1"></i>
+                                                </td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.originalLocation || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.lendingLocation || '-'"></td>
+                                                <td class="px-3 py-3 text-slate-600" x-text="asset.reason"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                <div class="text-sm text-slate-600" x-show="lentAssetsDetails && lentAssetsDetails.length > 0">
+                    已選擇 <span class="font-bold text-blue-600" x-text="selectedLendIds.length"></span> / <span x-text="filteredAssets.length"></span> 筆
+                </div>
+                <div class="flex gap-3">
+                    <button x-show="hasExternalLends" @click="$store.app.openLendingPrintFromLent()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium shadow-sm" :disabled="isSubmitting">
+                        <i class="fas fa-print"></i>列印出借申請單
+                    </button>
+                    <button @click="$store.app.closeLentModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium" :disabled="isSubmitting">關閉</button>
+                    <button x-show="lentAssetsDetails && lentAssetsDetails.length > 0" @click="handleSubmitReturn()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed font-medium shadow-sm" :disabled="selectedLendIds.length === 0 || isSubmitting">
+                        <template x-if="isSubmitting"><span class="flex items-center gap-2"><i class="fas fa-spinner fa-spin"></i>處理中...</span></template>
+                        <template x-if="!isSubmitting"><span class="flex items-center gap-2"><i class="fas fa-check"></i>確認歸還所選項目</span></template>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ===== ScrapPrintModal ===== -->
+<template x-if="$store.app.activeModal === 'scrapPrint'">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="scrapPrintModal">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out] flex flex-col">
+            <div class="px-6 py-4 border-b bg-orange-50 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-orange-800">列印報廢申請單</h3>
+                <button @click="$store.app.closeScrapPrintModal()" class="text-orange-600 hover:text-orange-800 transition-colors"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="px-6 border-b bg-slate-50">
+                <div class="flex">
+                    <button @click="activeTab = 'pending'" class="px-4 py-3 font-medium text-sm border-b-2 transition-colors" :class="activeTab === 'pending' ? 'border-orange-600 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-700'">待報廢資產</button>
+                    <button @click="activeTab = 'history'" class="px-4 py-3 font-medium text-sm border-b-2 transition-colors" :class="activeTab === 'history' ? 'border-orange-600 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-700'">已生成文件</button>
+                    <button @click="activeTab = 'byDate'" class="px-4 py-3 font-medium text-sm border-b-2 transition-colors" :class="activeTab === 'byDate' ? 'border-orange-600 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-700'">列印已報廢資產</button>
+                </div>
+            </div>
+            <template x-if="activeTab === 'pending'">
+                <div>
+                    <div class="px-6 py-4 border-b bg-orange-50/50">
+                        <label class="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
+                        <label class="inline-flex items-center mr-6"><input type="radio" name="scrapCategory" value="財產" x-model="selectedCategory" class="mr-2"><span>財產</span></label>
+                        <label class="inline-flex items-center"><input type="radio" name="scrapCategory" value="非消耗品" x-model="selectedCategory" class="mr-2"><span>非消耗品</span></label>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <template x-if="isLoading"><div class="flex items-center justify-center py-16"><div class="text-center"><div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div><p class="mt-4 text-slate-600">載入中...</p></div></div></template>
+                        <template x-if="!isLoading && currentAssets.length === 0"><div class="text-center py-16 text-slate-500"><i class="fas fa-inbox text-5xl mb-4 text-slate-300"></i><p x-text="'目前沒有任何狀態為「報廢中」的' + selectedCategory + '。'"></p></div></template>
+                        <template x-if="!isLoading && currentAssets.length > 0">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-orange-50 sticky top-0"><tr>
+                                        <th class="px-3 py-2 text-left"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" class="rounded"></th>
+                                        <th class="px-3 py-2 text-left">財產編號</th><th class="px-3 py-2 text-left">財產名稱</th><th class="px-3 py-2 text-left">財產別名</th>
+                                        <th class="px-3 py-2 text-left">型號/廠牌</th><th class="px-3 py-2 text-left">原保管人</th><th class="px-3 py-2 text-left">原使用人</th>
+                                        <th class="px-3 py-2 text-left">報廢日期</th><th class="px-3 py-2 text-left">報廢原因</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        <template x-for="asset in currentAssets" :key="asset.assetId">
+                                            <tr class="border-b hover:bg-orange-50/30">
+                                                <td class="px-3 py-2"><input type="checkbox" :checked="selectedIds.indexOf(asset.assetId) !== -1" @change="handleSelectOne(asset.assetId)" class="rounded"></td>
+                                                <td class="px-3 py-2" x-text="asset.assetId"></td>
+                                                <td class="px-3 py-2" x-text="asset.assetName"></td>
+                                                <td class="px-3 py-2" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
+                                                <td class="px-3 py-2" x-text="asset.modelBrand"></td>
+                                                <td class="px-3 py-2" x-text="asset.originalKeeper"></td>
+                                                <td class="px-3 py-2" x-text="asset.originalUser || ''"></td>
+                                                <td class="px-3 py-2" x-text="asset.scrapDate || ''"></td>
+                                                <td class="px-3 py-2" x-text="asset.scrapReason || ''"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+            <template x-if="activeTab === 'history'">
+                <div class="flex-1 overflow-y-auto p-6">
+                    <template x-if="isLoadingHistory"><div class="flex items-center justify-center py-16"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div><span class="ml-3 text-slate-600">載入中...</span></div></template>
+                    <template x-if="!isLoadingHistory && historyFiles.length === 0">
+                        <div class="text-center py-16 text-slate-500"><i class="fas fa-folder-open text-5xl mb-4 text-slate-300"></i><p>目前沒有已生成的報廢文件。</p>
+                            <button @click="loadHistoryFiles()" class="mt-4 px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"><i class="fas fa-sync-alt mr-2"></i>重新載入</button>
+                        </div>
+                    </template>
+                    <template x-if="!isLoadingHistory && historyFiles.length > 0">
+                        <div>
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-medium text-slate-700">已生成的報廢文件</h4>
+                                <button @click="loadHistoryFiles()" class="text-sm text-orange-600 hover:text-orange-800 transition-colors"><i class="fas fa-sync-alt mr-1"></i>重新整理</button>
+                            </div>
+                            <div class="overflow-x-auto border rounded-lg">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-slate-50"><tr>
+                                        <th class="px-4 py-3 text-left font-medium text-slate-600">檔案名稱</th><th class="px-4 py-3 text-left font-medium text-slate-600">最後修改時間</th>
+                                        <th class="px-4 py-3 text-left font-medium text-slate-600">大小</th><th class="px-4 py-3 text-left font-medium text-slate-600">操作</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        <template x-for="(file, idx) in historyFiles" :key="idx">
+                                            <tr class="border-t hover:bg-slate-50">
+                                                <td class="px-4 py-3" x-text="file.name"></td>
+                                                <td class="px-4 py-3 text-slate-600" x-text="file.lastUpdated"></td>
+                                                <td class="px-4 py-3 text-slate-600" x-text="file.size"></td>
+                                                <td class="px-4 py-3"><a :href="file.url" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 font-medium"><i class="fas fa-external-link-alt mr-1"></i>開啟</a></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <template x-if="activeTab === 'byDate'">
+                <div class="flex-1 overflow-y-auto p-6">
+                    <div class="mb-4 p-4 bg-orange-50 rounded-lg">
+                        <label class="font-medium text-slate-700 mr-4">財產類別：</label>
+                        <label class="inline-flex items-center mr-6"><input type="radio" name="scrapCategoryByDate" value="財產" x-model="selectedCategory" class="mr-2"><span>財產</span></label>
+                        <label class="inline-flex items-center"><input type="radio" name="scrapCategoryByDate" value="非消耗品" x-model="selectedCategory" class="mr-2"><span>非消耗品</span></label>
+                    </div>
+                    <div class="mb-6 p-4 bg-slate-50 rounded-lg">
+                        <h4 class="font-medium text-slate-700 mb-3"><i class="fas fa-calendar-alt mr-2 text-slate-500"></i>選擇報廢期間</h4>
+                        <div class="flex flex-wrap items-end gap-4">
+                            <div><label class="block text-sm text-slate-600 mb-1">起始日期</label><input type="date" x-model="startDate" class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"></div>
+                            <div><label class="block text-sm text-slate-600 mb-1">結束日期</label><input type="date" x-model="endDate" class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"></div>
+                            <button @click="handlePreviewByDate()" :disabled="isLoadingPreview" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2">
+                                <template x-if="isLoadingPreview"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>搜尋中...</span></span></template>
+                                <template x-if="!isLoadingPreview"><span class="flex items-center gap-2"><i class="fas fa-search"></i><span>預覽</span></span></template>
+                            </button>
+                        </div>
+                    </div>
+                    <template x-if="previewAssets.length > 0">
+                        <div>
+                            <h4 class="font-medium text-green-700 mb-3 flex items-center gap-2"><i class="fas fa-check-circle"></i><span x-text="'預覽符合條件的資產（' + previewAssets.length + ' 筆）'"></span></h4>
+                            <div class="overflow-x-auto border rounded-lg mb-4">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-green-50"><tr>
+                                        <th class="px-3 py-2 text-left">財產編號</th><th class="px-3 py-2 text-left">財產名稱</th><th class="px-3 py-2 text-left">財產別名</th>
+                                        <th class="px-3 py-2 text-left">型號/廠牌</th><th class="px-3 py-2 text-left">保管人</th><th class="px-3 py-2 text-left">報廢日期</th><th class="px-3 py-2 text-left">報廢原因</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        <template x-for="(asset, idx) in previewAssets" :key="idx">
+                                            <tr class="border-t hover:bg-green-50/30">
+                                                <td class="px-3 py-2" x-text="asset.assetId"></td>
+                                                <td class="px-3 py-2" x-text="asset.assetName"></td>
+                                                <td class="px-3 py-2" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
+                                                <td class="px-3 py-2" x-text="asset.modelBrand"></td>
+                                                <td class="px-3 py-2" x-text="asset.leaderName"></td>
+                                                <td class="px-3 py-2" x-text="asset.scrapDate"></td>
+                                                <td class="px-3 py-2" x-text="asset.scrapReason"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="text-center">
+                                <button @click="handleGenerateByDate()" :disabled="isGeneratingByDate" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2 mx-auto">
+                                    <template x-if="isGeneratingByDate"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>產生中...</span></span></template>
+                                    <template x-if="!isGeneratingByDate"><span class="flex items-center gap-2"><i class="fas fa-file-alt"></i><span>生成報廢申請單</span></span></template>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <div x-show="activeTab === 'pending'" class="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                <div class="text-sm text-slate-600">已選擇 <span class="font-bold text-orange-600" x-text="selectedIds.length"></span> 筆資產</div>
+                <div class="flex gap-3">
+                    <button @click="$store.app.closeScrapPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" :disabled="isGenerating">取消</button>
+                    <button @click="handleGenerateDoc()" :disabled="isGenerating || selectedIds.length === 0" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <template x-if="isGenerating"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>產生中...</span></span></template>
+                        <template x-if="!isGenerating"><span class="flex items-center gap-2"><i class="fas fa-file-alt"></i><span>生成報廢申請單</span></span></template>
+                    </button>
+                </div>
+            </div>
+            <div x-show="activeTab === 'history' || activeTab === 'byDate'" class="px-6 py-4 border-t bg-slate-50 flex justify-end">
+                <button @click="$store.app.closeScrapPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">關閉</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ===== TransferPrintModal ===== -->
+<template x-if="$store.app.activeModal === 'transferPrint'">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="transferPrintModal">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out] flex flex-col">
+            <div class="px-6 py-4 border-b bg-purple-50 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-purple-800">列印轉移申請單</h3>
+                <button @click="$store.app.closeTransferPrintModal()" class="text-purple-600 hover:text-purple-800 transition-colors"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="px-6 border-b bg-slate-50">
+                <div class="flex">
+                    <button @click="activeTab = 'pending'" class="px-4 py-3 font-medium text-sm border-b-2 transition-colors" :class="activeTab === 'pending' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'">待列印清單</button>
+                    <button @click="activeTab = 'history'" class="px-4 py-3 font-medium text-sm border-b-2 transition-colors" :class="activeTab === 'history' ? 'border-purple-600 text-purple-600' : 'border-transparent text-slate-500 hover:text-slate-700'">查看歷史紀錄</button>
+                </div>
+            </div>
+            <template x-if="activeTab === 'pending'">
+                <div>
+                    <div class="px-6 py-4 border-b bg-purple-50/50">
+                        <label class="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
+                        <label class="inline-flex items-center mr-6"><input type="radio" name="transferCategory" value="財產" x-model="selectedCategory" class="mr-2"><span>財產</span></label>
+                        <label class="inline-flex items-center"><input type="radio" name="transferCategory" value="非消耗品" x-model="selectedCategory" class="mr-2"><span>非消耗品</span></label>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <template x-if="isLoading"><div class="flex items-center justify-center py-16"><div class="text-center"><div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div><p class="mt-4 text-slate-600">載入中...</p></div></div></template>
+                        <template x-if="!isLoading && currentAssets.length === 0"><div class="text-center py-16 text-slate-500"><i class="fas fa-inbox text-5xl mb-4 text-slate-300"></i><p x-text="'目前沒有任何已完成轉移的' + selectedCategory + '記錄。'"></p></div></template>
+                        <template x-if="!isLoading && currentAssets.length > 0">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-purple-50 sticky top-0"><tr>
+                                        <th class="px-3 py-2 text-left"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" class="rounded"></th>
+                                        <th class="px-3 py-2 text-left">財產編號</th><th class="px-3 py-2 text-left">財產名稱</th><th class="px-3 py-2 text-left">財產別名</th>
+                                        <th class="px-3 py-2 text-left">型號/廠牌</th><th class="px-3 py-2 text-left">原保管人</th><th class="px-3 py-2 text-left">原使用人</th>
+                                        <th class="px-3 py-2 text-left">原地點</th><th class="px-3 py-2 text-left">新保管人</th><th class="px-3 py-2 text-left">新使用人</th>
+                                        <th class="px-3 py-2 text-left">新地點</th><th class="px-3 py-2 text-left">轉移類型</th><th class="px-3 py-2 text-left">轉移日期</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        <template x-for="asset in currentAssets" :key="asset.assetId">
+                                            <tr class="border-b hover:bg-purple-50/30">
+                                                <td class="px-3 py-2"><input type="checkbox" :checked="selectedIds.indexOf(asset.assetId) !== -1" @change="handleSelectOne(asset.assetId)" class="rounded"></td>
+                                                <td class="px-3 py-2" x-text="asset.assetId"></td>
+                                                <td class="px-3 py-2" x-text="asset.assetName"></td>
+                                                <td class="px-3 py-2" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
+                                                <td class="px-3 py-2" x-text="asset.modelBrand"></td>
+                                                <td class="px-3 py-2" x-text="asset.oldKeeper"></td>
+                                                <td class="px-3 py-2" x-text="asset.oldUser || ''"></td>
+                                                <td class="px-3 py-2" x-text="asset.oldLocation"></td>
+                                                <td class="px-3 py-2" x-text="asset.newKeeper"></td>
+                                                <td class="px-3 py-2" x-text="asset.newUser || ''"></td>
+                                                <td class="px-3 py-2" x-text="asset.newLocation"></td>
+                                                <td class="px-3 py-2" x-text="asset.transferType"></td>
+                                                <td class="px-3 py-2" x-text="asset.transferDate"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+            <template x-if="activeTab === 'history'">
+                <div class="flex-1 overflow-y-auto p-6">
+                    <div class="mb-4 p-4 bg-purple-50/60 rounded-lg flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <label class="font-medium text-slate-700 mr-4">財產類別：</label>
+                            <label class="inline-flex items-center mr-6"><input type="radio" name="transferCategoryHistory" value="財產" x-model="selectedCategory" class="mr-2"><span>財產</span></label>
+                            <label class="inline-flex items-center"><input type="radio" name="transferCategoryHistory" value="物品" x-model="selectedCategory" class="mr-2"><span>物品</span></label>
+                        </div>
+                        <button @click="loadHistoryRecords()" class="text-sm text-purple-600 hover:text-purple-800 transition-colors"><i class="fas fa-sync-alt mr-1"></i>重新整理</button>
+                    </div>
+                    <template x-if="isLoadingHistory"><div class="flex items-center justify-center py-16"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div><span class="ml-3 text-slate-600">載入中...</span></div></template>
+                    <template x-if="!isLoadingHistory && historyError"><div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" x-text="historyError"></div></template>
+                    <template x-if="!isLoadingHistory && !historyError && historyRecords.length === 0"><div class="text-center py-16 text-slate-500"><i class="fas fa-folder-open text-5xl mb-4 text-slate-300"></i><p>目前沒有已列印的轉移文件紀錄。</p></div></template>
+                    <template x-if="!isLoadingHistory && !historyError && historyRecords.length > 0">
+                        <div>
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-medium text-slate-700">已列印轉移文件</h4>
+                                <div class="text-xs text-slate-500" x-text="'共 ' + historyRecords.length + ' 筆'"></div>
+                            </div>
+                            <div class="overflow-x-auto border rounded-lg">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-purple-50"><tr>
+                                        <th class="px-4 py-3 text-left font-medium text-slate-600">新保管人</th><th class="px-4 py-3 text-left font-medium text-slate-600">轉移日期</th>
+                                        <th class="px-4 py-3 text-left font-medium text-slate-600">包含筆數</th><th class="px-4 py-3 text-left font-medium text-slate-600">操作</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        <template x-for="(record, idx) in historyRecords" :key="(record.url || 'record') + '-' + idx">
+                                            <tr class="border-t hover:bg-purple-50/30">
+                                                <td class="px-4 py-3" x-text="record.keeper || '-'"></td>
+                                                <td class="px-4 py-3 text-slate-600" x-text="record.date || '-'"></td>
+                                                <td class="px-4 py-3 text-slate-600" x-text="(record.count !== undefined && record.count !== null) ? record.count : '-'"></td>
+                                                <td class="px-4 py-3"><a :href="record.url" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:text-purple-800 font-medium"><i class="fas fa-external-link-alt mr-1"></i>開啟文件</a></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <div x-show="activeTab === 'pending'" class="px-6 py-4 border-t bg-slate-50 flex justify-between items-center">
+                <div class="text-sm text-slate-600">已選擇 <span class="font-bold text-purple-600" x-text="selectedIds.length"></span> 筆資產</div>
+                <div class="flex gap-3">
+                    <button @click="$store.app.closeTransferPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" :disabled="isGenerating">取消</button>
+                    <button @click="handleGenerateDoc()" :disabled="isGenerating || selectedIds.length === 0" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <template x-if="isGenerating"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>產生中...</span></span></template>
+                        <template x-if="!isGenerating"><span class="flex items-center gap-2"><i class="fas fa-file-alt"></i><span>生成轉移申請單</span></span></template>
+                    </button>
+                </div>
+            </div>
+            <div x-show="activeTab === 'history'" class="px-6 py-4 border-t bg-slate-50 flex justify-end">
+                <button @click="$store.app.closeTransferPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">關閉</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ===== LendingPrintModal ===== -->
+<template x-if="$store.app.activeModal === 'lendingPrint'">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="lendingPrintModal">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-[fadeIn_0.2s_ease-out] flex flex-col">
+            <div class="px-6 py-4 border-b bg-indigo-50 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-indigo-800">列印出借申請單（外部借用）</h3>
+                <button @click="$store.app.closeLendingPrintModal()" class="text-indigo-600 hover:text-indigo-800 transition-colors"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="px-6 border-b bg-slate-50">
+                <div class="flex">
+                    <button @click="activeTab = 'pending'" class="px-4 py-3 font-medium text-sm border-b-2 transition-colors" :class="activeTab === 'pending' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'">列印申請單</button>
+                    <button @click="activeTab = 'history'" class="px-4 py-3 font-medium text-sm border-b-2 transition-colors" :class="activeTab === 'history' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'">查看列印歷史</button>
+                </div>
+            </div>
+            <template x-if="activeTab === 'pending'">
+                <div class="flex-1 overflow-y-auto p-6">
+                    <template x-if="isLoading"><div class="flex items-center justify-center py-16"><div class="text-center"><div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div><p class="mt-4 text-slate-600">載入中...</p></div></div></template>
+                    <template x-if="!isLoading && error"><div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" x-text="error"></div></template>
+                    <template x-if="!isLoading && !error && groups.length === 0"><div class="text-center py-16 text-slate-500"><i class="fas fa-inbox text-5xl mb-4 text-slate-300"></i><p>目前沒有待列印的外部借用申請。</p></div></template>
+                    <template x-if="!isLoading && !error && groups.length > 0">
+                        <div class="space-y-6">
+                            <template x-for="(group, index) in groups" :key="(group.groupKey || 'group') + '-' + index">
+                                <div class="border border-slate-200 rounded-xl p-4">
+                                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                        <div>
+                                            <div class="text-sm text-slate-500">借用人</div>
+                                            <div class="text-lg font-semibold text-slate-800" x-text="group.borrowerName || '-'"></div>
+                                            <div class="text-sm text-slate-600 mt-1" x-text="'聯絡電話：' + (group.contactPhone || '-')"></div>
+                                            <div class="text-sm text-slate-600" x-text="'預計歸還日：' + (group.expectedReturnDate || '-')"></div>
+                                        </div>
+                                        <button @click="handlePrintGroup(group)" :disabled="isGenerating" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 disabled:opacity-50">
+                                            <i class="fas fa-file-alt"></i>生成出借申請單
+                                        </button>
+                                    </div>
+                                    <div class="text-sm text-slate-600 mb-3" x-text="'出借事由：' + (group.reason || '-')"></div>
+                                    <div class="overflow-x-auto border rounded-lg">
+                                        <table class="w-full text-sm">
+                                            <thead class="bg-indigo-50"><tr>
+                                                <th class="px-3 py-2 text-left">財產編號</th><th class="px-3 py-2 text-left">儀器名稱</th><th class="px-3 py-2 text-left">財產別名</th>
+                                                <th class="px-3 py-2 text-left">儀器序號/財產編號</th><th class="px-3 py-2 text-left">存放地點</th>
+                                            </tr></thead>
+                                            <tbody>
+                                                <template x-for="asset in (group.assets || [])" :key="asset.lendId || asset.assetId">
+                                                    <tr class="border-t">
+                                                        <td class="px-3 py-2" x-text="asset.assetId"></td>
+                                                        <td class="px-3 py-2" x-text="asset.assetName || '-'"></td>
+                                                        <td class="px-3 py-2" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
+                                                        <td class="px-3 py-2" x-text="asset.serialNumber || '-'"></td>
+                                                        <td class="px-3 py-2" x-text="asset.lendingLocation || '-'"></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="text-xs text-slate-500 mt-3" x-text="'共 ' + (group.assetCount || 0) + ' 筆資產'"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <template x-if="activeTab === 'history'">
+                <div class="flex-1 overflow-y-auto p-6">
+                    <template x-if="isLoadingHistory"><div class="flex items-center justify-center py-16"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div><span class="ml-3 text-slate-600">載入中...</span></div></template>
+                    <template x-if="!isLoadingHistory && historyError"><div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" x-text="historyError"></div></template>
+                    <template x-if="!isLoadingHistory && !historyError && historyRecords.length === 0"><div class="text-center py-16 text-slate-500"><i class="fas fa-folder-open text-5xl mb-4 text-slate-300"></i><p>目前沒有已列印的出借申請單紀錄。</p></div></template>
+                    <template x-if="!isLoadingHistory && !historyError && historyRecords.length > 0">
+                        <div class="overflow-x-auto border rounded-lg">
+                            <table class="w-full text-sm">
+                                <thead class="bg-indigo-50"><tr>
+                                    <th class="px-4 py-3 text-left font-medium text-slate-600">借用人</th><th class="px-4 py-3 text-left font-medium text-slate-600">聯絡電話</th>
+                                    <th class="px-4 py-3 text-left font-medium text-slate-600">列印日期</th><th class="px-4 py-3 text-left font-medium text-slate-600">包含筆數</th>
+                                    <th class="px-4 py-3 text-left font-medium text-slate-600">操作</th>
+                                </tr></thead>
+                                <tbody>
+                                    <template x-for="(record, idx) in historyRecords" :key="(record.url || 'history') + '-' + idx">
+                                        <tr class="border-t hover:bg-indigo-50/30">
+                                            <td class="px-4 py-3" x-text="record.borrowerName || '-'"></td>
+                                            <td class="px-4 py-3" x-text="record.contactPhone || '-'"></td>
+                                            <td class="px-4 py-3 text-slate-600" x-text="record.date || '-'"></td>
+                                            <td class="px-4 py-3 text-slate-600" x-text="record.count !== undefined && record.count !== null ? record.count : '-'"></td>
+                                            <td class="px-4 py-3"><a :href="record.url" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:text-indigo-800 font-medium"><i class="fas fa-external-link-alt mr-1"></i>開啟文件</a></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <div class="px-6 py-4 border-t bg-slate-50 flex justify-end">
+                <button @click="$store.app.closeLendingPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">關閉</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ===== OperationManualModal ===== -->
+<template x-if="$store.app.showOperationManualModal">
+    <div class="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4" x-data="operationManualModal" @click="$store.app.closeOperationManualModal()">
+        <div class="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-hidden border border-slate-200" @click.stop>
+            <div class="px-5 py-4 sm:px-6 border-b border-slate-200 bg-white flex items-start justify-between gap-4">
+                <div>
+                    <h3 class="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-book-open text-sky-600"></i>操作說明</h3>
+                    <p class="text-sm text-slate-500 mt-1">操作手冊與 PDF 下載整合在同一個彈窗中。</p>
+                </div>
+                <button @click="$store.app.closeOperationManualModal()" class="w-10 h-10 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors flex items-center justify-center" title="關閉操作說明"><i class="fas fa-times text-lg"></i></button>
+            </div>
+            <div class="overflow-y-auto max-h-[calc(92vh-82px)] px-4 py-4 sm:px-6 sm:py-5 space-y-6">
+                <section class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
+                        <div class="text-sm font-semibold text-slate-800">操作手冊內容</div>
+                        <div class="text-xs text-slate-500 mt-1">內容來自 `example/manual_exp.html` 的嵌入版本。</div>
+                    </div>
+                    <div class="bg-white">
+                        <template x-if="manualSrcDoc">
+                            <iframe x-ref="manualIframe" title="操作手冊內容" :srcdoc="manualSrcDoc" class="w-full border-0 bg-white" :style="'height:' + manualFrameHeight + 'px'" @load="handleFrameLoad()"></iframe>
+                        </template>
+                        <template x-if="!manualSrcDoc">
+                            <div class="px-6 py-10 text-center text-sm text-slate-500">找不到操作手冊範例內容，請確認模板檔案是否存在。</div>
+                        </template>
+                    </div>
+                </section>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 pt-1">
+                    <button @click="$store.app.closeOperationManualModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors">關閉</button>
+                    <template x-if="pdfDownloadUrl">
+                        <a :href="pdfDownloadUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white hover:bg-sky-700 transition-colors shadow-sm">
+                            <i class="fa-solid fa-file-arrow-down"></i>下載 PDF 操作手冊
+                        </a>
+                    </template>
+                    <template x-if="!pdfDownloadUrl">
+                        <button disabled class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-200 text-slate-400 cursor-not-allowed" title="尚未設定 PDF 下載連結">
+                            <i class="fa-solid fa-file-arrow-down"></i>尚未設定 PDF 下載
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
