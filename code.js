@@ -901,8 +901,10 @@ function doGet(e) {
       title = "列印條碼";
       break;
     default:
-      // 預設顯示入口網站;?ui=alpine 走 Alpine 重構版(雙軌並行,驗收完成前舊版為預設)
-      template = HtmlService.createTemplateFromFile(e.parameter.ui === 'alpine' ? 'userstate_alpine' : 'userstate');
+      // 回歸切換完成(2026-07-05):預設改為 Alpine 版。
+      // ?ui=legacy 保留快速回退通道,舊版已封存於 slow_loading_version/userstate.html
+      // (觀察期結束、確認無需回退後可移除此分支與整個 slow_loading_version/ 目錄)
+      template = HtmlService.createTemplateFromFile(e.parameter.ui === 'legacy' ? 'slow_loading_version/userstate' : 'userstate_alpine');
       title = "財產管理";
       break;
   }

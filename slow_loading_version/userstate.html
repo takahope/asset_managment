@@ -1342,7 +1342,8 @@
     <?!= include('batch_processing_list'); ?>
     <?!= include('quagga'); ?>
     <?!= include('selectbyqr'); ?>
-    <?!= include('copilot_chat'); ?>
+    <!-- copilot_chat.html 已於 Alpine 遷移時原地改寫(P6),舊頁改引用同目錄封存的 React 原版 -->
+    <?!= include('slow_loading_version/copilot_chat_legacy'); ?>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>

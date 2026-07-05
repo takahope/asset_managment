@@ -42,9 +42,9 @@ deployAllSheets()   // deploy.js:位於檔案尾端,建立/補齊所有必要工
 
 ### 2. Web App 入口:單頁應用
 
-`doGet(e)` (`code.js:794`) **目前只會回傳 `userstate.html`**;歷史上的 `?page=apply/review/lending/scrap/inventory/...` 已整併進單頁應用,轉移、出借、歸還、報廢、盤點、ISMS 分類皆為 userstate.html 內嵌的 modal / bottom sheet。新增功能時請以 SPA 心態修改 `userstate.html` + `code.js`,不要再新增獨立頁面。
+`doGet(e)` 預設回傳 `userstate_alpine.html`(Alpine.js SPA,2026-07-05 回歸切換後的正式版);`?ui=legacy` 走封存於 `slow_loading_version/userstate.html` 的舊版 React 頁(觀察期回退用,確認穩定後可整個目錄移除)。歷史上的 `?page=apply/review/lending/scrap/inventory/...` 已整併進單頁應用,轉移、出借、歸還、報廢、盤點、ISMS 分類皆為內嵌的 modal / bottom sheet。新增功能時請以 SPA 心態修改 Alpine partial(`alpine_store.html`/`alpine_views.html`/`alpine_modals_*.html` 等)+ `code.js`,不要再新增獨立頁面,也不要修改 `slow_loading_version/` 內的封存檔案。
 
-`userstate.html` 超過 14k 行,修改前先用 Grep 定位區塊。
+前端由多個 `alpine_*.html` partial 組成,狀態核心在 `alpine_store.html`(`Alpine.store('app')`),視圖元件在 `alpine_views.html`,各功能 modal 依 P3-P6 拆分於 `alpine_modals_*.html` / `alpine_inventory*.html`。`code.js` 的 `include()` 只解析一層 scriptlet(`createHtmlOutputFromFile` 非遞迴),所有 `<?!= include() ?>` 必須集中寫在 `userstate_alpine.html`(第一層),不可在被 include 的 partial 內再巢狀 include;提升到第一層的 modal/script include 也必須包在有 `x-data` 的容器內,否則 Alpine 不會初始化該子樹。詳見 `example/debug_report_nested_include_fix.md`。
 
 另外還有一組從試算表選單觸發的 modal 函式:`openPortal` / `openApplyPage` / `openUpdatePage` / `openReviewDashboard` (`code.js:586-648`),這些是 Sheet UI,與 Web App 入口分離。
 
@@ -73,7 +73,7 @@ deployAllSheets()   // deploy.js:位於檔案尾端,建立/補齊所有必要工
 - **出借/歸還**:`processBatchLending` / `processBatchReturn`,可產出外部出借申請單 (`createLendingDoc`,分組列印靠 `getExternalLendingPrintGroups`)。
 - **報廢**:`processBatchScrapping` → 狀態 `在庫 → 報廢中 → 已報廢`;可透過 `restoreFromScrap` 還原;產生 Docs 用 `createScrapDoc` / `createScrapDocByDateRange`。
 - **盤點**:`startInventorySession` → `markBatchInventory` / `resetBatchInventory`(寫入「盤點明細」)→ `updateInventoryProgress` → `completeInventorySession`。active session 的寫入有一組 `*InActiveSessions` helper,**修改明細時請走這些 helper**,不要只更新單一 session。
-- **批次匯入**:詳細檔案格式見 `batchimport.md`;入口在 `userstate.html` 的「新增資產」modal → `addNewAssetsBatch()`。
+- **批次匯入**:詳細檔案格式見 `batchimport.md`;入口在「新增資產」modal(`alpine_modals_asset.html`)→ `addNewAssetsBatch()`。
 
 ### 7. 子專案
 
