@@ -280,6 +280,7 @@
             editingAsset: null,
             selectedAssetIds: [],
             showInventoryMgmtModal: false,
+            showAiSettingsModal: false,
             inventoryFeatureEnabled: true,
             inventoryFeatureToggling: false,
             inventoryPendingByAsset: {},
@@ -1154,6 +1155,7 @@
                 if (!(this.isAdmin && mode === 'admin')) {
                     this.showInventoryMgmtModal = false;
                     this.showAddAssetModal = false;
+                    this.showAiSettingsModal = false;
                 }
                 this.loadData(mode);
             },

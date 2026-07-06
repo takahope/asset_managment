@@ -1,0 +1,137 @@
+<!--
+  alpine_modals_ai_settings.html — 智慧導覽助理 AI 設定 Modal（管理員專用）
+  外殼仿 alpine_modals_asset.html 的 AddAssetModal(fixed inset-0 + 白色卡片)。
+  對應後端 copilot.js 的 getCopilotSettings() / saveCopilotSettings()。
+-->
+<script>
+document.addEventListener('alpine:init', function () {
+
+    Alpine.data('aiSettingsModal', function () {
+        return {
+            isLoading: true, isSubmitting: false,
+            enabled: true, provider: 'GEMINI',
+            geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
+
+            init: function () {
+                var self = this;
+                google.script.run
+                    .withSuccessHandler(function (s) {
+                        var settings = s || {};
+                        self.enabled = settings.enabled !== false;
+                        self.provider = settings.provider || 'GEMINI';
+                        self.geminiModelId = settings.geminiModelId || '';
+                        self.openaiModelId = settings.openaiModelId || '';
+                        self.nvidiaModelId = settings.nvidiaModelId || '';
+                        self.isLoading = false;
+                    })
+                    .withFailureHandler(function (error) {
+                        alert('載入 AI 設定失敗：' + (error && error.message ? error.message : error));
+                        self.close();
+                    })
+                    .getCopilotSettings();
+            },
+            close: function () { this.$store.app.showAiSettingsModal = false; },
+            save: function () {
+                var self = this;
+                this.isSubmitting = true;
+                google.script.run
+                    .withSuccessHandler(function () {
+                        self.isSubmitting = false;
+                        self.close();
+                    })
+                    .withFailureHandler(function (error) {
+                        self.isSubmitting = false;
+                        alert('儲存失敗：' + (error && error.message ? error.message : error));
+                    })
+                    .saveCopilotSettings({
+                        enabled: self.enabled,
+                        provider: self.provider,
+                        geminiModelId: self.geminiModelId,
+                        openaiModelId: self.openaiModelId,
+                        nvidiaModelId: self.nvidiaModelId
+                    });
+            }
+        };
+    });
+
+});
+</script>
+
+<!-- ===== AiSettingsModal ===== -->
+<template x-if="$store.app.showAiSettingsModal && $store.app.isAdminView">
+    <div x-data="aiSettingsModal">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden">
+                <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-slate-800">
+                        <i class="fa-solid fa-robot mr-2 text-slate-500"></i>智慧導覽助理設定
+                    </h3>
+                    <button @click="close()" :disabled="isSubmitting" class="text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <div class="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+                    <template x-if="isLoading">
+                        <div class="flex flex-col items-center justify-center py-12 gap-4">
+                            <i class="fas fa-spinner fa-spin text-4xl text-slate-400"></i>
+                            <p class="text-slate-500 font-medium">載入設定中...</p>
+                        </div>
+                    </template>
+
+                    <template x-if="!isLoading">
+                        <div class="space-y-5">
+                            <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                <span class="text-sm font-medium text-slate-700">啟用智慧導覽助理</span>
+                                <button type="button" role="switch" :aria-checked="!!enabled" @click="enabled = !enabled"
+                                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                                        :class="enabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換智慧導覽助理啟用狀態">
+                                    <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                          :class="enabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                </button>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">模型供應商</label>
+                                <select x-model="provider" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="GEMINI">Google Gemini</option>
+                                    <option value="OPENAI">OpenAI (ChatGPT)</option>
+                                    <option value="NVIDIA">NVIDIA AI</option>
+                                </select>
+                                <p class="text-xs text-slate-500 mt-1">
+                                    切換供應商前，請先請系統管理員在 Apps Script 編輯器的「指令碼屬性」新增對應的 API Key（OPENAI_API_KEY / NVIDIA_API_KEY）。
+                                </p>
+                            </div>
+
+                            <div class="space-y-3 border-t border-slate-100 pt-4">
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">GEMINI_MODEL（預設：gemini-2.5-flash）</span>
+                                    <input type="text" x-model="geminiModelId" placeholder="gemini-2.5-flash"
+                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </label>
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">OPENAI_MODEL_ID（預設：gpt-4o-mini）</span>
+                                    <input type="text" x-model="openaiModelId" placeholder="gpt-4o-mini"
+                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </label>
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">NVIDIA_MODEL_ID（預設：meta/llama-3.1-70b-instruct，需為支援 chat/completions 的 NIM 模型）</span>
+                                    <input type="text" x-model="nvidiaModelId" placeholder="meta/llama-3.1-70b-instruct"
+                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
+                    <button @click="close()" :disabled="isSubmitting" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50">取消</button>
+                    <button @click="save()" :disabled="isSubmitting || isLoading" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                        <template x-if="isSubmitting"><span class="flex items-center gap-2"><span class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span><span>儲存中...</span></span></template>
+                        <template x-if="!isSubmitting"><span class="flex items-center gap-2"><i class="fas fa-check"></i><span>儲存設定</span></span></template>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>

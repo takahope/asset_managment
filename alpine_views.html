@@ -540,6 +540,13 @@ document.addEventListener('alpine:init', function () {
                         <span class="hidden sm:inline">新增資產</span>
                     </button>
 
+                    <button x-show="$store.app.isAdminView"
+                            @click="$store.app.showAiSettingsModal = true"
+                            class="hero-btn hero-btn--ghost" title="智慧導覽助理設定">
+                        <i class="fa-solid fa-robot text-slate-500"></i>
+                        <span class="hidden sm:inline">AI 設定</span>
+                    </button>
+
                     <button @click="if (!window.__WEB_APP_URL) { alert('正在準備列印頁面連結，請稍候再點一次。'); } else { window.open(window.__WEB_APP_URL + '?page=barcodeprint', '_blank'); }"
                             class="hero-btn hero-btn--ghost" title="開啟列印條碼頁面">
                         <i class="fa-solid fa-barcode text-emerald-600"></i>

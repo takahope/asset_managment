@@ -213,6 +213,7 @@ document.addEventListener('alpine:init', function () {
             loading: false,
             quickPrompts: QUICK_PROMPTS,
             _reqId: 0,
+            enabledFeature: true, // 預設開啟,避免 getCopilotSettings() 回來前 FAB 閃爍/消失
 
             init: function () {
                 var self = this;
@@ -224,6 +225,11 @@ document.addEventListener('alpine:init', function () {
                         if (body) body.scrollTop = body.scrollHeight;
                     });
                 });
+                // 獨立查詢管理員是否已停用此功能(widget 不依賴 $store.app,自行查詢)
+                google.script.run
+                    .withSuccessHandler(function (s) { self.enabledFeature = !s || s.enabled !== false; })
+                    .withFailureHandler(function () { /* 靜默略過,維持預設開啟,不打斷使用者 */ })
+                    .getCopilotSettings();
             },
             toggleOpen: function () { this.open = !this.open; },
             send: function (rawText) {
@@ -265,7 +271,7 @@ document.addEventListener('alpine:init', function () {
 });
 </script>
 
-<div id="copilot-root" x-data="copilotWidget">
+<div id="copilot-root" x-data="copilotWidget" x-show="enabledFeature">
     <template x-if="open">
         <div class="copilot-panel" role="dialog" aria-label="系統導覽助理">
             <div class="copilot-header">
