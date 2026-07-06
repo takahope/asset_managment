@@ -115,8 +115,16 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         hideFlyProgressBar('轉移申請已提交！', 0);
-                        alert(message);
                         self.isSubmitting = false;
+                        var requiresPrint = message.includes('請列印轉移申請單') || message.includes('需列印');
+                        var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
+                        store.showSuccessPrompt({
+                            title: '轉移申請已提交',
+                            message: message,
+                            actionType: 'TRANSFER',
+                            requiresPrint: requiresPrint,
+                            waitReview: waitReview
+                        });
                         store.handleQuickActionSuccess();
                         store.handleCloseQuickActionModal();
                     })
@@ -203,8 +211,14 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         hideFlyProgressBar('出借申請已提交！', 0);
-                        alert(message);
                         self.isSubmitting = false;
+                        store.showSuccessPrompt({
+                            title: '出借申請已提交',
+                            message: message,
+                            actionType: 'LEND',
+                            requiresPrint: true,
+                            waitReview: false
+                        });
                         store.handleQuickActionSuccess();
                         store.handleCloseQuickActionModal();
                     })
@@ -269,8 +283,14 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         hideFlyProgressBar('報廢申請已提交！', 0);
-                        alert(message);
                         self.isSubmitting = false;
+                        store.showSuccessPrompt({
+                            title: '報廢申請已提交',
+                            message: message,
+                            actionType: 'SCRAP',
+                            requiresPrint: true,
+                            waitReview: false
+                        });
                         store.handleQuickActionSuccess();
                         store.handleCloseQuickActionModal();
                     })

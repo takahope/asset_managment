@@ -238,6 +238,7 @@
     document.addEventListener('alpine:init', function () {
         Alpine.store('app', {
             /* ── 狀態(對應舊頁 12807-12931 useState;名稱一致) ── */
+            successPromptData: { visible: false, title: '', message: '', actionType: null, requiresPrint: false, waitReview: false },
             isReady: false,
             allAssets: [],
             isAdmin: false,
@@ -280,7 +281,7 @@
             editingAsset: null,
             selectedAssetIds: [],
             showInventoryMgmtModal: false,
-            showAiSettingsModal: false,
+            showModelSettingModal: false,
             inventoryFeatureEnabled: true,
             inventoryFeatureToggling: false,
             inventoryPendingByAsset: {},
@@ -1155,7 +1156,7 @@
                 if (!(this.isAdmin && mode === 'admin')) {
                     this.showInventoryMgmtModal = false;
                     this.showAddAssetModal = false;
-                    this.showAiSettingsModal = false;
+                    this.showModelSettingModal = false;
                 }
                 this.loadData(mode);
             },
@@ -2069,6 +2070,26 @@
                     this.selectedAssetIds = [];
                 }
                 this.loadData();
+            },
+            showSuccessPrompt: function (params) {
+                this.successPromptData = {
+                    visible: true,
+                    title: params.title || '申請已成功送出',
+                    message: params.message || '',
+                    actionType: params.actionType || null,
+                    requiresPrint: params.requiresPrint || false,
+                    waitReview: params.waitReview || false
+                };
+            },
+            closeSuccessPrompt: function () {
+                this.successPromptData.visible = false;
+            },
+            goToPrintPage: function () {
+                var type = this.successPromptData.actionType;
+                this.closeSuccessPrompt();
+                if (type === 'TRANSFER') this.activeModal = 'transferPrint';
+                else if (type === 'SCRAP') this.activeModal = 'scrapPrint';
+                else if (type === 'LEND') this.activeModal = 'lendingPrint';
             },
             // 盤點成功回調(舊頁 15309-15314)
             handleInventorySuccess: function () {

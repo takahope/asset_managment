@@ -106,9 +106,17 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         hideFlyProgressBar('批次轉移申請已提交！', 0);
-                        alert(message);
                         if (typeof window.BatchList_resetOnSubmit === 'function') window.BatchList_resetOnSubmit();
                         self.isSubmitting = false;
+                        var requiresPrint = message.includes('請列印轉移申請單') || message.includes('需列印');
+                        var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
+                        store.showSuccessPrompt({
+                            title: '批次轉移申請已提交',
+                            message: message,
+                            actionType: 'TRANSFER',
+                            requiresPrint: requiresPrint,
+                            waitReview: waitReview
+                        });
                         store.handleBatchActionSuccess();
                     })
                     .withFailureHandler(function (error) {
@@ -152,9 +160,15 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         hideFlyProgressBar('批次出借申請已提交！', 0);
-                        alert(message);
                         if (typeof window.BatchList_resetOnSubmit === 'function') window.BatchList_resetOnSubmit();
                         self.isSubmitting = false;
+                        store.showSuccessPrompt({
+                            title: '批次出借申請已提交',
+                            message: message,
+                            actionType: 'LEND',
+                            requiresPrint: true,
+                            waitReview: false
+                        });
                         store.handleBatchActionSuccess();
                     })
                     .withFailureHandler(function (error) {
@@ -189,9 +203,15 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         hideFlyProgressBar('批次報廢申請已提交！', 0);
-                        alert(message);
                         if (typeof window.BatchList_resetOnSubmit === 'function') window.BatchList_resetOnSubmit();
                         self.isSubmitting = false;
+                        store.showSuccessPrompt({
+                            title: '批次報廢申請已提交',
+                            message: message,
+                            actionType: 'SCRAP',
+                            requiresPrint: true,
+                            waitReview: false
+                        });
                         store.handleBatchActionSuccess();
                     })
                     .withFailureHandler(function (error) {
