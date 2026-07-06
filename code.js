@@ -162,6 +162,13 @@ const ISMS_MAPPING_COLUMN_INDICES = {
   REMARKS: 5             // E欄: 備註
 };
 
+// 行動駐站清單（出借「借出後放置地點」下拉選單擴充來源）工作表欄位索引
+const PROTABLE_STATION_SHEET_NAME = "行動駐站";
+const PROTABLE_STATION_COLUMN_INDICES = {
+  NAME: 2,     // B欄: 駐站名稱
+  DELETED: 6   // F欄: 刪除標記，空白表示尚未刪除
+};
+
 // 在「軟體版本清單」工作表中的欄位
 const SV_SEVENZIP_COLUMN_INDEX = 1; // 7zip 版本在 A 欄
 
@@ -2716,6 +2723,43 @@ function showReturnDialog() {
 }
 
 /**
+ * 讀取「行動駐站」試算表中尚未刪除的駐站名稱，供出借「借出後放置地點」下拉選單擴充使用
+ * 判斷邏輯：B 欄為駐站中文名稱，F 欄空白代表該駐站尚未被刪除
+ * @returns {string[]} 例如 ["台北車站(行動駐站)", "高雄站(行動駐站)"]
+ */
+function getMobileStationLocations_() {
+  try {
+    if (!PROTABLE_STATION_SPREADSHEET_ID || PROTABLE_STATION_SPREADSHEET_ID === 'YOUR_PROTABLE_STATION_SPREADSHEET_ID_HERE') {
+      return [];
+    }
+
+    const ss = SpreadsheetApp.openById(PROTABLE_STATION_SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(PROTABLE_STATION_SHEET_NAME);
+    if (!sheet) return [];
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+
+    const indices = PROTABLE_STATION_COLUMN_INDICES;
+    const data = sheet.getRange(2, 1, lastRow - 1, indices.DELETED).getValues();
+    const stationNames = [];
+
+    data.forEach(row => {
+      const stationName = String(row[indices.NAME - 1] || '').trim();
+      const deletedMark = String(row[indices.DELETED - 1] || '').trim();
+      if (stationName && !deletedMark) {
+        stationNames.push(stationName + '(行動駐站)');
+      }
+    });
+
+    return stationNames;
+  } catch (e) {
+    Logger.log('讀取行動駐站清單失敗: ' + e.message);
+    return [];
+  }
+}
+
+/**
  * [供 lending.html 呼叫] 獲取使用者名下「在庫」的資產清單及所有可選的借用人
  */
 function getLendingData() {
@@ -2755,11 +2799,14 @@ function getLendingData() {
     const borrowerList = Array.from(uniqueBorrowersSet).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
     const locationList = Array.from(uniqueLocationsSet).sort();
 
+    // 3.5 併入行動駐站清單（標記為「(行動駐站)」，供內部借用地點下拉選單使用）
+    const mobileStationLocations = getMobileStationLocations_();
+
     // 4. 回傳整合後的資料
-    return { 
+    return {
         assets: availableAssets,
         borrowers: borrowerList,
-        locations: locationList
+        locations: locationList.concat(mobileStationLocations)
     };
 
   } catch (e) {

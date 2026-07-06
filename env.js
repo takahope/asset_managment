@@ -19,6 +19,9 @@ const TRANSFER_OUTPUT_FOLDER_ID = "1EV_43yZo4uZ";             // ⚠️ 請替�
 const LENDING_TEMPLATE_DOC_ID = "1xk64B39oeHv2rO1IjM";                 // ⚠️ 請替換成出借申請單範本ID
 const LENDING_OUTPUT_FOLDER_ID = "1QYX2WUuuemVwDTzlhC";               // ⚠️ 請替換成出借申請單輸出資料夾ID
 
+// --- ✨ **新增**：行動駐站清單試算表（出借「借出後放置地點」下拉選單擴充來源） ---
+const PROTABLE_STATION_SPREADSHEET_ID = "YOUR_PROTABLE_STATION_SPREADSHEET_ID_HERE"; // ⚠️ 請替換成「行動駐站」試算表ID
+
 // --- ✨ **新增**：ISMS 資訊資產對照整合設定 ---
 const ISMS_SPREADSHEET_ID = "YOUR_ISMS_SPREADSHEET_ID_HERE"; // ⚠️ 請替換成 ISMS 資訊資產試算表 ID
 const ISMS_ASSET_SHEET_NAME = "資訊資產清單";                   // ISMS 資訊資產清單工作表名稱
