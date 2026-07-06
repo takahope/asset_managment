@@ -3105,7 +3105,7 @@ function processBatchReturn(lendIds) {
 }
 
 /**
- * [供 userstate.html 呼叫] 取得外部借用待列印清單（按借用人資訊分組）
+ * [供 userstate.html 呼叫] 取得待列印清單（按借用人資訊分組）
  */
 function getExternalLendingPrintGroups(forceUserScope) {
   try {
@@ -3136,8 +3136,6 @@ function getExternalLendingPrintGroups(forceUserScope) {
     lendingData.forEach(row => {
       const status = row[LL_STATUS_COLUMN_INDEX - 1];
       if (status !== '出借中') return;
-      const borrowerType = row[LL_BORROWER_TYPE_COLUMN_INDEX - 1];
-      if (borrowerType !== 'external') return;
       const docUrl = row[LL_DOC_URL_COLUMN_INDEX - 1];
       if (docUrl) return;
 
@@ -3197,7 +3195,7 @@ function getExternalLendingPrintGroups(forceUserScope) {
 }
 
 /**
- * [供 userstate.html 呼叫] 建立外部借用出借申請單
+ * [供 userstate.html 呼叫] 建立出借申請單
  */
 function createLendingDoc(lendIds) {
   try {
@@ -3235,7 +3233,6 @@ function createLendingDoc(lendIds) {
       if (!entry) return;
       const row = entry.row;
       if (row[LL_STATUS_COLUMN_INDEX - 1] !== '出借中') return;
-      if (row[LL_BORROWER_TYPE_COLUMN_INDEX - 1] !== 'external') return;
 
       const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
       if (!assetId) return;
@@ -3252,7 +3249,7 @@ function createLendingDoc(lendIds) {
       const contactPhone = String(row[LL_CONTACT_PHONE_COLUMN_INDEX - 1] || '').trim();
       const reason = String(row[LL_REASON_COLUMN_INDEX - 1] || '').trim();
       const expectedReturnDate = formatDateValue(row[LL_EXPECTED_RETURN_DATE_COLUMN_INDEX - 1], 'yyyy/MM/dd');
-      if (!borrowerName || !contactPhone || !reason || !expectedReturnDate) return;
+      if (!borrowerName || !expectedReturnDate) return;
 
       if (!groupMeta) {
         groupMeta = { borrowerName, contactPhone, reason, expectedReturnDate };
@@ -3262,7 +3259,7 @@ function createLendingDoc(lendIds) {
         groupMeta.reason !== reason ||
         groupMeta.expectedReturnDate !== expectedReturnDate
       ) {
-        throw new Error('選取的外部借用資料條件不一致，請分開列印。');
+        throw new Error('選取的出借資料條件不一致，請分開列印。');
       }
 
       const serialNumber = assetInfo.sourceSheet === PROPERTY_MASTER_SHEET_NAME
@@ -3280,10 +3277,10 @@ function createLendingDoc(lendIds) {
     });
 
     if (unauthorized.length > 0 && selected.length === 0) {
-      throw new Error('權限不足：您不是這些外部借用記錄的出借人，無法列印。');
+      throw new Error('權限不足：您不是這些借用記錄的出借人，無法列印。');
     }
     if (!groupMeta || selected.length === 0) {
-      throw new Error('找不到可列印的外部借用記錄。');
+      throw new Error('找不到可列印的借用記錄。');
     }
 
     const now = new Date();
@@ -3378,7 +3375,7 @@ function createLendingDoc(lendIds) {
 }
 
 /**
- * [供 userstate.html 呼叫] 取得外部借用列印歷史
+ * [供 userstate.html 呼叫] 取得列印歷史
  */
 function getLendingDocHistory(forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
@@ -3409,7 +3406,6 @@ function getLendingDocHistory(forceUserScope) {
     lendingData.forEach(row => {
       const docUrl = row[LL_DOC_URL_COLUMN_INDEX - 1];
       if (!docUrl) return;
-      if (row[LL_BORROWER_TYPE_COLUMN_INDEX - 1] !== 'external') return;
 
       const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
       const lenderEmail = String(row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
