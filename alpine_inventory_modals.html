@@ -474,16 +474,6 @@
             <div class="inventory-modal-header">
                 <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-blue-500"></i>盤點管理 (Inventory Management)</h3>
                 <div class="flex items-center gap-3">
-                    <template x-if="isAdminView">
-                        <div class="flex items-center gap-2" :title="inventoryFeatureEnabled ? '盤點功能開啟中：頁面載入會載入盤點資料' : '盤點功能已關閉：頁面載入略過盤點資料以加速'">
-                            <span class="text-sm text-slate-600 whitespace-nowrap">盤點功能</span>
-                            <button type="button" role="switch" :aria-checked="!!inventoryFeatureEnabled" :disabled="inventoryFeatureToggling" @click="toggleInventoryFeature()"
-                                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors" :class="[inventoryFeatureEnabled ? 'bg-blue-500' : 'bg-slate-300', inventoryFeatureToggling ? 'opacity-60 cursor-not-allowed' : '']" aria-label="切換盤點功能">
-                                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform" :class="inventoryFeatureEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                            </button>
-                            <span class="text-xs text-slate-400 w-5 text-center" x-text="inventoryFeatureEnabled ? '開' : '關'"></span>
-                        </div>
-                    </template>
                     <button type="button" class="text-slate-400 hover:text-slate-600 transition-colors" @click="close()" aria-label="關閉"><i class="fa-solid fa-xmark text-xl"></i></button>
                 </div>
             </div>

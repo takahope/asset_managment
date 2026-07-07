@@ -283,7 +283,6 @@
             showInventoryMgmtModal: false,
             showModelSettingModal: false,
             inventoryFeatureEnabled: true,
-            inventoryFeatureToggling: false,
             inventoryPendingByAsset: {},
             pendingInventoryItems: [],
             isLoadingPendingInventory: false,
@@ -1050,29 +1049,19 @@
                 this.refreshCardData();
             },
 
-            // ✨ 盤點功能開關切換(管理員):寫入後端設定,開啟時靜默背景載入盤點資料,關閉時清空
+            // ✨ 盤點功能開關狀態套用(由設定 modal 呼叫 saveSystemSettings 成功後觸發):
+            // 開啟時靜默背景載入盤點資料,關閉時清空,不重複呼叫後端(後端已由 saveSystemSettings 統一寫入)
             // (改良自舊頁 14317-14335:舊頁開啟時呼叫 loadData() 整頁重載+全螢幕遮罩進度條;
             //  改為只呼叫 loadInventoryFeatureData() 背景載入盤點資料,用右上角 toast 顯示進度,
             //  儀表板卡片/統計數字因 store 狀態更新而原地出現,不打斷使用者當前畫面)
-            handleToggleInventoryFeature: function (next) {
-                var self = this;
-                this.inventoryFeatureToggling = true;
-                google.script.run
-                    .withSuccessHandler(function () {
-                        self.inventoryFeatureEnabled = next;
-                        self.inventoryFeatureToggling = false;
-                        if (next) {
-                            self.loadInventoryFeatureData();
-                        } else {
-                            // 關閉：直接清空盤點 state,無需重新載入其他資料
-                            self.clearInventoryState();
-                        }
-                    })
-                    .withFailureHandler(function (error) {
-                        self.inventoryFeatureToggling = false;
-                        alert('變更盤點功能設定失敗：' + (error && error.message ? error.message : error));
-                    })
-                    .setInventoryFeatureEnabled(next);
+            applyInventoryFeatureState: function (next) {
+                this.inventoryFeatureEnabled = next;
+                if (next) {
+                    this.loadInventoryFeatureData();
+                } else {
+                    // 關閉：直接清空盤點 state,無需重新載入其他資料
+                    this.clearInventoryState();
+                }
             },
 
             // 盤點功能開啟後的靜默背景載入(對應 loadData() 906-919 行盤點分支,

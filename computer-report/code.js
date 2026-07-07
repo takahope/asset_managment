@@ -186,67 +186,32 @@ function createAccessDeniedPage(userEmail) {
  * @returns {string[]} 一個包含所有管理員 Email 的陣列。
  */
 function getAdminEmails() {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'admin_emails_list';
-
-  const cachedAdmins = cache.get(cacheKey);
-  if (cachedAdmins) {
-    Logger.log("從快取中成功讀取管理員名單。");
-    return JSON.parse(cachedAdmins);
-  }
-
-  Logger.log("快取未命中，從 Google Sheet 讀取管理員名單。");
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ADMIN_LIST_SHEET_NAME);
-  if (!sheet) {
-    Logger.log(`錯誤：找不到名為 "${ADMIN_LIST_SHEET_NAME}" 的工作表。`);
-    return [];
-  }
-
-  const range = sheet.getRange("A2:A" + sheet.getLastRow());
-  const emails = range.getValues()
-    .map(row => row[0])
-    .filter(email => email && email.includes('@'));
-
-  if (emails.length > 0) {
-    cache.put(cacheKey, JSON.stringify(emails), 600);
-    Logger.log(`已將 ${emails.length} 筆管理員 Email 存入快取。`);
-  }
-
-  return emails;
+  const props = PropertiesService.getScriptProperties();
+  return parseEmailListProperty_(props.getProperty('ADMIN_EMAILS'));
 }
 
 /**
- * 從 "管理員名單" 工作表的 B 欄獲取「電腦回報」總管理員 Email 列表，並使用快取。
+ * 從 Script Property REPORT_ADMIN_EMAILS 獲取「電腦回報」總管理員 Email 列表。
+ * 注意：此 property 與主專案（asset_managment）的 REPORT_ADMIN_EMAILS 是各自獨立的
+ * script property，主專案設定視窗變更後不會同步到這裡，需在本專案另行設定。
  * @returns {string[]} 一個包含所有回報總管理員 Email 的陣列。
  */
 function getReportAdmins() {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'report_admins_list';
+  const props = PropertiesService.getScriptProperties();
+  return parseEmailListProperty_(props.getProperty('REPORT_ADMIN_EMAILS'));
+}
 
-  const cachedAdmins = cache.get(cacheKey);
-  if (cachedAdmins) {
-    Logger.log("從快取中成功讀取「電腦回報」管理員名單。");
-    return JSON.parse(cachedAdmins);
-  }
-
-  Logger.log("快取未命中，從 Google Sheet 讀取「電腦回報」管理員名單。");
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ADMIN_LIST_SHEET_NAME);
-  if (!sheet) {
-    Logger.log(`錯誤：找不到名為 "${ADMIN_LIST_SHEET_NAME}" 的工作表。`);
-    return [];
-  }
-
-  const range = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1);
-  const emails = range.getValues()
-    .map(row => row[0])
+/**
+ * 將逗號/換行/分號分隔的 email 字串解析為陣列，過濾空白與不含 @ 的項目。
+ * @param {string} raw
+ * @returns {string[]}
+ */
+function parseEmailListProperty_(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(/[\n,;]+/)
+    .map(email => email.trim())
     .filter(email => email && email.includes('@'));
-
-  if (emails.length > 0) {
-    cache.put(cacheKey, JSON.stringify(emails), 600);
-    Logger.log(`已將 ${emails.length} 筆「電腦回報」管理員 Email 存入快取。`);
-  }
-
-  return emails;
 }
 
 // =================================================================
@@ -556,4 +521,37 @@ function testComputerReportsAndNotify() {
   } else {
     Logger.log("所有應回報的電腦皆已完成本月份的回報。");
   }
+}
+
+// =================================================================
+// --- 一次性遷移：管理員名單工作表 → Script Property（本專案獨立執行） ---
+// =================================================================
+
+/**
+ * ✨ [一次性手動執行] 將「管理員名單」工作表 A/B 欄現有資料遷移至本專案的 Script Property。
+ * 與主專案（asset_managment）的 migrateAdminSettingsToProperties() 各自獨立，兩專案都要各執行一次。
+ * 部署前務必執行，否則遷移後 ADMIN_EMAILS 為空會導致 getAdminEmails 依賴的功能失效。
+ */
+function migrateAdminSettingsToProperties() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
+  if (!adminSheet) {
+    Logger.log(`找不到「${ADMIN_LIST_SHEET_NAME}」工作表，無法遷移。`);
+    return;
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const lastRow = adminSheet.getLastRow();
+
+  const adminEmails = lastRow >= 2
+    ? adminSheet.getRange(2, 1, lastRow - 1, 1).getValues().map(r => r[0]).filter(v => v && String(v).includes('@'))
+    : [];
+  const reportAdminEmails = lastRow >= 2
+    ? adminSheet.getRange(2, 2, lastRow - 1, 1).getValues().map(r => r[0]).filter(v => v && String(v).includes('@'))
+    : [];
+
+  props.setProperty('ADMIN_EMAILS', adminEmails.join(','));
+  props.setProperty('REPORT_ADMIN_EMAILS', reportAdminEmails.join(','));
+
+  Logger.log(`遷移完成：ADMIN_EMAILS=${adminEmails.length} 筆, REPORT_ADMIN_EMAILS=${reportAdminEmails.length} 筆`);
 }

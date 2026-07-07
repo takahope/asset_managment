@@ -399,26 +399,13 @@ function buildInventoryAssetContextMap_(assetIds) {
 
 /**
  * ✨ [系統功能] 檢查是否啟用「同組代理轉移」功能
- * 透過「管理員名單」工作表 D2 儲存格控制
+ * 透過 Script Property GROUP_PROXY_ENABLED 控制（原為「管理員名單」工作表 D2）
  * @returns {boolean} true = 啟用，false = 停用
  */
 function isGroupProxyTransferEnabled() {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
-
-    if (!adminSheet) {
-      Logger.log('找不到管理員名單工作表，預設關閉同組代理轉移功能');
-      return false;
-    }
-
-    // 讀取 D2 儲存格
-    const d2Value = adminSheet.getRange('D2').getValue();
-    const isEnabled = String(d2Value).trim() === '是';
-
-    Logger.log(`同組代理轉移功能狀態: ${isEnabled ? '啟用' : '停用'} (D2=${d2Value})`);
-    return isEnabled;
-
+    const props = PropertiesService.getScriptProperties();
+    return props.getProperty('GROUP_PROXY_ENABLED') === 'true';
   } catch (error) {
     Logger.log(`isGroupProxyTransferEnabled 錯誤: ${error.message}`);
     return false; // 發生錯誤時預設關閉
@@ -427,17 +414,14 @@ function isGroupProxyTransferEnabled() {
 
 /**
  * ✨ [系統功能] 檢查是否啟用「盤點功能」載入
- * 透過「管理員名單」工作表 E2 儲存格控制。
- * 預設啟用（保留現狀）：空白或非「否」皆視為開啟，只有明確為「否」才關閉。
+ * 透過 Script Property INVENTORY_FEATURE_ENABLED 控制（原為「管理員名單」工作表 E2）。
+ * 預設啟用（保留現狀）：未設定或非 'false' 皆視為開啟，只有明確為 'false' 才關閉。
  * 關閉時頁面載入會跳過盤點資料，加快載入速度。
  */
 function isInventoryFeatureEnabled() {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
-    if (!adminSheet) return true; // 找不到表時預設開啟
-    const e2 = adminSheet.getRange('E2').getValue();
-    return String(e2).trim() !== '否'; // 空白/未設定 = 開啟
+    const props = PropertiesService.getScriptProperties();
+    return props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false';
   } catch (e) {
     Logger.log(`isInventoryFeatureEnabled 錯誤: ${e.message}`);
     return true; // 出錯時預設開啟，避免誤關
@@ -445,17 +429,16 @@ function isInventoryFeatureEnabled() {
 }
 
 /**
- * ✨ [管理員專用] 設定「盤點功能」開關，寫入「管理員名單」E2。
- * 需通過 checkAdminPermissions 二次檢查，避免 IDOR。
+ * 將逗號/換行/分號分隔的 email 字串解析為陣列，過濾空白與不含 @ 的項目。
+ * @param {string} raw
+ * @returns {string[]}
  */
-function setInventoryFeatureEnabled(enabled) {
-  if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可變更盤點功能設定。');
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
-  if (!adminSheet) throw new Error('找不到「管理員名單」工作表。');
-  adminSheet.getRange('E2').setValue(enabled ? '是' : '否');
-  Logger.log(`盤點功能設定為: ${enabled ? '啟用' : '停用'}`);
-  return { success: true, enabled: !!enabled };
+function parseEmailListProperty_(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(/[\n,;]+/)
+    .map(email => email.trim())
+    .filter(email => email && email.includes('@'));
 }
 
 /**
@@ -4084,59 +4067,63 @@ function restoreFromScrap(assetIds) {
  * @returns {string[]} 一個包含所有管理員 Email 的陣列。
  */
 function getAdminEmails() {
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'admin_emails_list';
-  
-  // 步驟 1: 嘗試從快取中讀取資料
-  const cachedAdmins = cache.get(cacheKey);
-  if (cachedAdmins) {
-    Logger.log("從快取中成功讀取管理員名單。");
-    return JSON.parse(cachedAdmins); // 將快取的字串轉回陣列
-  }
-
-  // 步驟 2: 如果快取中沒有，則從試算表讀取
-  Logger.log("快取未命中，從 Google Sheet 讀取管理員名單。");
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ADMIN_LIST_SHEET_NAME);
-  if (!sheet) {
-    Logger.log(`錯誤：找不到名為 "${ADMIN_LIST_SHEET_NAME}" 的工作表。`);
-    return []; // 如果找不到工作表，回傳空陣列
-  }
-  
-  const range = sheet.getRange("A2:A" + sheet.getLastRow());
-  const emails = range.getValues()
-                      .map(row => row[0])
-                      .filter(email => email && email.includes('@')); // 過濾掉空白或格式不符的儲存格
-  
-  // 步驟 3: 將從試算表讀到的資料存入快取，以便下次使用
-  // 快取有效時間設為 10 分鐘 (600 秒)
-  if (emails.length > 0) {
-    cache.put(cacheKey, JSON.stringify(emails), 600); 
-    Logger.log(`已將 ${emails.length} 筆管理員 Email 存入快取。`);
-  }
-
-  return emails;
+  const props = PropertiesService.getScriptProperties();
+  return parseEmailListProperty_(props.getProperty('ADMIN_EMAILS'));
 }
 
 /**
  * 檢查是否啟用管理員郵件通知功能
- * 讀取「管理員名單」工作表的 C2 儲存格，若為「是」則啟用
+ * 透過 Script Property ADMIN_EMAIL_NOTIFY_ENABLED 控制（原為「管理員名單」工作表 C2）
  * @returns {boolean} true = 啟用郵件通知, false = 停用
  */
 function isAdminEmailEnabled() {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ADMIN_LIST_SHEET_NAME);
-  if (!sheet) {
-    Logger.log(`錯誤：找不到名為 "${ADMIN_LIST_SHEET_NAME}" 的工作表。`);
-    return false;
-  }
-
-  const emailToggle = sheet.getRange("C2").getValue();
-  const isEnabled = (emailToggle === '是');
-
+  const props = PropertiesService.getScriptProperties();
+  const isEnabled = props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true';
   if (!isEnabled) {
-    Logger.log(`📧 管理員郵件通知已停用（C2 = 「${emailToggle}」）`);
+    Logger.log('📧 管理員郵件通知已停用（ADMIN_EMAIL_NOTIFY_ENABLED != true）');
   }
-
   return isEnabled;
+}
+
+/**
+ * ✨ [管理員專用] 取得系統設定（電腦回報管理員 email、通知開關、同組資產開關、盤點功能開關）。
+ * 供設定視窗（alpine_model_setting.html）讀取初始值。加 admin 守衛避免非管理員讀取 email 清單。
+ * @returns {{reportAdminEmails:string, adminEmailNotifyEnabled:boolean, groupProxyEnabled:boolean, inventoryFeatureEnabled:boolean}}
+ */
+function getSystemSettings() {
+  if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可讀取系統設定。');
+  const props = PropertiesService.getScriptProperties();
+  return {
+    reportAdminEmails: props.getProperty('REPORT_ADMIN_EMAILS') || '',
+    adminEmailNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
+    groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
+    inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false'
+  };
+}
+
+/**
+ * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
+ * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
+ * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean}} settings
+ * @returns {{success:boolean}}
+ */
+function saveSystemSettings(settings) {
+  if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可變更系統設定。');
+  const props = PropertiesService.getScriptProperties();
+  const s = settings || {};
+  if (s.reportAdminEmails !== undefined) {
+    props.setProperty('REPORT_ADMIN_EMAILS', String(s.reportAdminEmails).trim());
+  }
+  if (s.adminEmailNotifyEnabled !== undefined) {
+    props.setProperty('ADMIN_EMAIL_NOTIFY_ENABLED', String(!!s.adminEmailNotifyEnabled));
+  }
+  if (s.groupProxyEnabled !== undefined) {
+    props.setProperty('GROUP_PROXY_ENABLED', String(!!s.groupProxyEnabled));
+  }
+  if (s.inventoryFeatureEnabled !== undefined) {
+    props.setProperty('INVENTORY_FEATURE_ENABLED', String(!!s.inventoryFeatureEnabled));
+  }
+  return { success: true };
 }
 
 function checkAdminPermissions() {
@@ -9039,4 +9026,44 @@ function markBatchInventoryWithIsms(assetResults) {
   }
 
   return inventoryResult;
+}
+
+// =================================================================
+// --- 一次性遷移：管理員名單工作表 → Script Property ---
+// =================================================================
+
+/**
+ * ✨ [一次性手動執行] 將「管理員名單」工作表 A~E 欄現有資料遷移至 Script Property。
+ * 部署前務必在 Apps Script 編輯器手動執行一次，否則遷移後 ADMIN_EMAILS 為空會鎖死所有管理功能。
+ * 執行後工作表資料不會被清除（保留備援），僅新增/覆寫對應的 Script Property。
+ */
+function migrateAdminSettingsToProperties() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const adminSheet = ss.getSheetByName(ADMIN_LIST_SHEET_NAME);
+  if (!adminSheet) {
+    Logger.log(`找不到「${ADMIN_LIST_SHEET_NAME}」工作表，無法遷移。`);
+    return;
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const lastRow = adminSheet.getLastRow();
+
+  const adminEmails = lastRow >= 2
+    ? adminSheet.getRange(2, 1, lastRow - 1, 1).getValues().map(r => r[0]).filter(v => v && String(v).includes('@'))
+    : [];
+  const reportAdminEmails = lastRow >= 2
+    ? adminSheet.getRange(2, 2, lastRow - 1, 1).getValues().map(r => r[0]).filter(v => v && String(v).includes('@'))
+    : [];
+  const notifyEnabled = String(adminSheet.getRange('C2').getValue()).trim() === '是';
+  const groupProxyEnabled = String(adminSheet.getRange('D2').getValue()).trim() === '是';
+  const inventoryEnabled = String(adminSheet.getRange('E2').getValue()).trim() !== '否';
+
+  props.setProperty('ADMIN_EMAILS', adminEmails.join(','));
+  props.setProperty('REPORT_ADMIN_EMAILS', reportAdminEmails.join(','));
+  props.setProperty('ADMIN_EMAIL_NOTIFY_ENABLED', String(notifyEnabled));
+  props.setProperty('GROUP_PROXY_ENABLED', String(groupProxyEnabled));
+  props.setProperty('INVENTORY_FEATURE_ENABLED', String(inventoryEnabled));
+
+  Logger.log(`遷移完成：ADMIN_EMAILS=${adminEmails.length} 筆, REPORT_ADMIN_EMAILS=${reportAdminEmails.length} 筆, ` +
+    `ADMIN_EMAIL_NOTIFY_ENABLED=${notifyEnabled}, GROUP_PROXY_ENABLED=${groupProxyEnabled}, INVENTORY_FEATURE_ENABLED=${inventoryEnabled}`);
 }

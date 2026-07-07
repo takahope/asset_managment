@@ -58,7 +58,7 @@ function getCopilotSettings() {
 
 /**
  * 儲存智慧導覽助理設定（管理員專用）。
- * 比照 code.js 的 setInventoryFeatureEnabled() 權限守衛慣例。
+ * 比照 code.js 的 saveSystemSettings() 權限守衛慣例。
  * @param {{enabled?:boolean, provider?:string, geminiModelId?:string, openaiModelId?:string, nvidiaModelId?:string}} settings
  * @returns {{success:boolean}}
  */
