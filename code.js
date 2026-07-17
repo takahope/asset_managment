@@ -954,14 +954,14 @@ function parseUserStateDateValue_(value) {
   return null;
 }
 
-function formatUserStateDateDisplay_(value) {
+function formatUserStateDateDisplay_(value, timeZone) {
   if (!value) {
     return '';
   }
 
   const parsed = parseUserStateDateValue_(value);
   if (parsed) {
-    return Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+    return Utilities.formatDate(parsed, timeZone || Session.getScriptTimeZone(), 'yyyy/MM/dd');
   }
 
   const raw = String(value || '').trim();
@@ -975,7 +975,7 @@ function formatUserStateDateDisplay_(value) {
     .find(line => line) || raw;
 }
 
-function getUserStateData(forceUserScope) {
+function getUserStateData(forceUserScope, options) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const normalizedCurrentEmail = String(currentUserEmail).toLowerCase();
   const isAdmin = checkAdminPermissions();
@@ -1029,22 +1029,16 @@ function getUserStateData(forceUserScope) {
     }
   }
 
-  const assetIds = filteredData
-    .map(asset => String(asset.assetId || '').trim())
-    .filter(Boolean);
-  const ismsMappingResult = getIsmsMappingForAssets(assetIds);
-  const ismsMappings = ismsMappingResult && ismsMappingResult.success && ismsMappingResult.mappings
-    ? ismsMappingResult.mappings
-    : {};
+  // 效能：ISMS 權威對照移至 getUserStateSecondary 靜默載入（省去總表重讀與跨檔開啟）
+  const skipDisplayDate = !!(options && options.skipDisplayDate);
+  const scriptTimeZone = skipDisplayDate ? null : Session.getScriptTimeZone();
 
   const results = filteredData.map(asset => {
-    const assetId = String(asset.assetId || '').trim();
-    const mapping = ismsMappings[assetId] || {};
     const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
     const mappedUserGroup = asset.userName ? (userNameToGroupMap[String(asset.userName).trim()] || '') : '';
     const mappedLeaderGroup = asset.leaderName ? (userNameToGroupMap[String(asset.leaderName).trim()] || '') : '';
     const groupName = defaultGroup || mappedUserGroup || mappedLeaderGroup || '未分組';
-    return {
+    const record = {
       assetId: asset.assetId,
       assetName: asset.assetName,
       assetAlias: asset.assetAlias || '',
@@ -1061,12 +1055,15 @@ function getUserStateData(forceUserScope) {
       sourceSheet: asset.sourceSheet || '',
       useLife: asset.useLife || '',
       purchaseDate: asset.purchaseDate ? (asset.purchaseDate instanceof Date ? asset.purchaseDate.toISOString() : String(asset.purchaseDate)) : '',
-      purchaseDateDisplay: formatUserStateDateDisplay_(asset.purchaseDate),
       isItAsset: asset.isItAsset || '',
       isIsoScope: asset.isIsoScope || '',
-      ismsAssetId: String(mapping.ismsAssetId || asset.ismsAssetId || ''),
+      ismsAssetId: String(asset.ismsAssetId || ''),
       propertyCategory: String(asset.propertyCategory || '')
     };
+    if (!skipDisplayDate) {
+      record.purchaseDateDisplay = formatUserStateDateDisplay_(asset.purchaseDate, scriptTimeZone);
+    }
+    return record;
   });
 
   return {
