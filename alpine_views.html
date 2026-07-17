@@ -464,12 +464,12 @@ document.addEventListener('alpine:init', function () {
     Alpine.data('dashboardCards', function () {
         return {
             cards: [
-                { id: 'transferring', label: '轉移中', countKey: 'transferring', color: 'bg-cyan-500', icon: '🔁', description: '我申請轉出、等待對方接收' },
-                { id: 'pending', label: '待接收', countKey: 'pending', color: 'bg-blue-500', icon: '📥', description: '需要您確認接收的資產' },
-                { id: 'lent', label: '出借中', countKey: 'lent', color: 'bg-green-500', icon: '📤', description: '目前出借的資產' },
-                { id: 'scrapPending', label: '待列印報廢申請單', countKey: 'scrapPending', color: 'bg-orange-500', icon: '🗑️', description: '報廢中的資產（需列印申請單）' },
-                { id: 'transferPending', label: '待列印轉移申請單', countKey: 'transferPending', color: 'bg-purple-500', icon: '🔄', description: '已被接收的資產（需列印轉移申請單）' },
-                { id: 'inventory', label: '待盤點', countKey: 'inventory', color: 'bg-red-500', icon: '📋', description: '需要您完成的盤點任務' }
+                { id: 'transferring', label: '轉移中', countKey: 'transferring', dataSource: 'overview', color: 'bg-cyan-500', icon: '🔁', description: '我申請轉出、等待對方接收' },
+                { id: 'pending', label: '待接收', countKey: 'pending', dataSource: 'overview', color: 'bg-blue-500', icon: '📥', description: '需要您確認接收的資產' },
+                { id: 'lent', label: '出借中', countKey: 'lent', dataSource: 'core', color: 'bg-green-500', icon: '📤', description: '目前出借的資產' },
+                { id: 'scrapPending', label: '待列印報廢申請單', countKey: 'scrapPending', dataSource: 'scrap', color: 'bg-orange-500', icon: '🗑️', description: '報廢中的資產（需列印申請單）' },
+                { id: 'transferPending', label: '待列印轉移申請單', countKey: 'transferPending', dataSource: 'secondary', color: 'bg-purple-500', icon: '🔄', description: '已被接收的資產（需列印轉移申請單）' },
+                { id: 'inventory', label: '待盤點', countKey: 'inventory', dataSource: 'secondary', color: 'bg-red-500', icon: '📋', description: '需要您完成的盤點任務' }
             ]
         };
     });
@@ -512,6 +512,19 @@ document.addEventListener('alpine:init', function () {
                         <i class="fas fa-spinner fa-spin text-blue-500"></i>
                         正在載入統計數據...
                     </span>
+
+                    <!-- 待辦事項抽屜開關 -->
+                    <button @click="$store.app.toggleSidebar()"
+                            class="hero-btn hero-btn--ghost relative" title="待辦事項">
+                        <i class="fa-solid fa-list-check text-slate-600"></i>
+                        <span class="hidden sm:inline">待辦事項</span>
+                        <template x-if="$store.app.sidebarCountsReady && $store.app.sidebarPendingTotal > 0">
+                            <span class="sidebar-badge" x-text="$store.app.sidebarPendingTotal"></span>
+                        </template>
+                        <template x-if="!$store.app.sidebarCountsReady">
+                            <span class="sidebar-badge sidebar-badge--loading"></span>
+                        </template>
+                    </button>
 
                     <!-- ModeToggleCard(舊頁 6057-6071) -->
                     <div class="mode-toggle-card mode-toggle-card--compact">
@@ -581,33 +594,27 @@ document.addEventListener('alpine:init', function () {
             </button>
         </div>
 
-        <!-- 儀表板卡片(舊頁 3441-3531) -->
+        <!-- 左側功能抽屜：轉移中/待接收/出借中/待列印報廢單/待列印轉移單/待盤點(舊頁 3441-3531 卡片移入) -->
         <div x-data="dashboardCards">
-            <template x-if="$store.app.isLoadingCards">
-                <div class="dashboard-grid mb-6">
-                    <template x-for="i in 6" :key="i">
-                        <div class="status-card px-4 py-3 rounded-2xl">
-                            <div class="flex items-center gap-3">
-                                <div class="flex flex-col items-center gap-1">
-                                    <div class="w-5 h-5 bg-slate-200 rounded animate-pulse"></div>
-                                    <div class="status-card__bar bg-slate-200 rounded-full animate-pulse"></div>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="h-4 bg-slate-200 rounded w-16 mb-1 animate-pulse"></div>
-                                    <div class="h-3 bg-slate-100 rounded w-24 animate-pulse"></div>
-                                </div>
-                                <div class="w-8 h-7 bg-slate-200 rounded animate-pulse"></div>
-                            </div>
-                        </div>
-                    </template>
+            <!-- 遮罩：點擊關閉 -->
+            <div class="sidebar-overlay"
+                 x-show="$store.app.sidebarOpen"
+                 @click="$store.app.sidebarOpen = false"
+                 x-transition.opacity.duration.200ms
+                 style="display:none;"></div>
+            <!-- 抽屜本體 -->
+            <aside class="sidebar-drawer"
+                   :class="$store.app.sidebarOpen ? 'sidebar-drawer--open' : ''">
+                <div class="sidebar-drawer__header">
+                    <h3 class="sidebar-drawer__title">待辦事項</h3>
+                    <button class="sidebar-drawer__close" @click="$store.app.sidebarOpen = false" aria-label="關閉待辦事項">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
-            </template>
-            <template x-if="!$store.app.isLoadingCards">
-                <div class="dashboard-grid mb-6">
-                    <template x-for="(card, index) in cards" :key="card.id">
-                        <button @click="$store.app.handleCardClick(card.id)"
-                                :style="'--delay:' + (index * 60) + 'ms'"
-                                class="status-card rounded-2xl px-4 py-3 cursor-pointer text-left group focus:outline-none focus:ring-2 focus:ring-teal-200">
+                <div class="sidebar-drawer__body">
+                    <template x-for="card in cards" :key="card.id">
+                        <button @click="$store.app.handleCardClick(card.id); $store.app.sidebarOpen = false;"
+                                class="status-card sidebar-card rounded-2xl px-4 py-3 cursor-pointer text-left group focus:outline-none focus:ring-2 focus:ring-teal-200 w-full">
                             <div class="flex items-center gap-3">
                                 <div class="flex flex-col items-center gap-1">
                                     <span class="text-2xl" x-text="card.icon"></span>
@@ -617,13 +624,19 @@ document.addEventListener('alpine:init', function () {
                                     <p class="text-sm font-medium text-slate-600 group-hover:text-slate-800 transition-colors" x-text="card.label"></p>
                                     <p class="text-xs text-slate-400 whitespace-pre-wrap" :title="card.description" x-text="card.description"></p>
                                 </div>
-                                <div class="status-card__count text-2xl font-bold text-slate-800 tabular-nums"
-                                     x-text="$store.app.cardCounts[card.countKey]"></div>
+                                <div class="status-card__count text-2xl font-bold text-slate-800 tabular-nums">
+                                    <template x-if="$store.app.isCardCountReady(card.dataSource)">
+                                        <span x-text="$store.app.cardCounts[card.countKey]"></span>
+                                    </template>
+                                    <template x-if="!$store.app.isCardCountReady(card.dataSource)">
+                                        <span class="text-xs font-normal text-slate-400">載入中</span>
+                                    </template>
+                                </div>
                             </div>
                         </button>
                     </template>
                 </div>
-            </template>
+            </aside>
         </div>
 
         <!-- InventoryDashboardCard 盤點進度監控儀表板(P5;含元件註冊 script) -->

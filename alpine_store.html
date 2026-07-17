@@ -205,6 +205,7 @@
         transferPendingRequest: 0,
         addAssetDropdownLoad: null,
         addAssetDropdownRequest: 0,
+        secondaryRequest: 0,                 // 次要資料靜默載入的請求序號，用來丟棄過期回應
         inventoryToastTimer: null,
         advancedSubmit: false,
         closeActionPanelFn: null,            // closeActionPanelRef
@@ -240,6 +241,8 @@
             /* ── 狀態(對應舊頁 12807-12931 useState;名稱一致) ── */
             successPromptData: { visible: false, title: '', message: '', actionType: null, requiresPrint: false, waitReview: false },
             isReady: false,
+            secondaryLoaded: false,   // 次要資料（抽屜卡片）是否已靜默載入完成
+            sidebarOpen: false,        // 左側功能抽屜開合狀態
             allAssets: [],
             isAdmin: false,
             viewMode: 'user',
@@ -367,6 +370,23 @@
                     transferPending: this.transferPendingCount,
                     inventory: inventoryCount
                 };
+            },
+            // 左側抽屜待辦總數
+            get sidebarPendingTotal() {
+                var c = this.cardCounts;
+                return (c.transferring || 0) + (c.pending || 0) + (c.lent || 0)
+                     + (c.scrapPending || 0) + (c.transferPending || 0) + (c.inventory || 0);
+            },
+            // 抽屜卡片全部數字是否就緒（transferOverview 與次要資料皆到齊）
+            get sidebarCountsReady() {
+                return this.transferOverviewLoaded && this.secondaryLoaded;
+            },
+            // 單張卡片數字是否可信（依其資料來源決定）
+            isCardCountReady: function (source) {
+                if (source === 'overview') return this.transferOverviewLoaded;
+                if (source === 'secondary') return this.secondaryLoaded;
+                if (source === 'scrap') return this.isAdminView || this.secondaryLoaded;
+                return true; // 'core'：源自 allAssets，首屏即可信
             },
             get hasActiveInventory() {
                 return Object.keys(this.inventoryStatusByAsset || {}).length > 0;
@@ -870,24 +890,27 @@
                 }, 1500, 250);
             },
 
-            /* ── 首屏載入(舊頁 14081-14185 loadData 逐段對應) ── */
+            /* ── 首屏載入：核心資料阻塞渲染主表格，次要資料（抽屜卡片）靜默補載 ── */
             loadData: function (overrideViewMode) {
                 var self = this;
                 showFlyProgressBar('正在載入財產狀態資料...', { mask: true });
                 this.isLoadingCards = true;
+                this.secondaryLoaded = false;
+                // 新一輪載入立即讓任何在途的次要回應失效，避免視角切換時舊資料污染
+                refs.secondaryRequest += 1;
                 var isInitialLoad = !overrideViewMode && !refs.viewModeInitialized;
                 var effectiveViewMode = overrideViewMode || this.viewMode;
                 var forceUserScope = isInitialLoad ? false : (effectiveViewMode === 'user');
 
                 google.script.run
-                    .withSuccessHandler(function (bundle) {
-                        var response = bundle && bundle.userState;
+                    .withSuccessHandler(function (core) {
+                        var response = core && core.userState;
                         if (!response || response.error) {
                             alert('載入失敗：' + ((response && response.error) || '無資料'));
                             hideFlyProgressBar('載入失敗', 0);
                             return;
                         }
-                        self.webAppUrl = bundle.appUrl || '';
+                        self.webAppUrl = core.appUrl || '';
                         self.isAdmin = !!response.isAdmin;
                         self.currentUserEmail = response.userEmail || '';
                         self.currentUserName = response.userName || '';
@@ -896,16 +919,46 @@
                             self.viewMode = response.isAdmin ? 'admin' : 'user';
                             refs.viewModeInitialized = true;
                         }
+                        self.inventoryFeatureEnabled = core.inventoryEnabled !== false;
+                        // 核心資料就緒 → 主表格立即顯示，不等待次要資料
+                        self.isLoadingCards = false;
+                        self.isReady = true;
+                        self.syncAssetGlobals();
+                        hideFlyProgressBar('資料載入完成！', 300);
+                        // 沿用既有的細粒度靜默預載排程
                         self.scheduleTransferOverviewLoad(forceUserScope);
                         self.scheduleScrapPendingPreload(forceUserScope);
                         self.scheduleTransferPendingPreload(forceUserScope);
                         if (response.isAdmin && !forceUserScope) {
                             self.scheduleAddAssetDropdownPreload();
                         }
-                        var inventoryEnabled = bundle.inventoryEnabled !== false;
-                        self.inventoryFeatureEnabled = inventoryEnabled;
-                        if (inventoryEnabled) {
-                            var inventoryResponse = bundle.inventory;
+                        if (self.inventoryFeatureEnabled) {
+                            self.schedulePendingInventoryLoad(forceUserScope);
+                        } else {
+                            self.clearInventoryState();
+                        }
+                        // 抽屜卡片所需的次要資料靜默補載
+                        self.loadSecondaryData(forceUserScope);
+                    })
+                    .withFailureHandler(function (error) {
+                        self.isLoadingCards = false;
+                        hideFlyProgressBar('載入失敗', 0);
+                        alert('錯誤：' + error.message);
+                    })
+                    .getUserStateCore(forceUserScope);
+            },
+
+            /* ── 次要資料靜默載入：填入左側功能抽屜所需資料（不顯示進度條、失敗不打斷） ── */
+            loadSecondaryData: function (forceUserScope) {
+                var self = this;
+                var requestId = refs.secondaryRequest;
+                google.script.run
+                    .withSuccessHandler(function (secondary) {
+                        // 視角已切換 → 丟棄過期回應
+                        if (refs.secondaryRequest !== requestId) return;
+                        if (!secondary) { self.secondaryLoaded = true; return; }
+                        if (self.inventoryFeatureEnabled) {
+                            var inventoryResponse = secondary.inventory;
                             if (inventoryResponse && !inventoryResponse.error) {
                                 self.inventorySessions = inventoryResponse;
                                 self.currentUserGroup = inventoryResponse.currentUserGroup || '';
@@ -917,35 +970,32 @@
                             } else {
                                 console.warn('載入盤點資料失敗或無資料');
                             }
-                            self.schedulePendingInventoryLoad(forceUserScope);
-                        } else {
-                            self.clearInventoryState();
                         }
-                        self.transferPendingCount = typeof bundle.transferCount === 'number' ? bundle.transferCount : 0;
-                        if (bundle.transfer && !bundle.transfer.error) {
-                            self.transferOptions = bundle.transfer;
+                        self.transferPendingCount = typeof secondary.transferCount === 'number' ? secondary.transferCount : 0;
+                        if (secondary.transfer && !secondary.transfer.error) {
+                            self.transferOptions = secondary.transfer;
                             self.syncTransferOptionGlobals();
                         }
-                        if (bundle.lending && !bundle.lending.error) {
-                            self.lendingOptions = bundle.lending;
+                        if (secondary.lending && !secondary.lending.error) {
+                            self.lendingOptions = secondary.lending;
                         }
-                        if (bundle.lentOut && !bundle.lentOut.error) {
-                            self.lentAssetsDetails = bundle.lentOut.assets || [];
+                        if (secondary.lentOut && !secondary.lentOut.error) {
+                            self.lentAssetsDetails = secondary.lentOut.assets || [];
                         } else {
                             self.lentAssetsDetails = null;
                         }
-                        self.isLoadingCards = false;
-                        self.isReady = true;
-                        self.syncAssetGlobals();
-                        hideFlyProgressBar('資料載入完成！', 300);
+                        self.secondaryLoaded = true;
                     })
                     .withFailureHandler(function (error) {
-                        self.isLoadingCards = false;
-                        hideFlyProgressBar('載入失敗', 0);
-                        alert('錯誤：' + error.message);
+                        if (refs.secondaryRequest !== requestId) return;
+                        console.warn('次要資料載入失敗：', (error && error.message) || error);
+                        self.secondaryLoaded = true;
                     })
-                    .getUserStateBundle(forceUserScope);
+                    .getUserStateSecondary(forceUserScope);
             },
+
+            /* ── 左側功能抽屜開合 ── */
+            toggleSidebar: function () { this.sidebarOpen = !this.sidebarOpen; },
 
             /* ── 卡片重新整理(舊頁 14185-14309 refreshCardData;並行載入 + 最短顯示時間) ── */
             refreshCardData: function () {

@@ -1078,37 +1078,76 @@ function getUserStateData(forceUserScope) {
 }
 
 /**
- * [供 userstate.html 首次載入呼叫] 一次性回傳頁面所需的所有資料。
- * 透過請求範圍記憶化讓內部所有 getAllAssets() 只實際讀取試算表一次，
- * 並把原本 6 個 google.script.run 往返合併為 1 個。
- * 各子項以 try/catch 包裹，個別失敗不拖垮整個 bundle（沿用前端原本各自的容錯）。
+ * 共用容錯包裝：子項個別失敗不拖垮整體，記錄後回退預設值。
  */
-function getUserStateBundle(forceUserScope) {
+function safeBundleCall_(fn, fallback) {
+  try {
+    return fn();
+  } catch (e) {
+    Logger.log(`bundle 子項失敗（非致命）: ${e.message}`);
+    return fallback;
+  }
+}
+
+/**
+ * [首屏阻塞] 只回傳資產主表格渲染所需的核心資料。
+ * 透過請求範圍記憶化讓內部 getAllAssets() 只實際讀取試算表一次。
+ * userState 失敗則整體失敗（沿用前端原本行為）；其餘次要資料改由
+ * getUserStateSecondary 於首屏顯示後靜默載入。
+ */
+function getUserStateCore(forceUserScope) {
   armAllAssetsMemo_();
   try {
-    const safe = (fn, fallback) => {
-      try {
-        return fn();
-      } catch (e) {
-        Logger.log(`getUserStateBundle 子項失敗（非致命）: ${e.message}`);
-        return fallback;
-      }
-    };
-    // ✨ 盤點功能開關：關閉時跳過 getInventoryData 以加快載入
-    const inventoryEnabled = isInventoryFeatureEnabled();
     return {
-      appUrl:           safe(() => getAppUrl(), ''),
+      appUrl:           safeBundleCall_(() => getAppUrl(), ''),
       userState:        getUserStateData(forceUserScope), // 主資料，失敗則整體失敗
-      inventory:        inventoryEnabled ? safe(() => getInventoryData(forceUserScope), null) : null,
-      inventoryEnabled: inventoryEnabled, // ✨ 回傳旗標供前端判斷
-      transferCount:    safe(() => getTransferableItemsCount(forceUserScope), null),
-      transfer:         safe(() => getTransferData(forceUserScope), null),
-      lending:          safe(() => getLendingData(), null),
-      lentOut:          safe(() => getLentOutAssets(forceUserScope), null)
+      inventoryEnabled: isInventoryFeatureEnabled()       // 廉價旗標，前端需先知道以決定是否顯示盤點
     };
   } finally {
     disarmAllAssetsMemo_();
   }
+}
+
+/**
+ * [首屏後靜默載入] 回傳左側功能抽屜所需的次要資料。
+ * 透過請求範圍記憶化讓內部 getAllAssets() 只實際讀取試算表一次。
+ * 各子項以 try/catch 包裹，個別失敗不拖垮整體。
+ */
+function getUserStateSecondary(forceUserScope) {
+  armAllAssetsMemo_();
+  try {
+    // ✨ 盤點功能開關：關閉時跳過 getInventoryData 以加快載入
+    const inventoryEnabled = isInventoryFeatureEnabled();
+    return {
+      inventory:     inventoryEnabled ? safeBundleCall_(() => getInventoryData(forceUserScope), null) : null,
+      transferCount: safeBundleCall_(() => getTransferableItemsCount(forceUserScope), null),
+      transfer:      safeBundleCall_(() => getTransferData(forceUserScope), null),
+      lending:       safeBundleCall_(() => getLendingData(), null),
+      lentOut:       safeBundleCall_(() => getLentOutAssets(forceUserScope), null)
+    };
+  } finally {
+    disarmAllAssetsMemo_();
+  }
+}
+
+/**
+ * [相容封存頁 ?ui=legacy] 舊版 slow_loading_version/userstate.html 仍呼叫此合併端點。
+ * 主版 SPA 已改用 getUserStateCore + getUserStateSecondary 分層載入；
+ * 此薄封裝維持舊版回退路徑不中斷，待封存目錄整個移除後可一併刪除。
+ */
+function getUserStateBundle(forceUserScope) {
+  const core = getUserStateCore(forceUserScope);
+  const secondary = getUserStateSecondary(forceUserScope);
+  return {
+    appUrl:           core.appUrl,
+    userState:        core.userState,
+    inventoryEnabled: core.inventoryEnabled,
+    inventory:        secondary.inventory,
+    transferCount:    secondary.transferCount,
+    transfer:         secondary.transfer,
+    lending:          secondary.lending,
+    lentOut:          secondary.lentOut
+  };
 }
 
 function getUserStateExportDataByTargets(targets, forceUserScope) {
