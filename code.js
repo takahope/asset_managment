@@ -1106,6 +1106,30 @@ function getUserStateCore(forceUserScope) {
 }
 
 /**
+ * 只讀取 ISMS 對照表 A/B 兩欄，回傳 {資產編號: 資訊資產編號} 字典。
+ * 供 getUserStateSecondary 靜默載入使用——不重讀總表（isItAsset 已在 asset 物件內）。
+ */
+function getIsmsAssetIdMapForSecondary_() {
+  if (!ISMS_SPREADSHEET_ID || ISMS_SPREADSHEET_ID === 'YOUR_ISMS_SPREADSHEET_ID_HERE') {
+    return {};
+  }
+  const mappingSheet = SpreadsheetApp.openById(ISMS_SPREADSHEET_ID).getSheetByName(ISMS_MAPPING_SHEET_NAME);
+  if (!mappingSheet || mappingSheet.getLastRow() <= 1) {
+    return {};
+  }
+  const data = mappingSheet.getRange(2, 1, mappingSheet.getLastRow() - 1, ISMS_MAPPING_COLUMN_INDICES.ISMS_ASSET_ID).getValues();
+  const map = {};
+  data.forEach(row => {
+    const assetId = String(row[ISMS_MAPPING_COLUMN_INDICES.ASSET_ID - 1] || '').trim();
+    const ismsId = String(row[ISMS_MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1] || '').trim();
+    if (assetId && ismsId) {
+      map[assetId] = ismsId;
+    }
+  });
+  return map;
+}
+
+/**
  * [首屏後靜默載入] 回傳左側功能抽屜所需的次要資料。
  * 透過請求範圍記憶化讓內部 getAllAssets() 只實際讀取試算表一次。
  * 各子項以 try/catch 包裹，個別失敗不拖垮整體。
@@ -1120,7 +1144,8 @@ function getUserStateSecondary(forceUserScope) {
       transferCount: safeBundleCall_(() => getTransferableItemsCount(forceUserScope), null),
       transfer:      safeBundleCall_(() => getTransferData(forceUserScope), null),
       lending:       safeBundleCall_(() => getLendingData(), null),
-      lentOut:       safeBundleCall_(() => getLentOutAssets(forceUserScope), null)
+      lentOut:       safeBundleCall_(() => getLentOutAssets(forceUserScope), null),
+      ismsMappings:  safeBundleCall_(() => getIsmsAssetIdMapForSecondary_(), null)
     };
   } finally {
     disarmAllAssetsMemo_();
