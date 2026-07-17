@@ -893,6 +893,7 @@
             /* ── 首屏載入：核心資料阻塞渲染主表格，次要資料（抽屜卡片）靜默補載 ── */
             loadData: function (overrideViewMode) {
                 var self = this;
+                var perfT0 = Date.now();
                 showFlyProgressBar('正在載入財產狀態資料...', { mask: true });
                 this.isLoadingCards = true;
                 this.secondaryLoaded = false;
@@ -910,11 +911,28 @@
                             hideFlyProgressBar('載入失敗', 0);
                             return;
                         }
+                        var perfT1 = Date.now();
+                        var fields = response.assetFields;
+                        var rows = response.assetRows;
+                        if (!Array.isArray(fields) || !Array.isArray(rows)) {
+                            alert('載入失敗：資料格式錯誤（請重新整理，若持續發生請聯絡管理員）');
+                            hideFlyProgressBar('載入失敗', 0);
+                            return;
+                        }
+                        var unpacked = new Array(rows.length);
+                        for (var ri = 0; ri < rows.length; ri++) {
+                            var rowValues = rows[ri] || [];
+                            var assetObj = {};
+                            for (var fi = 0; fi < fields.length; fi++) {
+                                assetObj[fields[fi]] = rowValues[fi];
+                            }
+                            unpacked[ri] = assetObj;
+                        }
                         self.webAppUrl = core.appUrl || '';
                         self.isAdmin = !!response.isAdmin;
                         self.currentUserEmail = response.userEmail || '';
                         self.currentUserName = response.userName || '';
-                        self.allAssets = self.decorateAssetListForUserState(response.assets);
+                        self.allAssets = self.decorateAssetListForUserState(unpacked);
                         if (!refs.viewModeInitialized) {
                             self.viewMode = response.isAdmin ? 'admin' : 'user';
                             refs.viewModeInitialized = true;
@@ -925,6 +943,9 @@
                         self.isReady = true;
                         self.syncAssetGlobals();
                         hideFlyProgressBar('資料載入完成！', 300);
+                        console.log('[loadPerf] 後端往返 ' + (perfT1 - perfT0) + 'ms；後端內部 '
+                            + JSON.stringify((core && core.timings) || {}) + '；前端處理 '
+                            + (Date.now() - perfT1) + 'ms（' + rows.length + ' 筆）');
                         // 沿用既有的細粒度靜默預載排程
                         self.scheduleTransferOverviewLoad(forceUserScope);
                         self.scheduleScrapPendingPreload(forceUserScope);
@@ -983,6 +1004,19 @@
                             self.lentAssetsDetails = secondary.lentOut.assets || [];
                         } else {
                             self.lentAssetsDetails = null;
+                        }
+                        // ISMS 權威對照靜默 patch（首屏先用總表值，這裡補上對照表覆蓋）
+                        if (secondary.ismsMappings) {
+                            var ismsMappings = secondary.ismsMappings;
+                            var ismsPatched = false;
+                            self.allAssets.forEach(function (asset) {
+                                var mapped = ismsMappings[String(asset.assetId || '').trim()];
+                                if (mapped && asset.ismsAssetId !== mapped) {
+                                    asset.ismsAssetId = mapped;
+                                    ismsPatched = true;
+                                }
+                            });
+                            if (ismsPatched) self.syncAssetGlobals();
                         }
                         self.secondaryLoaded = true;
                     })
