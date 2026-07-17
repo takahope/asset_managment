@@ -162,6 +162,14 @@ const ISMS_MAPPING_COLUMN_INDICES = {
   REMARKS: 5             // E欄: 備註
 };
 
+// 主 SPA 首載 tuple 傳輸的 DTO 欄位順序——必須與 getUserStateData 回傳物件的屬性名一致
+const USERSTATE_ASSET_DTO_FIELDS = [
+  'assetId', 'assetName', 'assetAlias', 'productSerial', 'modelBrand',
+  'leader', 'leaderEmail', 'userEmail', 'location', 'status',
+  'category', 'group', 'userName', 'sourceSheet', 'useLife',
+  'purchaseDate', 'isItAsset', 'isIsoScope', 'ismsAssetId', 'propertyCategory'
+];
+
 // 行動駐站清單（出借「借出後放置地點」下拉選單擴充來源）工作表欄位索引
 const PROTABLE_STATION_SHEET_NAME = "行動駐站";
 const PROTABLE_STATION_COLUMN_INDICES = {
@@ -1088,17 +1096,46 @@ function safeBundleCall_(fn, fallback) {
 
 /**
  * [首屏阻塞] 只回傳資產主表格渲染所需的核心資料。
- * 透過請求範圍記憶化讓內部 getAllAssets() 只實際讀取試算表一次。
- * userState 失敗則整體失敗（沿用前端原本行為）；其餘次要資料改由
- * getUserStateSecondary 於首屏顯示後靜默載入。
+ * 效能設計：跳過 purchaseDateDisplay 格式化；assets 以 tuple（欄位名一次 + 值陣列）傳輸
+ * 縮減序列化 payload；timings 供前端 console 對照各段耗時。
+ * userState 失敗則整體失敗（沿用前端原本行為）；次要資料由 getUserStateSecondary 靜默載入。
  */
 function getUserStateCore(forceUserScope) {
+  const tStart = Date.now();
   armAllAssetsMemo_();
   try {
+    const appUrl = safeBundleCall_(() => getAppUrl(), '');
+
+    // 預熱記憶化並單獨量測總表讀取成本（後續 getUserStateData 內的呼叫命中快取）
+    const tAssets = Date.now();
+    safeBundleCall_(() => getAllAssets(), null);
+    const allAssetsMs = Date.now() - tAssets;
+
+    const tUserState = Date.now();
+    const userState = getUserStateData(forceUserScope, { skipDisplayDate: true }); // 主資料，失敗則整體失敗
+    const userStateMs = Date.now() - tUserState;
+
+    // tuple 化：欄位名只傳一次，5000 筆等級可將 payload 約減半
+    const tPack = Date.now();
+    const assets = userState.assets || [];
+    userState.assetFields = USERSTATE_ASSET_DTO_FIELDS;
+    userState.assetRows = assets.map(asset => USERSTATE_ASSET_DTO_FIELDS.map(field => asset[field]));
+    delete userState.assets;
+    const packMs = Date.now() - tPack;
+
+    const timings = {
+      allAssetsMs: allAssetsMs,
+      userStateMs: userStateMs,
+      packMs: packMs,
+      totalMs: Date.now() - tStart
+    };
+    Logger.log(`getUserStateCore timings: ${JSON.stringify(timings)}`);
+
     return {
-      appUrl:           safeBundleCall_(() => getAppUrl(), ''),
-      userState:        getUserStateData(forceUserScope), // 主資料，失敗則整體失敗
-      inventoryEnabled: isInventoryFeatureEnabled()       // 廉價旗標，前端需先知道以決定是否顯示盤點
+      appUrl:           appUrl,
+      userState:        userState,
+      inventoryEnabled: isInventoryFeatureEnabled(), // 廉價旗標，前端需先知道以決定是否顯示盤點
+      timings:          timings
     };
   } finally {
     disarmAllAssetsMemo_();
@@ -1154,22 +1191,34 @@ function getUserStateSecondary(forceUserScope) {
 
 /**
  * [相容封存頁 ?ui=legacy] 舊版 slow_loading_version/userstate.html 仍呼叫此合併端點。
- * 主版 SPA 已改用 getUserStateCore + getUserStateSecondary 分層載入；
- * 此薄封裝維持舊版回退路徑不中斷，待封存目錄整個移除後可一併刪除。
+ * 必須維持舊格式：userState.assets 為物件陣列、含 purchaseDateDisplay 與 ISMS 覆蓋
+ * （getUserStateCore 已 tuple 化，不可再轉呼叫）。待封存目錄整個移除後可一併刪除。
  */
 function getUserStateBundle(forceUserScope) {
-  const core = getUserStateCore(forceUserScope);
   const secondary = getUserStateSecondary(forceUserScope);
-  return {
-    appUrl:           core.appUrl,
-    userState:        core.userState,
-    inventoryEnabled: core.inventoryEnabled,
-    inventory:        secondary.inventory,
-    transferCount:    secondary.transferCount,
-    transfer:         secondary.transfer,
-    lending:          secondary.lending,
-    lentOut:          secondary.lentOut
-  };
+  armAllAssetsMemo_();
+  try {
+    const userState = getUserStateData(forceUserScope); // 不帶 options → 含 purchaseDateDisplay
+    const mappings = secondary.ismsMappings || {};
+    (userState.assets || []).forEach(asset => {
+      const mapped = mappings[String(asset.assetId || '').trim()];
+      if (mapped) {
+        asset.ismsAssetId = mapped;
+      }
+    });
+    return {
+      appUrl:           safeBundleCall_(() => getAppUrl(), ''),
+      userState:        userState,
+      inventoryEnabled: isInventoryFeatureEnabled(),
+      inventory:        secondary.inventory,
+      transferCount:    secondary.transferCount,
+      transfer:         secondary.transfer,
+      lending:          secondary.lending,
+      lentOut:          secondary.lentOut
+    };
+  } finally {
+    disarmAllAssetsMemo_();
+  }
 }
 
 function getUserStateExportDataByTargets(targets, forceUserScope) {
