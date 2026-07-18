@@ -2,6 +2,11 @@
 // ISMS 資產對照管理系統 - 後端 API
 // ==========================================
 
+// HR 在職狀態值域(四值合稱「在職」;「在勤」只是其中一種細分狀態)
+const HR_ACTIVE_STATUSES = ['在勤', '休假', '育嬰假', '外派人員'];
+const HR_GROUP_MAP_CACHE_KEY = 'hr_email_group_map_v1';
+const HR_GROUP_MAP_CACHE_SECONDS = 600; // 10 分鐘
+
 /**
  * Web App 入口點
  */
@@ -132,9 +137,118 @@ function checkIsAdmin_(email) {
 }
 
 /**
- * 建立 Email -> 組別對照表（從「保管人/信箱」工作表的G欄）
+ * 讀取 HR 主表試算表 ID(本專案 Script Property;與主專案各設一次)
+ * @returns {string}
  */
-function getEmailToGroupMap_() {
+function getHrSpreadsheetId_() {
+  const id = PropertiesService.getScriptProperties().getProperty('HR_SPREADSHEET_ID');
+  if (!id) {
+    throw new Error('尚未設定 HR_SPREADSHEET_ID(本專案 Script Property)。');
+  }
+  return String(id).trim();
+}
+
+/**
+ * HR 組別名 → 本系統組別名 轉換表(本專案 Script Property HR_GROUP_NAME_MAP,值同主專案)
+ * @returns {Object}
+ */
+function getHrGroupNameMap_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('HR_GROUP_NAME_MAP');
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) || {};
+  } catch (e) {
+    console.error('HR_GROUP_NAME_MAP 解析失敗(視為空表):', e);
+    return {};
+  }
+}
+
+/**
+ * 主職判定順序(ECOSYSTEM 契約):PRE → CEO → DEPT-* → GRP-*;其餘(含 TF-*)視為兼任(99)。
+ * @param {string} code 組別代碼
+ * @returns {number}
+ */
+function orgCodeRank_(code) {
+  const c = String(code || '').trim();
+  if (c === 'PRE') return 0;
+  if (c === 'CEO') return 1;
+  if (c.indexOf('DEPT-') === 0) return 2;
+  if (c.indexOf('GRP-') === 0) return 3;
+  return 99;
+}
+
+/**
+ * 直讀 HR 三表,回傳在職人員的 email → 組別對照(已過名稱轉換)。
+ * HR 讀取失敗時 throw,由呼叫端 fallback。
+ * @returns {Object} { [emailLower]: groupName }
+ */
+function getHrEmailToGroupMap_() {
+  const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
+
+  // 1. 人員主檔 A/C → 在職 email 集合
+  const personnelSheet = hrSs.getSheetByName(CONFIG.HR_PERSONNEL_SHEET_NAME);
+  if (!personnelSheet || personnelSheet.getLastRow() <= 1) {
+    throw new Error(`HR「${CONFIG.HR_PERSONNEL_SHEET_NAME}」讀取失敗或無資料。`);
+  }
+  const activeEmails = {};
+  personnelSheet.getRange(2, 1, personnelSheet.getLastRow() - 1, 3).getValues().forEach(row => {
+    const email = String(row[0] || '').toLowerCase().trim();
+    const status = String(row[2] || '').trim();
+    if (!email || !email.includes('@')) return;
+    if (HR_ACTIVE_STATUSES.indexOf(status) === -1) return;
+    activeEmails[email] = true;
+  });
+
+  // 2. 組織架構樹 C/D → 代碼轉中文名
+  const orgSheet = hrSs.getSheetByName(CONFIG.HR_ORG_TREE_SHEET_NAME);
+  const codeToOrgName = {};
+  if (orgSheet && orgSheet.getLastRow() > 1) {
+    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
+      const code = String(row[2] || '').trim();
+      const name = String(row[3] || '').trim();
+      if (code && name) codeToOrgName[code] = name;
+    });
+  }
+
+  // 3. 人員職務配置 A/C/E → 每人主職組別代碼(只取在職者)
+  const assignmentSheet = hrSs.getSheetByName(CONFIG.HR_ASSIGNMENT_SHEET_NAME);
+  const emailToMainCode = {};
+  if (assignmentSheet && assignmentSheet.getLastRow() > 1) {
+    assignmentSheet.getRange(2, 1, assignmentSheet.getLastRow() - 1, 5).getValues().forEach(row => {
+      const email = String(row[0] || '').toLowerCase().trim();
+      if (!email || !activeEmails[email]) return;
+      const orgCode = String(row[2] || '').trim();
+      if (orgCode && orgCodeRank_(orgCode) < 99) {
+        const current = emailToMainCode[email];
+        if (!current || orgCodeRank_(orgCode) < orgCodeRank_(current)) {
+          emailToMainCode[email] = orgCode;
+        }
+      }
+    });
+  }
+
+  // 4. 代碼 → HR 中文名 → 本系統組別名
+  const groupNameMap = getHrGroupNameMap_();
+  const emailToGroup = {};
+  Object.keys(emailToMainCode).forEach(email => {
+    const hrName = codeToOrgName[emailToMainCode[email]] || '';
+    if (!hrName) return;
+    emailToGroup[email] = groupNameMap[hrName] || hrName;
+  });
+  return emailToGroup;
+}
+
+/**
+ * 清除 HR 組別對照快取(改 HR/property 後可手動執行)
+ */
+function clearHrGroupMapCache() {
+  CacheService.getScriptCache().remove(HR_GROUP_MAP_CACHE_KEY);
+}
+
+/**
+ * Fallback:讀「保管人/信箱」G 欄建立 Email -> 組別對照(HR 直讀失敗時使用;該表由主專案每日同步維護)。
+ */
+function getEmailToGroupMapFallback_() {
   const emailToGroupMap = {};
   try {
     const ss = SpreadsheetApp.openById(CONFIG.ASSET_SPREADSHEET_ID);
@@ -161,6 +275,29 @@ function getEmailToGroupMap_() {
   }
 
   return emailToGroupMap;
+}
+
+/**
+ * 建立 Email -> 組別對照表(Phase 2:直讀 HR;失敗 fallback 讀舊表 G 欄;10 分鐘快取)。
+ * 對外簽名不變,回傳 { [emailLower]: groupName }。
+ */
+function getEmailToGroupMap_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(HR_GROUP_MAP_CACHE_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_) { /* fall through */ }
+  }
+  let map;
+  try {
+    map = getHrEmailToGroupMap_();
+  } catch (e) {
+    console.error('直讀 HR 組別失敗，回退讀「保管人/信箱」G 欄:', e);
+    map = getEmailToGroupMapFallback_();
+  }
+  try {
+    cache.put(HR_GROUP_MAP_CACHE_KEY, JSON.stringify(map), HR_GROUP_MAP_CACHE_SECONDS);
+  } catch (_) {}
+  return map;
 }
 
 /**

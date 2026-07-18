@@ -26,7 +26,12 @@ const CONFIG = {
   ADMIN_LIST_SHEET_NAME: '管理員名單',
 
   // 軟體清冊工作表
-  SOFTWARE_SHEET_NAME: '軟體清冊'
+  SOFTWARE_SHEET_NAME: '軟體清冊',
+
+  // HR 主表(Phase 2:組別對照改直讀 HR;HR_SPREADSHEET_ID 走 Script Property,不放此處)
+  HR_PERSONNEL_SHEET_NAME: '人員主檔',   // A 信箱、B 姓名、C 狀態
+  HR_ORG_TREE_SHEET_NAME: '組織架構樹',  // C 代碼、D 名稱
+  HR_ASSIGNMENT_SHEET_NAME: '人員職務配置' // A 信箱、C 組別代碼、E 職務
 };
 
 // ==========================================
