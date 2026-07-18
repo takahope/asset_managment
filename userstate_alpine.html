@@ -2499,6 +2499,7 @@
       google.script.run
         .withSuccessHandler(function(urls) {
           if (!urls || !urls.isAdmin) return; // 非管理員不顯示 FAB
+          if (urls.fabMenuEnabled === false) return; // 若設定為隱藏，也不顯示 FAB
           if (urls.ismsAssetUrl)    document.getElementById('fabLinkIsmsAsset').href = urls.ismsAssetUrl;
           if (urls.ismsConnectUrl)  document.getElementById('fabLinkIsmsConnect').href = urls.ismsConnectUrl;
           if (urls.softwareListUrl) document.getElementById('fabLinkSoftware').href = urls.softwareListUrl;

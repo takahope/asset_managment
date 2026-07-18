@@ -847,6 +847,9 @@ function doGet(e) {
   switch (page) {
     case 'barcodeprint':
       // 列印條碼標籤頁面
+      if (!checkAdminPermissions()) {
+        return createAccessDeniedPage(currentUserEmail);
+      }
       template = HtmlService.createTemplateFromFile('barcodeprint');
       title = "列印條碼";
       break;
@@ -1332,8 +1335,10 @@ function getUserStatePageUrls() {
  */
 function getFabNavigationUrls() {
   var webAppUrl = ScriptApp.getService().getUrl();
+  var props = PropertiesService.getScriptProperties();
   return {
     isAdmin: checkAdminPermissions(),
+    fabMenuEnabled: props.getProperty('FAB_MENU_ENABLED') !== 'false',
     ismsAssetUrl: FAB_URL_ISMS_ASSET,
     ismsConnectUrl: FAB_URL_ISMS_CONNECT,
     softwareListUrl: FAB_URL_SOFTWARE_LIST,
@@ -4116,6 +4121,7 @@ function getSystemSettings() {
     adminEmailNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
     groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
     inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
+    fabMenuEnabled: props.getProperty('FAB_MENU_ENABLED') !== 'false',
     // ✨ 保管人/信箱 遷移設定（spec 2026-07-18）
     hrGroupNameMap: props.getProperty('HR_GROUP_NAME_MAP') || '',
     infoStationCustodianEmails: props.getProperty('INFO_STATION_CUSTODIAN_EMAILS') || '',
@@ -4148,6 +4154,9 @@ function saveSystemSettings(settings) {
   }
   if (s.inventoryFeatureEnabled !== undefined) {
     props.setProperty('INVENTORY_FEATURE_ENABLED', String(!!s.inventoryFeatureEnabled));
+  }
+  if (s.fabMenuEnabled !== undefined) {
+    props.setProperty('FAB_MENU_ENABLED', String(!!s.fabMenuEnabled));
   }
   // ✨ 保管人/信箱 遷移設定；HR 相關鍵變更後清 directory 快取讓新值即時生效
   let hrSettingsChanged = false;

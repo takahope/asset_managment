@@ -15839,21 +15839,23 @@
                                     </button>
                                 )}
 
-                                {/* 列印條碼按鈕（所有使用者可見） */}
-                                <button
-                                    onClick={() => {
-                                        if (!__WEB_APP_URL) {
-                                            alert('正在準備列印頁面連結，請稍候再點一次。');
-                                            return;
-                                        }
-                                        window.open(__WEB_APP_URL + '?page=barcodeprint', '_blank');
-                                    }}
-                                    className="hero-btn hero-btn--ghost"
-                                    title="開啟列印條碼頁面"
-                                >
-                                    <i className="fa-solid fa-barcode text-emerald-600"></i>
-                                    <span className="hidden sm:inline">列印條碼</span>
-                                </button>
+                                {/* 列印條碼按鈕（僅管理員可見） */}
+                                {isAdminView && (
+                                    <button
+                                        onClick={() => {
+                                            if (!__WEB_APP_URL) {
+                                                alert('正在準備列印頁面連結，請稍候再點一次。');
+                                                return;
+                                            }
+                                            window.open(__WEB_APP_URL + '?page=barcodeprint', '_blank');
+                                        }}
+                                        className="hero-btn hero-btn--ghost"
+                                        title="開啟列印條碼頁面"
+                                    >
+                                        <i className="fa-solid fa-barcode text-emerald-600"></i>
+                                        <span className="hidden sm:inline">列印條碼</span>
+                                    </button>
+                                )}
 
                                 {/* 操作說明書按鈕 */}
                                 <button
@@ -16536,6 +16538,7 @@
       google.script.run
         .withSuccessHandler(function(urls) {
           if (!urls || !urls.isAdmin) return; // 非管理員不顯示 FAB
+          if (urls.fabMenuEnabled === false) return; // 若設定為隱藏，也不顯示 FAB
           if (urls.ismsAssetUrl)    document.getElementById('fabLinkIsmsAsset').href = urls.ismsAssetUrl;
           if (urls.ismsConnectUrl)  document.getElementById('fabLinkIsmsConnect').href = urls.ismsConnectUrl;
           if (urls.softwareListUrl) document.getElementById('fabLinkSoftware').href = urls.softwareListUrl;
