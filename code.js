@@ -1380,20 +1380,9 @@ function getTransferData(forceUserScope) {
     const groupMemberEmails = getGroupMemberEmails(currentUserEmail);
     groupMemberEmailsLower = groupMemberEmails.map(e => String(e).toLowerCase().trim());
 
-    // 從「保管人/信箱」工作表讀取當前使用者的組別名稱
-    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    const keeperDataForGroup = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-
+    // 從 HR keeper directory 讀取當前使用者的組別名稱
     const normalizedCurrentEmail = String(currentUserEmail).toLowerCase().trim();
-    keeperDataForGroup.forEach(row => {
-      const email = row[1];
-      if (!email) return;
-
-      const normalizedEmail = String(email).toLowerCase().trim();
-      if (normalizedEmail === normalizedCurrentEmail) {
-        currentGroup = row[6] ? String(row[6]).trim() : null;
-      }
-    });
+    currentGroup = getKeeperDirectory_().emailToGroup[normalizedCurrentEmail] || null;
   }
 
   // 1. 從所有資產中，篩選出屬於當前使用者的、可轉移的資產
@@ -1413,50 +1402,31 @@ function getTransferData(forceUserScope) {
       sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
-  // 2. 從「保管人/信箱」工作表讀取保管人和使用人列表（改用固定列表）
-  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-
-  // 讀取保管人資料（A欄：姓名，B欄：Email，C欄：是否為駐管，D欄：資訊組保管人，E欄：資訊組使用人，F欄：收案組保管＆使用人）
-  // 假設第1行是標題，從第2行開始讀取
-  const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 6).getValues();
+  // 2. 從 HR keeper directory 取得保管人清單（全體在勤）與角色名單
+  const directory = getKeeperDirectory_();
   const uniqueKeepersMap = new Map();
-  const custodianMap = new Map(); // ✨ 駐管專用 Map
-  const infoCustodianMap = new Map(); // ✨ 新增：資訊組保管人 Map
-  const infoUserMap = new Map(); // ✨ 新增：資訊組使用人 Map
-  const intakeCustodianMap = new Map(); // ✨ 新增：收案組保管＆使用人 Map
-
-  keeperData.forEach(row => {
-    const name = row[0];  // A欄：姓名
-    const email = row[1]; // B欄：Email
-    const isCustodian = String(row[2]).trim(); // C欄：是否為駐管
-    const isInfoCustodian = String(row[3]).trim(); // D欄：資訊組駐站資產保管人
-    const isInfoUser = String(row[4]).trim(); // E欄：資訊組駐站資產使用人
-    const isIntakeCustodian = String(row[5]).trim(); // F欄：駐站轉中心收案組保管＆使用人
-
-    if (name && email) {
-      uniqueKeepersMap.set(email, name);
-
-      // ✨ 如果 C 欄為「是」，加入駐管列表
-      if (isCustodian === '是') {
-        custodianMap.set(email, name);
-      }
-
-      // ✨ 如果 D 欄為「是」，加入資訊組保管人列表
-      if (isInfoCustodian === '是') {
-        infoCustodianMap.set(email, name);
-      }
-
-      // ✨ 如果 E 欄為「是」，加入資訊組使用人列表
-      if (isInfoUser === '是') {
-        infoUserMap.set(email, name);
-      }
-
-      // ✨ 如果 F 欄為「是」，加入收案組保管＆使用人列表
-      if (isIntakeCustodian === '是') {
-        intakeCustodianMap.set(email, name);
-      }
-    }
+  const custodianMap = new Map(); // ✨ 駐管（HR 職務=駐站管理員）
+  directory.allEmails.forEach(email => {
+    const name = directory.emailToName[email];
+    if (name) uniqueKeepersMap.set(email, name);
   });
+  directory.custodianEmails.forEach(email => {
+    const name = directory.emailToName[email];
+    if (name) custodianMap.set(email, name);
+  });
+  // D/E/F 角色名單改由 Script Properties 維護（設定視窗），姓名經 directory 解析
+  const resolveRoleMap_ = emails => {
+    const roleMap = new Map();
+    emails.forEach(email => {
+      const normalized = String(email).toLowerCase().trim();
+      const name = directory.emailToName[normalized];
+      if (name) roleMap.set(normalized, name);
+    });
+    return roleMap;
+  };
+  const infoCustodianMap = resolveRoleMap_(getInfoStationCustodianEmails_());   // 原 D 欄
+  const infoUserMap = resolveRoleMap_(getInfoStationUserEmails_());             // 原 E 欄
+  const intakeCustodianMap = resolveRoleMap_(getIntakeCustodianEmails_());      // 原 F 欄
 
   // 從「存置地點列表」工作表讀取地點清單（A欄：地點名稱，B欄：是否為駐站，C欄：駐站轉資訊組，D欄：駐站轉中心收案，E欄：資訊組電腦專用）
   const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
