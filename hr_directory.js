@@ -302,7 +302,7 @@ function getHrOfficialGroups_() {
         names.add(name);
       }
     });
-    return Array.from(names).sort();
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   } catch (e) {
     Logger.log('無法取得 HR 組織名稱: ' + e.message);
     return [];

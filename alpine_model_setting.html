@@ -17,6 +17,16 @@ document.addEventListener('alpine:init', function () {
             parsedHrGroupNameMap: {}, hrOfficialGroups: [],
             infoStationCustodianEmails: '', infoStationUserEmails: '', intakeCustodianEmails: '',
             ismsInventoryGroups: '', hrLastSyncAt: '', isSyncing: false,
+            hrGroupSearchQuery: '',
+            get filteredHrOfficialGroups() {
+                if (!this.hrGroupSearchQuery) return this.hrOfficialGroups;
+                var q = this.hrGroupSearchQuery.toLowerCase();
+                var self = this;
+                return this.hrOfficialGroups.filter(function(g) {
+                    var mapped = self.parsedHrGroupNameMap[g] || '';
+                    return g.toLowerCase().indexOf(q) !== -1 || mapped.toLowerCase().indexOf(q) !== -1;
+                });
+            },
 
             init: function () {
                 var self = this;
@@ -246,8 +256,17 @@ document.addEventListener('alpine:init', function () {
                                             您仍可使用下方進階設定手動輸入 JSON。
                                         </div>
                                     </template>
+                                    <template x-if="hrOfficialGroups.length > 0">
+                                        <div class="relative mb-2">
+                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <i class="fa-solid fa-search text-slate-400 text-xs"></i>
+                                            </div>
+                                            <input type="text" x-model="hrGroupSearchQuery" placeholder="搜尋官方名稱或已設定名稱..."
+                                                   class="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                                        </div>
+                                    </template>
                                     <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg bg-white mt-1 divide-y divide-slate-100">
-                                        <template x-for="hrGroup in hrOfficialGroups" :key="hrGroup">
+                                        <template x-for="hrGroup in filteredHrOfficialGroups" :key="hrGroup">
                                             <div class="flex items-center px-3 py-2 hover:bg-slate-50">
                                                 <div class="w-1/2 text-sm text-slate-700 truncate pr-2" x-text="hrGroup" :title="hrGroup"></div>
                                                 <div class="w-1/2 flex items-center">
