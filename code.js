@@ -9177,3 +9177,39 @@ function migrateAdminSettingsToProperties() {
   Logger.log(`遷移完成：ADMIN_EMAILS=${adminEmails.length} 筆, REPORT_ADMIN_EMAILS=${reportAdminEmails.length} 筆, ` +
     `ADMIN_EMAIL_NOTIFY_ENABLED=${notifyEnabled}, GROUP_PROXY_ENABLED=${groupProxyEnabled}, INVENTORY_FEATURE_ENABLED=${inventoryEnabled}`);
 }
+
+/**
+ * ✨ [一次性遷移] 讀「保管人/信箱」D/E/F/H 欄寫入 Script Properties。
+ * 比照 migrateAdminSettingsToProperties:編輯器手動執行一次;不清空原欄位(回退保險)。
+ * D=INFO_STATION_CUSTODIAN_EMAILS, E=INFO_STATION_USER_EMAILS,
+ * F=INTAKE_CUSTODIAN_EMAILS, H=ISMS_INVENTORY_GROUPS
+ */
+function migrateKeeperFlagsToProperties() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() <= 1) {
+    Logger.log(`找不到「${KEEPER_EMAIL_MAP_SHEET_NAME}」資料,無法遷移。`);
+    return;
+  }
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
+  const infoCustodians = [];
+  const infoUsers = [];
+  const intakeCustodians = [];
+  const ismsGroups = new Set();
+  rows.forEach(row => {
+    const email = String(row[1] || '').toLowerCase().trim();
+    if (email && email.includes('@')) {
+      if (String(row[3]).trim() === '是') infoCustodians.push(email);
+      if (String(row[4]).trim() === '是') infoUsers.push(email);
+      if (String(row[5]).trim() === '是') intakeCustodians.push(email);
+    }
+    const groupName = String(row[7] || '').trim();
+    if (groupName) ismsGroups.add(groupName);
+  });
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('INFO_STATION_CUSTODIAN_EMAILS', infoCustodians.join(','));
+  props.setProperty('INFO_STATION_USER_EMAILS', infoUsers.join(','));
+  props.setProperty('INTAKE_CUSTODIAN_EMAILS', intakeCustodians.join(','));
+  props.setProperty('ISMS_INVENTORY_GROUPS', Array.from(ismsGroups).join(','));
+  Logger.log(`遷移完成:資訊組保管人 ${infoCustodians.length} 筆、資訊組使用人 ${infoUsers.length} 筆、` +
+    `收案組 ${intakeCustodians.length} 筆、盤點組別 ${ismsGroups.size} 筆。原欄位未清空(回退保險)。`);
+}
