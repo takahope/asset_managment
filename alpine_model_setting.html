@@ -13,6 +13,9 @@ document.addEventListener('alpine:init', function () {
             geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
             reportAdminEmails: '', adminEmailNotifyEnabled: false,
             groupProxyEnabled: false, inventoryFeatureEnabled: true,
+            hrSpreadsheetId: '', hrGroupNameMap: '',
+            infoStationCustodianEmails: '', infoStationUserEmails: '', intakeCustodianEmails: '',
+            ismsInventoryGroups: '', hrLastSyncAt: '', isSyncing: false,
 
             init: function () {
                 var self = this;
@@ -43,6 +46,13 @@ document.addEventListener('alpine:init', function () {
                         self.adminEmailNotifyEnabled = !!settings.adminEmailNotifyEnabled;
                         self.groupProxyEnabled = !!settings.groupProxyEnabled;
                         self.inventoryFeatureEnabled = settings.inventoryFeatureEnabled !== false;
+                        self.hrSpreadsheetId = settings.hrSpreadsheetId || '';
+                        self.hrGroupNameMap = settings.hrGroupNameMap || '';
+                        self.infoStationCustodianEmails = settings.infoStationCustodianEmails || '';
+                        self.infoStationUserEmails = settings.infoStationUserEmails || '';
+                        self.intakeCustodianEmails = settings.intakeCustodianEmails || '';
+                        self.ismsInventoryGroups = settings.ismsInventoryGroups || '';
+                        self.hrLastSyncAt = settings.hrLastSyncAt || '';
                         systemLoaded = true;
                         maybeFinishLoading();
                     })
@@ -53,6 +63,22 @@ document.addEventListener('alpine:init', function () {
                     .getSystemSettings();
             },
             close: function () { this.$store.app.showModelSettingModal = false; },
+            syncFromHr: function () {
+                var self = this;
+                if (this.isSyncing) return;
+                this.isSyncing = true;
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        self.isSyncing = false;
+                        self.hrLastSyncAt = (result && result.syncedAt) || self.hrLastSyncAt;
+                        alert('HR 同步完成，寫入 ' + ((result && result.count) || 0) + ' 筆。');
+                    })
+                    .withFailureHandler(function (error) {
+                        self.isSyncing = false;
+                        alert('HR 同步失敗：' + (error && error.message ? error.message : error));
+                    })
+                    .manualSyncFromHr();
+            },
             save: function () {
                 var self = this;
                 this.isSubmitting = true;
@@ -72,7 +98,13 @@ document.addEventListener('alpine:init', function () {
                                 reportAdminEmails: self.reportAdminEmails,
                                 adminEmailNotifyEnabled: self.adminEmailNotifyEnabled,
                                 groupProxyEnabled: self.groupProxyEnabled,
-                                inventoryFeatureEnabled: self.inventoryFeatureEnabled
+                                inventoryFeatureEnabled: self.inventoryFeatureEnabled,
+                                hrSpreadsheetId: self.hrSpreadsheetId,
+                                hrGroupNameMap: self.hrGroupNameMap,
+                                infoStationCustodianEmails: self.infoStationCustodianEmails,
+                                infoStationUserEmails: self.infoStationUserEmails,
+                                intakeCustodianEmails: self.intakeCustodianEmails,
+                                ismsInventoryGroups: self.ismsInventoryGroups
                             });
                     })
                     .withFailureHandler(function (error) {
@@ -198,6 +230,56 @@ document.addEventListener('alpine:init', function () {
                                               :class="inventoryFeatureEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
                                     </button>
                                 </div>
+                            </div>
+
+                            <!-- ✨ 人員資料來源（HR）區塊 -->
+                            <div class="space-y-3 border-t border-slate-100 pt-4">
+                                <h4 class="text-sm font-semibold text-slate-700"><i class="fa-solid fa-people-group mr-1"></i>人員資料來源（HR）</h4>
+
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">HR 主表試算表 ID</span>
+                                    <input type="text" x-model="hrSpreadsheetId" placeholder="HR_managerv3 試算表 ID"
+                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </label>
+
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">組別名稱轉換表（JSON：HR 組別名 → 本系統組別名）</span>
+                                    <textarea x-model="hrGroupNameMap" rows="3" placeholder='{"行政支援組(行政組)":"行政組","資料運用組":"釋出組","專案規劃組":"策略組"}'
+                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                </label>
+
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">資訊組駐站資產保管人（email，逗號分隔）</span>
+                                    <textarea x-model="infoStationCustodianEmails" rows="2"
+                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                </label>
+
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">資訊組駐站資產使用人（email，逗號分隔）</span>
+                                    <textarea x-model="infoStationUserEmails" rows="2"
+                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                </label>
+
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">駐站轉中心收案組保管＆使用人（email，逗號分隔）</span>
+                                    <textarea x-model="intakeCustodianEmails" rows="2"
+                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                </label>
+
+                                <label class="block">
+                                    <span class="text-xs text-slate-500">ISMS 盤點組別（逗號分隔）</span>
+                                    <input type="text" x-model="ismsInventoryGroups"
+                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </label>
+
+                                <div class="flex items-center justify-between pt-1">
+                                    <button type="button" @click="syncFromHr()" :disabled="isSyncing || isSubmitting"
+                                            class="px-3 py-2 text-sm font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-colors disabled:opacity-50">
+                                        <i class="fa-solid fa-rotate mr-1" :class="isSyncing ? 'fa-spin' : ''"></i><span x-text="isSyncing ? '同步中...' : '立即從 HR 同步'"></span>
+                                    </button>
+                                    <span class="text-xs text-slate-400" x-text="hrLastSyncAt ? '上次同步：' + hrLastSyncAt.replace('T', ' ').slice(0, 16) : '尚未同步'"></span>
+                                </div>
+                                <p class="text-xs text-slate-500">保管人/組別由 HR 主表單向同步；此區清單為主專案不再讀「保管人/信箱」後的角色設定來源。</p>
                             </div>
                         </div>
                     </template>
