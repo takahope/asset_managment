@@ -941,25 +941,21 @@ function getUserStateData(forceUserScope, options) {
   const isAdmin = checkAdminPermissions();
   const useAdminScope = isAdmin && !forceUserScope;
 
-  // 查詢使用者姓名
+  // 查詢使用者姓名與「姓名→組別」對照（HR keeper directory）
   let currentUserName = currentUserEmail.split('@')[0]; // 預設使用 email 前綴
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-  const userNameToGroupMap = {};
-  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-    for (let row of keeperData) {
-      const name = row[0] ? String(row[0]).trim() : '';
-      const email = row[1];
-      const groupName = row[6] ? String(row[6]).trim() : '';
-      if (email && String(email).toLowerCase() === normalizedCurrentEmail) {
-        currentUserName = name || currentUserName; // 找到對應的姓名
-      }
-      if (name && groupName && !userNameToGroupMap[name]) {
-        userNameToGroupMap[name] = groupName;
-      }
-    }
+  const directory = getKeeperDirectory_();
+  if (directory.emailToName[normalizedCurrentEmail]) {
+    currentUserName = directory.emailToName[normalizedCurrentEmail];
   }
+  const userNameToGroupMap = {};
+  directory.allEmails.forEach(email => {
+    const name = directory.emailToName[email];
+    const groupName = directory.emailToGroup[email] || '';
+    if (name && groupName && !userNameToGroupMap[name]) {
+      userNameToGroupMap[name] = groupName;
+    }
+  });
 
   let filteredData;
 
@@ -6222,17 +6218,15 @@ function addNewAssetsBatch(payload) {
     const existingIdSet = new Set(existingAssets.map(asset => String(asset.assetId || '').trim()).filter(id => id));
     const incomingIdSet = new Set();
 
-    const keeperSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    if (!keeperSheet || keeperSheet.getLastRow() <= 1) {
+    const directory = getKeeperDirectory_();
+    if (!directory.allEmails.length) {
       return { error: '找不到保管人名單，無法匯入' };
     }
-    const keeperData = keeperSheet.getRange(2, 1, keeperSheet.getLastRow() - 1, 2).getValues();
     const nameToEmail = {};
     const duplicateNames = new Set();
-    keeperData.forEach(row => {
-      const name = String(row[0] || '').trim();
-      const email = String(row[1] || '').trim().toLowerCase();
-      if (!name || !email) return;
+    directory.allEmails.forEach(email => {
+      const name = String(directory.emailToName[email] || '').trim();
+      if (!name) return;
       if (nameToEmail[name] && nameToEmail[name] !== email) {
         duplicateNames.add(name);
         return;
@@ -6548,33 +6542,22 @@ function getInventoryData(forceUserScope) {
     const emailToNameMap = {};
     const emailToGroupMap = {};
     const assigneeUserMap = {};
-    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-      keeperData.forEach(row => {
-        const name = row[0];
-        const email = row[1];
-        const groupName = row[6];
-        if (email) {
-          const normalizedEmail = String(email).toLowerCase();
-          const displayName = name ? String(name).trim() : String(email).split('@')[0];
-          emailToNameMap[normalizedEmail] = displayName;
-          const normalizedGroup = groupName ? String(groupName).trim() : '';
-          if (normalizedGroup) {
-            emailToGroupMap[normalizedEmail] = normalizedGroup;
-          }
-          if (!assigneeUserMap[normalizedEmail]) {
-            assigneeUserMap[normalizedEmail] = {
-              name: displayName,
-              email: normalizedEmail,
-              group: normalizedGroup
-            };
-          } else if (normalizedGroup && !assigneeUserMap[normalizedEmail].group) {
-            assigneeUserMap[normalizedEmail].group = normalizedGroup;
-          }
-        }
-      });
-    }
+    const directory = getKeeperDirectory_();
+    directory.allEmails.forEach(normalizedEmail => {
+      const displayName = directory.emailToName[normalizedEmail];
+      emailToNameMap[normalizedEmail] = displayName;
+      const normalizedGroup = directory.emailToGroup[normalizedEmail] || '';
+      if (normalizedGroup) {
+        emailToGroupMap[normalizedEmail] = normalizedGroup;
+      }
+      if (!assigneeUserMap[normalizedEmail]) {
+        assigneeUserMap[normalizedEmail] = {
+          name: displayName,
+          email: normalizedEmail,
+          group: normalizedGroup
+        };
+      }
+    });
     const currentUserGroup = ismsAccess.currentUserGroup || emailToGroupMap[currentUserEmail] || '未分組';
     const groups = Array.from(new Set(Object.values(emailToGroupMap).filter(Boolean))).sort();
     const assigneeUsers = Object.values(assigneeUserMap).sort((a, b) => {
@@ -6712,25 +6695,15 @@ function getPendingInventoryAssignments(forceUserScope) {
     let currentUserGroup = '未分組';
     const emailToNameMap = {};
     const emailToGroupMap = {};
-    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-      keeperData.forEach(row => {
-        const name = row[0];
-        const email = row[1];
-        const groupName = row[6];
-        if (email) {
-          const normalizedEmail = String(email).toLowerCase();
-          emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
-          if (groupName) {
-            emailToGroupMap[normalizedEmail] = String(groupName).trim();
-          }
-          if (normalizedEmail === currentUserEmail && groupName) {
-            currentUserGroup = String(groupName).trim();
-          }
-        }
-      });
-    }
+    const directory = getKeeperDirectory_();
+    directory.allEmails.forEach(normalizedEmail => {
+      emailToNameMap[normalizedEmail] = directory.emailToName[normalizedEmail];
+      const groupName = directory.emailToGroup[normalizedEmail] || '';
+      if (groupName) {
+        emailToGroupMap[normalizedEmail] = groupName;
+      }
+    });
+    currentUserGroup = directory.emailToGroup[currentUserEmail] || '未分組';
 
     const inventoryLogSheet = ss.getSheetByName(INVENTORY_LOG_SHEET_NAME);
     if (!inventoryLogSheet || inventoryLogSheet.getLastRow() <= 1) {
@@ -7108,21 +7081,12 @@ function startInventorySession(options) {
     const emailToGroupMap = {};
     const emailToNameMap = {};
     if (assignmentMode === 'group' || assignmentMode === 'custom' || groupFilterSet.size > 0) {
-      const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-      if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-        const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-        keeperData.forEach(row => {
-          const name = row[0];
-          const email = row[1];
-          const groupName = row[6];
-          if (email) {
-            const normalizedEmail = String(email).toLowerCase();
-            const displayName = name ? String(name).trim() : String(email).split('@')[0];
-            emailToGroupMap[normalizedEmail] = groupName ? String(groupName).trim() : '';
-            emailToNameMap[normalizedEmail] = displayName;
-          }
-        });
-      }
+      const directory = getKeeperDirectory_();
+      directory.allEmails.forEach(normalizedEmail => {
+        const displayName = directory.emailToName[normalizedEmail];
+        emailToGroupMap[normalizedEmail] = directory.emailToGroup[normalizedEmail] || '';
+        emailToNameMap[normalizedEmail] = displayName;
+      });
     }
 
     let customAssignedUser = '';
