@@ -4115,14 +4115,22 @@ function getSystemSettings() {
     reportAdminEmails: props.getProperty('REPORT_ADMIN_EMAILS') || '',
     adminEmailNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
     groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
-    inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false'
+    inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
+    // ✨ 保管人/信箱 遷移設定（spec 2026-07-18）
+    hrSpreadsheetId: props.getProperty('HR_SPREADSHEET_ID') || '',
+    hrGroupNameMap: props.getProperty('HR_GROUP_NAME_MAP') || '',
+    infoStationCustodianEmails: props.getProperty('INFO_STATION_CUSTODIAN_EMAILS') || '',
+    infoStationUserEmails: props.getProperty('INFO_STATION_USER_EMAILS') || '',
+    intakeCustodianEmails: props.getProperty('INTAKE_CUSTODIAN_EMAILS') || '',
+    ismsInventoryGroups: props.getProperty('ISMS_INVENTORY_GROUPS') || '',
+    hrLastSyncAt: props.getProperty('HR_LAST_SYNC_AT') || '' // 唯讀，save 不處理
   };
 }
 
 /**
  * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
  * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
- * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean}} settings
+ * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrSpreadsheetId?:string, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
  * @returns {{success:boolean}}
  */
 function saveSystemSettings(settings) {
@@ -4140,6 +4148,36 @@ function saveSystemSettings(settings) {
   }
   if (s.inventoryFeatureEnabled !== undefined) {
     props.setProperty('INVENTORY_FEATURE_ENABLED', String(!!s.inventoryFeatureEnabled));
+  }
+  // ✨ 保管人/信箱 遷移設定；HR 相關鍵變更後清 directory 快取讓新值即時生效
+  let hrSettingsChanged = false;
+  if (s.hrSpreadsheetId !== undefined) {
+    props.setProperty('HR_SPREADSHEET_ID', String(s.hrSpreadsheetId).trim());
+    hrSettingsChanged = true;
+  }
+  if (s.hrGroupNameMap !== undefined) {
+    const raw = String(s.hrGroupNameMap).trim();
+    if (raw) {
+      try { JSON.parse(raw); } catch (e) { throw new Error('組別轉換表不是合法 JSON：' + e.message); }
+    }
+    props.setProperty('HR_GROUP_NAME_MAP', raw);
+    hrSettingsChanged = true;
+  }
+  if (s.infoStationCustodianEmails !== undefined) {
+    props.setProperty('INFO_STATION_CUSTODIAN_EMAILS', String(s.infoStationCustodianEmails).trim());
+  }
+  if (s.infoStationUserEmails !== undefined) {
+    props.setProperty('INFO_STATION_USER_EMAILS', String(s.infoStationUserEmails).trim());
+  }
+  if (s.intakeCustodianEmails !== undefined) {
+    props.setProperty('INTAKE_CUSTODIAN_EMAILS', String(s.intakeCustodianEmails).trim());
+  }
+  if (s.ismsInventoryGroups !== undefined) {
+    props.setProperty('ISMS_INVENTORY_GROUPS', String(s.ismsInventoryGroups).trim());
+  }
+  if (hrSettingsChanged) {
+    clearKeeperDirectoryCache();
+    clearPermissionCache();
   }
   return { success: true };
 }
