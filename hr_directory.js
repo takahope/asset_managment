@@ -252,7 +252,6 @@ function syncKeeperSheetFromHR() {
   const emails = directory.allEmails.slice().sort();
   if (emails.length < HR_SYNC_MIN_HEADCOUNT) {
     const msg = `HR 同步中止:在勤人數 ${emails.length} 低於門檻 ${HR_SYNC_MIN_HEADCOUNT},「保管人/信箱」未變更。`;
-    notifyAdminsOfSyncFailure_(msg);
     throw new Error(msg);
   }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
@@ -277,17 +276,6 @@ function syncKeeperSheetFromHR() {
   return { success: true, count: rows.length, syncedAt: syncedAt };
 }
 
-/** 同步失敗時通知管理員(通知失敗只記 log,不再拋錯) */
-function notifyAdminsOfSyncFailure_(message) {
-  try {
-    const admins = getAdminEmails();
-    if (admins.length) {
-      MailApp.sendEmail(admins.join(','), '[資產管理] HR 同步失敗', message);
-    }
-  } catch (e) {
-    Logger.log('同步失敗通知寄送失敗:' + e.message);
-  }
-}
 
 /** ✨ [設定視窗呼叫] 手動觸發 HR 同步(admin 守衛) */
 function manualSyncFromHr() {
