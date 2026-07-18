@@ -546,35 +546,11 @@ function getGroupMemberEmails(targetEmail) {
   const normalizedTarget = String(targetEmail || '').toLowerCase().trim();
   if (!normalizedTarget) return [];
 
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-  if (!keeperEmailSheet || keeperEmailSheet.getLastRow() <= 1) {
-    return [normalizedTarget];
-  }
+  const directory = getKeeperDirectory_();
+  const groupName = directory.emailToGroup[normalizedTarget];
+  if (!groupName) return [normalizedTarget];
 
-  const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-  const emailToGroupMap = {};
-  const groupToMembersMap = {};
-
-  keeperData.forEach(row => {
-    const email = row[1];
-    if (!email) return;
-    const normalizedEmail = String(email).toLowerCase().trim();
-    const groupName = row[6] ? String(row[6]).trim() : '';
-    if (!groupName) return;
-    emailToGroupMap[normalizedEmail] = groupName;
-    if (!groupToMembersMap[groupName]) {
-      groupToMembersMap[groupName] = [];
-    }
-    groupToMembersMap[groupName].push(normalizedEmail);
-  });
-
-  const groupName = emailToGroupMap[normalizedTarget];
-  if (!groupName) {
-    return [normalizedTarget];
-  }
-
-  const members = groupToMembersMap[groupName] || [];
+  const members = directory.groupToMembers[groupName] || [];
   const uniqueMembers = new Set(members);
   uniqueMembers.add(normalizedTarget);
   return Array.from(uniqueMembers);
@@ -753,20 +729,12 @@ function getAllowedEmails() {
 
   Logger.log("快取未命中，從 Google Sheet 建立系統存取白名單。");
 
-  // 來源 1：保管人信箱（B 欄）
+  // 來源 1：HR 全體在勤人員（經 keeper directory；HR 失敗時 directory 內部自動回退讀舊表）
   let keeperEmails = [];
   try {
-    const keeperSheet = SpreadsheetApp.openById(SPREADSHEET_ID)
-      .getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    if (keeperSheet && keeperSheet.getLastRow() > 1) {
-      const range = keeperSheet.getRange(2, 2, keeperSheet.getLastRow() - 1, 1); // B2:B
-      keeperEmails = range.getValues()
-        .map(row => row[0])
-        .filter(email => email && String(email).includes('@'))
-        .map(email => String(email).toLowerCase().trim());
-    }
+    keeperEmails = getKeeperDirectory_().allEmails;
   } catch (e) {
-    Logger.log("讀取保管人信箱時發生錯誤：" + e.message);
+    Logger.log("讀取 HR 人員名單時發生錯誤：" + e.message);
   }
 
   // 來源 2：管理員名單（防呆機制）
@@ -789,6 +757,7 @@ function getAllowedEmails() {
  */
 function clearPermissionCache() {
   CacheService.getScriptCache().remove('system_access_allowlist');
+  clearKeeperDirectoryCache();
 }
 
 /**
