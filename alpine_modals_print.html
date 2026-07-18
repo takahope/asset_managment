@@ -128,10 +128,6 @@ document.addEventListener('alpine:init', function () {
             },
             get lentAssetsDetails() { return this.$store.app.lentAssetsDetails; },
             get isLoading() { return this.$store.app.isLoadingLentDetails; },
-            get hasExternalLends() {
-                var d = this.lentAssetsDetails;
-                return Array.isArray(d) && d.some(function (a) { return a.borrowerType === 'external'; });
-            },
             get filteredAssets() {
                 var d = this.lentAssetsDetails;
                 var f = this.filters;
@@ -721,7 +717,7 @@ document.addEventListener('alpine:init', function () {
                     已選擇 <span class="font-bold text-blue-600" x-text="selectedLendIds.length"></span> / <span x-text="filteredAssets.length"></span> 筆
                 </div>
                 <div class="flex gap-3">
-                    <button x-show="hasExternalLends" @click="$store.app.openLendingPrintFromLent()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium shadow-sm" :disabled="isSubmitting">
+                    <button x-show="lentAssetsDetails && lentAssetsDetails.length > 0" @click="$store.app.openLendingPrintFromLent()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium shadow-sm" :disabled="isSubmitting">
                         <i class="fas fa-print"></i>列印出借申請單
                     </button>
                     <button @click="$store.app.closeLentModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium" :disabled="isSubmitting">關閉</button>
