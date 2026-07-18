@@ -285,6 +285,28 @@ function manualSyncFromHr() {
 }
 
 /**
+ * 取得 HR 組織架構樹中的所有官方組別名稱(供設定 UI 顯示用)
+ * @returns {string[]}
+ */
+function getHrOfficialGroups_() {
+  try {
+    const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
+    const orgSheet = hrSs.getSheetByName(HR_ORG_TREE_SHEET_NAME);
+    if (!orgSheet || orgSheet.getLastRow() <= 1) return [];
+    const names = new Set();
+    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
+      const name = String(row[3] || '').trim();
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort();
+  } catch (e) {
+    Logger.log('無法取得 HR 組織名稱: ' + e.message);
+    return [];
+  }
+}
+
+
+/**
  * [編輯器手動執行一次] 安裝每日 05:00 HR 同步觸發器(重複執行會先清舊觸發器,冪等)。
  */
 function setupHrSyncTrigger() {

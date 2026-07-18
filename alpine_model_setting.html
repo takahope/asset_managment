@@ -14,6 +14,7 @@ document.addEventListener('alpine:init', function () {
             reportAdminEmails: '', adminEmailNotifyEnabled: false,
             groupProxyEnabled: false, inventoryFeatureEnabled: true,
             hrSpreadsheetId: '', hrGroupNameMap: '',
+            parsedHrGroupNameMap: {}, hrOfficialGroups: [],
             infoStationCustodianEmails: '', infoStationUserEmails: '', intakeCustodianEmails: '',
             ismsInventoryGroups: '', hrLastSyncAt: '', isSyncing: false,
 
@@ -48,6 +49,8 @@ document.addEventListener('alpine:init', function () {
                         self.inventoryFeatureEnabled = settings.inventoryFeatureEnabled !== false;
                         self.hrSpreadsheetId = settings.hrSpreadsheetId || '';
                         self.hrGroupNameMap = settings.hrGroupNameMap || '';
+                        try { self.parsedHrGroupNameMap = JSON.parse(self.hrGroupNameMap || '{}'); } catch(e) { self.parsedHrGroupNameMap = {}; }
+                        self.hrOfficialGroups = settings.hrOfficialGroups || [];
                         self.infoStationCustodianEmails = settings.infoStationCustodianEmails || '';
                         self.infoStationUserEmails = settings.infoStationUserEmails || '';
                         self.intakeCustodianEmails = settings.intakeCustodianEmails || '';
@@ -82,6 +85,7 @@ document.addEventListener('alpine:init', function () {
             save: function () {
                 var self = this;
                 this.isSubmitting = true;
+                this.hrGroupNameMap = JSON.stringify(this.parsedHrGroupNameMap);
                 google.script.run
                     .withSuccessHandler(function () {
                         google.script.run
@@ -243,10 +247,31 @@ document.addEventListener('alpine:init', function () {
                                 </label>
 
                                 <label class="block">
-                                    <span class="text-xs text-slate-500">組別名稱轉換表（JSON：HR 組別名 → 本系統組別名）</span>
-                                    <textarea x-model="hrGroupNameMap" rows="3" placeholder='{"行政支援組(行政組)":"行政組","資料運用組":"釋出組","專案規劃組":"策略組"}'
-                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                    <span class="text-xs text-slate-500 font-bold mb-2 block">組別名稱轉換表 (顯示名稱若空白，則與 HR 正式名稱相同)</span>
+                                    <template x-if="hrOfficialGroups.length === 0">
+                                        <div class="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                                            目前無法取得 HR 組織架構，請確認 HR 主表 ID 正確且有讀取權限。
+                                            您仍可使用下方進階設定手動輸入 JSON。
+                                        </div>
+                                    </template>
+                                    <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg bg-white mt-1 divide-y divide-slate-100">
+                                        <template x-for="hrGroup in hrOfficialGroups" :key="hrGroup">
+                                            <div class="flex items-center px-3 py-2 hover:bg-slate-50">
+                                                <div class="w-1/2 text-sm text-slate-700 truncate pr-2" x-text="hrGroup" :title="hrGroup"></div>
+                                                <div class="w-1/2 flex items-center">
+                                                    <i class="fa-solid fa-arrow-right-long text-slate-300 mx-2 text-xs"></i>
+                                                    <input type="text" x-model="parsedHrGroupNameMap[hrGroup]" :placeholder="hrGroup"
+                                                           class="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
                                 </label>
+                                <details class="mt-2">
+                                    <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">進階：編輯原始 JSON</summary>
+                                    <textarea :value="JSON.stringify(parsedHrGroupNameMap, null, 2)" @input="try { parsedHrGroupNameMap = JSON.parse($event.target.value); } catch(e){}" rows="3"
+                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                </details>
 
                                 <label class="block">
                                     <span class="text-xs text-slate-500">資訊組駐站資產保管人（email，逗號分隔）</span>

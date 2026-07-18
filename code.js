@@ -4123,7 +4123,8 @@ function getSystemSettings() {
     infoStationUserEmails: props.getProperty('INFO_STATION_USER_EMAILS') || '',
     intakeCustodianEmails: props.getProperty('INTAKE_CUSTODIAN_EMAILS') || '',
     ismsInventoryGroups: props.getProperty('ISMS_INVENTORY_GROUPS') || '',
-    hrLastSyncAt: props.getProperty('HR_LAST_SYNC_AT') || '' // 唯讀，save 不處理
+    hrLastSyncAt: props.getProperty('HR_LAST_SYNC_AT') || '', // 唯讀，save 不處理
+    hrOfficialGroups: getHrOfficialGroups_()
   };
 }
 
