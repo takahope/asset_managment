@@ -295,8 +295,12 @@ function getHrOfficialGroups_() {
     if (!orgSheet || orgSheet.getLastRow() <= 1) return [];
     const names = new Set();
     orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
+      const code = String(row[2] || '').trim();
       const name = String(row[3] || '').trim();
-      if (name) names.add(name);
+      // ✨ 根據 ECOSYSTEM 契約，只列出權重小於 99 的組織 (PRE, CEO, DEPT-*, GRP-*)
+      if (name && orgCodeRank_(code) < 99) {
+        names.add(name);
+      }
     });
     return Array.from(names).sort();
   } catch (e) {
