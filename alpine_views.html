@@ -796,186 +796,128 @@ document.addEventListener('alpine:init', function () {
                     </div>
                 </div>
 
-                <!-- 第 2 行:下拉選單 + 盤點任務開關 -->
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 items-stretch">
+                <!-- 第 2 行:下拉選單 + 盤點任務開關 (Compact Inline) -->
+                <div class="flex flex-wrap items-center gap-2 relative z-10">
+                    
                     <!-- 多選:狀態 -->
                     <template x-for="cfg in msBefore" :key="cfg.key">
-                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
-                            <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
-                                <span class="truncate" x-text="cfg.label"></span>
-                                <span class="text-[11px] text-slate-500 shrink-0" x-text="'已選 ' + selectedFor(cfg.key).length + ' 項'"></span>
-                            </label>
-                            <div class="space-y-2 flex-1">
-                                <div class="relative fs-dropdown-root">
-                                    <button type="button" @click="toggleDropdown(cfg.key)"
-                                            class="w-full min-h-[42px] px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                                            :class="dropdownOpen[cfg.key] ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'">
-                                        <span :class="selectedFor(cfg.key).length === 0 ? 'text-slate-400' : 'text-slate-700'"
-                                              x-text="selectedFor(cfg.key).length === 0 ? cfg.placeholder : '已選擇 ' + selectedFor(cfg.key).length + ' 項'"></span>
-                                        <i class="fa-solid fa-chevron-down text-slate-400 transition-transform" :class="dropdownOpen[cfg.key] ? 'rotate-180' : ''"></i>
-                                    </button>
-                                    <div x-show="dropdownOpen[cfg.key]" class="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
-                                        <div class="p-2 border-b border-slate-100 bg-slate-50">
-                                            <div class="flex justify-between px-1 text-xs">
-                                                <button type="button" @click="selectAllFilterOptions(cfg.key)"
-                                                        class="text-blue-600 hover:text-blue-800 font-medium"
-                                                        :disabled="optionsFor(cfg.key).length === 0">全選</button>
-                                                <button type="button" @click="clearFilterOptions(cfg.key)" class="text-slate-500 hover:text-slate-700">清除所有</button>
-                                            </div>
-                                        </div>
-                                        <div class="max-h-72 overflow-y-auto p-1">
-                                            <template x-for="option in optionsFor(cfg.key)" :key="option">
-                                                <label class="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700">
-                                                    <input type="checkbox" class="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
-                                                           :checked="selectedFor(cfg.key).indexOf(option) !== -1"
-                                                           @change="toggleFilterOption(cfg.key, option)">
-                                                    <span class="flex-1" x-text="option"></span>
-                                                    <i class="fa-solid fa-check text-blue-600 text-xs" x-show="selectedFor(cfg.key).indexOf(option) !== -1"></i>
-                                                </label>
-                                            </template>
-                                            <div class="py-4 text-center text-sm text-slate-500" x-show="optionsFor(cfg.key).length === 0" x-text="cfg.empty"></div>
-                                        </div>
+                        <div class="relative fs-dropdown-root">
+                            <button type="button" @click="toggleDropdown(cfg.key)"
+                                    class="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm bg-white transition-colors h-[38px]"
+                                    :class="dropdownOpen[cfg.key] || selectedFor(cfg.key).length > 0 ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
+                                <i class="fa-solid fa-filter text-slate-400 text-[11px]" :class="selectedFor(cfg.key).length > 0 ? 'text-blue-500' : ''"></i>
+                                <span class="font-medium" x-text="cfg.label"></span>
+                                <span x-show="selectedFor(cfg.key).length > 0" 
+                                      class="bg-blue-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none min-w-[18px] text-center" 
+                                      x-text="selectedFor(cfg.key).length"></span>
+                                <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform ml-1" :class="dropdownOpen[cfg.key] ? 'rotate-180' : ''"></i>
+                            </button>
+                            <div x-show="dropdownOpen[cfg.key]" class="absolute z-50 left-0 mt-2 w-64 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                <div class="p-2 border-b border-slate-100 bg-slate-50">
+                                    <div class="flex justify-between px-1 text-xs">
+                                        <button type="button" @click="selectAllFilterOptions(cfg.key)" class="text-blue-600 hover:text-blue-800 font-medium" :disabled="optionsFor(cfg.key).length === 0">全選</button>
+                                        <button type="button" @click="clearFilterOptions(cfg.key)" class="text-slate-500 hover:text-slate-700">清除所有</button>
                                     </div>
                                 </div>
-                                <div class="flex flex-wrap gap-2" x-show="selectedFor(cfg.key).length > 0">
-                                    <template x-for="value in selectedFor(cfg.key)" :key="value">
-                                        <span class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
-                                            <span x-text="value"></span>
-                                            <button type="button" @click="removeFilterOption(cfg.key, value)"
-                                                    class="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
-                                                    :aria-label="'移除 ' + value">
-                                                <i class="fa-solid fa-xmark text-[10px]"></i>
-                                            </button>
-                                        </span>
+                                <div class="max-h-72 overflow-y-auto p-1">
+                                    <template x-for="option in optionsFor(cfg.key)" :key="option">
+                                        <label class="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700">
+                                            <input type="checkbox" class="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500" :checked="selectedFor(cfg.key).indexOf(option) !== -1" @change="toggleFilterOption(cfg.key, option)">
+                                            <span class="flex-1" x-text="option"></span>
+                                            <i class="fa-solid fa-check text-blue-600 text-xs" x-show="selectedFor(cfg.key).indexOf(option) !== -1"></i>
+                                        </label>
                                     </template>
-                                    <button type="button" @click="clearFilterOptions(cfg.key)" class="text-xs text-slate-500 hover:text-rose-600 underline">清除</button>
+                                    <div class="py-4 text-center text-sm text-slate-500" x-show="optionsFor(cfg.key).length === 0" x-text="cfg.empty"></div>
                                 </div>
                             </div>
                         </div>
                     </template>
 
                     <!-- 單選:財產類別 -->
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
-                        <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
-                            <span class="truncate">依財產類別篩選</span>
-                        </label>
+                    <div class="relative">
                         <select :value="$store.app.filters.category"
                                 @change="$store.app.handleFilterChange('category', $event.target.value)"
-                                class="w-full min-h-[42px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm hover:border-slate-300 bg-white"
-                                :class="$store.app.filters.category ? 'text-slate-700' : 'text-slate-400'">
-                            <option value="">-- 顯示全部 --</option>
+                                class="h-[38px] pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
+                                :class="$store.app.filters.category ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700 font-medium' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
+                            <option value="">依財產類別篩選</option>
                             <template x-for="opt in categoryOptions" :key="opt">
                                 <option :value="opt" x-text="opt" :selected="$store.app.filters.category === opt"></option>
                             </template>
                         </select>
+                        <i class="fa-solid fa-filter absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none" 
+                           :class="$store.app.filters.category ? 'text-blue-500' : 'text-slate-400'"></i>
+                        <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
                     </div>
 
                     <!-- 單選:系統類別 -->
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
-                        <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
-                            <span class="truncate">依系統類別篩選</span>
-                        </label>
+                    <div class="relative">
                         <select :value="$store.app.filters.systemCategory"
                                 @change="$store.app.handleFilterChange('systemCategory', $event.target.value)"
-                                class="w-full min-h-[42px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm hover:border-slate-300 bg-white"
-                                :class="$store.app.filters.systemCategory ? 'text-slate-700' : 'text-slate-400'">
-                            <option value="">-- 顯示全部 --</option>
+                                class="h-[38px] pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
+                                :class="$store.app.filters.systemCategory ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700 font-medium' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
+                            <option value="">依系統類別篩選</option>
                             <option value="新系統">新系統</option>
                             <option value="舊系統">舊系統</option>
                         </select>
+                        <i class="fa-solid fa-filter absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none" 
+                           :class="$store.app.filters.systemCategory ? 'text-blue-500' : 'text-slate-400'"></i>
+                        <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
                     </div>
 
                     <!-- 多選:保管人/使用人/組別/保管位置(可搜尋) -->
                     <template x-for="cfg in msAfter" :key="cfg.key">
-                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2">
-                            <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
-                                <span class="truncate" x-text="cfg.label"></span>
-                                <span class="text-[11px] text-slate-500 shrink-0" x-text="'已選 ' + selectedFor(cfg.key).length + ' 項'"></span>
-                            </label>
-                            <div class="space-y-2 flex-1">
-                                <div class="relative fs-dropdown-root">
-                                    <button type="button" @click="toggleDropdown(cfg.key)"
-                                            class="w-full min-h-[42px] px-3 py-2 border rounded-lg text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
-                                            :class="dropdownOpen[cfg.key] ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'">
-                                        <span :class="selectedFor(cfg.key).length === 0 ? 'text-slate-400' : 'text-slate-700'"
-                                              x-text="selectedFor(cfg.key).length === 0 ? cfg.placeholder : '已選擇 ' + selectedFor(cfg.key).length + ' 項'"></span>
-                                        <i class="fa-solid fa-chevron-down text-slate-400 transition-transform" :class="dropdownOpen[cfg.key] ? 'rotate-180' : ''"></i>
-                                    </button>
-                                    <div x-show="dropdownOpen[cfg.key]" class="absolute z-50 mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-xl">
-                                        <div class="p-2 border-b border-slate-100 bg-slate-50">
-                                            <div class="flex justify-between px-1 text-xs">
-                                                <button type="button" @click="selectAllFilterOptions(cfg.key)"
-                                                        class="text-blue-600 hover:text-blue-800 font-medium"
-                                                        :disabled="optionsFor(cfg.key).length === 0">全選</button>
-                                                <button type="button" @click="clearFilterOptions(cfg.key)" class="text-slate-500 hover:text-slate-700">清除所有</button>
-                                            </div>
-                                        </div>
-                                        <div class="p-2 border-b border-slate-100 bg-white">
-                                            <div class="relative">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                                <input type="text"
-                                                       :value="optionSearch[cfg.key]"
-                                                       @input="optionSearch[cfg.key] = $event.target.value"
-                                                       :placeholder="cfg.searchPlaceholder"
-                                                       class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            </div>
-                                        </div>
-                                        <div class="max-h-72 overflow-y-auto p-1">
-                                            <template x-for="option in optionsFor(cfg.key)" :key="option">
-                                                <label class="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700">
-                                                    <input type="checkbox" class="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500"
-                                                           :checked="selectedFor(cfg.key).indexOf(option) !== -1"
-                                                           @change="toggleFilterOption(cfg.key, option)">
-                                                    <span class="flex-1" x-text="option"></span>
-                                                    <i class="fa-solid fa-check text-blue-600 text-xs" x-show="selectedFor(cfg.key).indexOf(option) !== -1"></i>
-                                                </label>
-                                            </template>
-                                            <div class="py-4 text-center text-sm text-slate-500" x-show="optionsFor(cfg.key).length === 0" x-text="cfg.empty"></div>
-                                        </div>
+                        <div class="relative fs-dropdown-root">
+                            <button type="button" @click="toggleDropdown(cfg.key)"
+                                    class="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm bg-white transition-colors h-[38px]"
+                                    :class="dropdownOpen[cfg.key] || selectedFor(cfg.key).length > 0 ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
+                                <i class="fa-solid fa-filter text-slate-400 text-[11px]" :class="selectedFor(cfg.key).length > 0 ? 'text-blue-500' : ''"></i>
+                                <span class="font-medium" x-text="cfg.label"></span>
+                                <span x-show="selectedFor(cfg.key).length > 0" 
+                                      class="bg-blue-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none min-w-[18px] text-center" 
+                                      x-text="selectedFor(cfg.key).length"></span>
+                                <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform ml-1" :class="dropdownOpen[cfg.key] ? 'rotate-180' : ''"></i>
+                            </button>
+                            <div x-show="dropdownOpen[cfg.key]" class="absolute z-50 left-0 mt-2 w-72 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                <div class="p-2 border-b border-slate-100 bg-slate-50">
+                                    <div class="flex justify-between px-1 text-xs">
+                                        <button type="button" @click="selectAllFilterOptions(cfg.key)" class="text-blue-600 hover:text-blue-800 font-medium" :disabled="optionsFor(cfg.key).length === 0">全選</button>
+                                        <button type="button" @click="clearFilterOptions(cfg.key)" class="text-slate-500 hover:text-slate-700">清除所有</button>
                                     </div>
                                 </div>
-                                <div class="flex flex-wrap gap-2" x-show="selectedFor(cfg.key).length > 0">
-                                    <template x-for="value in selectedFor(cfg.key)" :key="value">
-                                        <span class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
-                                            <span x-text="value"></span>
-                                            <button type="button" @click="removeFilterOption(cfg.key, value)"
-                                                    class="inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-600 hover:bg-blue-200"
-                                                    :aria-label="'移除 ' + value">
-                                                <i class="fa-solid fa-xmark text-[10px]"></i>
-                                            </button>
-                                        </span>
+                                <div class="p-2 border-b border-slate-100 bg-white">
+                                    <div class="relative">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                        <input type="text" :value="optionSearch[cfg.key]" @input="optionSearch[cfg.key] = $event.target.value" :placeholder="cfg.searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    </div>
+                                </div>
+                                <div class="max-h-72 overflow-y-auto p-1">
+                                    <template x-for="option in optionsFor(cfg.key)" :key="option">
+                                        <label class="flex items-center gap-2 px-3 py-2.5 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-700">
+                                            <input type="checkbox" class="h-4 w-4 border-slate-300 rounded text-blue-600 focus:ring-blue-500" :checked="selectedFor(cfg.key).indexOf(option) !== -1" @change="toggleFilterOption(cfg.key, option)">
+                                            <span class="flex-1" x-text="option"></span>
+                                            <i class="fa-solid fa-check text-blue-600 text-xs" x-show="selectedFor(cfg.key).indexOf(option) !== -1"></i>
+                                        </label>
                                     </template>
-                                    <button type="button" @click="clearFilterOptions(cfg.key)" class="text-xs text-slate-500 hover:text-rose-600 underline">清除</button>
+                                    <div class="py-4 text-center text-sm text-slate-500" x-show="optionsFor(cfg.key).length === 0" x-text="cfg.empty"></div>
                                 </div>
                             </div>
                         </div>
                     </template>
 
-                    <!-- 盤點任務開關(舊頁 5976-6004) -->
+                    <!-- 盤點任務開關(緊湊型) -->
                     <template x-if="$store.app.hasActiveInventory">
-                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 h-full flex flex-col gap-2"
-                             :class="$store.app.filters.inventoryTaskOnly ? 'border-teal-200 bg-teal-50/70' : ''">
-                            <label class="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 min-h-[20px]">
-                                <span class="truncate">盤點任務篩選</span>
-                                <span class="text-[11px] text-slate-500 shrink-0" x-text="'目前 ' + $store.app.inventoryTaskCount + ' 筆'"></span>
-                            </label>
-                            <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 min-h-[42px] flex-1">
-                                <div class="min-w-0">
-                                    <div class="text-sm font-medium text-slate-700 truncate">只顯示盤點任務</div>
-                                    <div class="text-[11px] text-slate-500 mt-0.5 truncate">聚焦待處理項目</div>
-                                </div>
-                                <button type="button" role="switch"
-                                        :aria-checked="!!$store.app.filters.inventoryTaskOnly"
-                                        @click="$store.app.handleFilterChange('inventoryTaskOnly', !$store.app.filters.inventoryTaskOnly)"
-                                        class="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-teal-400"
-                                        :class="$store.app.filters.inventoryTaskOnly ? 'bg-teal-500' : 'bg-slate-300'"
-                                        title="切換盤點任務篩選">
-                                    <span class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform"
-                                          :class="$store.app.filters.inventoryTaskOnly ? 'translate-x-5' : 'translate-x-1'"></span>
-                                </button>
+                        <button type="button" @click="$store.app.handleFilterChange('inventoryTaskOnly', !$store.app.filters.inventoryTaskOnly)"
+                                class="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-colors h-[38px] relative"
+                                :class="$store.app.filters.inventoryTaskOnly ? 'border-teal-500 ring-1 ring-teal-500 bg-teal-50/50 text-teal-700 font-medium' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
+                            <i class="fa-solid fa-clipboard-check" :class="$store.app.filters.inventoryTaskOnly ? 'text-teal-600' : 'text-slate-400'"></i>
+                            <span>盤點任務篩選</span>
+                            <div class="w-8 h-4 rounded-full transition-colors flex items-center ml-1" :class="$store.app.filters.inventoryTaskOnly ? 'bg-teal-500' : 'bg-slate-300'">
+                                <div class="w-3 h-3 bg-white rounded-full shadow transform transition-transform mx-0.5" :class="$store.app.filters.inventoryTaskOnly ? 'translate-x-4' : 'translate-x-0'"></div>
                             </div>
-                        </div>
+                            <span class="absolute -top-2 -right-2 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm" x-show="$store.app.filters.inventoryTaskOnly" x-text="$store.app.inventoryTaskCount"></span>
+                        </button>
                     </template>
+
                 </div>
 
                 <!-- 第 3 行:已套用篩選條件 + 結果筆數 -->
