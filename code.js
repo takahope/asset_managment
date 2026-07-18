@@ -712,7 +712,7 @@ function getAllowedEmails() {
 
   Logger.log("快取未命中，從 Google Sheet 建立系統存取白名單。");
 
-  // 來源 1：HR 全體在勤人員（經 keeper directory；HR 失敗時 directory 內部自動回退讀舊表）
+  // 來源 1：HR 全體在職人員（經 keeper directory；HR 失敗時 directory 內部自動回退讀舊表）
   let keeperEmails = [];
   try {
     keeperEmails = getKeeperDirectory_().allEmails;
@@ -1398,7 +1398,7 @@ function getTransferData(forceUserScope) {
       sourceSheet: asset.sourceSheet // 標記資料來源
     }));
 
-  // 2. 從 HR keeper directory 取得保管人清單（全體在勤）與角色名單
+  // 2. 從 HR keeper directory 取得保管人清單（全體在職）與角色名單
   const directory = getKeeperDirectory_();
   const uniqueKeepersMap = new Map();
   const custodianMap = new Map(); // ✨ 駐管（HR 職務=駐站管理員）
@@ -6110,7 +6110,7 @@ function getDropdownData() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // 1. 讀取保管人 (Email -> 姓名，HR 全體在勤)
+    // 1. 讀取保管人 (Email -> 姓名，HR 全體在職)
     const directory = getKeeperDirectory_();
     const keepers = {};
     directory.allEmails.forEach(email => {

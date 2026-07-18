@@ -10,12 +10,13 @@ const HR_ORG_TREE_SHEET_NAME = "組織架構樹";    // C 代碼、D 名稱
 const HR_ASSIGNMENT_SHEET_NAME = "人員職務配置"; // A 信箱、C 組別代碼、E 職務
 
 // 白名單納入的人員狀態值域(離職必排除;值域如需調整只改這裡)
+// 這四個細分狀態合稱「在職」；「在勤」只是其中一種細分狀態,不可拿來代稱整組
 const HR_ACTIVE_STATUSES = ['在勤', '休假', '育嬰假', '外派人員'];
 
 // 駐管判定:人員職務配置 E 欄職務等於此值(任一列即算,涵蓋兼任)
 const HR_STATION_MANAGER_TITLE = '駐站管理員';
 
-// 同步防呆:HR 在勤人數低於此門檻即中止同步,避免上游異常清空白名單
+// 同步防呆:HR 在職人數低於此門檻即中止同步,避免上游異常清空白名單
 const HR_SYNC_MIN_HEADCOUNT = 5;
 
 const KEEPER_DIRECTORY_CACHE_KEY = 'keeper_directory_v1';
@@ -100,7 +101,7 @@ function orgCodeRank_(code) {
 function buildKeeperDirectoryFromHr_() {
   const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
 
-  // 1. 人員主檔:A 信箱、B 姓名、C 狀態 → 在勤過濾(離職排除契約)
+  // 1. 人員主檔:A 信箱、B 姓名、C 狀態 → 在職過濾(離職排除契約)
   const personnelSheet = hrSs.getSheetByName(HR_PERSONNEL_SHEET_NAME);
   if (!personnelSheet || personnelSheet.getLastRow() <= 1) {
     throw new Error(`HR「${HR_PERSONNEL_SHEET_NAME}」讀取失敗或無資料。`);
@@ -133,7 +134,7 @@ function buildKeeperDirectoryFromHr_() {
   if (assignmentSheet && assignmentSheet.getLastRow() > 1) {
     assignmentSheet.getRange(2, 1, assignmentSheet.getLastRow() - 1, 5).getValues().forEach(row => {
       const email = String(row[0] || '').toLowerCase().trim();
-      if (!email || !emailToName[email]) return; // 只處理在勤人員
+      if (!email || !emailToName[email]) return; // 只處理在職人員
       const orgCode = String(row[2] || '').trim();
       const title = String(row[4] || '').trim();
       if (title === HR_STATION_MANAGER_TITLE) custodianSet[email] = true;
@@ -231,7 +232,7 @@ function clearKeeperDirectoryCache() {
 function debugKeeperDirectory() {
   clearKeeperDirectoryCache();
   const d = buildKeeperDirectoryFromHr_();
-  Logger.log('在勤人數: ' + d.allEmails.length);
+  Logger.log('在職人數: ' + d.allEmails.length);
   Logger.log('駐管清單: ' + JSON.stringify(d.custodianEmails));
   Logger.log('組別分布: ' + JSON.stringify(Object.keys(d.groupToMembers).map(g => g + '=' + d.groupToMembers[g].length)));
   Logger.log('抽樣前 5 筆: ' + JSON.stringify(d.allEmails.slice(0, 5).map(e => [e, d.emailToName[e], d.emailToGroup[e] || ''])));
@@ -245,13 +246,13 @@ function debugKeeperDirectory() {
 /**
  * 從 HR 整批重寫「保管人/信箱」:A 姓名/B Email/G 組別;C–F、H 留空但保留欄位序
  * (isms-connect-asset 以 row[6] 讀 G 欄,嚴禁改變欄位位置)。
- * 防呆:在勤人數低於 HR_SYNC_MIN_HEADCOUNT 即中止並通知管理員。
+ * 防呆:在職人數低於 HR_SYNC_MIN_HEADCOUNT 即中止(不寄送通知,GAS 觸發器失敗會自動通知 script owner)。
  */
 function syncKeeperSheetFromHR() {
   const directory = buildKeeperDirectoryFromHr_(); // 直接重建,不吃快取
   const emails = directory.allEmails.slice().sort();
   if (emails.length < HR_SYNC_MIN_HEADCOUNT) {
-    const msg = `HR 同步中止:在勤人數 ${emails.length} 低於門檻 ${HR_SYNC_MIN_HEADCOUNT},「保管人/信箱」未變更。`;
+    const msg = `HR 同步中止:在職人數 ${emails.length} 低於門檻 ${HR_SYNC_MIN_HEADCOUNT},「保管人/信箱」未變更。`;
     throw new Error(msg);
   }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
