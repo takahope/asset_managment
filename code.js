@@ -558,41 +558,24 @@ function getGroupMemberEmails(targetEmail) {
 
 /**
  * 取得目前使用者的組別與 ISMS 盤點白名單權限
- * G欄：使用者組別
- * H欄：允許使用 ISMS 盤點的組別
- * 管理員永遠可用，不受 H 欄限制
- * @param {SpreadsheetApp.Spreadsheet} ss
+ * 使用者組別：HR keeper directory
+ * 允許組別：Script Property ISMS_INVENTORY_GROUPS（原 H 欄）
+ * 管理員永遠可用，不受允許組別限制
+ * @param {SpreadsheetApp.Spreadsheet} ss（保留簽名相容，已不使用）
  * @param {string} currentUserEmail
  * @param {boolean} isAdmin
  * @returns {{ currentUserGroup: string, allowedIsmsGroups: string[], canUseIsmsInventory: boolean }}
  */
 function getIsmsInventoryAccess_(ss, currentUserEmail, isAdmin) {
   const normalizedEmail = String(currentUserEmail || '').toLowerCase().trim();
-  let currentUserGroup = '未分組';
-  const allowedIsmsGroupSet = new Set();
-
-  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 8).getValues();
-    keeperData.forEach(row => {
-      const email = row[1];
-      const groupName = row[6] ? String(row[6]).trim() : '';
-      const allowedGroup = row[7] ? String(row[7]).trim() : '';
-      if (allowedGroup) {
-        allowedIsmsGroupSet.add(allowedGroup);
-      }
-      if (!email) return;
-      const rowEmail = String(email).toLowerCase().trim();
-      if (rowEmail === normalizedEmail && groupName) {
-        currentUserGroup = groupName;
-      }
-    });
-  }
-
+  const directory = getKeeperDirectory_();
+  const currentUserGroup = directory.emailToGroup[normalizedEmail] || '未分組';
+  const allowedIsmsGroups = getIsmsInventoryGroups_();
+  const allowedSet = new Set(allowedIsmsGroups);
   return {
     currentUserGroup: currentUserGroup,
-    allowedIsmsGroups: Array.from(allowedIsmsGroupSet),
-    canUseIsmsInventory: Boolean(isAdmin || (currentUserGroup && allowedIsmsGroupSet.has(currentUserGroup)))
+    allowedIsmsGroups: allowedIsmsGroups,
+    canUseIsmsInventory: Boolean(isAdmin || (currentUserGroup && allowedSet.has(currentUserGroup)))
   };
 }
 
@@ -8076,31 +8059,14 @@ function resetBatchInventory(inventoryId, assetIds) {
 }
 
 /**
- * 取得使用者所屬組別（供盤點權限判斷）
- * @param {Spreadsheet} ss - 既有 Spreadsheet 物件
+ * 取得使用者所屬組別（供盤點權限判斷，HR keeper directory）
+ * @param {Spreadsheet} ss（保留簽名相容，已不使用）
  * @param {string} currentUserEmail - 使用者 Email（小寫）
  * @returns {string} 組別名稱
  */
 function getInventoryUserGroup_(ss, currentUserEmail) {
-  let currentUserGroup = '未分組';
-  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 7).getValues();
-    for (let i = 0; i < keeperData.length; i++) {
-      const row = keeperData[i];
-      const email = row[1];
-      if (!email) continue;
-      const normalizedEmail = String(email).toLowerCase().trim();
-      if (normalizedEmail === currentUserEmail) {
-        const groupName = row[6];
-        if (groupName) {
-          currentUserGroup = String(groupName).trim();
-        }
-        break;
-      }
-    }
-  }
-  return currentUserGroup;
+  const directory = getKeeperDirectory_();
+  return directory.emailToGroup[String(currentUserEmail || '').toLowerCase().trim()] || '未分組';
 }
 
 /**
