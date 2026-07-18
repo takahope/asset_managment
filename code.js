@@ -1599,43 +1599,40 @@ function processBatchTransferApplication(formData) {
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // ✨ 修復：優先從「保管人/信箱」表讀取 Email → 姓名映射
-    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
+    // ✨ 優先從 HR keeper directory 讀取 Email → 姓名映射（key 一律小寫）
+    const directory = getKeeperDirectory_();
     const emailToNameMap = new Map();
 
-    // 1️⃣ 先從「保管人/信箱」表建立映射（主要來源）
-    keeperData.forEach(row => {
-      const name = row[0]; // A欄：姓名
-      const email = row[1]; // B欄：Email
-      if (name && email) {
-        emailToNameMap.set(email, name);
-      }
+    // 1️⃣ 先從 keeper directory 建立映射（主要來源）
+    Object.keys(directory.emailToName).forEach(email => {
+      emailToNameMap.set(email, directory.emailToName[email]);
     });
 
-    // 2️⃣ 從資產列表補充不在「保管人/信箱」表中的保管人
+    // 2️⃣ 從資產列表補充不在 directory 中的保管人（key 小寫化，與 directory 一致）
     const allAssets = getAllAssets();
     allAssets.forEach(asset => {
-      if (asset.leaderEmail && asset.leaderName && !emailToNameMap.has(asset.leaderEmail)) {
-        emailToNameMap.set(asset.leaderEmail, asset.leaderName);
+      const leaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+      if (leaderEmail && asset.leaderName && !emailToNameMap.has(leaderEmail)) {
+        emailToNameMap.set(leaderEmail, asset.leaderName);
       }
     });
 
     // 3️⃣ 解析新保管人姓名（✨ 使用 actualNewKeeperEmail）
-    const newKeeperName = actualNewKeeperEmail ? (emailToNameMap.get(actualNewKeeperEmail) || actualNewKeeperEmail.split('@')[0]) : null;
+    const newKeeperName = actualNewKeeperEmail ? (emailToNameMap.get(String(actualNewKeeperEmail).toLowerCase().trim()) || actualNewKeeperEmail.split('@')[0]) : null;
 
     // 4️⃣ 處理使用人Email（使用相同的映射表）
     const userEmailToNameMap = new Map(emailToNameMap); // 複製保管人映射作為基礎
 
-    // 補充：從資產的使用人欄位中加入額外映射
+    // 補充：從資產的使用人欄位中加入額外映射（key 小寫化）
     allAssets.forEach(asset => {
-      if (asset.userEmail && asset.userName && !userEmailToNameMap.has(asset.userEmail)) {
-        userEmailToNameMap.set(asset.userEmail, asset.userName);
+      const userEmail = String(asset.userEmail || '').toLowerCase().trim();
+      if (userEmail && asset.userName && !userEmailToNameMap.has(userEmail)) {
+        userEmailToNameMap.set(userEmail, asset.userName);
       }
     });
 
     // ✨ 使用 actualNewUserEmail 解析使用人姓名
-    const finalNewUserName = actualNewUserEmail ? (userEmailToNameMap.get(actualNewUserEmail) || newUserName || actualNewUserEmail.split('@')[0]) : newUserName;
+    const finalNewUserName = actualNewUserEmail ? (userEmailToNameMap.get(String(actualNewUserEmail).toLowerCase().trim()) || newUserName || actualNewUserEmail.split('@')[0]) : newUserName;
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
 
     // ✨ 新增：讀取地點映射，用於判斷是否為駐站
@@ -2954,18 +2951,11 @@ function getLentOutAssets(forceUserScope) {
             }
         };
 
-        const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+        const directory = getKeeperDirectory_();
         const emailToNameMap = new Map();
-        if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-            const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
-            keeperData.forEach(row => {
-                const name = row[0];
-                const email = row[1];
-                if (email) {
-                    emailToNameMap.set(String(email).toLowerCase(), name || String(email).split('@')[0]);
-                }
-            });
-        }
+        Object.keys(directory.emailToName).forEach(email => {
+            emailToNameMap.set(email, directory.emailToName[email]);
+        });
 
         const allAssets = getAllAssets();
         const assetIdToInfoMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), {
@@ -4239,10 +4229,8 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
 
 function getAdminName() {
   const currentUserEmail = Session.getActiveUser().getEmail();
-  const mappingSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-  const data = mappingSheet.getRange("A2:B" + mappingSheet.getLastRow()).getValues();
-  const mapping = new Map(data.map(row => [row[1], row[0]])); // Email -> Name
-  return mapping.get(currentUserEmail) || currentUserEmail; // 如果找不到，就回傳 Email
+  const directory = getKeeperDirectory_();
+  return directory.emailToName[String(currentUserEmail).toLowerCase().trim()] || currentUserEmail;
 }
 
 function getScrappingDataForAdmin(assetCategory, forceUserScope) {
@@ -5893,18 +5881,8 @@ function getAssetStatusDetail(assetId, forceUserScope) {
       const lenderEmail = String(latestRow[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase();
       let lenderName = lenderEmail || '';
       if (lenderEmail) {
-        const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-        if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-          const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
-          for (let i = 0; i < keeperData.length; i++) {
-            const name = keeperData[i][0];
-            const email = keeperData[i][1];
-            if (email && String(email).toLowerCase() === lenderEmail) {
-              lenderName = name || lenderEmail;
-              break;
-            }
-          }
-        }
+        const directoryName = getKeeperDirectory_().emailToName[lenderEmail];
+        if (directoryName) lenderName = directoryName;
       }
 
       return {
@@ -6098,14 +6076,11 @@ function getDropdownData() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // 1. 讀取保管人 (Email -> 姓名)
-    const keeperSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    const keeperData = keeperSheet.getRange(2, 1, keeperSheet.getLastRow() - 1, 2).getValues();
+    // 1. 讀取保管人 (Email -> 姓名，HR 全體在勤)
+    const directory = getKeeperDirectory_();
     const keepers = {};
-    keeperData.forEach(row => {
-      const name = row[0];
-      const email = row[1];
-      if (email) keepers[email] = name;
+    directory.allEmails.forEach(email => {
+      keepers[email] = directory.emailToName[email];
     });
 
     // 2. 讀取地點
@@ -6155,17 +6130,15 @@ function addNewAsset(form) {
   if (!sheet) throw new Error("找不到目標工作表，請聯絡管理員。");
 
   // 3. 準備輔助資料 (名稱查找 & 駐站判斷)
-  const keeperSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-  const keeperData = keeperSheet.getRange(2, 1, keeperSheet.getLastRow() - 1, 2).getValues();
-  const emailToName = new Map(keeperData.map(r => [r[1], r[0]])); // Email -> Name
+  const directory = getKeeperDirectory_();
 
   const locSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
   const locData = locSheet.getRange(2, 1, locSheet.getLastRow() - 1, 2).getValues(); // A=Name, B=IsStation
   const locIsStationMap = new Map(locData.map(r => [r[0], r[1] === '是']));
 
   // 4. 解析名稱
-  const keeperName = emailToName.get(form.keeperEmail) || form.keeperEmail.split('@')[0];
-  const userName = form.userEmail ? (emailToName.get(form.userEmail) || form.userEmail.split('@')[0]) : keeperName;
+  const keeperName = directory.emailToName[String(form.keeperEmail).toLowerCase().trim()] || form.keeperEmail.split('@')[0];
+  const userName = form.userEmail ? (directory.emailToName[String(form.userEmail).toLowerCase().trim()] || form.userEmail.split('@')[0]) : keeperName;
 
   // 5. 建構資料列 (Array)
   // 找出最大的索引值以決定陣列長度
@@ -6946,19 +6919,12 @@ function getActiveInventorySessions(userEmail, isAdminMode, userGroup) {
       return [];
     }
 
-    // 建立 Email 到姓名的映射（從「保管人/信箱」表）
-    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    // 建立 Email 到姓名的映射（HR keeper directory）
+    const directory = getKeeperDirectory_();
     const emailToNameMap = new Map();
-    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
-      keeperData.forEach(row => {
-        const name = row[0];
-        const email = row[1];
-        if (email) {
-          emailToNameMap.set(String(email).toLowerCase(), name);
-        }
-      });
-    }
+    Object.keys(directory.emailToName).forEach(email => {
+      emailToNameMap.set(email, directory.emailToName[email]);
+    });
 
     const normalizedUserEmail = String(userEmail || '').toLowerCase();
     const normalizedUserGroup = userGroup ? String(userGroup).trim() : '';
@@ -7391,19 +7357,11 @@ function getInventoryDetails(inventoryId) {
 }
 
 function getInventoryAssigneeNameMap() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const directory = getKeeperDirectory_();
   const emailToNameMap = {};
-  const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-  if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-    const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
-    keeperData.forEach(row => {
-      const name = row[0];
-      const email = row[1];
-      if (!email) return;
-      const normalizedEmail = String(email).toLowerCase();
-      emailToNameMap[normalizedEmail] = name || String(email).split('@')[0];
-    });
-  }
+  Object.keys(directory.emailToName).forEach(email => {
+    emailToNameMap[email] = directory.emailToName[email];
+  });
   return emailToNameMap;
 }
 
@@ -8379,19 +8337,12 @@ function getInventoryHistory(allRecords) {
       return String(rawValue);
     };
 
-    // 建立 Email 到姓名的映射（從「保管人/信箱」表）
-    const keeperEmailSheet = ss.getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+    // 建立 Email 到姓名的映射（HR keeper directory）
+    const directory = getKeeperDirectory_();
     const emailToNameMap = new Map();
-    if (keeperEmailSheet && keeperEmailSheet.getLastRow() > 1) {
-      const keeperData = keeperEmailSheet.getRange(2, 1, keeperEmailSheet.getLastRow() - 1, 2).getValues();
-      keeperData.forEach(row => {
-        const name = row[0];
-        const email = row[1];
-        if (email) {
-          emailToNameMap.set(String(email).toLowerCase(), name);
-        }
-      });
-    }
+    Object.keys(directory.emailToName).forEach(email => {
+      emailToNameMap.set(email, directory.emailToName[email]);
+    });
 
     const data = inventoryLogSheet.getRange(2, 1, inventoryLogSheet.getLastRow() - 1, inventoryLogSheet.getLastColumn()).getValues();
     const history = data.map(row => {
