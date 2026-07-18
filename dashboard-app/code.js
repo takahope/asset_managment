@@ -70,6 +70,55 @@ function doGet() {
 // =================================================================
 
 /**
+ * 讀取 HR 主表試算表 ID(本專案 Script Property;與主專案各設一次)
+ * @returns {string}
+ */
+function getHrSpreadsheetId_() {
+  const id = PropertiesService.getScriptProperties().getProperty('HR_SPREADSHEET_ID');
+  if (!id) {
+    throw new Error('尚未設定 HR_SPREADSHEET_ID(本專案 Script Property)。');
+  }
+  return String(id).trim();
+}
+
+/**
+ * 直讀 HR 人員主檔,回傳全體在職人員的小寫 email 陣列。
+ * HR 讀取失敗時 throw,由呼叫端 fallback。
+ * @returns {string[]}
+ */
+function getHrActiveEmails_() {
+  const ss = SpreadsheetApp.openById(getHrSpreadsheetId_());
+  const sheet = ss.getSheetByName(HR_PERSONNEL_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() <= 1) {
+    throw new Error(`HR「${HR_PERSONNEL_SHEET_NAME}」讀取失敗或無資料。`);
+  }
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues(); // A 信箱、B 姓名、C 狀態
+  const emails = [];
+  data.forEach(row => {
+    const email = String(row[0] || '').toLowerCase().trim();
+    const status = String(row[2] || '').trim();
+    if (!email || !email.includes('@')) return;
+    if (HR_ACTIVE_STATUSES.indexOf(status) === -1) return;
+    emails.push(email);
+  });
+  return emails;
+}
+
+/**
+ * Fallback:讀「保管人/信箱」同步表 B 欄(HR 直讀失敗時使用;該表由主專案每日同步維護)。
+ * @returns {string[]}
+ */
+function getKeeperSheetEmailsFallback_() {
+  const keeperSheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+    .getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
+  if (!keeperSheet || keeperSheet.getLastRow() <= 1) return [];
+  return keeperSheet.getRange(2, 2, keeperSheet.getLastRow() - 1, 1).getValues() // B2:B
+    .map(row => row[0])
+    .filter(email => email && String(email).includes('@'))
+    .map(email => String(email).toLowerCase().trim());
+}
+
+/**
  * 取得系統存取白名單（含快取）
  * 來源：保管人信箱 + 資產管理員
  * @returns {string[]} 允許存取的 Email 陣列（已小寫化）
@@ -84,19 +133,17 @@ function getAllowedEmails() {
     return JSON.parse(cachedList);
   }
 
+  // 來源 1：HR 全體在職人員（直讀 HR；失敗回退讀「保管人/信箱」同步表 B 欄）
   let keeperEmails = [];
   try {
-    const keeperSheet = SpreadsheetApp.openById(SPREADSHEET_ID)
-      .getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
-    if (keeperSheet && keeperSheet.getLastRow() > 1) {
-      const range = keeperSheet.getRange(2, 2, keeperSheet.getLastRow() - 1, 1);
-      keeperEmails = range.getValues()
-        .map(row => row[0])
-        .filter(email => email && String(email).includes('@'))
-        .map(email => String(email).toLowerCase().trim());
-    }
+    keeperEmails = getHrActiveEmails_();
   } catch (e) {
-    Logger.log("讀取保管人信箱時發生錯誤：" + e.message);
+    Logger.log("直讀 HR 失敗，回退讀「保管人/信箱」B 欄：" + e.message);
+    try {
+      keeperEmails = getKeeperSheetEmailsFallback_();
+    } catch (e2) {
+      Logger.log("讀取保管人信箱 fallback 亦失敗：" + e2.message);
+    }
   }
 
   const adminEmails = getAdminEmails().map(e => String(e).toLowerCase().trim());
