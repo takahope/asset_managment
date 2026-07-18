@@ -13,7 +13,7 @@ document.addEventListener('alpine:init', function () {
             geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
             reportAdminEmails: '', adminEmailNotifyEnabled: false,
             groupProxyEnabled: false, inventoryFeatureEnabled: true,
-            hrSpreadsheetId: '', hrGroupNameMap: '',
+            hrGroupNameMap: '',
             parsedHrGroupNameMap: {}, hrOfficialGroups: [],
             infoStationCustodianEmails: '', infoStationUserEmails: '', intakeCustodianEmails: '',
             ismsInventoryGroups: '', hrLastSyncAt: '', isSyncing: false,
@@ -47,7 +47,6 @@ document.addEventListener('alpine:init', function () {
                         self.adminEmailNotifyEnabled = !!settings.adminEmailNotifyEnabled;
                         self.groupProxyEnabled = !!settings.groupProxyEnabled;
                         self.inventoryFeatureEnabled = settings.inventoryFeatureEnabled !== false;
-                        self.hrSpreadsheetId = settings.hrSpreadsheetId || '';
                         self.hrGroupNameMap = settings.hrGroupNameMap || '';
                         try { self.parsedHrGroupNameMap = JSON.parse(self.hrGroupNameMap || '{}'); } catch(e) { self.parsedHrGroupNameMap = {}; }
                         self.hrOfficialGroups = settings.hrOfficialGroups || [];
@@ -103,7 +102,6 @@ document.addEventListener('alpine:init', function () {
                                 adminEmailNotifyEnabled: self.adminEmailNotifyEnabled,
                                 groupProxyEnabled: self.groupProxyEnabled,
                                 inventoryFeatureEnabled: self.inventoryFeatureEnabled,
-                                hrSpreadsheetId: self.hrSpreadsheetId,
                                 hrGroupNameMap: self.hrGroupNameMap,
                                 infoStationCustodianEmails: self.infoStationCustodianEmails,
                                 infoStationUserEmails: self.infoStationUserEmails,
@@ -241,16 +239,10 @@ document.addEventListener('alpine:init', function () {
                                 <h4 class="text-sm font-semibold text-slate-700"><i class="fa-solid fa-people-group mr-1"></i>人員資料來源（HR）</h4>
 
                                 <label class="block">
-                                    <span class="text-xs text-slate-500">HR 主表試算表 ID</span>
-                                    <input type="text" x-model="hrSpreadsheetId" placeholder="HR_managerv3 試算表 ID"
-                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                </label>
-
-                                <label class="block">
                                     <span class="text-xs text-slate-500 font-bold mb-2 block">組別名稱轉換表 (顯示名稱若空白，則與 HR 正式名稱相同)</span>
                                     <template x-if="hrOfficialGroups.length === 0">
                                         <div class="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                                            目前無法取得 HR 組織架構，請確認 HR 主表 ID 正確且有讀取權限。
+                                            目前無法取得 HR 組織架構，請確認 HR 主表讀取權限。
                                             您仍可使用下方進階設定手動輸入 JSON。
                                         </div>
                                     </template>

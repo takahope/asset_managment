@@ -4117,7 +4117,6 @@ function getSystemSettings() {
     groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
     inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
     // ✨ 保管人/信箱 遷移設定（spec 2026-07-18）
-    hrSpreadsheetId: props.getProperty('HR_SPREADSHEET_ID') || '',
     hrGroupNameMap: props.getProperty('HR_GROUP_NAME_MAP') || '',
     infoStationCustodianEmails: props.getProperty('INFO_STATION_CUSTODIAN_EMAILS') || '',
     infoStationUserEmails: props.getProperty('INFO_STATION_USER_EMAILS') || '',
@@ -4131,7 +4130,7 @@ function getSystemSettings() {
 /**
  * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
  * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
- * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrSpreadsheetId?:string, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
+ * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
  * @returns {{success:boolean}}
  */
 function saveSystemSettings(settings) {
@@ -4152,10 +4151,6 @@ function saveSystemSettings(settings) {
   }
   // ✨ 保管人/信箱 遷移設定；HR 相關鍵變更後清 directory 快取讓新值即時生效
   let hrSettingsChanged = false;
-  if (s.hrSpreadsheetId !== undefined) {
-    props.setProperty('HR_SPREADSHEET_ID', String(s.hrSpreadsheetId).trim());
-    hrSettingsChanged = true;
-  }
   if (s.hrGroupNameMap !== undefined) {
     const raw = String(s.hrGroupNameMap).trim();
     if (raw) {
