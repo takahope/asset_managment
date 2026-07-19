@@ -16,6 +16,26 @@ const HR_ACTIVE_STATUSES = ['在勤', '休假', '育嬰假', '外派人員'];
 // 駐管判定:人員職務配置 E 欄職務等於此值(任一列即算,涵蓋兼任)
 const HR_STATION_MANAGER_TITLE = '駐站管理員';
 
+// 駐站類別規則(spec 2026-07-19):代碼字首(大小寫不敏感)→ 類別鍵;先具體後泛化,順序不可調換
+const STATION_CATEGORY_RULES = [
+  { key: 'OUTSOURCED', prefix: 'GRP-CO-EX-' },     // 委外駐站
+  { key: 'PORTABLE', prefix: 'GRP-CO-PROTABLE' },  // 行動駐站(走出借流程,一般不列入存置地點)
+  { key: 'PERMANENT', prefix: 'GRP-CO-' }          // 常設駐站(兜底)
+];
+
+/**
+ * 判定組別代碼所屬駐站類別;非駐站代碼回傳 null。
+ * @param {string} code
+ * @returns {'PERMANENT'|'OUTSOURCED'|'PORTABLE'|null}
+ */
+function stationCategoryOf_(code) {
+  const upper = String(code || '').trim().toUpperCase();
+  for (let i = 0; i < STATION_CATEGORY_RULES.length; i++) {
+    if (upper.indexOf(STATION_CATEGORY_RULES[i].prefix) === 0) return STATION_CATEGORY_RULES[i].key;
+  }
+  return null;
+}
+
 // 同步防呆:HR 在職人數低於此門檻即中止同步,避免上游異常清空白名單
 const HR_SYNC_MIN_HEADCOUNT = 5;
 
@@ -116,14 +136,18 @@ function buildKeeperDirectoryFromHr_() {
     emailToName[email] = name || email.split('@')[0];
   });
 
-  // 2. 組織架構樹:C 代碼、D 名稱 → 代碼轉中文名
+  // 2. 組織架構樹:C 代碼、D 名稱 → 代碼轉中文名;順手收集駐站組別(GRP-CO-*)
   const orgSheet = hrSs.getSheetByName(HR_ORG_TREE_SHEET_NAME);
   const codeToOrgName = {};
+  const stationGroups = [];
   if (orgSheet && orgSheet.getLastRow() > 1) {
     orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
       const code = String(row[2] || '').trim();
       const name = String(row[3] || '').trim();
-      if (code && name) codeToOrgName[code] = name;
+      if (code && name) {
+        codeToOrgName[code] = name;
+        if (stationCategoryOf_(code)) stationGroups.push({ code: code, name: name });
+      }
     });
   }
 
@@ -165,7 +189,8 @@ function buildKeeperDirectoryFromHr_() {
     emailToGroup: emailToGroup,
     groupToMembers: groupToMembers,
     custodianEmails: Object.keys(custodianSet),
-    allEmails: Object.keys(emailToName)
+    allEmails: Object.keys(emailToName),
+    stationGroups: stationGroups
   };
 }
 
@@ -225,7 +250,121 @@ function getKeeperDirectory_() {
 /** 清除 directory 快取(設定變更、手動同步後呼叫) */
 function clearKeeperDirectoryCache() {
   KEEPER_DIRECTORY_MEMO_ = null;
+  LOCATION_CONFIG_MEMO_ = null;
   CacheService.getScriptCache().remove(KEEPER_DIRECTORY_CACHE_KEY);
+}
+
+// --- 存置地點設定(spec 2026-07-19:原「存置地點列表」工作表遷 Script Properties + HR 駐站) ---
+
+let LOCATION_CONFIG_MEMO_ = null; // 同一請求內記憶化
+
+/** 清除 location config 記憶化(設定儲存後呼叫,確保同請求內讀到新值) */
+function clearLocationConfigMemo_() {
+  LOCATION_CONFIG_MEMO_ = null;
+}
+
+/**
+ * 存置地點設定唯一入口(六個讀取點皆走此,不再讀「存置地點列表」)。
+ * 靜態地點來自 STATIC_LOCATIONS;駐站依 STATION_CATEGORIES 過濾 HR 組織架構樹,
+ * 名稱經 HR_GROUP_NAME_MAP 轉慣用名;directory 走 fallback 時改用 STATION_NAME_SNAPSHOT。
+ * 順序:靜態(設定順序)在前、駐站(組織架構樹列序)在後。
+ * @returns {{locations:string[], stationLocations:string[], infoLocation:?string, intakeLocation:?string, infoComputerLocation:?string}}
+ */
+function getLocationConfig_() {
+  if (LOCATION_CONFIG_MEMO_) return LOCATION_CONFIG_MEMO_;
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const staticLocations = String(props['STATIC_LOCATIONS'] || '')
+    .split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const enabledCategories = String(props['STATION_CATEGORIES'] || '')
+    .split(/[\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+
+  // 駐站名冊:HR 直讀優先;fallback 物件無 stationGroups 鍵時降級用快照
+  let stationGroups = getKeeperDirectory_().stationGroups;
+  if (!Array.isArray(stationGroups)) {
+    try {
+      const snapshot = JSON.parse(props['STATION_NAME_SNAPSHOT'] || '{}');
+      stationGroups = Object.keys(snapshot).map(code => ({ code: code, name: snapshot[code] }));
+    } catch (e) {
+      Logger.log('STATION_NAME_SNAPSHOT 解析失敗(駐站清單降級為空):' + e.message);
+      stationGroups = [];
+    }
+  }
+
+  const groupNameMap = getHrGroupNameMap_();
+  const stationLocations = stationGroups
+    .filter(g => enabledCategories.indexOf(stationCategoryOf_(g.code)) !== -1)
+    .map(g => groupNameMap[g.name] || g.name)
+    .filter(Boolean);
+
+  LOCATION_CONFIG_MEMO_ = {
+    locations: staticLocations.concat(stationLocations),
+    stationLocations: stationLocations,
+    infoLocation: String(props['INFO_LOCATION'] || '').trim() || null,
+    intakeLocation: String(props['INTAKE_LOCATION'] || '').trim() || null,
+    infoComputerLocation: String(props['INFO_COMPUTER_LOCATION'] || '').trim() || null
+  };
+  return LOCATION_CONFIG_MEMO_;
+}
+
+/** 判斷地點是否為駐站(批次轉移/審核/新增資產的電腦欄位標記用) */
+function isStationLocation_(name) {
+  const normalized = String(name || '').trim();
+  if (!normalized) return false;
+  return getLocationConfig_().stationLocations.indexOf(normalized) !== -1;
+}
+
+/**
+ * 以 HR 當前駐站名冊更新 STATION_NAME_SNAPSHOT(收錄全部 GRP-CO-*,含未啟用類別;name 存 HR 原名)。
+ * 只在每日同步/手動同步/設定儲存/一次性遷移呼叫;讀取路徑禁止寫入。
+ * 空陣列不寫入,避免 HR 暫時故障時清空既有快照。
+ * @param {Array<{code:string,name:string}>} stationGroups
+ */
+function updateStationNameSnapshot_(stationGroups) {
+  if (!Array.isArray(stationGroups) || !stationGroups.length) return;
+  try {
+    const snapshot = {};
+    stationGroups.forEach(g => { snapshot[g.code] = g.name; });
+    PropertiesService.getScriptProperties().setProperty('STATION_NAME_SNAPSHOT', JSON.stringify(snapshot));
+  } catch (e) {
+    Logger.log('STATION_NAME_SNAPSHOT 更新失敗(不影響主流程):' + e.message);
+  }
+}
+
+/**
+ * [設定視窗用] 直讀 HR 組織架構樹取得全部駐站候選(不吃快取,管理介面要即時);
+ * HR 失敗時退回快照。name 已經過 HR_GROUP_NAME_MAP 轉換、hrName 為 HR 原名。
+ * @returns {Array<{code:string, name:string, hrName:string, category:string}>}
+ */
+function getStationCandidates_() {
+  const groupNameMap = getHrGroupNameMap_();
+  try {
+    const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
+    const orgSheet = hrSs.getSheetByName(HR_ORG_TREE_SHEET_NAME);
+    if (!orgSheet || orgSheet.getLastRow() <= 1) return [];
+    const candidates = [];
+    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
+      const code = String(row[2] || '').trim();
+      const hrName = String(row[3] || '').trim();
+      const category = stationCategoryOf_(code);
+      if (code && hrName && category) {
+        candidates.push({ code: code, name: groupNameMap[hrName] || hrName, hrName: hrName, category: category });
+      }
+    });
+    return candidates;
+  } catch (e) {
+    Logger.log('駐站候選直讀 HR 失敗,改用快照:' + e.message);
+    try {
+      const snapshot = JSON.parse(PropertiesService.getScriptProperties().getProperty('STATION_NAME_SNAPSHOT') || '{}');
+      return Object.keys(snapshot).map(code => ({
+        code: code,
+        name: groupNameMap[snapshot[code]] || snapshot[code],
+        hrName: snapshot[code],
+        category: stationCategoryOf_(code)
+      })).filter(c => c.category);
+    } catch (e2) {
+      return [];
+    }
+  }
 }
 
 /** [編輯器手動執行] 檢視 directory 組裝結果,核對人數/駐管/組別分布 */
@@ -271,6 +410,7 @@ function syncKeeperSheetFromHR() {
 
   const syncedAt = new Date().toISOString();
   PropertiesService.getScriptProperties().setProperty('HR_LAST_SYNC_AT', syncedAt);
+  updateStationNameSnapshot_(directory.stationGroups);
   clearKeeperDirectoryCache();
   clearPermissionCache(); // 白名單快取一併重建
   Logger.log(`HR 同步完成:寫入 ${rows.length} 筆。`);
