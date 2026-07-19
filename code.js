@@ -4091,6 +4091,13 @@ function getSystemSettings() {
     infoStationUserEmails: props.getProperty('INFO_STATION_USER_EMAILS') || '',
     intakeCustodianEmails: props.getProperty('INTAKE_CUSTODIAN_EMAILS') || '',
     ismsInventoryGroups: props.getProperty('ISMS_INVENTORY_GROUPS') || '',
+    // ✨ 存置地點設定(spec 2026-07-19)
+    staticLocations: props.getProperty('STATIC_LOCATIONS') || '',
+    stationCategories: props.getProperty('STATION_CATEGORIES') || '',
+    infoLocation: props.getProperty('INFO_LOCATION') || '',
+    intakeLocation: props.getProperty('INTAKE_LOCATION') || '',
+    infoComputerLocation: props.getProperty('INFO_COMPUTER_LOCATION') || '',
+    stationCandidates: getStationCandidates_(),
     hrLastSyncAt: props.getProperty('HR_LAST_SYNC_AT') || '', // 唯讀，save 不處理
     hrOfficialGroups: getHrOfficialGroups_()
   };
@@ -4142,6 +4149,46 @@ function saveSystemSettings(settings) {
   }
   if (s.ismsInventoryGroups !== undefined) {
     props.setProperty('ISMS_INVENTORY_GROUPS', String(s.ismsInventoryGroups).trim());
+  }
+  // ✨ 存置地點設定(spec 2026-07-19):驗證後寫入;快照一併更新
+  const locationKeysTouched = ['staticLocations', 'stationCategories', 'infoLocation', 'intakeLocation', 'infoComputerLocation']
+    .some(key => s[key] !== undefined);
+  if (locationKeysTouched) {
+    const candidates = getStationCandidates_();
+    // 靜態地點:去空白、去重複、保序
+    const staticRaw = s.staticLocations !== undefined ? String(s.staticLocations) : (props.getProperty('STATIC_LOCATIONS') || '');
+    const staticList = [];
+    staticRaw.split(/\n+/).forEach(line => {
+      const loc = line.trim();
+      if (loc && staticList.indexOf(loc) === -1) staticList.push(loc);
+    });
+    // 類別:只收合法鍵
+    const validCategoryKeys = ['PERMANENT', 'OUTSOURCED', 'PORTABLE'];
+    const categoriesRaw = s.stationCategories !== undefined ? String(s.stationCategories) : (props.getProperty('STATION_CATEGORIES') || '');
+    const categories = categoriesRaw.split(/[\n,;]+/).map(c => c.trim().toUpperCase())
+      .filter(c => validCategoryKeys.indexOf(c) !== -1);
+    // 合併清單(用「將寫入的新值」計算,含未提交欄位的既有值)
+    const stationNames = candidates.filter(c => categories.indexOf(c.category) !== -1).map(c => c.name);
+    const mergedList = staticList.concat(stationNames);
+    // 三個特殊地點必須在合併清單內(空值=未設定,合法)
+    const specialChecks = [
+      { key: 'infoLocation', prop: 'INFO_LOCATION', label: '駐站轉資訊組' },
+      { key: 'intakeLocation', prop: 'INTAKE_LOCATION', label: '駐站轉中心收案' },
+      { key: 'infoComputerLocation', prop: 'INFO_COMPUTER_LOCATION', label: '資訊組電腦專用' }
+    ];
+    specialChecks.forEach(check => {
+      const value = s[check.key] !== undefined ? String(s[check.key]).trim() : (props.getProperty(check.prop) || '').trim();
+      if (value && mergedList.indexOf(value) === -1) {
+        throw new Error('「' + check.label + '」地點「' + value + '」不在合併後的地點清單中,請重新選擇。');
+      }
+    });
+    if (s.staticLocations !== undefined) props.setProperty('STATIC_LOCATIONS', staticList.join('\n'));
+    if (s.stationCategories !== undefined) props.setProperty('STATION_CATEGORIES', categories.join(','));
+    specialChecks.forEach(check => {
+      if (s[check.key] !== undefined) props.setProperty(check.prop, String(s[check.key]).trim());
+    });
+    updateStationNameSnapshot_(candidates.map(c => ({ code: c.code, name: c.hrName })));
+    clearLocationConfigMemo_();
   }
   if (hrSettingsChanged) {
     clearKeeperDirectoryCache();
