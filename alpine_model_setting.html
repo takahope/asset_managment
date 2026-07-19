@@ -96,9 +96,14 @@ document.addEventListener('alpine:init', function () {
                             PORTABLE: cats.indexOf('PORTABLE') !== -1
                         };
                         self.stationCandidates = settings.stationCandidates || [];
-                        self.infoLocation = settings.infoLocation || '';
-                        self.intakeLocation = settings.intakeLocation || '';
-                        self.infoComputerLocation = settings.infoComputerLocation || '';
+                        var _infoLoc = settings.infoLocation || '';
+                        var _intakeLoc = settings.intakeLocation || '';
+                        var _infoCompLoc = settings.infoComputerLocation || '';
+                        self.$nextTick(function () {
+                            self.infoLocation = _infoLoc;
+                            self.intakeLocation = _intakeLoc;
+                            self.infoComputerLocation = _infoCompLoc;
+                        });
                         systemLoaded = true;
                         maybeFinishLoading();
                     })

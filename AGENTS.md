@@ -44,3 +44,6 @@ PRs should include:
 ## Security & Configuration Tips
 - Update IDs in `env.js` for your environment before deploying.
 - Web app access is domain-restricted in `appsscript.json`; confirm this matches deployment needs.
+
+## Event Log
+- 2026-07-19: Fixed Alpine.js `x-model` and dynamic `<option>` race condition in `alpine_model_setting.html` by using `$nextTick` to set select models.
