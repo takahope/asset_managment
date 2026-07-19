@@ -462,3 +462,108 @@ function setupHrSyncTrigger() {
   ScriptApp.newTrigger('syncKeeperSheetFromHR').timeBased().everyDays(1).atHour(5).create();
   Logger.log('已安裝每日 05:00 的 HR 同步觸發器。');
 }
+
+// --- 存置地點一次性遷移與驗證工具(spec 2026-07-19;觀察期後可整段移除) ---
+
+/**
+ * [編輯器手動執行一次] 「存置地點列表」A–E 欄 → Script Properties。
+ * 冪等:重跑整組覆蓋;執行前先 log 舊值以便回復。
+ * B=是 的列比對 HR 駐站顯示名 → 推定 STATION_CATEGORIES;對不到者暫歸靜態清單保底。
+ */
+function migrateLocationSheetToProperties() {
+  const props = PropertiesService.getScriptProperties();
+  const oldValues = {};
+  ['STATIC_LOCATIONS', 'STATION_CATEGORIES', 'STATION_NAME_SNAPSHOT', 'INFO_LOCATION', 'INTAKE_LOCATION', 'INFO_COMPUTER_LOCATION'].forEach(key => {
+    oldValues[key] = props.getProperty(key);
+  });
+  Logger.log('遷移前舊值(回復用):' + JSON.stringify(oldValues));
+
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() <= 1) throw new Error('「存置地點列表」工作表讀取失敗或無資料。');
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+
+  // HR 駐站名冊(強制重建,不吃快取;HR 失敗直接 throw,遷移不允許降級)
+  clearKeeperDirectoryCache();
+  const directory = buildKeeperDirectoryFromHr_();
+  const groupNameMap = getHrGroupNameMap_();
+  const displayNameToStation = {};
+  (directory.stationGroups || []).forEach(g => {
+    displayNameToStation[groupNameMap[g.name] || g.name] = g;
+  });
+
+  const staticList = [];
+  const matchedCategories = [];
+  const unmatchedStations = [];
+  let infoLocation = '';
+  let intakeLocation = '';
+  let infoComputerLocation = '';
+
+  rows.forEach(row => {
+    const name = String(row[0] || '').trim();
+    if (!name) return;
+    if (String(row[2] || '').trim() === '是' && !infoLocation) infoLocation = name;
+    if (String(row[3] || '').trim() === '是' && !intakeLocation) intakeLocation = name;
+    if (String(row[4] || '').trim() === '是' && !infoComputerLocation) infoComputerLocation = name;
+    if (String(row[1] || '').trim() === '是') {
+      const station = displayNameToStation[name];
+      if (station) {
+        const category = stationCategoryOf_(station.code);
+        if (category && matchedCategories.indexOf(category) === -1) matchedCategories.push(category);
+      } else {
+        unmatchedStations.push(name);
+        if (staticList.indexOf(name) === -1) staticList.push(name); // 保底不掉地點
+      }
+    } else {
+      if (staticList.indexOf(name) === -1) staticList.push(name);
+    }
+  });
+
+  props.setProperty('STATIC_LOCATIONS', staticList.join('\n'));
+  props.setProperty('STATION_CATEGORIES', matchedCategories.join(','));
+  props.setProperty('INFO_LOCATION', infoLocation);
+  props.setProperty('INTAKE_LOCATION', intakeLocation);
+  props.setProperty('INFO_COMPUTER_LOCATION', infoComputerLocation);
+  updateStationNameSnapshot_(directory.stationGroups || []);
+  clearKeeperDirectoryCache();
+
+  Logger.log('=== 遷移報告 ===');
+  Logger.log('STATIC_LOCATIONS(' + staticList.length + ' 筆):\n' + staticList.join('\n'));
+  Logger.log('STATION_CATEGORIES:' + (matchedCategories.join(',') || '(無)'));
+  Logger.log('INFO_LOCATION:' + (infoLocation || '(未設定)'));
+  Logger.log('INTAKE_LOCATION:' + (intakeLocation || '(未設定)'));
+  Logger.log('INFO_COMPUTER_LOCATION:' + (infoComputerLocation || '(未設定)'));
+  Logger.log('工作表有但 HR 對不到的駐站(已暫歸靜態清單):' + (unmatchedStations.join('、') || '(無)'));
+}
+
+/**
+ * [編輯器手動執行] 比對 getLocationConfig_() 與現行工作表;遷移後 diff 必須為空(硬性驗收證據)。
+ */
+function debugLocationConfig() {
+  clearKeeperDirectoryCache();
+  const config = getLocationConfig_();
+
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
+  const rows = (sheet && sheet.getLastRow() > 1)
+    ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues()
+    : [];
+  const sheetLocations = rows.map(r => String(r[0] || '').trim()).filter(Boolean);
+  const sheetStations = rows.filter(r => String(r[1] || '').trim() === '是').map(r => String(r[0] || '').trim());
+  const firstFlag = colIndex => {
+    const hit = rows.filter(r => String(r[colIndex] || '').trim() === '是')[0];
+    return hit ? String(hit[0]).trim() : null;
+  };
+  const logDiff = (label, sheetSide, configSide) => {
+    const onlySheet = sheetSide.filter(x => configSide.indexOf(x) === -1);
+    const onlyConfig = configSide.filter(x => sheetSide.indexOf(x) === -1);
+    Logger.log('=== ' + label + ' diff ===');
+    Logger.log('工作表有但新設定沒有:' + (onlySheet.join('、') || '(無)'));
+    Logger.log('新設定有但工作表沒有:' + (onlyConfig.join('、') || '(無)'));
+  };
+
+  logDiff('地點集合', sheetLocations, config.locations);
+  logDiff('駐站集合', sheetStations, config.stationLocations);
+  Logger.log('=== 特殊地點 ===');
+  Logger.log('資訊組:表=' + firstFlag(2) + ' / 新=' + config.infoLocation + (firstFlag(2) === config.infoLocation ? ' ✔' : ' ✘'));
+  Logger.log('收案組:表=' + firstFlag(3) + ' / 新=' + config.intakeLocation + (firstFlag(3) === config.intakeLocation ? ' ✔' : ' ✘'));
+  Logger.log('電腦專用:表=' + firstFlag(4) + ' / 新=' + config.infoComputerLocation + (firstFlag(4) === config.infoComputerLocation ? ' ✔' : ' ✘'));
+}
