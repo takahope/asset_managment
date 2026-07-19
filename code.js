@@ -1363,9 +1363,6 @@ function getTransferData(forceUserScope) {
   const allAssets = getAllAssets(); // Keep this to get all users/keepers for dropdowns
   const allMyAssets = getAssetsForCurrentUser();
 
-  // ✨ 提前宣告 ss 變數，避免後續使用時未定義
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
   // ✨ 檢查權限和視圖模式
   const isAdmin = checkAdminPermissions();
   const useAdminScope = isAdmin && !forceUserScope;
@@ -1429,34 +1426,8 @@ function getTransferData(forceUserScope) {
   const infoUserMap = resolveRoleMap_(getInfoStationUserEmails_());             // 原 E 欄
   const intakeCustodianMap = resolveRoleMap_(getIntakeCustodianEmails_());      // 原 F 欄
 
-  // 從「存置地點列表」工作表讀取地點清單（A欄：地點名稱，B欄：是否為駐站，C欄：駐站轉資訊組，D欄：駐站轉中心收案，E欄：資訊組電腦專用）
-  const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-  const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 5).getValues();
-  const locationList = locationData.map(row => row[0]).filter(loc => loc); // 過濾空值
-
-  // ✨ 篩選出駐站地點
-  const stationLocationList = locationData
-    .filter(row => String(row[1]).trim() === '是') // B欄為「是」
-    .map(row => row[0])
-    .filter(loc => loc);
-
-  // ✨ 新增：篩選出資訊組地點
-  const infoLocationList = locationData
-    .filter(row => String(row[2]).trim() === '是') // C欄為「是」
-    .map(row => row[0])
-    .filter(loc => loc);
-
-  // ✨ 新增：篩選出收案組地點
-  const intakeLocationList = locationData
-    .filter(row => String(row[3]).trim() === '是') // D欄為「是」
-    .map(row => row[0])
-    .filter(loc => loc);
-
-  // ✨ 新增：篩選出資訊組電腦專用地點
-  const infoComputerLocationList = locationData
-    .filter(row => String(row[4]).trim() === '是') // E欄為「是」
-    .map(row => row[0])
-    .filter(loc => loc);
+  // 存置地點設定(原「存置地點列表」工作表已遷 Script Properties + HR 駐站;spec 2026-07-19)
+  const locConfig = getLocationConfig_();
 
   // 3. 將 Map 轉換為前端需要的格式
   const keepers = {};
@@ -1473,8 +1444,8 @@ function getTransferData(forceUserScope) {
   // ✨ 使用人列表與保管人列表相同（從同一工作表讀取）
   const users = keepers;
 
-  // 地點清單已從「存置地點列表」工作表讀取，無需排序（假設工作表已排序）
-  const locations = locationList;
+  // 地點順序:靜態地點(設定順序)在前、駐站(組織架構樹列序)在後
+  const locations = locConfig.locations;
 
   // 4. 回傳整合後的資料
   return {
@@ -1484,15 +1455,15 @@ function getTransferData(forceUserScope) {
     users: users,
     locations: locations,
     custodians: custodians,           // ✨ 駐管列表
-    stationLocations: stationLocationList, // ✨ 駐站地點列表
+    stationLocations: locConfig.stationLocations, // ✨ 駐站地點列表
     // ✨ 資訊組相關資料
     infoCustodian: infoCustodianMap.size > 0 ? Object.fromEntries(infoCustodianMap) : null,
     infoUser: infoUserMap.size > 0 ? Object.fromEntries(infoUserMap) : null,
-    infoLocation: infoLocationList.length > 0 ? infoLocationList[0] : null,
-    infoComputerLocation: infoComputerLocationList.length > 0 ? infoComputerLocationList[0] : null, // ✨ 新增：電腦專用地點
+    infoLocation: locConfig.infoLocation,
+    infoComputerLocation: locConfig.infoComputerLocation, // ✨ 電腦專用地點
     // ✨ 收案組相關資料
     intakeCustodian: intakeCustodianMap.size > 0 ? Object.fromEntries(intakeCustodianMap) : null,
-    intakeLocation: intakeLocationList.length > 0 ? intakeLocationList[0] : null,
+    intakeLocation: locConfig.intakeLocation,
     // ✨ 同組代理功能資訊
     groupProxyEnabled: groupProxyEnabled,
     currentGroup: currentGroup,
@@ -1635,11 +1606,6 @@ function processBatchTransferApplication(formData) {
     // ✨ 使用 actualNewUserEmail 解析使用人姓名
     const finalNewUserName = actualNewUserEmail ? (userEmailToNameMap.get(String(actualNewUserEmail).toLowerCase().trim()) || newUserName || actualNewUserEmail.split('@')[0]) : newUserName;
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
-
-    // ✨ 新增：讀取地點映射，用於判斷是否為駐站
-    const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-    const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
-    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[1]]));
 
     const now = new Date();
     const applicantEmail = Session.getActiveUser().getEmail(); // 申請操作人員 Email
@@ -1795,7 +1761,7 @@ function processBatchTransferApplication(formData) {
             location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue(now);
 
             // ✨ 新增：判斷是否為駐站 + 是否為電腦，更新 IS_COMPUTER 欄位
-            const isStation = locationIsStationMap.get(finalNewLocation) === '是';
+            const isStation = isStationLocation_(finalNewLocation);
             const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
             const isActuallyComputer = assetRow[indicesToUpdate.IS_ACTUALLY_COMPUTER - 1] === '是';
             const shouldBeMarked = isStation && isActuallyComputer;
@@ -2223,10 +2189,7 @@ function processBatchApproval(appIds) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
-    const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-    const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 4).getValues();
-    const locationIsStationMap = new Map(locationData.map(row => [row[0], row[1]]));
-    
+
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow(), appLogSheet.getLastColumn()).getValues();
     const appLogMap = new Map(appLogData.map((row, index) => [row[AL_APP_ID_COLUMN_INDEX - 1], { row, index: index + 2 }]));
 
@@ -2330,7 +2293,7 @@ function processBatchApproval(appIds) {
             }
           }
 
-          const isStation = locationIsStationMap.get(newLocation) === '是';
+          const isStation = isStationLocation_(newLocation);
           // IS_ACTUALLY_COMPUTER 欄位可能不存在於所有物件中，需要安全檢查
           const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
           const isActuallyComputer = assetRow[indices.IS_ACTUALLY_COMPUTER - 1] === '是';
@@ -6113,8 +6076,6 @@ function getScrapDriveFiles() {
  */
 function getDropdownData() {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
     // 1. 讀取保管人 (Email -> 姓名，HR 全體在職)
     const directory = getKeeperDirectory_();
     const keepers = {};
@@ -6122,10 +6083,8 @@ function getDropdownData() {
       keepers[email] = directory.emailToName[email];
     });
 
-    // 2. 讀取地點
-    const locSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-    const locData = locSheet.getRange(2, 1, locSheet.getLastRow() - 1, 1).getValues();
-    const locations = locData.map(row => row[0]).filter(loc => loc && loc.toString().trim() !== "");
+    // 2. 讀取地點(Script Properties + HR 駐站)
+    const locations = getLocationConfig_().locations;
 
     // 3. 讀取現有分類 (從所有資產中掃描不重複的分類)
     const allAssets = getAllAssets();
@@ -6171,10 +6130,6 @@ function addNewAsset(form) {
   // 3. 準備輔助資料 (名稱查找 & 駐站判斷)
   const directory = getKeeperDirectory_();
 
-  const locSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-  const locData = locSheet.getRange(2, 1, locSheet.getLastRow() - 1, 2).getValues(); // A=Name, B=IsStation
-  const locIsStationMap = new Map(locData.map(r => [r[0], r[1] === '是']));
-
   // 4. 解析名稱
   const keeperName = directory.emailToName[String(form.keeperEmail).toLowerCase().trim()] || form.keeperEmail.split('@')[0];
   const userName = form.userEmail ? (directory.emailToName[String(form.userEmail).toLowerCase().trim()] || form.userEmail.split('@')[0]) : keeperName;
@@ -6213,7 +6168,7 @@ function addNewAsset(form) {
     }
 
     // 如果是駐站地點 + 是電腦實體 -> 標記為需回報電腦 (IS_COMPUTER)
-    const isStation = locIsStationMap.get(form.location);
+    const isStation = isStationLocation_(form.location);
     if (isStation && indices.IS_COMPUTER) {
         row[indices.IS_COMPUTER - 1] = "是";  // T 欄
     }
@@ -6278,12 +6233,6 @@ function addNewAssetsBatch(payload) {
     });
 
     const normalizeText = (value) => String(value || '').trim();
-    // ✨ 讀取存置地點列表（B 欄：是否為駐站）
-    const locationSheet = ss.getSheetByName(KEEPER_LOCATION_MAP_SHEET_NAME);
-    const locationData = locationSheet.getRange(2, 1, locationSheet.getLastRow() - 1, 2).getValues();
-    const locationIsStationMap = new Map(
-      locationData.map(row => [normalizeText(row[0]), normalizeText(row[1]) === '是'])
-    );
     const parseDateValue = (value) => {
       if (!value) return '';
       if (value instanceof Date) return value;
@@ -6387,7 +6336,7 @@ function addNewAssetsBatch(payload) {
         if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) {
           values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
         }
-        const isStation = locationIsStationMap.get(location);
+        const isStation = isStationLocation_(location);
         if (isStation && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
           values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
         }
