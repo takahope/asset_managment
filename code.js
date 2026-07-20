@@ -4104,6 +4104,211 @@ function isUserEmailEnabled() {
   return isEnabled;
 }
 
+// =================================================================
+// --- 位置有誤標記與待確認清單 (spec 2026-07-21) ---
+// 資料以 script property「一筆一 key」儲存，key = LOCERR_<assetId>，
+// 避開單一值 9KB 上限；email 於標記當下快照進紀錄。
+// =================================================================
+
+const LOCATION_ERROR_KEY_PREFIX = 'LOCERR_';
+
+/**
+ * 取得「位置有誤」執行模式。
+ * @returns {'immediate'|'queue'}
+ */
+function getLocationErrorMode_() {
+  const mode = PropertiesService.getScriptProperties().getProperty('LOCATION_ERROR_MODE');
+  return mode === 'queue' ? 'queue' : 'immediate';
+}
+
+/**
+ * 依 assetId 用 V3 資料層組出「位置有誤」紀錄物件（email/name 快照）。
+ * @param {string} assetId
+ * @param {string} actorEmail 標記者 email
+ * @returns {object|null} 找不到資產回 null
+ */
+function buildLocationErrorRecord_(assetId, actorEmail) {
+  const located = findAssetLocation(assetId);
+  if (!located) return null;
+  const indices = located.sheetName === PROPERTY_MASTER_SHEET_NAME
+    ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+  const assetRow = located.sheet.getRange(located.rowIndex, 1, 1, located.sheet.getLastColumn()).getValues()[0];
+  const asset = mapRowToAssetObject(assetRow, indices, located.sheetName);
+  return {
+    assetId: String(asset.assetId || '').trim(),
+    assetName: String(asset.assetName || ''),
+    systemLocation: String(asset.location || ''),
+    keeperEmail: String(asset.leaderEmail || '').trim(),
+    keeperName: String(asset.leaderName || ''),
+    userEmail: String(asset.userEmail || '').trim(),
+    userName: String(asset.userName || ''),
+    flaggedAt: new Date().toISOString(),
+    flaggedBy: String(actorEmail || '')
+  };
+}
+
+/**
+ * upsert 一筆紀錄到 script property（同 assetId 覆寫）。
+ * @param {object} record buildLocationErrorRecord_ 產物
+ */
+function writeLocationErrorRecord_(record) {
+  PropertiesService.getScriptProperties()
+    .setProperty(LOCATION_ERROR_KEY_PREFIX + record.assetId, JSON.stringify(record));
+}
+
+/**
+ * 讀出全部 LOCERR_* 紀錄。
+ * @returns {Array<object>}
+ */
+function readAllLocationErrorRecords_() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const records = [];
+  Object.keys(props).forEach(key => {
+    if (key.indexOf(LOCATION_ERROR_KEY_PREFIX) !== 0) return;
+    try {
+      records.push(JSON.parse(props[key]));
+    } catch (e) {
+      Logger.log('位置有誤紀錄解析失敗（略過）：' + key + ' → ' + e.message);
+    }
+  });
+  return records;
+}
+
+/**
+ * 寄信通知一批紀錄的保管人/使用人；跨紀錄以同一 Set 去重（同一人只寄一封）。
+ * 這同時涵蓋 immediate 模式的「單筆內 keeper=user 去重」。
+ * @param {Array<object>} records
+ * @returns {number} 實際寄出的信件數
+ */
+function sendLocationErrorNotifications_(records) {
+  const notifiedEmails = new Set();
+  const appUrl = getAppUrl();
+  let sent = 0;
+  records.forEach(record => {
+    [record.keeperEmail, record.userEmail].forEach(email => {
+      const target = String(email || '').trim();
+      if (!target || notifiedEmails.has(target.toLowerCase())) return;
+      notifiedEmails.add(target.toLowerCase());
+      const subject = `[財產位置確認] 您的財產「${record.assetName}」位置需確認`;
+      let body = `您好，\n\n系統盤點發現以下財產可能不在系統顯示的位置，請您確認實際位置，或前往系統申請轉移：\n\n`;
+      body += `財產編號：${record.assetId}\n`;
+      body += `財產名稱：${record.assetName}\n`;
+      body += `系統顯示位置：${record.systemLocation}\n\n`;
+      body += `請點擊下方連結前往資產管理系統確認或申請轉移：\n${appUrl}\n\n`;
+      body += `此為系統自動發送郵件。`;
+      MailApp.sendEmail(target, subject, body);
+      sent++;
+    });
+  });
+  return sent;
+}
+
+/**
+ * [immediate 單筆入口] 標記一筆資產位置有誤：寫紀錄 +（若開）寄信。
+ * 權限：白名單內使用者皆可（與盤點一致），紀錄 flaggedBy。
+ * @param {string} assetId
+ * @returns {string} 訊息字串（成功「✅…」／失敗「❌…」）
+ */
+function flagLocationError(assetId) {
+  try {
+    const actorEmail = Session.getActiveUser().getEmail();
+    const record = buildLocationErrorRecord_(assetId, actorEmail);
+    if (!record || !record.assetId) return '❌ 位置有誤標記失敗：找不到資產 ' + assetId;
+    writeLocationErrorRecord_(record);
+    let notified = 0;
+    if (isUserEmailEnabled()) {
+      notified = sendLocationErrorNotifications_([record]);
+    }
+    return notified > 0
+      ? `✅ 已標記「${record.assetName}」位置有誤，並通知 ${notified} 人。`
+      : `✅ 已標記「${record.assetName}」位置有誤（未寄信，已留存待確認紀錄）。`;
+  } catch (e) {
+    Logger.log('flagLocationError 錯誤：' + e.message + ' at ' + e.stack);
+    return '❌ 位置有誤標記失敗：' + e.message;
+  }
+}
+
+/**
+ * [queue 批次入口] 一次標記多筆；寄信跨筆去重（同一人只一封）。
+ * @param {string[]} assetIds
+ * @returns {string} 摘要字串
+ */
+function processBatchLocationErrors(assetIds) {
+  if (!assetIds || assetIds.length === 0) return '您沒有選擇任何項目。';
+  try {
+    const actorEmail = Session.getActiveUser().getEmail();
+    const records = [];
+    const failed = [];
+    assetIds.forEach(assetId => {
+      const record = buildLocationErrorRecord_(assetId, actorEmail);
+      if (!record || !record.assetId) { failed.push(assetId); return; }
+      writeLocationErrorRecord_(record);
+      records.push(record);
+    });
+    let notified = 0;
+    if (isUserEmailEnabled()) {
+      notified = sendLocationErrorNotifications_(records);
+    }
+    let message = `✅ 已標記 ${records.length} 筆位置有誤`;
+    if (notified > 0) message += `，通知 ${notified} 人`;
+    if (failed.length > 0) message += `；${failed.length} 筆找不到資產已跳過`;
+    return message + '。';
+  } catch (e) {
+    Logger.log('processBatchLocationErrors 錯誤：' + e.message + ' at ' + e.stack);
+    return '❌ 位置有誤批次標記失敗：' + e.message;
+  }
+}
+
+/**
+ * [清單查詢] 供側邊欄卡片計數與清單 modal。
+ * 受眾過濾：admin 且非 forceUserScope → 全部；否則只回 currentUser 為
+ * 保管人/使用人的（同組代理啟用且非 forceUserScope 時比照擴展）。
+ * @param {boolean} forceUserScope
+ * @returns {Array<object>}
+ */
+function getLocationErrorRecords(forceUserScope) {
+  const records = readAllLocationErrorRecords_();
+  const admin = checkAdminPermissions();
+  if (admin && !forceUserScope) {
+    return records.sort((a, b) => String(b.flaggedAt).localeCompare(String(a.flaggedAt)));
+  }
+  const currentEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+  const scopeEmails = new Set([currentEmail]);
+  if (!forceUserScope && isGroupProxyTransferEnabled()) {
+    getGroupMemberEmails(Session.getActiveUser().getEmail())
+      .forEach(e => scopeEmails.add(String(e || '').toLowerCase().trim()));
+  }
+  return records
+    .filter(r => scopeEmails.has(String(r.keeperEmail || '').toLowerCase())
+      || scopeEmails.has(String(r.userEmail || '').toLowerCase()))
+    .sort((a, b) => String(b.flaggedAt).localeCompare(String(a.flaggedAt)));
+}
+
+/**
+ * [手動結案] 刪除一筆紀錄。權限：admin 或該紀錄的 keeper/user 本人（防 IDOR）。
+ * @param {string} assetId
+ * @returns {string} 訊息字串
+ */
+function resolveLocationError(assetId) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const raw = props.getProperty(LOCATION_ERROR_KEY_PREFIX + assetId);
+    if (!raw) return '❌ 找不到此筆位置有誤紀錄（可能已處理）。';
+    const record = JSON.parse(raw);
+    const currentEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+    const isOwner = currentEmail === String(record.keeperEmail || '').toLowerCase()
+      || currentEmail === String(record.userEmail || '').toLowerCase();
+    if (!checkAdminPermissions() && !isOwner) {
+      return '❌ 權限不足：僅管理員或該資產的保管人/使用人可結案。';
+    }
+    props.deleteProperty(LOCATION_ERROR_KEY_PREFIX + assetId);
+    return '✅ 已標記為已處理。';
+  } catch (e) {
+    Logger.log('resolveLocationError 錯誤：' + e.message);
+    return '❌ 結案失敗：' + e.message;
+  }
+}
+
 /**
  * ✨ [管理員專用] 取得系統設定（電腦回報管理員 email、通知開關、同組資產開關、盤點功能開關）。
  * 供設定視窗（alpine_model_setting.html）讀取初始值。加 admin 守衛避免非管理員讀取 email 清單。
