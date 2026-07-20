@@ -1083,10 +1083,11 @@ function getUserStateCore(forceUserScope) {
     Logger.log(`getUserStateCore timings: ${JSON.stringify(timings)}`);
 
     return {
-      appUrl:           appUrl,
-      userState:        userState,
-      inventoryEnabled: isInventoryFeatureEnabled(), // 廉價旗標，前端需先知道以決定是否顯示盤點
-      timings:          timings
+      appUrl:            appUrl,
+      userState:         userState,
+      inventoryEnabled:  isInventoryFeatureEnabled(), // 廉價旗標，前端需先知道以決定是否顯示盤點
+      locationErrorMode: getLocationErrorMode_(),      // ✨ 位置有誤執行模式（immediate/queue），前端按鈕分流用
+      timings:           timings
     };
   } finally {
     disarmAllAssetsMemo_();
@@ -2212,6 +2213,7 @@ function processBatchApproval(appIds) {
     const now = new Date();
     let successCount = 0;
     const errors = [];
+    const resolvedLocationErrorAssetIds = []; // ✨ 轉移完成即清除對應位置有誤紀錄
 
     // 🛡️ 安全性修復：取得當前使用者身分
     const currentUserEmail = Session.getActiveUser().getEmail();
@@ -2415,6 +2417,7 @@ function processBatchApproval(appIds) {
           }
 
           successCount++;
+          resolvedLocationErrorAssetIds.push(assetId); // ✨ 記錄待清除
         } else {
           errors.push(`找不到資產 ${assetId}`);
         }
@@ -2450,6 +2453,14 @@ function processBatchApproval(appIds) {
         throw new Error('權限不足：您不是這些申請的指定審核人，無法執行審核操作。');
       }
       message += `\n（注意：${unauthorizedApps.length} 筆申請因權限不足已跳過）`;
+    }
+
+    // ✨ 轉移完成：清除對應的位置有誤待確認紀錄（存在才刪，靜默略過）
+    if (resolvedLocationErrorAssetIds.length > 0) {
+      const props = PropertiesService.getScriptProperties();
+      resolvedLocationErrorAssetIds.forEach(id => {
+        try { props.deleteProperty(LOCATION_ERROR_KEY_PREFIX + id); } catch (e) { /* 略過 */ }
+      });
     }
 
     return message;
@@ -4324,6 +4335,7 @@ function getSystemSettings() {
     groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
     inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
     fabMenuEnabled: props.getProperty('FAB_MENU_ENABLED') !== 'false',
+    locationErrorMode: getLocationErrorMode_(), // ✨ 位置有誤執行模式
     // ✨ 保管人/信箱 遷移設定（spec 2026-07-18）
     hrGroupNameMap: props.getProperty('HR_GROUP_NAME_MAP') || '',
     infoStationCustodianEmails: props.getProperty('INFO_STATION_CUSTODIAN_EMAILS') || '',
@@ -4370,6 +4382,9 @@ function saveSystemSettings(settings) {
   }
   if (s.fabMenuEnabled !== undefined) {
     props.setProperty('FAB_MENU_ENABLED', String(!!s.fabMenuEnabled));
+  }
+  if (s.locationErrorMode !== undefined) {
+    props.setProperty('LOCATION_ERROR_MODE', s.locationErrorMode === 'queue' ? 'queue' : 'immediate');
   }
   // ✨ 保管人/信箱 遷移設定；HR 相關鍵變更後清 directory 快取讓新值即時生效
   let hrSettingsChanged = false;
