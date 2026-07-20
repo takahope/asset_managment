@@ -487,6 +487,47 @@ document.addEventListener('alpine:init', function () {
     .filter-native-select::-ms-expand {
         display: none;
     }
+
+    .filter-toolbar-row {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .filter-toolbar-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        flex-shrink: 0;
+        width: 100%;
+    }
+
+    .filter-toolbar-action {
+        width: 100%;
+    }
+
+    .filter-toolbar-action--reset {
+        grid-column: span 2 / span 2;
+    }
+
+    @media (min-width: 1024px) {
+        .filter-toolbar-row {
+            flex-direction: row;
+            align-items: center;
+        }
+
+        .filter-toolbar-actions {
+            display: flex;
+            flex-wrap: wrap;
+            width: auto;
+        }
+
+        .filter-toolbar-action,
+        .filter-toolbar-action--reset {
+            grid-column: auto;
+            width: auto;
+        }
+    }
 </style>
 
 <!-- ================= Alpine 應用主畫面(對應舊頁 App render 15748-16280) ================= -->
@@ -769,7 +810,7 @@ document.addEventListener('alpine:init', function () {
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6" x-data="filterSection">
             <div class="flex flex-col gap-4">
                 <!-- 第 1 行:關鍵字搜尋 + 動作按鈕 -->
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <div class="filter-toolbar-row flex flex-col gap-3 lg:flex-row lg:items-center">
                     <div class="relative flex-1 min-w-0">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                         <input id="search-box" type="text"
@@ -784,23 +825,23 @@ document.addEventListener('alpine:init', function () {
                             <i class="fa-solid fa-barcode"></i>
                         </button>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 flex-shrink-0 w-full lg:w-auto lg:flex lg:flex-wrap">
+                    <div class="filter-toolbar-actions grid grid-cols-2 gap-2 flex-shrink-0 w-full lg:w-auto lg:flex lg:flex-wrap">
                         <button type="button" @click="handleResetAllFilters()" :disabled="!hasActiveFilter"
-                                class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-2 w-full lg:col-auto lg:w-auto"
+                                class="filter-toolbar-action filter-toolbar-action--reset inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-2 w-full lg:col-auto lg:w-auto"
                                 :class="hasActiveFilter ? 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50' : 'border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed'"
                                 :title="hasActiveFilter ? '清除所有篩選與搜尋字' : '目前沒有套用的篩選'" aria-label="清除篩選">
                             <i class="fa-solid fa-filter-circle-xmark"></i>
                             清除篩選
                         </button>
                         <button type="button" @click="$store.app.handleExportExcel()" :disabled="exportDisabled"
-                                class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-1 w-full lg:col-auto lg:w-auto"
+                                class="filter-toolbar-action inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-1 w-full lg:col-auto lg:w-auto"
                                 :class="exportDisabled ? 'border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed' : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'"
                                 :title="exportDisabled ? '沒有可匯出的資料' : '匯出 Excel'" aria-label="匯出 Excel">
                             <i class="fa-solid fa-file-excel"></i>
                             匯出 Excel
                         </button>
                         <button type="button" @click="$store.app.handleExportCsv()" :disabled="exportDisabled"
-                                class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-1 w-full lg:col-auto lg:w-auto"
+                                class="filter-toolbar-action inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-1 w-full lg:col-auto lg:w-auto"
                                 :class="exportDisabled ? 'border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed' : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'"
                                 :title="exportDisabled ? '沒有可匯出的資料' : '匯出 CSV'" aria-label="匯出 CSV">
                             <i class="fa-solid fa-file-csv"></i>
