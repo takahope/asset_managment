@@ -312,9 +312,9 @@ document.addEventListener('alpine:init', function () {
                         store.handleCloseQuickActionModal();
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('提交失敗', 0);
+                        store.removeProcessingAsset(asset.assetId);
+                        store.toastOrAlert('❌ 提交失敗：' + error.message, 'error');
                         alert('錯誤：' + error.message);
-                        self.isSubmitting = false;
                     })
                     .processBatchScrapping(formData);
             },

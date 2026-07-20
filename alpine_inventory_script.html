@@ -455,7 +455,13 @@ document.addEventListener('alpine:init', function () {
                     self.isResetting = false;
                 };
                 if (this.isBatch) {
-                    if (!this.assetIds || this.assetIds.length === 0) { hideFlyProgressBar('取消失敗', 0); alert('沒有可取消的資產'); this.isResetting = false; return; }
+                    if (!this.assetIds || this.assetIds.length === 0) {
+                        self.$store.app.removeProcessingAssets(processingIds);
+                        self.$store.app.toastOrAlert('❌ 取消失敗：沒有可取消的資產', 'error');
+                        alert('沒有可取消的資產');
+                        this.isResetting = false;
+                        return;
+                    }
                     google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetBatchInventoryInActiveSessions(this.assetIds);
                 } else {
                     google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetAssetInventoryInActiveSessions(this.asset.assetId);

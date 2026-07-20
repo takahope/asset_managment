@@ -2228,6 +2228,8 @@
                     if (missingStatus.length > 0) { alert('仍有未選擇盤點結果的資產，請先完成選擇'); return; }
                     if (!confirm('即將送出 ' + activeItems.length + ' 筆盤點結果，是否繼續？')) return;
                     this.toastProgress('正在提交盤點結果...');
+                    var activeAssetIds = activeItems.map(function (i) { return i.assetId; });
+                    this.addProcessingAssets(activeAssetIds);
                     var payload = activeItems.map(function (item) {
                         var o = { assetId: item.assetId, result: item.status, remarks: (item.actionPayload && item.actionPayload.remarks) || '' };
                         if (item.actionPayload && item.actionPayload.ismsData) o.ismsData = item.actionPayload.ismsData;
@@ -2237,12 +2239,14 @@
                         ? 'markBatchInventoryWithIsms' : 'markBatchInventoryInActiveSessions';
                     var runner = google.script.run
                         .withSuccessHandler(function (response) {
+                            self.removeProcessingAssets(activeAssetIds);
                             if (response && response.error) { self.toastOrAlert('❌ 盤點送出失敗：' + response.error, 'error'); alert('盤點送出失敗：' + response.error); return; }
                             self.toastOrAlert('✅ 盤點完成！', 'success');
                             if (window.AssetCartStore) window.AssetCartStore.removeItemsByIds(activeItems.map(function (i) { return i.assetId; }));
                             self.handleInventorySuccess();
                         })
                         .withFailureHandler(function (error) {
+                            self.removeProcessingAssets(activeAssetIds);
                             self.toastOrAlert('❌ 盤點失敗：' + ((error && error.message) || error), 'error');
                             alert('盤點送出失敗：' + ((error && error.message) || error));
                         });
@@ -2274,6 +2278,8 @@
                 if (items.length === 0) { this.toastOrAlert('清單沒有可送出的項目', 'warning'); return Promise.resolve(); }
                 refs.advancedSubmit = true;
                 this.toastProgress('正在送出進階清單...');
+                var allAssetIds = items.map(function(i) { return i.assetId; });
+                this.addProcessingAssets(allAssetIds);
                 var successIds = [], failedIds = [], invalidIds = [];
                 var groupByPayload = function (actionItems) {
                     var groups = new Map();
@@ -2337,6 +2343,7 @@
                         if (invalidIds.length > 0) messageParts.push('缺少設定 ' + invalidIds.length + ' 筆');
                         var message = messageParts.length > 0 ? ('送出完成：' + messageParts.join('，')) : '送出完成';
                         self.toastOrAlert((failedIds.length > 0 || invalidIds.length > 0) ? '⚠️ ' + message : '✅ ' + message, (failedIds.length > 0 || invalidIds.length > 0) ? 'warning' : 'success');
+                        self.removeProcessingAssets(allAssetIds);
                         refs.advancedSubmit = false;
                     });
                 return chain;

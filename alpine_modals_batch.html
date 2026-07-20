@@ -252,9 +252,9 @@ document.addEventListener('alpine:init', function () {
                         store.handleBatchActionSuccess();
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('提交失敗', 0);
+                        store.removeProcessingAssets(processingIds);
+                        store.toastOrAlert('❌ 提交失敗：' + error.message, 'error');
                         alert('錯誤：' + error.message);
-                        self.isSubmitting = false;
                     })
                     .processBatchScrapping(formData);
             }
