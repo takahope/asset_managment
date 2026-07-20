@@ -375,7 +375,8 @@
                     lent: this.allAssets.filter(function (a) { return a.status === '出借中'; }).length,
                     scrapPending: scrapPendingCount,
                     transferPending: this.transferPendingCount,
-                    inventory: inventoryCount
+                    inventory: inventoryCount,
+                    locationError: this.locationErrorCount
                 };
             },
             // 左側抽屜待辦總數
@@ -393,6 +394,7 @@
                 if (source === 'overview') return this.transferOverviewLoaded;
                 if (source === 'secondary') return this.secondaryLoaded;
                 if (source === 'scrap') return this.isAdminView || this.secondaryLoaded;
+                if (source === 'locationError') return this.locationErrorLoaded;
                 return true; // 'core'：源自 allAssets，首屏即可信
             },
             get hasActiveInventory() {
@@ -822,6 +824,23 @@
                     self.loadScrapPendingDetails(forceUserScope, { silent: true });
                 }, 1500, 250);
             },
+            scheduleLocationErrorPreload: function (forceUserScope) {
+                var self = this;
+                scheduleIdle('locationErrorLoad', function () {
+                    google.script.run
+                        .withSuccessHandler(function (records) {
+                            var list = Array.isArray(records) ? records : [];
+                            self.locationErrorRecords = list;
+                            self.locationErrorCount = list.length;
+                            self.locationErrorLoaded = true;
+                        })
+                        .withFailureHandler(function (error) {
+                            console.warn('載入位置有誤清單失敗：', error);
+                            self.locationErrorLoaded = true;
+                        })
+                        .getLocationErrorRecords(forceUserScope);
+                });
+            },
             loadTransferPendingDetails: function (forceUserScope, options) {
                 options = options || {};
                 var self = this;
@@ -986,6 +1005,7 @@
                         // 沿用既有的細粒度靜默預載排程
                         self.scheduleTransferOverviewLoad(forceUserScope);
                         self.scheduleScrapPendingPreload(forceUserScope);
+                        self.scheduleLocationErrorPreload(forceUserScope);
                         self.scheduleTransferPendingPreload(forceUserScope);
                         if (response.isAdmin && !forceUserScope) {
                             self.scheduleAddAssetDropdownPreload();
@@ -1356,6 +1376,10 @@
                     case 'inventory':
                         this.activeModal = 'inventoryPending';
                         this.loadPendingInventoryAssignments(this.viewMode === 'user');
+                        break;
+                    case 'locationError':
+                        this.activeModal = 'locationError';
+                        this.scheduleLocationErrorPreload(this.viewMode === 'user');
                         break;
                 }
             },
@@ -2063,6 +2087,23 @@
                         self.toastOrAlert('❌ 標記失敗：' + ((error && error.message) || error), 'error');
                     })
                     .flagLocationError(asset.assetId);
+            },
+            handleResolveLocationError: function (assetId) {
+                var self = this;
+                if (!confirm('確定將此筆標記為已處理？')) return;
+                google.script.run
+                    .withSuccessHandler(function (message) {
+                        var isError = typeof message === 'string' && message.indexOf('❌') === 0;
+                        self.toastOrAlert(message || '已處理', isError ? 'error' : 'success');
+                        if (!isError) {
+                            self.locationErrorRecords = (self.locationErrorRecords || []).filter(function (r) { return r.assetId !== assetId; });
+                            self.locationErrorCount = self.locationErrorRecords.length;
+                        }
+                    })
+                    .withFailureHandler(function (error) {
+                        self.toastOrAlert('❌ 結案失敗：' + ((error && error.message) || error), 'error');
+                    })
+                    .resolveLocationError(assetId);
             },
             handleInventoryQueue: function (payload, summary) {
                 var self = this;

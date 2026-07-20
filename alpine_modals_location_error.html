@@ -1,0 +1,39 @@
+<!-- ===== 位置有誤清單 modal（spec 2026-07-21） ===== -->
+<div x-show="$store.app.activeModal === 'locationError'"
+     x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+     @click.self="$store.app.activeModal = null">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+      <h3 class="text-base font-semibold text-slate-800"><span class="mr-2">📍</span>需確認財產（位置有誤）</h3>
+      <button class="text-slate-400 hover:text-slate-600" @click="$store.app.activeModal = null" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-5">
+      <template x-if="!$store.app.locationErrorLoaded">
+        <div class="text-center py-8 text-slate-400"><i class="fa-solid fa-spinner fa-spin"></i> 載入中...</div>
+      </template>
+      <template x-if="$store.app.locationErrorLoaded && (!$store.app.locationErrorRecords || $store.app.locationErrorRecords.length === 0)">
+        <div class="text-center py-8 text-slate-400">目前沒有需確認的財產。</div>
+      </template>
+      <template x-if="$store.app.locationErrorLoaded && $store.app.locationErrorRecords && $store.app.locationErrorRecords.length > 0">
+        <div class="divide-y divide-slate-100">
+          <template x-for="rec in $store.app.locationErrorRecords" :key="rec.assetId">
+            <div class="py-3 flex items-start gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-slate-500" x-text="rec.assetId"></span>
+                  <span class="text-sm font-medium text-slate-800 truncate" x-text="rec.assetName"></span>
+                </div>
+                <div class="text-xs text-slate-500 mt-0.5">系統位置：<span x-text="rec.systemLocation || '（無）'"></span></div>
+                <div class="text-xs text-slate-400 mt-0.5" x-text="'標記時間：' + (rec.flaggedAt ? new Date(rec.flaggedAt).toLocaleString('zh-TW') : '')"></div>
+              </div>
+              <button type="button"
+                      class="shrink-0 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100"
+                      @click="$store.app.handleResolveLocationError(rec.assetId)">已確認/已處理</button>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>

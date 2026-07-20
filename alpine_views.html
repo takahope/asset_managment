@@ -469,7 +469,8 @@ document.addEventListener('alpine:init', function () {
                 { id: 'lent', label: '出借中', countKey: 'lent', dataSource: 'core', color: 'bg-green-500', icon: '📤', description: '目前出借的資產' },
                 { id: 'scrapPending', label: '待列印報廢申請單', countKey: 'scrapPending', dataSource: 'scrap', color: 'bg-orange-500', icon: '🗑️', description: '報廢中的資產（需列印申請單）' },
                 { id: 'transferPending', label: '待列印轉移申請單', countKey: 'transferPending', dataSource: 'secondary', color: 'bg-purple-500', icon: '🔄', description: '已被接收的資產（需列印轉移申請單）' },
-                { id: 'inventory', label: '待盤點', countKey: 'inventory', dataSource: 'secondary', color: 'bg-red-500', icon: '📋', description: '需要您完成的盤點任務' }
+                { id: 'inventory', label: '待盤點', countKey: 'inventory', dataSource: 'secondary', color: 'bg-red-500', icon: '📋', description: '需要您完成的盤點任務' },
+                { id: 'locationError', label: '需確認財產', countKey: 'locationError', dataSource: 'locationError', color: 'bg-amber-500', icon: '📍', description: '系統顯示位置有誤，需確認或申請轉移' }
             ]
         };
     });
