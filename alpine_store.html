@@ -15,6 +15,7 @@
         SCRAP: '報廢',
         INVENTORY: '盤點',
         INVENTORY_RESET: '取消確認',
+        LOCATION_ERROR: '位置有誤',
         NONE: '未指定'
     };
     var INVENTORY_STATUS_LABELS = {
@@ -288,6 +289,10 @@
             showInventoryMgmtModal: false,
             showModelSettingModal: false,
             inventoryFeatureEnabled: true,
+            locationErrorMode: 'immediate',   // ✨ 開機由 core.locationErrorMode 覆寫
+            locationErrorCount: 0,            // ✨ 待確認財產卡片計數
+            locationErrorRecords: null,       // ✨ 清單 modal 資料（null=未載入）
+            locationErrorLoaded: false,       // ✨ 卡片計數是否就緒（Task 5 使用）
             inventoryPendingByAsset: {},
             pendingInventoryItems: [],
             isLoadingPendingInventory: false,
@@ -969,6 +974,7 @@
                             refs.viewModeInitialized = true;
                         }
                         self.inventoryFeatureEnabled = core.inventoryEnabled !== false;
+                        self.locationErrorMode = core.locationErrorMode === 'queue' ? 'queue' : 'immediate';
                         // 核心資料就緒 → 主表格立即顯示，不等待次要資料
                         self.isLoadingCards = false;
                         self.isReady = true;
@@ -2022,6 +2028,42 @@
                 this.quickActionModalType = modalType;
                 this.closeActionPanel({ keepPending: true });
             },
+            handleLocationErrorAction: function () {
+                var self = this;
+                var asset = this.actionPanelState.asset || this.resolveAssetDetail(this.actionPanelState.assetId);
+                if (!asset || !asset.assetId) { this.toastOrAlert('尚未選擇資產', 'warning'); return; }
+
+                if (this.locationErrorMode === 'queue') {
+                    if (window.AssetCartStore) {
+                        window.AssetCartStore.addOrUpdateItem({
+                            assetId: asset.assetId,
+                            assetName: asset.assetName || '',
+                            actionType: 'LOCATION_ERROR',
+                            status: null,
+                            actionPayload: null,
+                            actionSummary: '位置有誤'
+                        });
+                        this.toastOrAlert('已加入進階清單：' + (asset.assetName || asset.assetId) + '（位置有誤）', 'success');
+                    }
+                    this.closeActionPanel({ keepPending: true });
+                    return;
+                }
+
+                // immediate 模式：確認後立即送出
+                if (!confirm('確定標記「' + (asset.assetName || asset.assetId) + '」位置有誤？\n系統位置：' + (asset.location || '（無）') + '\n\n若信件通知已開啟，將寄信通知保管人與使用人。')) return;
+                this.toastProgress('正在標記位置有誤...');
+                this.closeActionPanel({ keepPending: true });
+                google.script.run
+                    .withSuccessHandler(function (message) {
+                        var isError = typeof message === 'string' && message.indexOf('❌') === 0;
+                        self.toastOrAlert(message || '已標記', isError ? 'error' : 'success');
+                        if (!isError) self.scheduleLocationErrorPreload(self.viewMode === 'user');
+                    })
+                    .withFailureHandler(function (error) {
+                        self.toastOrAlert('❌ 標記失敗：' + ((error && error.message) || error), 'error');
+                    })
+                    .flagLocationError(asset.assetId);
+            },
             handleInventoryQueue: function (payload, summary) {
                 var self = this;
                 if (!window.AssetCartStore) return;
@@ -2336,6 +2378,13 @@
                     .then(function () { return runGroups(items.filter(function (i) { return i.actionType === 'TRANSFER'; }), 'processBatchTransferApplication'); })
                     .then(function () { return runGroups(items.filter(function (i) { return i.actionType === 'LEND'; }), 'processBatchLending'); })
                     .then(function () { return runGroups(items.filter(function (i) { return i.actionType === 'SCRAP'; }), 'processBatchScrapping'); })
+                    .then(function () {
+                        var locErrIds = items.filter(function (i) { return i.actionType === 'LOCATION_ERROR'; }).map(function (i) { return i.assetId; });
+                        if (locErrIds.length === 0) return;
+                        return self.runScriptPromise('processBatchLocationErrors', locErrIds)
+                            .then(function () { successIds.push.apply(successIds, locErrIds); self.scheduleLocationErrorPreload(self.viewMode === 'user'); })
+                            .catch(function (error) { console.warn('processBatchLocationErrors 送出失敗：', error); failedIds.push.apply(failedIds, locErrIds); });
+                    })
                     .catch(function (error) { console.warn('進階清單送出失敗：', error); })
                     .finally(function () {
                         if (successIds.length > 0) window.AssetCartStore.removeItemsByIds(successIds);
