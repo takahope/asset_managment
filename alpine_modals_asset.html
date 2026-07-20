@@ -380,13 +380,23 @@ document.addEventListener('alpine:init', function () {
                     var payload = { propertyCategory: self.propertyCategoryForImport, propertyRows: propertyRows, itemRows: itemRows };
                     google.script.run
                         .withSuccessHandler(function (response) {
-                            self.$store.app.toastOrAlert('✅ 匯入完成！', 'success');
                             self.isBatchImporting = false;
-                            if (!response || response.error) { self.batchImportError = (response && response.error) || '匯入失敗'; return; }
+                            // 先判斷整批失敗,避免在錯誤情形仍顯示成功 toast
+                            if (!response || response.error) {
+                                self.$store.app.toastOrAlert('❌ 匯入失敗：' + ((response && response.error) || '未知錯誤'), 'error');
+                                self.batchImportError = (response && response.error) || '匯入失敗';
+                                return;
+                            }
                             var serverFailures = Array.isArray(response.failures) ? response.failures : [];
                             var combinedFailures = clientFailures.concat(serverFailures);
                             var successCount = Number(response.successCount || 0);
                             self.batchImportResult = { successCount: successCount, failureCount: combinedFailures.length, failures: combinedFailures };
+                            self.$store.app.toastOrAlert(
+                                combinedFailures.length > 0
+                                    ? ('⚠️ 匯入完成：成功 ' + successCount + ' 筆，失敗 ' + combinedFailures.length + ' 筆')
+                                    : ('✅ 匯入完成：成功 ' + successCount + ' 筆'),
+                                combinedFailures.length > 0 ? 'warning' : 'success'
+                            );
                             if (successCount > 0) self.$store.app.handleAddAssetSuccess();
                         })
                         .withFailureHandler(function (error) {

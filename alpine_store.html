@@ -2174,8 +2174,10 @@
                 this.batchModalType = null;
                 this.batchActionAssetIds = [];
             },
-            handleBatchActionSuccess: function (skipReload) {
-                var currentType = this.batchModalType;
+            handleBatchActionSuccess: function (skipReload, modalTypeOverride) {
+                // modalTypeOverride:提交時 modal 已被 handleCloseBatchModal 關閉並清空 batchModalType,
+                // 呼叫端須把提交前捕捉的類型傳入,否則進階模式無法依動作類型清除購物車。
+                var currentType = modalTypeOverride || this.batchModalType;
                 this.batchModalType = null;
                 this.batchActionAssetIds = [];
                 if (this.isAdvancedMode) {
@@ -2186,7 +2188,8 @@
                     this.selectedAssetIds = [];
                 }
                 if (!skipReload) {
-                    this.loadData();
+                    // 以輕量的卡片級刷新對帳(權威更新 allAssets 與統計),取代整頁 loadData 全螢幕遮罩
+                    this.refreshCardData();
                 }
             },
             showSuccessPrompt: function (params) {

@@ -378,14 +378,27 @@ document.addEventListener('alpine:init', function () {
                     this.close();
                     return;
                 }
-                var processingIds = this.isBatch ? [].concat(this.assetIds) : [this.asset.assetId];
-                var store = this.$store.app;
+                // 先在關閉 modal 前捕捉所有需要的值(close() 會清空 store,asset/assetIds 皆為 store getter)
+                var isBatch = this.isBatch;
+                var assetIdsCopy = isBatch ? [].concat(this.assetIds || []) : [];
+                var singleAssetId = isBatch ? null : (this.asset && this.asset.assetId);
+                if (isBatch) {
+                    if (assetIdsCopy.length === 0) { alert('沒有可盤點的資產'); return; }
+                } else if (!singleAssetId) {
+                    alert('找不到要盤點的資產'); return;
+                }
+                var processingIds = isBatch ? [].concat(assetIdsCopy) : [singleAssetId];
+                // 防重複送出:任一目標資產處理中則忽略本次點擊
+                if (processingIds.some(function (id) { return store.isAssetProcessing(id); })) return;
+                var invResult = this.invResult;
+                var invRemarks = this.invRemarks;
+                var ismsData = this.buildIsmsData();
+                var hasIsmsData = ismsData !== null;
+
                 store.toastProgress('正在提交盤點結果...');
                 store.addProcessingAssets(processingIds);
                 this.close();
 
-                var ismsData = this.buildIsmsData();
-                var hasIsmsData = ismsData !== null;
                 var successHandler = function (response) {
                     store.removeProcessingAssets(processingIds);
                     if (response && response.success) {
@@ -401,20 +414,17 @@ document.addEventListener('alpine:init', function () {
                     store.toastOrAlert('❌ 盤點失敗：' + error.message, 'error');
                     alert('盤點失敗：' + error.message);
                 };
-                if (this.isBatch) {
-                    if (!this.assetIds || this.assetIds.length === 0) {
-                        store.removeProcessingAssets(processingIds); alert('沒有可盤點的資產'); return;
-                    }
-                    var assetResults = this.assetIds.map(function (id) {
-                        var o = { assetId: id, result: self.invResult, remarks: self.invRemarks };
+                if (isBatch) {
+                    var assetResults = assetIdsCopy.map(function (id) {
+                        var o = { assetId: id, result: invResult, remarks: invRemarks };
                         if (hasIsmsData) o.ismsData = ismsData;
                         return o;
                     });
                     if (hasIsmsData) google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markBatchInventoryWithIsms(assetResults);
                     else google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markBatchInventoryInActiveSessions(assetResults);
                 } else {
-                    if (hasIsmsData) google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markAssetInventoryWithIsms(this.asset.assetId, this.invResult, this.invRemarks, ismsData);
-                    else google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markAssetInventoryInActiveSessions(this.asset.assetId, this.invResult, this.invRemarks);
+                    if (hasIsmsData) google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markAssetInventoryWithIsms(singleAssetId, invResult, invRemarks, ismsData);
+                    else google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).markAssetInventoryInActiveSessions(singleAssetId, invResult, invRemarks);
                 }
             },
             handleReset: function () {
@@ -432,39 +442,42 @@ document.addEventListener('alpine:init', function () {
                     ? ('確定要取消所選的 ' + totalCount + ' 筆盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。')
                     : '確定要取消此資產的盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。';
                 if (!confirm(confirmMessage)) return;
+                // 提交前捕捉目標資產(避免 store getter 於流程中被清空)
+                var assetIdsCopy = this.isBatch ? [].concat(this.assetIds || []) : [];
+                var singleAssetId = this.isBatch ? null : (this.asset && this.asset.assetId);
+                if (this.isBatch) {
+                    if (assetIdsCopy.length === 0) { alert('沒有可取消的資產'); return; }
+                } else if (!singleAssetId) {
+                    alert('找不到要取消的資產'); return;
+                }
+                var processingIds = this.isBatch ? [].concat(assetIdsCopy) : [singleAssetId];
+                // 防重複送出:任一目標資產處理中則忽略本次點擊
+                if (processingIds.some(function (id) { return self.$store.app.isAssetProcessing(id); })) return;
                 this.isResetting = true;
-                this.$store.app.toast('正在取消盤點結果...');
-                var processingIds = this.isBatch ? [].concat(this.assetIds) : [this.asset.assetId];
+                this.$store.app.toastProgress('正在取消盤點結果...');
                 this.$store.app.addProcessingAssets(processingIds);
                 var successHandler = function (response) {
                     self.$store.app.removeProcessingAssets(processingIds);
                     if (response && response.success) {
-                        self.$store.app.toast('✅ 取消完成！', 'success');
+                        self.$store.app.toastOrAlert('✅ 取消完成！', 'success');
                         self.onSuccess();
                         self.close();
                     } else {
-                        self.$store.app.toast('❌ 取消失敗：' + ((response && (response.message || response.error)) || '未知錯誤'), 'error');
+                        self.$store.app.toastOrAlert('❌ 取消失敗：' + ((response && (response.message || response.error)) || '未知錯誤'), 'error');
                         alert('取消失敗：' + ((response && (response.message || response.error)) || '未知錯誤'));
                     }
                     self.isResetting = false;
                 };
                 var failureHandler = function (error) {
                     self.$store.app.removeProcessingAssets(processingIds);
-                    self.$store.app.toast('❌ 取消失敗：' + error.message, 'error');
+                    self.$store.app.toastOrAlert('❌ 取消失敗：' + error.message, 'error');
                     alert('取消失敗：' + error.message);
                     self.isResetting = false;
                 };
                 if (this.isBatch) {
-                    if (!this.assetIds || this.assetIds.length === 0) {
-                        self.$store.app.removeProcessingAssets(processingIds);
-                        self.$store.app.toastOrAlert('❌ 取消失敗：沒有可取消的資產', 'error');
-                        alert('沒有可取消的資產');
-                        this.isResetting = false;
-                        return;
-                    }
-                    google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetBatchInventoryInActiveSessions(this.assetIds);
+                    google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetBatchInventoryInActiveSessions(assetIdsCopy);
                 } else {
-                    google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetAssetInventoryInActiveSessions(this.asset.assetId);
+                    google.script.run.withSuccessHandler(successHandler).withFailureHandler(failureHandler).resetAssetInventoryInActiveSessions(singleAssetId);
                 }
             }
         };

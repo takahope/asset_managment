@@ -80,9 +80,12 @@ document.addEventListener('alpine:init', function () {
                 if (!confirm(confirmMessage)) return;
 
                 var processingIds = [].concat(selectedAssetIds);
+                // 防重複送出:任一目標資產處理中則忽略本次點擊
+                if (processingIds.some(function (id) { return store.isAssetProcessing(id); })) return;
+                var submittedModalType = store.batchModalType; // 關閉前先捕捉,供成功後依類型清購物車
                 store.toastProgress('正在提交 ' + processingIds.length + ' 筆資產的批次轉移申請...');
                 store.addProcessingAssets(processingIds);
-                store.handleCloseBatchModal(); // Note: method is handleCloseBatchModal
+                store.handleCloseBatchModal();
 
                 var formData = {
                     assetIds: selectedAssetIds,
@@ -111,11 +114,16 @@ document.addEventListener('alpine:init', function () {
                     .withSuccessHandler(function (message) {
                         store.removeProcessingAssets(processingIds);
                         
+                        // 後端 catch 會以「申請失敗：」字串回傳(非拋出),須辨識為失敗
+                        if (typeof message === 'string' && message.indexOf('申請失敗') === 0) {
+                            store.toastOrAlert('❌ 提交批次轉移失敗：' + message, 'error');
+                            alert(message);
+                            return;
+                        }
                         var requiresPrint = message.includes('請列印轉移申請單') || message.includes('需列印');
                         var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
                         
                         store.toastOrAlert('✅ 批次轉移申請已提交！', 'success');
-                        processingIds.forEach(function(id) { store.updateAssetLocalStatus(id, '轉移中'); });
                         
                         store.showSuccessPrompt({
                             title: '批次轉移申請已提交',
@@ -124,7 +132,8 @@ document.addEventListener('alpine:init', function () {
                             requiresPrint: requiresPrint,
                             waitReview: waitReview
                         });
-                        store.handleBatchActionSuccess(true);
+                        // 清購物車(依提交前類型)並以權威資料對帳,修正純地點/部分成功等狀態落差
+                        store.handleBatchActionSuccess(false, submittedModalType);
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAssets(processingIds);
@@ -161,6 +170,9 @@ document.addEventListener('alpine:init', function () {
                 if (!confirm(confirmMessage)) return;
 
                 var processingIds = [].concat(selectedAssetIds);
+                // 防重複送出:任一目標資產處理中則忽略本次點擊
+                if (processingIds.some(function (id) { return store.isAssetProcessing(id); })) return;
+                var submittedModalType = store.batchModalType; // 關閉前先捕捉,供成功後依類型清購物車
                 store.toastProgress('正在提交 ' + processingIds.length + ' 筆資產的批次出借申請...');
                 store.addProcessingAssets(processingIds);
                 store.handleCloseBatchModal();
@@ -178,20 +190,27 @@ document.addEventListener('alpine:init', function () {
                     .withSuccessHandler(function (message) {
                         store.removeProcessingAssets(processingIds);
                         
-                        var requiresPrint = message.includes('請列印') || message.includes('需列印');
+                        // 後端 catch 會以「申請出借失敗：」字串回傳(非拋出),須辨識為失敗
+                        if (typeof message === 'string' && message.indexOf('申請出借失敗') === 0) {
+                            store.toastOrAlert('❌ 提交批次出借失敗：' + message, 'error');
+                            alert(message);
+                            return;
+                        }
+                        // 出借一律提供列印外部出借申請單入口(後端成功訊息不含列印關鍵字)
+                        var requiresPrint = true;
                         var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
                         
                         store.toastOrAlert('✅ 批次出借申請已提交！', 'success');
-                        processingIds.forEach(function(id) { store.updateAssetLocalStatus(id, '出借中'); });
                         
                         store.showSuccessPrompt({
                             title: '批次出借申請已提交',
                             message: message,
-                            actionType: 'LENDING',
+                            actionType: 'LEND',
                             requiresPrint: requiresPrint,
                             waitReview: waitReview
                         });
-                        store.handleBatchActionSuccess(true);
+                        // 清購物車(依提交前類型)並以權威資料對帳,修正部分成功等狀態落差
+                        store.handleBatchActionSuccess(false, submittedModalType);
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAssets(processingIds);
@@ -223,6 +242,9 @@ document.addEventListener('alpine:init', function () {
                 if (!confirm(confirmMessage)) return;
 
                 var processingIds = [].concat(selectedAssetIds);
+                // 防重複送出:任一目標資產處理中則忽略本次點擊
+                if (processingIds.some(function (id) { return store.isAssetProcessing(id); })) return;
+                var submittedModalType = store.batchModalType; // 關閉前先捕捉,供成功後依類型清購物車
                 store.toastProgress('正在提交 ' + processingIds.length + ' 筆資產的批次報廢申請...');
                 store.addProcessingAssets(processingIds);
                 store.handleCloseBatchModal();
@@ -236,11 +258,16 @@ document.addEventListener('alpine:init', function () {
                     .withSuccessHandler(function (message) {
                         store.removeProcessingAssets(processingIds);
                         
+                        // 後端 catch 會以「申請報廢失敗：」字串回傳(非拋出),須辨識為失敗
+                        if (typeof message === 'string' && message.indexOf('申請報廢失敗') === 0) {
+                            store.toastOrAlert('❌ 提交批次報廢失敗：' + message, 'error');
+                            alert(message);
+                            return;
+                        }
                         var requiresPrint = message.includes('請列印報廢申請單') || message.includes('需列印');
                         var waitReview = message.includes('需要審核') || message.includes('等待');
                         
                         store.toastOrAlert('✅ 批次報廢申請已提交！', 'success');
-                        processingIds.forEach(function(id) { store.updateAssetLocalStatus(id, '報廢中'); });
                         
                         store.showSuccessPrompt({
                             title: '批次報廢申請已提交',
@@ -249,7 +276,8 @@ document.addEventListener('alpine:init', function () {
                             requiresPrint: true,
                             waitReview: false
                         });
-                        store.handleBatchActionSuccess();
+                        // 清購物車(依提交前類型)並以權威資料對帳,修正部分成功等狀態落差
+                        store.handleBatchActionSuccess(false, submittedModalType);
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAssets(processingIds);

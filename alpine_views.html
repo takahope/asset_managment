@@ -797,16 +797,16 @@ document.addEventListener('alpine:init', function () {
                 </div>
 
                 <!-- 第 2 行:下拉選單 + 盤點任務開關 (Compact Inline) -->
-                <div class="flex flex-wrap items-center gap-2 relative z-10">
+                <div class="flex flex-wrap items-center gap-3 relative z-10 w-full">
                     
                     <!-- 多選:狀態 -->
                     <template x-for="cfg in msBefore" :key="cfg.key">
-                        <div class="relative fs-dropdown-root">
+                        <div class="relative fs-dropdown-root flex-1 min-w-[140px]">
                             <button type="button" @click="toggleDropdown(cfg.key)"
-                                    class="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm bg-white transition-colors h-[38px]"
+                                    class="flex items-center justify-between gap-2 px-3 py-1.5 border rounded-lg text-sm bg-white transition-colors h-[38px] w-full"
                                     :class="dropdownOpen[cfg.key] || selectedFor(cfg.key).length > 0 ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
                                 <i class="fa-solid fa-filter text-slate-400 text-[11px]" :class="selectedFor(cfg.key).length > 0 ? 'text-blue-500' : ''"></i>
-                                <span class="font-medium" x-text="cfg.label"></span>
+                                <span class="font-medium truncate flex-1 text-left" x-text="cfg.label"></span>
                                 <span x-show="selectedFor(cfg.key).length > 0" 
                                       class="bg-blue-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none min-w-[18px] text-center" 
                                       x-text="selectedFor(cfg.key).length"></span>
@@ -834,10 +834,10 @@ document.addEventListener('alpine:init', function () {
                     </template>
 
                     <!-- 單選:財產類別 -->
-                    <div class="relative">
+                    <div class="relative flex-1 min-w-[140px]">
                         <select :value="$store.app.filters.category"
                                 @change="$store.app.handleFilterChange('category', $event.target.value)"
-                                class="h-[38px] pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
+                                class="h-[38px] w-full pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
                                 :class="$store.app.filters.category ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700 font-medium' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
                             <option value="">依財產類別篩選</option>
                             <template x-for="opt in categoryOptions" :key="opt">
@@ -850,10 +850,10 @@ document.addEventListener('alpine:init', function () {
                     </div>
 
                     <!-- 單選:系統類別 -->
-                    <div class="relative">
+                    <div class="relative flex-1 min-w-[140px]">
                         <select :value="$store.app.filters.systemCategory"
                                 @change="$store.app.handleFilterChange('systemCategory', $event.target.value)"
-                                class="h-[38px] pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
+                                class="h-[38px] w-full pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
                                 :class="$store.app.filters.systemCategory ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700 font-medium' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
                             <option value="">依系統類別篩選</option>
                             <option value="新系統">新系統</option>
@@ -866,12 +866,12 @@ document.addEventListener('alpine:init', function () {
 
                     <!-- 多選:保管人/使用人/組別/保管位置(可搜尋) -->
                     <template x-for="cfg in msAfter" :key="cfg.key">
-                        <div class="relative fs-dropdown-root">
+                        <div class="relative fs-dropdown-root flex-1 min-w-[140px]">
                             <button type="button" @click="toggleDropdown(cfg.key)"
-                                    class="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm bg-white transition-colors h-[38px]"
+                                    class="flex items-center justify-between gap-2 px-3 py-1.5 border rounded-lg text-sm bg-white transition-colors h-[38px] w-full"
                                     :class="dropdownOpen[cfg.key] || selectedFor(cfg.key).length > 0 ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
                                 <i class="fa-solid fa-filter text-slate-400 text-[11px]" :class="selectedFor(cfg.key).length > 0 ? 'text-blue-500' : ''"></i>
-                                <span class="font-medium" x-text="cfg.label"></span>
+                                <span class="font-medium truncate flex-1 text-left" x-text="cfg.label"></span>
                                 <span x-show="selectedFor(cfg.key).length > 0" 
                                       class="bg-blue-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none min-w-[18px] text-center" 
                                       x-text="selectedFor(cfg.key).length"></span>
@@ -907,7 +907,7 @@ document.addEventListener('alpine:init', function () {
                     <!-- 盤點任務開關(緊湊型) -->
                     <template x-if="$store.app.hasActiveInventory">
                         <button type="button" @click="$store.app.handleFilterChange('inventoryTaskOnly', !$store.app.filters.inventoryTaskOnly)"
-                                class="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-colors h-[38px] relative"
+                                class="flex items-center justify-between gap-2 px-3 py-1.5 border rounded-lg text-sm transition-colors h-[38px] relative flex-1 min-w-[140px]"
                                 :class="$store.app.filters.inventoryTaskOnly ? 'border-teal-500 ring-1 ring-teal-500 bg-teal-50/50 text-teal-700 font-medium' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
                             <i class="fa-solid fa-clipboard-check" :class="$store.app.filters.inventoryTaskOnly ? 'text-teal-600' : 'text-slate-400'"></i>
                             <span>盤點任務篩選</span>

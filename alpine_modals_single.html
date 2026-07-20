@@ -111,6 +111,7 @@ document.addEventListener('alpine:init', function () {
                 var confirmation = confirm('確定要轉移財產「' + asset.assetId + '」嗎？');
                 if (!confirmation) return;
                 
+                if (store.isAssetProcessing(asset.assetId)) return; // 防重複送出
                 store.toastProgress('正在提交「' + asset.assetId + '」的轉移申請...');
                 store.addProcessingAsset(asset.assetId);
                 store.handleCloseQuickActionModal();
@@ -118,12 +119,17 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         store.removeProcessingAsset(asset.assetId);
+                        // 後端 catch 會以「申請失敗：」字串回傳(非拋出),須在成功回呼中辨識為失敗
+                        if (typeof message === 'string' && message.indexOf('申請失敗') === 0) {
+                            store.toastOrAlert('❌ 提交轉移失敗：' + message, 'error');
+                            alert(message);
+                            return;
+                        }
                         var requiresPrint = message.includes('請列印轉移申請單') || message.includes('需列印');
                         var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
                         
                         store.toastOrAlert('✅ 「' + asset.assetId + '」轉移申請已提交！', 'success');
-                        store.updateAssetLocalStatus(asset.assetId, '轉移中');
-                        
+
                         store.showSuccessPrompt({
                             title: '轉移申請已提交',
                             message: message,
@@ -131,6 +137,8 @@ document.addEventListener('alpine:init', function () {
                             requiresPrint: requiresPrint,
                             waitReview: waitReview
                         });
+                        // 以權威資料對帳:純地點轉移維持在庫、部分成功等情形皆由此修正,並更新卡片統計
+                        store.refreshCardData();
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAsset(asset.assetId);
@@ -211,6 +219,7 @@ document.addEventListener('alpine:init', function () {
                 var confirmation = confirm('確定要出借財產「' + asset.assetId + '」給 ' + this.borrowerName + ' 嗎？');
                 if (!confirmation) return;
 
+                if (store.isAssetProcessing(asset.assetId)) return; // 防重複送出
                 store.toastProgress('正在提交「' + asset.assetId + '」的出借申請...');
                 store.addProcessingAsset(asset.assetId);
                 store.handleCloseQuickActionModal();
@@ -218,19 +227,27 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         store.removeProcessingAsset(asset.assetId);
-                        var requiresPrint = message.includes('請列印') || message.includes('需列印');
+                        // 後端 catch 會以「申請出借失敗：」字串回傳(非拋出),須辨識為失敗
+                        if (typeof message === 'string' && message.indexOf('申請出借失敗') === 0) {
+                            store.toastOrAlert('❌ 提交出借失敗：' + message, 'error');
+                            alert(message);
+                            return;
+                        }
+                        // 出借一律提供列印外部出借申請單入口(後端成功訊息不含列印關鍵字)
+                        var requiresPrint = true;
                         var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
                         
                         store.toastOrAlert('✅ 「' + asset.assetId + '」出借申請已提交！', 'success');
-                        store.updateAssetLocalStatus(asset.assetId, '出借中');
-                        
+
                         store.showSuccessPrompt({
                             title: '出借申請已提交',
                             message: message,
-                            actionType: 'LENDING',
+                            actionType: 'LEND',
                             requiresPrint: requiresPrint,
                             waitReview: waitReview
                         });
+                        // 以權威資料對帳:部分成功(未在庫/無權限被跳過)等情形由此修正,並更新卡片統計
+                        store.refreshCardData();
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAsset(asset.assetId);
@@ -288,6 +305,7 @@ document.addEventListener('alpine:init', function () {
                 var confirmation = confirm('確定要申請報廢財產「' + asset.assetId + '」嗎？\n報廢原因：' + (this.reason === 'A' ? 'A.維修不具效益，且逾使用年限' : this.reason === 'B' ? 'B.損壞無法修復，且逾使用年限' : 'C.其他'));
                 if (!confirmation) return;
                 
+                if (store.isAssetProcessing(asset.assetId)) return; // 防重複送出
                 store.toastProgress('正在提交「' + asset.assetId + '」的報廢申請...');
                 store.addProcessingAsset(asset.assetId);
                 store.handleCloseQuickActionModal();
@@ -295,12 +313,17 @@ document.addEventListener('alpine:init', function () {
                 google.script.run
                     .withSuccessHandler(function (message) {
                         store.removeProcessingAsset(asset.assetId);
+                        // 後端 catch 會以「申請報廢失敗：」字串回傳(非拋出),須辨識為失敗
+                        if (typeof message === 'string' && message.indexOf('申請報廢失敗') === 0) {
+                            store.toastOrAlert('❌ 提交報廢失敗：' + message, 'error');
+                            alert(message);
+                            return;
+                        }
                         var requiresPrint = message.includes('請列印報廢申請單') || message.includes('需列印');
                         var waitReview = message.includes('需要審核') || message.includes('等待');
                         
                         store.toastOrAlert('✅ 「' + asset.assetId + '」報廢申請已提交！', 'success');
-                        store.updateAssetLocalStatus(asset.assetId, '報廢中');
-                        
+
                         store.showSuccessPrompt({
                             title: '報廢申請已提交',
                             message: message,
@@ -308,8 +331,8 @@ document.addEventListener('alpine:init', function () {
                             requiresPrint: true,
                             waitReview: false
                         });
-                        store.handleQuickActionSuccess();
-                        store.handleCloseQuickActionModal();
+                        // 以權威資料對帳:部分成功等情形由此修正,並更新卡片統計(取代整頁 loadData)
+                        store.refreshCardData();
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAsset(asset.assetId);
