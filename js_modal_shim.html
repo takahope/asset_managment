@@ -1,29 +1,18 @@
 <script>
 // 原生 Modal shim:以約 90 行取代 jQuery 3.5.1 + bootstrap.bundle.js(僅本頁 modal 需要)。
 // 相容介面:$('#id').modal('show'|'hide'|'toggle')、window.$.fn.modal 能力檢查、
-// data-dismiss="modal" 按鈕、backdrop 點擊與 Esc 關閉。樣式沿用 Bootstrap CSS。
+// data-dismiss="modal" 按鈕、backdrop 點擊與 Esc 關閉。樣式沿用自製 .lm-modal(見 userstate_alpine.html)。
 (function () {
-  var TRANSITION_MS = 300;
   var openStack = []; // 目前開啟中的 modal 元素(後開在後)
 
   function reflow(el) { void el.offsetHeight; }
 
-  function getBackdrop(modal) { return modal.__backdrop || null; }
-
   function showModal(modal) {
     if (!modal || openStack.indexOf(modal) !== -1) return;
-    var backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop fade';
-    document.body.appendChild(backdrop);
-    modal.__backdrop = backdrop;
-
-    document.body.classList.add('modal-open');
-    modal.style.display = 'block';
+    document.body.classList.add('lm-scroll-lock');
     modal.removeAttribute('aria-hidden');
     modal.setAttribute('aria-modal', 'true');
-    reflow(modal);
-    backdrop.classList.add('show');
-    modal.classList.add('show');
+    modal.classList.add('is-open');
     openStack.push(modal);
   }
 
@@ -32,18 +21,10 @@
     if (idx === -1) return;
     openStack.splice(idx, 1);
 
-    modal.classList.remove('show');
-    var backdrop = getBackdrop(modal);
-    if (backdrop) backdrop.classList.remove('show');
-
-    setTimeout(function () {
-      modal.style.display = 'none';
-      modal.setAttribute('aria-hidden', 'true');
-      modal.removeAttribute('aria-modal');
-      if (backdrop && backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
-      modal.__backdrop = null;
-      if (openStack.length === 0) document.body.classList.remove('modal-open');
-    }, TRANSITION_MS);
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.removeAttribute('aria-modal');
+    if (openStack.length === 0) document.body.classList.remove('lm-scroll-lock');
   }
 
   // --- jQuery 相容包裝 ---
@@ -76,12 +57,11 @@
     // data-dismiss="modal":關閉所屬 modal
     var dismissBtn = e.target.closest('[data-dismiss="modal"]');
     if (dismissBtn) {
-      var owner = dismissBtn.closest('.modal');
+      var owner = dismissBtn.closest('.lm-modal');
       if (owner) { hideModal(owner); return; }
     }
-    // 點擊 modal 外圍(backdrop 區域):Bootstrap 的 backdrop 在 modal 下層,
-    // 實際收到點擊的是 .modal 容器本身(非 .modal-dialog 內容)
-    if (e.target.classList && e.target.classList.contains('modal')) {
+    // 點擊 modal 外圍(overlay 區域):實際收到點擊的是 .lm-modal 容器本身(非 .lm-dialog 內容)
+    if (e.target.classList && e.target.classList.contains('lm-modal')) {
       hideModal(e.target);
     }
   });

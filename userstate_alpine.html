@@ -1537,17 +1537,17 @@
 
     <template id="operationManualSrcDocTemplate"><?!= include('operation_manual_srcdoc'); ?></template>
 
-    <!-- Bootstrap Modals (保留現有結構) -->
-    <div class="modal fade" id="duplicateAssetsModal" tabindex="-1" role="dialog" aria-labelledby="duplicateAssetsTitle" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="duplicateAssetsTitle">重複產編清單</h5>
-                    <button type="button" class="close" data-dismiss="modal">
+    <!-- 自製 .lm-modal(原 Bootstrap Modals,保留現有結構,樣式改自製) -->
+    <div class="lm-modal" id="duplicateAssetsModal" tabindex="-1" role="dialog" aria-labelledby="duplicateAssetsTitle" aria-hidden="true">
+        <div class="lm-dialog lm-dialog--lg" role="document">
+            <div class="lm-card">
+                <div class="lm-header">
+                    <h5 class="lm-title" id="duplicateAssetsTitle">重複產編清單</h5>
+                    <button type="button" class="lm-close" data-dismiss="modal">
                         <span>&times;</span>
                     </button>
                 </div>
-                <div class="modal-body">
+                <div class="lm-body">
                     <div id="duplicate-assets-meta" class="text-slate-500 mb-2"></div>
                     <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
                         <table class="table table-sm table-hover mb-0">
@@ -1565,23 +1565,23 @@
                         </table>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="lm-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">關閉</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="pendingApprovalModal" tabindex="-1" role="dialog" aria-labelledby="pendingApprovalTitle" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="pendingApprovalTitle">待接收資產清單</h5>
-                    <button type="button" class="close" data-dismiss="modal">
+    <div class="lm-modal" id="pendingApprovalModal" tabindex="-1" role="dialog" aria-labelledby="pendingApprovalTitle" aria-hidden="true">
+        <div class="lm-dialog lm-dialog--lg" role="document">
+            <div class="lm-card">
+                <div class="lm-header">
+                    <h5 class="lm-title" id="pendingApprovalTitle">待接收資產清單</h5>
+                    <button type="button" class="lm-close" data-dismiss="modal">
                         <span>&times;</span>
                     </button>
                 </div>
-                <div class="modal-body">
+                <div class="lm-body">
                     <div class="form-row mb-2">
                         <div class="form-group col-md-5">
                             <label for="pending-location-filter">依原保管地點篩選</label>
@@ -1615,7 +1615,7 @@
                     </div>
                     <div id="pending-pagination" class="flex justify-between items-center mt-2"></div>
                 </div>
-                <div class="modal-footer">
+                <div class="lm-footer">
                     <button type="button" class="btn btn-outline-danger" onclick="submitPendingRejection()">拒絕所選</button>
                     <button type="button" class="btn btn-success" onclick="submitPendingApproval()">接受所選</button>
                 </div>
@@ -1623,16 +1623,16 @@
         </div>
     </div>
 
-    <div class="modal fade" id="assignmentModeModal" tabindex="-1" role="dialog" aria-labelledby="assignmentModeTitle" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="assignmentModeTitle">選擇分派方式</h5>
-                    <button type="button" class="close" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">
+    <div class="lm-modal" id="assignmentModeModal" tabindex="-1" role="dialog" aria-labelledby="assignmentModeTitle" aria-hidden="true">
+        <div class="lm-dialog" role="document">
+            <div class="lm-card">
+                <div class="lm-header">
+                    <h5 class="lm-title" id="assignmentModeTitle">選擇分派方式</h5>
+                    <button type="button" class="lm-close" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">
                         <span>&times;</span>
                     </button>
                 </div>
-                <div class="modal-body">
+                <div class="lm-body">
                     <p class="mb-3">請選擇本次盤點的分派方式：</p>
                     <div class="custom-control custom-radio mb-2">
                         <input type="radio" id="assignment-mode-group" name="assignmentMode" class="custom-control-input" value="group" checked>
@@ -1664,7 +1664,7 @@
                         <div id="assignment-custom-error" class="text-danger mt-2" style="display: none;"></div>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="lm-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.inventoryCancelAssignmentMode && window.inventoryCancelAssignmentMode()">取消</button>
                     <button type="button" class="btn btn-primary" onclick="window.inventoryConfirmAssignmentMode && window.inventoryConfirmAssignmentMode()">開始盤點</button>
                 </div>
@@ -1672,16 +1672,16 @@
         </div>
     </div>
 
-    <div class="modal fade" id="assignmentAssetsModal" tabindex="-1" role="dialog" aria-labelledby="assignmentAssetsTitle" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="assignmentAssetsTitle">分派清單</h5>
-                    <button type="button" class="close" data-dismiss="modal">
+    <div class="lm-modal" id="assignmentAssetsModal" tabindex="-1" role="dialog" aria-labelledby="assignmentAssetsTitle" aria-hidden="true">
+        <div class="lm-dialog lm-dialog--lg" role="document">
+            <div class="lm-card">
+                <div class="lm-header">
+                    <h5 class="lm-title" id="assignmentAssetsTitle">分派清單</h5>
+                    <button type="button" class="lm-close" data-dismiss="modal">
                         <span>&times;</span>
                     </button>
                 </div>
-                <div class="modal-body">
+                <div class="lm-body">
                     <div id="assignment-assets-meta" class="text-slate-500 mb-2"></div>
                     <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
                         <table class="table table-sm table-hover mb-0">
@@ -1703,7 +1703,7 @@
                     </div>
                     <div id="assignment-assets-pagination" class="flex justify-between items-center mt-2"></div>
                 </div>
-                <div class="modal-footer">
+                <div class="lm-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">關閉</button>
                 </div>
             </div>
