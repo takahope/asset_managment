@@ -383,11 +383,12 @@
             get sidebarPendingTotal() {
                 var c = this.cardCounts;
                 return (c.transferring || 0) + (c.pending || 0) + (c.lent || 0)
-                     + (c.scrapPending || 0) + (c.transferPending || 0) + (c.inventory || 0);
+                     + (c.scrapPending || 0) + (c.transferPending || 0) + (c.inventory || 0)
+                     + (c.locationError || 0);
             },
             // 抽屜卡片全部數字是否就緒（transferOverview 與次要資料皆到齊）
             get sidebarCountsReady() {
-                return this.transferOverviewLoaded && this.secondaryLoaded;
+                return this.transferOverviewLoaded && this.secondaryLoaded && this.locationErrorLoaded;
             },
             // 單張卡片數字是否可信（依其資料來源決定）
             isCardCountReady: function (source) {
@@ -839,7 +840,7 @@
                             self.locationErrorLoaded = true;
                         })
                         .getLocationErrorRecords(forceUserScope);
-                });
+                }, 1500, 250);
             },
             loadTransferPendingDetails: function (forceUserScope, options) {
                 options = options || {};
@@ -2059,7 +2060,7 @@
 
                 if (this.locationErrorMode === 'queue') {
                     if (window.AssetCartStore) {
-                        window.AssetCartStore.addOrUpdateItem({
+                        var added = window.AssetCartStore.addOrUpdateItem({
                             assetId: asset.assetId,
                             assetName: asset.assetName || '',
                             actionType: 'LOCATION_ERROR',
@@ -2067,7 +2068,7 @@
                             actionPayload: null,
                             actionSummary: '位置有誤'
                         });
-                        this.toastOrAlert('已加入進階清單：' + (asset.assetName || asset.assetId) + '（位置有誤）', 'success');
+                        if (added) this.toastOrAlert('已加入進階清單：' + (asset.assetName || asset.assetId) + '（位置有誤）', 'success');
                     }
                     this.closeActionPanel({ keepPending: true });
                     return;

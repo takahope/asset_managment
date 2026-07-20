@@ -2459,7 +2459,7 @@ function processBatchApproval(appIds) {
     if (resolvedLocationErrorAssetIds.length > 0) {
       const props = PropertiesService.getScriptProperties();
       resolvedLocationErrorAssetIds.forEach(id => {
-        try { props.deleteProperty(LOCATION_ERROR_KEY_PREFIX + id); } catch (e) { /* 略過 */ }
+        try { props.deleteProperty(LOCATION_ERROR_KEY_PREFIX + String(id || '').trim()); } catch (e) { /* 略過 */ }
       });
     }
 
