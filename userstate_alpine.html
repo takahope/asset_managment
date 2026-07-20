@@ -610,6 +610,63 @@
             justify-content: flex-end;
         }
 
+        /* ── 自製 modal 系統（取代 Bootstrap .modal*）；shim 只切換 .is-open ── */
+        .lm-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1050;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 32px 16px;
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.6);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity .15s ease, visibility .15s ease;
+        }
+        .lm-modal.is-open { opacity: 1; visibility: visible; }
+        .lm-dialog { width: 100%; max-width: 500px; margin: auto; }
+        .lm-dialog--lg { max-width: 900px; }
+        .lm-card {
+            background: var(--surface, #fff);
+            border-radius: 16px;
+            box-shadow: 0 32px 80px rgba(15, 23, 42, 0.25);
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 64px);
+            overflow: hidden;
+        }
+        .lm-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            background: var(--surface-muted, #f8fafc);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .lm-title { margin: 0; font-size: 18px; font-weight: 700; color: var(--ink-900, #0f172a); }
+        .lm-body { padding: 20px; overflow-y: auto; }
+        .lm-footer {
+            padding: 12px 20px;
+            border-top: 1px solid #e2e8f0;
+            background: var(--surface-muted, #f8fafc);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .lm-close {
+            border: 0;
+            background: transparent;
+            font-size: 24px;
+            line-height: 1;
+            color: var(--ink-500, #64748b);
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .lm-close:hover { color: var(--ink-900, #0f172a); }
+        body.lm-scroll-lock { overflow: hidden; }
+
         .inventory-secondary-button {
             background: #ffffff;
             border: 1px solid #e2e8f0;
