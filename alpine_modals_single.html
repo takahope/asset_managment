@@ -110,14 +110,20 @@ document.addEventListener('alpine:init', function () {
 
                 var confirmation = confirm('確定要轉移財產「' + asset.assetId + '」嗎？');
                 if (!confirmation) return;
-                this.isSubmitting = true;
-                showFlyProgressBar('正在提交轉移申請...');
+                
+                store.toastProgress('正在提交「' + asset.assetId + '」的轉移申請...');
+                store.addProcessingAsset(asset.assetId);
+                store.handleCloseQuickActionModal();
+
                 google.script.run
                     .withSuccessHandler(function (message) {
-                        hideFlyProgressBar('轉移申請已提交！', 0);
-                        self.isSubmitting = false;
+                        store.removeProcessingAsset(asset.assetId);
                         var requiresPrint = message.includes('請列印轉移申請單') || message.includes('需列印');
                         var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
+                        
+                        store.toastOrAlert('✅ 「' + asset.assetId + '」轉移申請已提交！', 'success');
+                        store.updateAssetLocalStatus(asset.assetId, '轉移中');
+                        
                         store.showSuccessPrompt({
                             title: '轉移申請已提交',
                             message: message,
@@ -125,13 +131,11 @@ document.addEventListener('alpine:init', function () {
                             requiresPrint: requiresPrint,
                             waitReview: waitReview
                         });
-                        store.handleQuickActionSuccess();
-                        store.handleCloseQuickActionModal();
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('提交失敗', 0);
+                        store.removeProcessingAsset(asset.assetId);
+                        store.toastOrAlert('❌ 提交轉移失敗: ' + error.message, 'error');
                         alert('錯誤：' + error.message);
-                        self.isSubmitting = false;
                     })
                     .processBatchTransferApplication(formData);
             },
@@ -206,26 +210,32 @@ document.addEventListener('alpine:init', function () {
                 }
                 var confirmation = confirm('確定要出借財產「' + asset.assetId + '」給 ' + this.borrowerName + ' 嗎？');
                 if (!confirmation) return;
-                this.isSubmitting = true;
-                showFlyProgressBar('正在提交出借申請...');
+
+                store.toastProgress('正在提交「' + asset.assetId + '」的出借申請...');
+                store.addProcessingAsset(asset.assetId);
+                store.handleCloseQuickActionModal();
+
                 google.script.run
                     .withSuccessHandler(function (message) {
-                        hideFlyProgressBar('出借申請已提交！', 0);
-                        self.isSubmitting = false;
+                        store.removeProcessingAsset(asset.assetId);
+                        var requiresPrint = message.includes('請列印') || message.includes('需列印');
+                        var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
+                        
+                        store.toastOrAlert('✅ 「' + asset.assetId + '」出借申請已提交！', 'success');
+                        store.updateAssetLocalStatus(asset.assetId, '出借中');
+                        
                         store.showSuccessPrompt({
                             title: '出借申請已提交',
                             message: message,
-                            actionType: 'LEND',
-                            requiresPrint: true,
-                            waitReview: false
+                            actionType: 'LENDING',
+                            requiresPrint: requiresPrint,
+                            waitReview: waitReview
                         });
-                        store.handleQuickActionSuccess();
-                        store.handleCloseQuickActionModal();
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('提交失敗', 0);
+                        store.removeProcessingAsset(asset.assetId);
+                        store.toastOrAlert('❌ 提交出借失敗: ' + error.message, 'error');
                         alert('錯誤：' + error.message);
-                        self.isSubmitting = false;
                     })
                     .processBatchLending(formData);
             },
@@ -256,7 +266,6 @@ document.addEventListener('alpine:init', function () {
                     : '報廢｜' + reasonLabel;
             },
             handleSubmit: function () {
-                var self = this;
                 var store = this.$store.app;
                 var asset = this.asset;
                 if (!this.reason) { alert('請選擇報廢原因'); return; }
@@ -278,12 +287,20 @@ document.addEventListener('alpine:init', function () {
                 }
                 var confirmation = confirm('確定要申請報廢財產「' + asset.assetId + '」嗎？\n報廢原因：' + (this.reason === 'A' ? 'A.維修不具效益，且逾使用年限' : this.reason === 'B' ? 'B.損壞無法修復，且逾使用年限' : 'C.其他'));
                 if (!confirmation) return;
-                this.isSubmitting = true;
-                showFlyProgressBar('正在提交報廢申請...');
+                
+                store.toastProgress('正在提交「' + asset.assetId + '」的報廢申請...');
+                store.addProcessingAsset(asset.assetId);
+                store.handleCloseQuickActionModal();
+
                 google.script.run
                     .withSuccessHandler(function (message) {
-                        hideFlyProgressBar('報廢申請已提交！', 0);
-                        self.isSubmitting = false;
+                        store.removeProcessingAsset(asset.assetId);
+                        var requiresPrint = message.includes('請列印報廢申請單') || message.includes('需列印');
+                        var waitReview = message.includes('需要審核') || message.includes('等待');
+                        
+                        store.toastOrAlert('✅ 「' + asset.assetId + '」報廢申請已提交！', 'success');
+                        store.updateAssetLocalStatus(asset.assetId, '報廢中');
+                        
                         store.showSuccessPrompt({
                             title: '報廢申請已提交',
                             message: message,

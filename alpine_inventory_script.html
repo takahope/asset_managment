@@ -378,30 +378,32 @@ document.addEventListener('alpine:init', function () {
                     this.close();
                     return;
                 }
-                this.isSubmitting = true;
-                showFlyProgressBar('正在提交盤點結果...');
+                var processingIds = this.isBatch ? [].concat(this.assetIds) : [this.asset.assetId];
+                var store = this.$store.app;
+                store.toastProgress('正在提交盤點結果...');
+                store.addProcessingAssets(processingIds);
+                this.close();
+
                 var ismsData = this.buildIsmsData();
                 var hasIsmsData = ismsData !== null;
                 var successHandler = function (response) {
+                    store.removeProcessingAssets(processingIds);
                     if (response && response.success) {
-                        hideFlyProgressBar('盤點完成！', 300);
-                        alert(response.message || '盤點完成');
-                        self.onSuccess();
-                        self.close();
+                        store.toastOrAlert('✅ ' + (response.message || '盤點完成'), 'success');
+                        if (typeof self.onSuccess === 'function') self.onSuccess(true);
                     } else {
-                        hideFlyProgressBar('盤點失敗', 0);
+                        store.toastOrAlert('❌ 盤點失敗：' + ((response && (response.error || response.message)) || '未知錯誤'), 'error');
                         alert('盤點失敗：' + ((response && (response.error || response.message)) || '未知錯誤'));
                     }
-                    self.isSubmitting = false;
                 };
                 var failureHandler = function (error) {
-                    hideFlyProgressBar('盤點失敗', 0);
+                    store.removeProcessingAssets(processingIds);
+                    store.toastOrAlert('❌ 盤點失敗：' + error.message, 'error');
                     alert('盤點失敗：' + error.message);
-                    self.isSubmitting = false;
                 };
                 if (this.isBatch) {
                     if (!this.assetIds || this.assetIds.length === 0) {
-                        hideFlyProgressBar('盤點失敗', 0); alert('沒有可盤點的資產'); this.isSubmitting = false; return;
+                        store.removeProcessingAssets(processingIds); alert('沒有可盤點的資產'); return;
                     }
                     var assetResults = this.assetIds.map(function (id) {
                         var o = { assetId: id, result: self.invResult, remarks: self.invRemarks };
@@ -431,21 +433,24 @@ document.addEventListener('alpine:init', function () {
                     : '確定要取消此資產的盤點結果，並重設為「未盤點」嗎？\n\n此操作將清除備註與盤點時間/盤點人。';
                 if (!confirm(confirmMessage)) return;
                 this.isResetting = true;
-                showFlyProgressBar('正在取消盤點結果...');
+                this.$store.app.toast('正在取消盤點結果...');
+                var processingIds = this.isBatch ? [].concat(this.assetIds) : [this.asset.assetId];
+                this.$store.app.addProcessingAssets(processingIds);
                 var successHandler = function (response) {
+                    self.$store.app.removeProcessingAssets(processingIds);
                     if (response && response.success) {
-                        hideFlyProgressBar('取消完成！', 300);
-                        alert(response.message || '已取消盤點結果');
+                        self.$store.app.toast('✅ 取消完成！', 'success');
                         self.onSuccess();
                         self.close();
                     } else {
-                        hideFlyProgressBar('取消失敗', 0);
+                        self.$store.app.toast('❌ 取消失敗：' + ((response && (response.message || response.error)) || '未知錯誤'), 'error');
                         alert('取消失敗：' + ((response && (response.message || response.error)) || '未知錯誤'));
                     }
                     self.isResetting = false;
                 };
                 var failureHandler = function (error) {
-                    hideFlyProgressBar('取消失敗', 0);
+                    self.$store.app.removeProcessingAssets(processingIds);
+                    self.$store.app.toast('❌ 取消失敗：' + error.message, 'error');
                     alert('取消失敗：' + error.message);
                     self.isResetting = false;
                 };

@@ -445,10 +445,10 @@ document.addEventListener('alpine:init', function () {
                 var lendIds = ((group && group.assets) || []).map(function (a) { return a.lendId; }).filter(Boolean);
                 if (lendIds.length === 0) { alert('此群組沒有可列印的項目。'); return; }
                 this.isGenerating = true;
-                showFlyProgressBar('正在產生出借申請單...');
+                this.$store.app.toastProgress('正在產生出借申請單...');
                 google.script.run
                     .withSuccessHandler(function (result) {
-                        hideFlyProgressBar('出借申請單已產生！', 0);
+                        self.$store.app.toastOrAlert('✅ 出借申請單已產生！', 'success');
                         if (result && result.fileUrl) window.open(result.fileUrl, '_blank');
                         self.isGenerating = false;
                         self.loadGroups();
@@ -456,7 +456,7 @@ document.addEventListener('alpine:init', function () {
                         if (self.activeTab === 'history') self.loadHistory();
                     })
                     .withFailureHandler(function (loadError) {
-                        hideFlyProgressBar('產生失敗', 0);
+                        self.$store.app.toastOrAlert('❌ 產生失敗：' + ((loadError && loadError.message) || loadError), 'error');
                         alert('產生失敗：' + ((loadError && loadError.message) || loadError));
                         self.isGenerating = false;
                     })

@@ -248,6 +248,8 @@
             viewMode: 'user',
             currentUserEmail: '',
             currentUserName: '',
+            processingAssetIds: [],
+            isGlobalProcessing: false,
             webAppUrl: '',
             showOperationManualModal: false,
             userStatePageUrls: Object.assign({}, __USERSTATE_PAGE_URLS),
@@ -435,6 +437,35 @@
                         systemCategory
                     ].filter(Boolean).join(' ').toLowerCase()
                 });
+            },
+            // 局部鎖定 (Item-level Locking)
+            isAssetProcessing: function (assetId) {
+                return this.processingAssetIds.indexOf(assetId) !== -1;
+            },
+            addProcessingAsset: function (assetId) {
+                if (!this.isAssetProcessing(assetId)) {
+                    this.processingAssetIds.push(assetId);
+                }
+            },
+            removeProcessingAsset: function (assetId) {
+                this.processingAssetIds = this.processingAssetIds.filter(function (id) { return id !== assetId; });
+            },
+            addProcessingAssets: function (assetIds) {
+                var self = this;
+                assetIds.forEach(function (id) { self.addProcessingAsset(id); });
+            },
+            removeProcessingAssets: function (assetIds) {
+                var self = this;
+                assetIds.forEach(function (id) { self.removeProcessingAsset(id); });
+            },
+            // 局部更新資產狀態（不觸發整頁重整）
+            updateAssetLocalStatus: function (assetId, newStatus) {
+                var index = this.allAssets.findIndex(function (a) { return a.assetId === assetId; });
+                if (index !== -1) {
+                    var updated = Object.assign({}, this.allAssets[index], { status: newStatus });
+                    this.allAssets.splice(index, 1, this.decorateAssetForUserState(updated));
+                    this.assetsVersion += 1;
+                }
             },
             decorateAssetListForUserState: function (assets) {
                 var self = this;
@@ -1554,23 +1585,24 @@
                     '此操作將會把財產狀態恢復為「在庫」。'
                 );
                 if (!confirmation) return;
-                showFlyProgressBar('正在取消申請...');
+                
+                this.toastProgress('正在取消申請...');
+                this.addProcessingAsset(assetId);
+                
                 google.script.run
                     .withSuccessHandler(function (response) {
+                        self.removeProcessingAsset(assetId);
                         if (response.success) {
-                            hideFlyProgressBar('取消完成！', 300);
-                            setTimeout(function () {
-                                alert('申請已成功取消。');
-                                showFlyProgressBar('正在更新資料...');
-                                self.loadData();
-                            }, 400);
+                            self.toastOrAlert('✅ 申請已成功取消。', 'success');
+                            self.updateAssetLocalStatus(assetId, '在庫');
                         } else {
-                            hideFlyProgressBar('取消失敗', 0);
+                            self.toastOrAlert('❌ 取消失敗：' + response.error, 'error');
                             alert('錯誤：' + response.error);
                         }
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('取消失敗', 0);
+                        self.removeProcessingAsset(assetId);
+                        self.toastOrAlert('❌ 取消失敗：' + error.message, 'error');
                         alert('錯誤：' + error.message);
                     })
                     .cancelTransferOrScrap(assetId);
@@ -1583,18 +1615,22 @@
                     '注意：此操作會保留原報廢記錄並添加回溯標記。'
                 );
                 if (!confirmation) return;
-                showFlyProgressBar('正在回溯資產狀態...');
+                this.toastProgress('正在回溯資產狀態...');
+                this.addProcessingAsset(assetId);
                 google.script.run
                     .withSuccessHandler(function (result) {
-                        hideFlyProgressBar('回溯完成！', 300);
-                        setTimeout(function () {
-                            alert(result.message);
-                            showFlyProgressBar('正在更新資料...');
-                            self.loadData();
-                        }, 400);
+                        self.removeProcessingAsset(assetId);
+                        if (result.success) {
+                            self.toastOrAlert('✅ ' + result.message, 'success');
+                            self.updateAssetLocalStatus(assetId, '在庫');
+                        } else {
+                            self.toastOrAlert('❌ 回溯失敗：' + (result.message || '未知錯誤'), 'error');
+                            alert('錯誤：' + (result.message || '未知錯誤'));
+                        }
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('回溯失敗', 0);
+                        self.removeProcessingAsset(assetId);
+                        self.toastOrAlert('❌ 回溯失敗：' + error.message, 'error');
                         alert('錯誤：' + error.message);
                     })
                     .restoreFromScrap([assetId]);
@@ -1792,8 +1828,10 @@
                 this.selectedAsset = null;
                 this.quickActionMode = 'submit';
             },
-            handleQuickActionSuccess: function () {
-                this.loadData();
+            handleQuickActionSuccess: function (skipReload) {
+                if (!skipReload) {
+                    this.loadData();
+                }
             },
             handleOpenEditModal: function (asset) {
                 this.editingAsset = asset;
@@ -2023,6 +2061,11 @@
                 if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast(message, level || 'info');
                 else alert(message);
             },
+            toastProgress: function (message) {
+                // 發出帶有 Loading 小圖示的 Toast
+                if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast('🔄 ' + message, 'info');
+                else console.log('🔄 ' + message);
+            },
 
             /* ── P6:列印/文件 modal 關閉與刷新(舊頁 16043-16139 App render 的 inline callback) ── */
             closeTransferringModal: function () { this.activeModal = null; },
@@ -2131,7 +2174,7 @@
                 this.batchModalType = null;
                 this.batchActionAssetIds = [];
             },
-            handleBatchActionSuccess: function () {
+            handleBatchActionSuccess: function (skipReload) {
                 var currentType = this.batchModalType;
                 this.batchModalType = null;
                 this.batchActionAssetIds = [];
@@ -2142,7 +2185,9 @@
                     if (typeof BatchList_resetOnSubmit === 'function') BatchList_resetOnSubmit();
                     this.selectedAssetIds = [];
                 }
-                this.loadData();
+                if (!skipReload) {
+                    this.loadData();
+                }
             },
             showSuccessPrompt: function (params) {
                 this.successPromptData = {
@@ -2182,7 +2227,7 @@
                     var missingStatus = activeItems.filter(function (i) { return !i.status; });
                     if (missingStatus.length > 0) { alert('仍有未選擇盤點結果的資產，請先完成選擇'); return; }
                     if (!confirm('即將送出 ' + activeItems.length + ' 筆盤點結果，是否繼續？')) return;
-                    showFlyProgressBar('正在提交盤點結果...');
+                    this.toastProgress('正在提交盤點結果...');
                     var payload = activeItems.map(function (item) {
                         var o = { assetId: item.assetId, result: item.status, remarks: (item.actionPayload && item.actionPayload.remarks) || '' };
                         if (item.actionPayload && item.actionPayload.ismsData) o.ismsData = item.actionPayload.ismsData;
@@ -2192,13 +2237,13 @@
                         ? 'markBatchInventoryWithIsms' : 'markBatchInventoryInActiveSessions';
                     var runner = google.script.run
                         .withSuccessHandler(function (response) {
-                            hideFlyProgressBar('盤點完成！', 300);
-                            if (response && response.error) { alert('盤點送出失敗：' + response.error); return; }
+                            if (response && response.error) { self.toastOrAlert('❌ 盤點送出失敗：' + response.error, 'error'); alert('盤點送出失敗：' + response.error); return; }
+                            self.toastOrAlert('✅ 盤點完成！', 'success');
                             if (window.AssetCartStore) window.AssetCartStore.removeItemsByIds(activeItems.map(function (i) { return i.assetId; }));
                             self.handleInventorySuccess();
                         })
                         .withFailureHandler(function (error) {
-                            hideFlyProgressBar('盤點失敗', 0);
+                            self.toastOrAlert('❌ 盤點失敗：' + ((error && error.message) || error), 'error');
                             alert('盤點送出失敗：' + ((error && error.message) || error));
                         });
                     runner[methodName](payload);
@@ -2228,7 +2273,7 @@
                 var items = window.AssetCartStore.getItems();
                 if (items.length === 0) { this.toastOrAlert('清單沒有可送出的項目', 'warning'); return Promise.resolve(); }
                 refs.advancedSubmit = true;
-                showFlyProgressBar('正在送出進階清單...');
+                this.toastProgress('正在送出進階清單...');
                 var successIds = [], failedIds = [], invalidIds = [];
                 var groupByPayload = function (actionItems) {
                     var groups = new Map();
@@ -2291,9 +2336,7 @@
                         if (failedIds.length > 0) messageParts.push('失敗 ' + failedIds.length + ' 筆');
                         if (invalidIds.length > 0) messageParts.push('缺少設定 ' + invalidIds.length + ' 筆');
                         var message = messageParts.length > 0 ? ('送出完成：' + messageParts.join('，')) : '送出完成';
-                        if (typeof window.BatchList_showToast === 'function') window.BatchList_showToast(message, (failedIds.length > 0 || invalidIds.length > 0) ? 'warning' : 'success');
-                        else alert(message);
-                        hideFlyProgressBar('送出完成', 300);
+                        self.toastOrAlert((failedIds.length > 0 || invalidIds.length > 0) ? '⚠️ ' + message : '✅ ' + message, (failedIds.length > 0 || invalidIds.length > 0) ? 'warning' : 'success');
                         refs.advancedSubmit = false;
                     });
                 return chain;

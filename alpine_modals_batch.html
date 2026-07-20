@@ -78,8 +78,12 @@ document.addEventListener('alpine:init', function () {
                     confirmMessage = '⚠️ 代理轉移確認\n\n您選取的資產中包含：\n  • 自己的資產：' + ownCount + ' 筆\n  • 同組成員的資產：' + proxyCount + ' 筆\n\n代理轉移的原保管人：\n' + proxyList + (proxyTransfers.length > 5 ? '\n  ... 等其他成員' : '') + '\n\n此操作將被記錄為「同組代理轉移」。\n\n是否確定繼續？';
                 }
                 if (!confirm(confirmMessage)) return;
-                this.isSubmitting = true;
-                showFlyProgressBar('正在提交批次轉移申請...');
+
+                var processingIds = [].concat(selectedAssetIds);
+                store.toastProgress('正在提交 ' + processingIds.length + ' 筆資產的批次轉移申請...');
+                store.addProcessingAssets(processingIds);
+                store.handleCloseBatchModal(); // Note: method is handleCloseBatchModal
+
                 var formData = {
                     assetIds: selectedAssetIds,
                     newKeeperEmail: this.changeKeeper ? this.newKeeperEmail : null,
@@ -105,11 +109,14 @@ document.addEventListener('alpine:init', function () {
                 }
                 google.script.run
                     .withSuccessHandler(function (message) {
-                        hideFlyProgressBar('批次轉移申請已提交！', 0);
-                        if (typeof window.BatchList_resetOnSubmit === 'function') window.BatchList_resetOnSubmit();
-                        self.isSubmitting = false;
+                        store.removeProcessingAssets(processingIds);
+                        
                         var requiresPrint = message.includes('請列印轉移申請單') || message.includes('需列印');
                         var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
+                        
+                        store.toastOrAlert('✅ 批次轉移申請已提交！', 'success');
+                        processingIds.forEach(function(id) { store.updateAssetLocalStatus(id, '轉移中'); });
+                        
                         store.showSuccessPrompt({
                             title: '批次轉移申請已提交',
                             message: message,
@@ -117,12 +124,12 @@ document.addEventListener('alpine:init', function () {
                             requiresPrint: requiresPrint,
                             waitReview: waitReview
                         });
-                        store.handleBatchActionSuccess();
+                        store.handleBatchActionSuccess(true);
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('提交失敗', 0);
+                        store.removeProcessingAssets(processingIds);
+                        store.toastOrAlert('❌ 提交批次轉移失敗: ' + error.message, 'error');
                         alert('錯誤：' + error.message);
-                        self.isSubmitting = false;
                     })
                     .processBatchTransferApplication(formData);
             }
@@ -150,31 +157,46 @@ document.addEventListener('alpine:init', function () {
                 var trimmedContactPhone = this.contactPhone.trim();
                 if (!trimmedBorrowerName || !trimmedLocation || !this.returnDate) { alert('請填寫所有必填欄位（借用人、地點、歸還日期）'); return; }
                 if (this.isExternal && (!trimmedReason || !trimmedContactPhone)) { alert('外部借用需填寫聯絡電話與出借事由'); return; }
-                if (!confirm('確定要批次出借 ' + selectedAssetIds.length + ' 筆資產給 ' + trimmedBorrowerName + ' 嗎？')) return;
-                this.isSubmitting = true;
-                showFlyProgressBar('正在提交批次出借申請...');
+                var confirmMessage = '確定要批次出借 ' + selectedAssetIds.length + ' 筆資產給 ' + this.borrowerName + ' 嗎？';
+                if (!confirm(confirmMessage)) return;
+
+                var processingIds = [].concat(selectedAssetIds);
+                store.toastProgress('正在提交 ' + processingIds.length + ' 筆資產的批次出借申請...');
+                store.addProcessingAssets(processingIds);
+                store.handleCloseBatchModal();
+
                 var formData = {
-                    assetIds: selectedAssetIds, borrowerName: trimmedBorrowerName, lendingLocation: trimmedLocation,
-                    returnDate: this.returnDate, reason: trimmedReason, borrowerType: this.borrowerType, contactPhone: trimmedContactPhone
+                    assetIds: selectedAssetIds,
+                    borrowerName: trimmedBorrowerName,
+                    lendingLocation: trimmedLocation,
+                    returnDate: this.returnDate,
+                    reason: trimmedReason,
+                    borrowerType: this.borrowerType,
+                    contactPhone: trimmedContactPhone
                 };
                 google.script.run
                     .withSuccessHandler(function (message) {
-                        hideFlyProgressBar('批次出借申請已提交！', 0);
-                        if (typeof window.BatchList_resetOnSubmit === 'function') window.BatchList_resetOnSubmit();
-                        self.isSubmitting = false;
+                        store.removeProcessingAssets(processingIds);
+                        
+                        var requiresPrint = message.includes('請列印') || message.includes('需列印');
+                        var waitReview = message.includes('需要審核') || message.includes('等待') || message.includes('任一方審核');
+                        
+                        store.toastOrAlert('✅ 批次出借申請已提交！', 'success');
+                        processingIds.forEach(function(id) { store.updateAssetLocalStatus(id, '出借中'); });
+                        
                         store.showSuccessPrompt({
                             title: '批次出借申請已提交',
                             message: message,
-                            actionType: 'LEND',
-                            requiresPrint: true,
-                            waitReview: false
+                            actionType: 'LENDING',
+                            requiresPrint: requiresPrint,
+                            waitReview: waitReview
                         });
-                        store.handleBatchActionSuccess();
+                        store.handleBatchActionSuccess(true);
                     })
                     .withFailureHandler(function (error) {
-                        hideFlyProgressBar('提交失敗', 0);
+                        store.removeProcessingAssets(processingIds);
+                        store.toastOrAlert('❌ 提交批次出借失敗: ' + error.message, 'error');
                         alert('錯誤：' + error.message);
-                        self.isSubmitting = false;
                     })
                     .processBatchLending(formData);
             }
@@ -193,18 +215,33 @@ document.addEventListener('alpine:init', function () {
                 var self = this;
                 var store = this.$store.app;
                 var selectedAssetIds = this.selectedAssetIds;
+                var trimmedNotes = this.remarks.trim();
                 if (selectedAssetIds.length === 0) { alert('請先選取要報廢的資產'); return; }
                 if (!this.reason) { alert('請選擇報廢原因'); return; }
-                if ((this.reason === 'C' || this.reason === '其他') && !this.remarks.trim()) { alert('選擇「其他」原因時，請務必填寫詳細說明'); return; }
-                if (!confirm('確定要批次申請報廢 ' + selectedAssetIds.length + ' 筆資產嗎？\n報廢原因：' + (this.reason === 'A' ? 'A.維修不具效益，且逾使用年限' : this.reason === 'B' ? 'B.損壞無法修復，且逾使用年限' : 'C.其他'))) return;
-                this.isSubmitting = true;
-                showFlyProgressBar('正在提交批次報廢申請...');
-                var formData = { assetIds: selectedAssetIds, reason: this.reason, remarks: this.remarks.trim() };
+                if ((this.reason === 'C' || this.reason === '其他') && !trimmedNotes) { alert('選擇「其他」原因時，請務必填寫詳細說明'); return; }
+                var confirmMessage = '確定要批次申請報廢 ' + selectedAssetIds.length + ' 筆資產嗎？\n報廢原因：' + (this.reason === 'A' ? 'A.維修不具效益，且逾使用年限' : this.reason === 'B' ? 'B.損壞無法修復，且逾使用年限' : 'C.其他');
+                if (!confirm(confirmMessage)) return;
+
+                var processingIds = [].concat(selectedAssetIds);
+                store.toastProgress('正在提交 ' + processingIds.length + ' 筆資產的批次報廢申請...');
+                store.addProcessingAssets(processingIds);
+                store.handleCloseBatchModal();
+
+                var formData = {
+                    assetIds: selectedAssetIds,
+                    reason: this.reason,
+                    remarks: trimmedNotes
+                };
                 google.script.run
                     .withSuccessHandler(function (message) {
-                        hideFlyProgressBar('批次報廢申請已提交！', 0);
-                        if (typeof window.BatchList_resetOnSubmit === 'function') window.BatchList_resetOnSubmit();
-                        self.isSubmitting = false;
+                        store.removeProcessingAssets(processingIds);
+                        
+                        var requiresPrint = message.includes('請列印報廢申請單') || message.includes('需列印');
+                        var waitReview = message.includes('需要審核') || message.includes('等待');
+                        
+                        store.toastOrAlert('✅ 批次報廢申請已提交！', 'success');
+                        processingIds.forEach(function(id) { store.updateAssetLocalStatus(id, '報廢中'); });
+                        
                         store.showSuccessPrompt({
                             title: '批次報廢申請已提交',
                             message: message,

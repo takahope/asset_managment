@@ -163,7 +163,7 @@ document.addEventListener('alpine:init', function () {
                 }
                 if (!confirm('確定要新增' + (this.assetType === 'property' ? '財產' : '物品') + '「' + this.assetId + '」嗎？')) return;
                 this.isSubmitting = true;
-                if (typeof showFlyProgressBar === 'function') showFlyProgressBar('正在新增資產...');
+                this.$store.app.toastProgress('正在新增資產...');
                 var formData = {
                     assetType: this.assetType,
                     assetId: this.assetId.trim(),
@@ -182,14 +182,14 @@ document.addEventListener('alpine:init', function () {
                 };
                 google.script.run
                     .withSuccessHandler(function (message) {
-                        if (typeof hideFlyProgressBar === 'function') hideFlyProgressBar('新增成功！', 300);
+                        self.$store.app.toastOrAlert('✅ 新增成功！', 'success');
                         alert(message);
                         self.isSubmitting = false;
                         self.$store.app.handleAddAssetSuccess();
                         self.close();
                     })
                     .withFailureHandler(function (error) {
-                        if (typeof hideFlyProgressBar === 'function') hideFlyProgressBar('新增失敗', 0);
+                        self.$store.app.toastOrAlert('❌ 新增失敗：' + error.message, 'error');
                         alert('錯誤：' + error.message);
                         self.isSubmitting = false;
                     })
@@ -376,11 +376,11 @@ document.addEventListener('alpine:init', function () {
                         return;
                     }
                     self.isBatchImporting = true;
-                    if (typeof showFlyProgressBar === 'function') showFlyProgressBar('正在批次匯入...');
+                    self.$store.app.toastProgress('正在批次匯入...');
                     var payload = { propertyCategory: self.propertyCategoryForImport, propertyRows: propertyRows, itemRows: itemRows };
                     google.script.run
                         .withSuccessHandler(function (response) {
-                            if (typeof hideFlyProgressBar === 'function') hideFlyProgressBar('匯入完成！', 300);
+                            self.$store.app.toastOrAlert('✅ 匯入完成！', 'success');
                             self.isBatchImporting = false;
                             if (!response || response.error) { self.batchImportError = (response && response.error) || '匯入失敗'; return; }
                             var serverFailures = Array.isArray(response.failures) ? response.failures : [];
@@ -390,7 +390,7 @@ document.addEventListener('alpine:init', function () {
                             if (successCount > 0) self.$store.app.handleAddAssetSuccess();
                         })
                         .withFailureHandler(function (error) {
-                            if (typeof hideFlyProgressBar === 'function') hideFlyProgressBar('匯入失敗', 0);
+                            self.$store.app.toastOrAlert('❌ 匯入失敗', 'error');
                             self.isBatchImporting = false;
                             self.batchImportError = (error && error.message) || '匯入失敗';
                         })

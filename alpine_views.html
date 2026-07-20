@@ -1453,7 +1453,12 @@ document.addEventListener('alpine:init', function () {
                                             </template>
                                         </td>
                                         <td class="px-2 py-3 text-left align-top whitespace-nowrap">
-                                            <div class="flex justify-start gap-2">
+                                            <!-- 處理中狀態鎖定 -->
+                                            <div class="flex items-center gap-2 text-blue-500 font-medium p-1" x-show="$store.app.isAssetProcessing(row.asset.assetId)">
+                                                <i class="fa-solid fa-spinner fa-spin text-base"></i>
+                                                <span class="text-xs" x-text="row.asset.status === '待處理' ? '處理中...' : '更新中...'"></span>
+                                            </div>
+                                            <div class="flex justify-start gap-2" x-show="!$store.app.isAssetProcessing(row.asset.assetId)">
                                                 <button type="button" x-show="$store.app.isAdminView"
                                                         @click="$store.app.handleOpenEditModal(row.asset)"
                                                         class="text-amber-600 hover:text-amber-800 transition-colors p-1" title="修改基本資料">
