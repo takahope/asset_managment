@@ -6356,7 +6356,7 @@
         // AssetTable 組件
         const AssetTable = ({ assets, isAdmin, currentUserEmail, isInventoryTaskOnly, inventoryStatusByAsset, onCancel, onRestore, onOpenTransferModal, onOpenLendingModal, onOpenScrapModal, onOpenEditModal, onOpenStatusDetail, onOpenInventoryModal, selectedAssetIds = [], onAssetSelect, onSelectAll, groupProxyEnabled = false, groupMemberEmailsLower = [] }) => {
 
-            const ROWS_PER_PAGE = 500;
+            const ROWS_PER_PAGE = 50;
             const [currentPage, setCurrentPage] = useState(1);
             const [expandedAssetIds, setExpandedAssetIds] = useState([]);
             const inventoryStatusStyles = {
