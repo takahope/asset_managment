@@ -476,6 +476,19 @@ document.addEventListener('alpine:init', function () {
 });
 </script>
 
+<style>
+    .filter-native-select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-image: none;
+    }
+
+    .filter-native-select::-ms-expand {
+        display: none;
+    }
+</style>
+
 <!-- ================= Alpine 應用主畫面(對應舊頁 App render 15748-16280) ================= -->
 <main id="app-root" x-data>
 <template x-if="$store.app.isReady">
@@ -837,7 +850,7 @@ document.addEventListener('alpine:init', function () {
                     <div class="relative col-span-1 md:flex-1 md:min-w-[140px]">
                         <select :value="$store.app.filters.category"
                                 @change="$store.app.handleFilterChange('category', $event.target.value)"
-                                class="h-[38px] w-full pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
+                                class="filter-native-select h-[38px] w-full pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
                                 :class="$store.app.filters.category ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700 font-medium' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
                             <option value="">依財產類別篩選</option>
                             <template x-for="opt in categoryOptions" :key="opt">
@@ -853,7 +866,7 @@ document.addEventListener('alpine:init', function () {
                     <div class="relative col-span-1 md:flex-1 md:min-w-[140px]">
                         <select :value="$store.app.filters.systemCategory"
                                 @change="$store.app.handleFilterChange('systemCategory', $event.target.value)"
-                                class="h-[38px] w-full pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
+                                class="filter-native-select h-[38px] w-full pl-8 pr-8 py-1.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm transition-colors cursor-pointer appearance-none bg-white"
                                 :class="$store.app.filters.systemCategory ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/30 text-blue-700 font-medium' : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'">
                             <option value="">依系統類別篩選</option>
                             <option value="新系統">新系統</option>
