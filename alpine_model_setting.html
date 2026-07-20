@@ -13,6 +13,7 @@ document.addEventListener('alpine:init', function () {
             geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
             reportAdminEmails: '', adminEmailNotifyEnabled: false, userEmailNotifyEnabled: true,
             groupProxyEnabled: false, inventoryFeatureEnabled: true, fabMenuEnabled: true,
+            locationErrorMode: 'immediate',
             hrGroupNameMap: '',
             parsedHrGroupNameMap: {}, hrOfficialGroups: [],
             infoStationCustodianEmails: '', infoStationUserEmails: '', intakeCustodianEmails: '',
@@ -80,6 +81,7 @@ document.addEventListener('alpine:init', function () {
                         self.userEmailNotifyEnabled = settings.userEmailNotifyEnabled !== false;
                         self.groupProxyEnabled = !!settings.groupProxyEnabled;
                         self.inventoryFeatureEnabled = settings.inventoryFeatureEnabled !== false;
+                        self.locationErrorMode = settings.locationErrorMode === 'queue' ? 'queue' : 'immediate';
                         self.fabMenuEnabled = settings.fabMenuEnabled !== false;
                         self.hrGroupNameMap = settings.hrGroupNameMap || '';
                         try { self.parsedHrGroupNameMap = JSON.parse(self.hrGroupNameMap || '{}'); } catch(e) { self.parsedHrGroupNameMap = {}; }
@@ -153,6 +155,7 @@ document.addEventListener('alpine:init', function () {
                                 userEmailNotifyEnabled: self.userEmailNotifyEnabled,
                                 groupProxyEnabled: self.groupProxyEnabled,
                                 inventoryFeatureEnabled: self.inventoryFeatureEnabled,
+                                locationErrorMode: self.locationErrorMode,
                                 fabMenuEnabled: self.fabMenuEnabled,
                                 hrGroupNameMap: self.hrGroupNameMap,
                                 infoStationCustodianEmails: self.infoStationCustodianEmails,
@@ -298,6 +301,16 @@ document.addEventListener('alpine:init', function () {
                                         <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
                                               :class="inventoryFeatureEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
                                     </button>
+                                </div>
+
+                                <div class="mt-4">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">位置有誤執行模式</label>
+                                    <select x-model="locationErrorMode"
+                                            class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="immediate">立即執行（點按鈕即寄信/紀錄）</option>
+                                        <option value="queue">加入購物車（批次送出時處理）</option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-slate-400">控制動作面板「位置有誤」按鈕的行為。</p>
                                 </div>
 
                                 <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
