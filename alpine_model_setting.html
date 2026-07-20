@@ -11,7 +11,7 @@ document.addEventListener('alpine:init', function () {
             isLoading: true, isSubmitting: false,
             enabled: true, provider: 'GEMINI',
             geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
-            reportAdminEmails: '', adminEmailNotifyEnabled: false,
+            reportAdminEmails: '', adminEmailNotifyEnabled: false, userEmailNotifyEnabled: true,
             groupProxyEnabled: false, inventoryFeatureEnabled: true, fabMenuEnabled: true,
             hrGroupNameMap: '',
             parsedHrGroupNameMap: {}, hrOfficialGroups: [],
@@ -77,6 +77,7 @@ document.addEventListener('alpine:init', function () {
                         var settings = s || {};
                         self.reportAdminEmails = settings.reportAdminEmails || '';
                         self.adminEmailNotifyEnabled = !!settings.adminEmailNotifyEnabled;
+                        self.userEmailNotifyEnabled = settings.userEmailNotifyEnabled !== false;
                         self.groupProxyEnabled = !!settings.groupProxyEnabled;
                         self.inventoryFeatureEnabled = settings.inventoryFeatureEnabled !== false;
                         self.fabMenuEnabled = settings.fabMenuEnabled !== false;
@@ -149,6 +150,7 @@ document.addEventListener('alpine:init', function () {
                             .saveSystemSettings({
                                 reportAdminEmails: self.reportAdminEmails,
                                 adminEmailNotifyEnabled: self.adminEmailNotifyEnabled,
+                                userEmailNotifyEnabled: self.userEmailNotifyEnabled,
                                 groupProxyEnabled: self.groupProxyEnabled,
                                 inventoryFeatureEnabled: self.inventoryFeatureEnabled,
                                 fabMenuEnabled: self.fabMenuEnabled,
@@ -265,6 +267,16 @@ document.addEventListener('alpine:init', function () {
                                             :class="adminEmailNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換管理員通知信啟用狀態">
                                         <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
                                               :class="adminEmailNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                    </button>
+                                </div>
+
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                    <span class="text-sm font-medium text-slate-700">一般使用者通知信</span>
+                                    <button type="button" role="switch" :aria-checked="!!userEmailNotifyEnabled" @click="userEmailNotifyEnabled = !userEmailNotifyEnabled"
+                                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                                            :class="userEmailNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換一般使用者通知信啟用狀態">
+                                        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                              :class="userEmailNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
                                     </button>
                                 </div>
 

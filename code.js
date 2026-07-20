@@ -1874,7 +1874,9 @@ function processBatchTransferApplication(formData) {
         });
         body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
         body += `${reviewLink}\n\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(actualNewUserEmail, subject, body);
+        if (isUserEmailEnabled()) {
+          MailApp.sendEmail(actualNewUserEmail, subject, body);
+        }
       }
       
       // 通知原保管人
@@ -1887,7 +1889,9 @@ function processBatchTransferApplication(formData) {
           body += `  - ${app.id}: ${app.assetName} → 新使用人: ${finalNewUserName}\n`;
         });
         body += `\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(keeperEmail, subject, body);
+        if (isUserEmailEnabled()) {
+          MailApp.sendEmail(keeperEmail, subject, body);
+        }
       });
       
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆使用人變更申請！已通知新使用人和原保管人。`;
@@ -1903,7 +1907,9 @@ function processBatchTransferApplication(formData) {
       });
       body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
       body += `${reviewLink}\n\n此為系統自動發送郵件。`;
-      MailApp.sendEmail(actualNewKeeperEmail, subject, body);
+      if (isUserEmailEnabled()) {
+        MailApp.sendEmail(actualNewKeeperEmail, subject, body);
+      }
       
       // 通知原使用人
       const oldUsers = new Set(needsApprovalApps.map(app => app.oldUserEmail).filter(e => e));
@@ -1915,7 +1921,9 @@ function processBatchTransferApplication(formData) {
           body += `  - ${app.id}: ${app.assetName} → 新保管人: ${newKeeperName}\n`;
         });
         body += `\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(userEmail, subject, body);
+        if (isUserEmailEnabled()) {
+          MailApp.sendEmail(userEmail, subject, body);
+        }
       });
       
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆保管人變更申請！已通知新保管人和原使用人。`;
@@ -1959,7 +1967,9 @@ function processBatchTransferApplication(formData) {
         body += `${reviewLink}\n`;
         body += `\n⚠️ 提醒：此申請需要您或新使用人審核，任一方審核即可完成轉移。\n`;
         body += `\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(actualNewKeeperEmail, subject, body);
+        if (isUserEmailEnabled()) {
+          MailApp.sendEmail(actualNewKeeperEmail, subject, body);
+        }
         notifiedEmails.add(actualNewKeeperEmail.toLowerCase());
       }
 
@@ -1979,7 +1989,9 @@ function processBatchTransferApplication(formData) {
         body += `${reviewLink}\n`;
         body += `\n⚠️ 提醒：此申請需要您或新保管人審核，任一方審核即可完成轉移。\n`;
         body += `\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(actualNewUserEmail, subject, body);
+        if (isUserEmailEnabled()) {
+          MailApp.sendEmail(actualNewUserEmail, subject, body);
+        }
         notifiedEmails.add(actualNewUserEmail.toLowerCase());
       }
 
@@ -2006,7 +2018,9 @@ function processBatchTransferApplication(formData) {
           }
           body += `\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n`;
           body += `\n此為系統自動發送郵件。`;
-          MailApp.sendEmail(oldKeeperEmail, subject, body);
+          if (isUserEmailEnabled()) {
+            MailApp.sendEmail(oldKeeperEmail, subject, body);
+          }
           notifiedEmails.add(oldKeeperEmail.toLowerCase());
         });
       }
@@ -2034,7 +2048,9 @@ function processBatchTransferApplication(formData) {
           }
           body += `\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n`;
           body += `\n此為系統自動發送郵件。`;
-          MailApp.sendEmail(oldUserEmail, subject, body);
+          if (isUserEmailEnabled()) {
+            MailApp.sendEmail(oldUserEmail, subject, body);
+          }
           notifiedEmails.add(oldUserEmail.toLowerCase());
         });
       }
@@ -2345,7 +2361,9 @@ function processBatchApproval(appIds) {
                 body += `此申請已完成，您無需再進行審核。\n\n`;
                 body += `此為系統自動發送郵件。`;
 
-                MailApp.sendEmail(otherReviewerEmail, subject, body);
+                if (isUserEmailEnabled()) {
+                  MailApp.sendEmail(otherReviewerEmail, subject, body);
+                }
                 Logger.log(`✅ 已通知另一方審核者: ${otherReviewerEmail}`);
               } catch (emailError) {
                 Logger.log(`⚠️ 發送通知給另一方審核者時發生錯誤: ${emailError.message}`);
@@ -2386,7 +2404,9 @@ function processBatchApproval(appIds) {
               body += `${printTransferLink}\n\n`;
               body += `此為系統自動發送郵件。`;
 
-              MailApp.sendEmail(applicantEmail, subject, body);
+              if (isUserEmailEnabled()) {
+                MailApp.sendEmail(applicantEmail, subject, body);
+              }
               Logger.log(`✅ 已通知申請人: ${applicantEmail}`);
             }
           } catch (emailError) {
@@ -4072,6 +4092,19 @@ function isAdminEmailEnabled() {
 }
 
 /**
+ * 檢查是否啟用一般使用者郵件通知功能
+ * @returns {boolean} true = 啟用, false = 停用
+ */
+function isUserEmailEnabled() {
+  const props = PropertiesService.getScriptProperties();
+  const isEnabled = props.getProperty('USER_EMAIL_NOTIFY_ENABLED') !== 'false';
+  if (!isEnabled) {
+    Logger.log('📧 一般使用者郵件通知已停用（USER_EMAIL_NOTIFY_ENABLED == false）');
+  }
+  return isEnabled;
+}
+
+/**
  * ✨ [管理員專用] 取得系統設定（電腦回報管理員 email、通知開關、同組資產開關、盤點功能開關）。
  * 供設定視窗（alpine_model_setting.html）讀取初始值。加 admin 守衛避免非管理員讀取 email 清單。
  * @returns {{reportAdminEmails:string, adminEmailNotifyEnabled:boolean, groupProxyEnabled:boolean, inventoryFeatureEnabled:boolean}}
@@ -4082,6 +4115,7 @@ function getSystemSettings() {
   return {
     reportAdminEmails: props.getProperty('REPORT_ADMIN_EMAILS') || '',
     adminEmailNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
+    userEmailNotifyEnabled: props.getProperty('USER_EMAIL_NOTIFY_ENABLED') !== 'false',
     groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
     inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
     fabMenuEnabled: props.getProperty('FAB_MENU_ENABLED') !== 'false',
@@ -4106,7 +4140,7 @@ function getSystemSettings() {
 /**
  * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
  * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
- * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
+ * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
  * @returns {{success:boolean}}
  */
 function saveSystemSettings(settings) {
@@ -4119,6 +4153,10 @@ function saveSystemSettings(settings) {
   if (s.adminEmailNotifyEnabled !== undefined) {
     props.setProperty('ADMIN_EMAIL_NOTIFY_ENABLED', String(!!s.adminEmailNotifyEnabled));
   }
+  if (s.userEmailNotifyEnabled !== undefined) {
+    props.setProperty('USER_EMAIL_NOTIFY_ENABLED', String(!!s.userEmailNotifyEnabled));
+  }
+
   if (s.groupProxyEnabled !== undefined) {
     props.setProperty('GROUP_PROXY_ENABLED', String(!!s.groupProxyEnabled));
   }
