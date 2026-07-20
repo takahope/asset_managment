@@ -488,6 +488,36 @@ document.addEventListener('alpine:init', function () {
         display: none;
     }
 
+    .filter-select-icon,
+    .filter-select-chevron {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+        line-height: 1;
+    }
+
+    .filter-select-icon {
+        left: 10px;
+        font-size: 11px;
+    }
+
+    .filter-select-chevron {
+        right: 12px;
+        width: 10px;
+        height: 10px;
+    }
+
+    .filter-select-chevron::before {
+        content: "";
+        display: block;
+        width: 6px;
+        height: 6px;
+        border-right: 1.5px solid #94a3b8;
+        border-bottom: 1.5px solid #94a3b8;
+        transform: rotate(45deg);
+    }
+
     .filter-toolbar-row {
         display: flex;
         flex-direction: column;
@@ -898,9 +928,9 @@ document.addEventListener('alpine:init', function () {
                                 <option :value="opt" x-text="opt" :selected="$store.app.filters.category === opt"></option>
                             </template>
                         </select>
-                        <i class="fa-solid fa-filter absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none" 
+                        <i class="filter-select-icon fa-solid fa-filter absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none" 
                            :class="$store.app.filters.category ? 'text-blue-500' : 'text-slate-400'"></i>
-                        <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+                        <span class="filter-select-chevron" aria-hidden="true"></span>
                     </div>
 
                     <!-- 單選:系統類別 -->
@@ -913,9 +943,9 @@ document.addEventListener('alpine:init', function () {
                             <option value="新系統">新系統</option>
                             <option value="舊系統">舊系統</option>
                         </select>
-                        <i class="fa-solid fa-filter absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none" 
+                        <i class="filter-select-icon fa-solid fa-filter absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none" 
                            :class="$store.app.filters.systemCategory ? 'text-blue-500' : 'text-slate-400'"></i>
-                        <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+                        <span class="filter-select-chevron" aria-hidden="true"></span>
                     </div>
 
                     <!-- 多選:保管人/使用人/組別/保管位置(可搜尋) -->
