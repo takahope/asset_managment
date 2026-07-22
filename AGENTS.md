@@ -51,3 +51,10 @@ PRs should include:
 - 2026-07-20: Added scoped responsive CSS for `alpine_views.html` filter toolbar to avoid missing frozen Tailwind `lg:*` utilities breaking desktop layout.
 - 2026-07-20: Fixed duplicate native/custom select arrows in `alpine_views.html` filter selects with scoped appearance reset CSS.
 - 2026-07-19: Fixed Alpine.js `x-model` and dynamic `<option>` race condition in `alpine_model_setting.html` by using `$nextTick` to set select models.
+
+## ★ Insight ─────────────────────────────────────
+- 沉澱時發現 gas-fullstack:476 早已寫過「凍結 Tailwind → 寫具名 scoped CSS class」的通則——這正解釋了為何當初該 skill 沒被觸發：這次是新功能作者沒讀既有規範。所以我補的是更難察覺的新症狀（z-index 任意值 → 遮蓋），提高未來被 grep/掃到的機率，而非複述通則。
+- 三層沉澱各司其職：PLAYBOOK §4=跨專案速記、skill=詳解單一來源、專案 CLAUDE.md=在地事件溯源。同一課三處互相指引，日後任一入口都找得到全貌。
+
+**⚠️ 前端修改鐵則** 
+修改前端時，一定要檢查掃描現有已編譯的凍結 Tailwind。如果沒有可用的 class，就**必須**使用「具名 scoped CSS class」，以免造成預期外的樣式錯誤。

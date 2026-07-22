@@ -1489,7 +1489,7 @@ document.addEventListener('alpine:init', function () {
                                                 </div>
                                             </template>
                                         </div>
-                                        <div class="space-y-1.5">
+                                        <div class="space-y-1.5" x-show="!$store.app.isAdvancedMode">
                                             <div class="text-[10px] font-medium uppercase tracking-wide text-slate-400">快速操作</div>
                                             <div class="flex flex-wrap gap-2">
                                                 <button type="button" x-show="$store.app.isAdminView"
@@ -1564,7 +1564,7 @@ document.addEventListener('alpine:init', function () {
                                     <th x-show="$store.app.visibleColumns.includes('group')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">組別</th>
                                     <th x-show="$store.app.visibleColumns.includes('category')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產類別</th>
                                     <th x-show="$store.app.visibleColumns.includes('status')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">狀態</th>
-                                    <th class="px-2 py-3 font-semibold text-slate-600 text-left whitespace-nowrap min-w-[160px]">操作</th>
+                                    <th x-show="!$store.app.isAdvancedMode" class="px-2 py-3 font-semibold text-slate-600 text-left whitespace-nowrap min-w-[160px]">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
@@ -1633,7 +1633,7 @@ document.addEventListener('alpine:init', function () {
                                                       :class="row.statusBadgeClass" x-text="row.asset.status"></span>
                                             </template>
                                         </td>
-                                        <td class="px-2 py-3 text-left align-top whitespace-nowrap">
+                                        <td x-show="!$store.app.isAdvancedMode" class="px-2 py-3 text-left align-top whitespace-nowrap">
                                             <!-- 處理中狀態鎖定 -->
                                             <div class="flex items-center gap-2 text-blue-500 font-medium p-1" x-show="$store.app.isAssetProcessing(row.asset.assetId)">
                                                 <i class="fa-solid fa-spinner fa-spin text-base"></i>

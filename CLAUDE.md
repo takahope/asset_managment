@@ -111,3 +111,11 @@ return {
 3. Apps Script 編輯器手動測試
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
+
+## 事件紀錄
+
+### 2026-07-22 客製化顯示欄位(桌面表格)三個 bug 修復
+- 症狀：①顯示欄位下拉被其他元件遮蓋 ②設定鈕未與搜尋框同排 ③欄位全勾選但表格欄位不顯示。
+- 根因 A(版面 ①②)：新 UI 用了預建 `css_tailwind.html` **未收錄**的 utility(`z-[60]`/`top-full`/`w-48`/`col-span-2`/`lg:w-auto`)，凍結 Tailwind 下無聲失效。修法：下拉改具名 class `.column-dropdown-menu`(定位+z-index)，按鈕沿用既有 `.filter-toolbar-action`。
+- 根因 B(不顯示 ③)：`visibleColumns` 定義在 `filterSection` 元件，但表格 `<th>/<td>` 的 `x-show` 落在 sibling 元件 `assetTable`，Alpine scope 隔離 → 讀到 undefined → `undefined.includes()` 拋錯被當 falsy → 整欄隱藏。修法：狀態提升到 `Alpine.store('app').visibleColumns`，checkbox 與表格都改讀 `$store.app.visibleColumns`。
+- 通則已沉澱：PLAYBOOK §4-11/12、`gas-fullstack` skill。檔案：`alpine_views.html`、`alpine_store.html`。
