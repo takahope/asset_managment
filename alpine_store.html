@@ -257,6 +257,7 @@
             pendingApprovalsData: [],
             inventorySessions: null,
             filters: INITIAL_FILTERS(),
+            visibleColumns: [],   // 桌面表格客製顯示欄位(跨 filterSection/assetTable 共享;由 filterSection.init 從 localStorage 初始化)
             activeModal: null,
             isLoadingCards: false,
             isExporting: false,

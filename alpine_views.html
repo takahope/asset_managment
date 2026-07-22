@@ -23,7 +23,6 @@ document.addEventListener('alpine:init', function () {
                 { key: 'category', label: '財產類別' },
                 { key: 'status', label: '狀態' }
             ],
-            visibleColumns: [],
             isColumnMenuOpen: false,
             debounceTimer: null,
             dropdownOpen: { status: false, leader: false, user: false, group: false, location: false },
@@ -44,18 +43,19 @@ document.addEventListener('alpine:init', function () {
                 var self = this;
                 this.localSearch = this.$store.app.filters.search;
                 
+                // visibleColumns 放在全域 $store.app(跨 filterSection/assetTable 共享);此處負責從 localStorage 初始化
                 var savedColumns = localStorage.getItem('assetTableVisibleColumns');
                 if (savedColumns) {
                     try {
-                        self.visibleColumns = JSON.parse(savedColumns);
+                        self.$store.app.visibleColumns = JSON.parse(savedColumns);
                     } catch (e) {
-                        self.visibleColumns = self.allToggleableColumns.map(function(c) { return c.key; });
+                        self.$store.app.visibleColumns = self.allToggleableColumns.map(function(c) { return c.key; });
                     }
                 } else {
-                    self.visibleColumns = self.allToggleableColumns.map(function(c) { return c.key; });
+                    self.$store.app.visibleColumns = self.allToggleableColumns.map(function(c) { return c.key; });
                 }
-                
-                self.$watch('visibleColumns', function (value) {
+
+                self.$watch('$store.app.visibleColumns', function (value) {
                     localStorage.setItem('assetTableVisibleColumns', JSON.stringify(value));
                 });
 
@@ -930,7 +930,7 @@ document.addEventListener('alpine:init', function () {
                                  class="column-dropdown-menu bg-white rounded-lg shadow-lg border border-slate-200 py-1.5">
                                 <template x-for="col in allToggleableColumns" :key="col.key">
                                     <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer text-sm text-slate-700 transition-colors">
-                                        <input type="checkbox" :value="col.key" x-model="visibleColumns"
+                                        <input type="checkbox" :value="col.key" x-model="$store.app.visibleColumns"
                                                class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
                                         <span x-text="col.label"></span>
                                     </label>
@@ -1539,16 +1539,16 @@ document.addEventListener('alpine:init', function () {
                                                :title="'全選所有「在庫」資產 (' + selectableAssets.length + ' 筆)'">
                                     </th>
                                     <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產編號</th>
-                                    <th x-show="visibleColumns.includes('systemCategory')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">系統類別</th>
-                                    <th x-show="visibleColumns.includes('assetName')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產名稱</th>
-                                    <th x-show="visibleColumns.includes('aliasDisplay')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產別名</th>
-                                    <th x-show="visibleColumns.includes('modelBrand')" class="px-2 py-3 font-semibold text-slate-600 w-[180px] max-w-[180px]">型號/廠牌</th>
-                                    <th x-show="visibleColumns.includes('userName')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">使用者</th>
-                                    <th x-show="visibleColumns.includes('leader')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">保管人</th>
-                                    <th x-show="visibleColumns.includes('location')" class="px-2 py-3 font-semibold text-slate-600 min-w-[100px]">保管位置</th>
-                                    <th x-show="visibleColumns.includes('group')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">組別</th>
-                                    <th x-show="visibleColumns.includes('category')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產類別</th>
-                                    <th x-show="visibleColumns.includes('status')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">狀態</th>
+                                    <th x-show="$store.app.visibleColumns.includes('systemCategory')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">系統類別</th>
+                                    <th x-show="$store.app.visibleColumns.includes('assetName')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產名稱</th>
+                                    <th x-show="$store.app.visibleColumns.includes('aliasDisplay')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產別名</th>
+                                    <th x-show="$store.app.visibleColumns.includes('modelBrand')" class="px-2 py-3 font-semibold text-slate-600 w-[180px] max-w-[180px]">型號/廠牌</th>
+                                    <th x-show="$store.app.visibleColumns.includes('userName')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">使用者</th>
+                                    <th x-show="$store.app.visibleColumns.includes('leader')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">保管人</th>
+                                    <th x-show="$store.app.visibleColumns.includes('location')" class="px-2 py-3 font-semibold text-slate-600 min-w-[100px]">保管位置</th>
+                                    <th x-show="$store.app.visibleColumns.includes('group')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">組別</th>
+                                    <th x-show="$store.app.visibleColumns.includes('category')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產類別</th>
+                                    <th x-show="$store.app.visibleColumns.includes('status')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">狀態</th>
                                     <th class="px-2 py-3 font-semibold text-slate-600 text-left whitespace-nowrap min-w-[160px]">操作</th>
                                 </tr>
                             </thead>
@@ -1568,13 +1568,13 @@ document.addEventListener('alpine:init', function () {
                                             </template>
                                         </td>
                                         <td class="px-2 py-3 font-mono text-slate-600 whitespace-nowrap align-top" x-text="row.asset.assetId"></td>
-                                        <td x-show="visibleColumns.includes('systemCategory')" class="px-2 py-3 whitespace-nowrap align-top">
+                                        <td x-show="$store.app.visibleColumns.includes('systemCategory')" class="px-2 py-3 whitespace-nowrap align-top">
                                             <span :class="row.asset.systemCategory === '舊系統'
                                                     ? 'inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold px-2 py-0.5'
                                                     : 'inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold px-2 py-0.5'"
                                                   x-text="row.asset.systemCategory"></span>
                                         </td>
-                                        <td x-show="visibleColumns.includes('assetName')" class="px-2 py-3 font-medium text-slate-800 align-top w-[160px] max-w-[160px]">
+                                        <td x-show="$store.app.visibleColumns.includes('assetName')" class="px-2 py-3 font-medium text-slate-800 align-top w-[160px] max-w-[160px]">
                                             <div class="flex items-start gap-2">
                                                 <div class="flex items-center gap-1 flex-shrink-0">
                                                     <i x-show="row.isTask" class="fa-solid fa-clipboard-check text-teal-600" title="盤點任務"></i>
@@ -1584,24 +1584,24 @@ document.addEventListener('alpine:init', function () {
                                                 <span x-show="row.isTask" class="inline-flex items-center rounded-full bg-teal-100 text-teal-700 text-xs font-semibold px-2 py-0.5 whitespace-nowrap">盤點任務</span>
                                             </div>
                                         </td>
-                                        <td x-show="visibleColumns.includes('aliasDisplay')" class="px-2 py-3 text-slate-600 align-top w-[160px] max-w-[160px]">
+                                        <td x-show="$store.app.visibleColumns.includes('aliasDisplay')" class="px-2 py-3 text-slate-600 align-top w-[160px] max-w-[160px]">
                                             <div class="line-clamp-2 text-xs break-all" :title="row.aliasDisplay" x-text="row.aliasDisplay"></div>
                                         </td>
-                                        <td x-show="visibleColumns.includes('modelBrand')" class="px-2 py-3 text-slate-600 align-top w-[180px] max-w-[180px]">
+                                        <td x-show="$store.app.visibleColumns.includes('modelBrand')" class="px-2 py-3 text-slate-600 align-top w-[180px] max-w-[180px]">
                                             <div class="line-clamp-2 text-xs break-all" :title="row.asset.modelBrand" x-text="row.asset.modelBrand || '-'"></div>
                                         </td>
-                                        <td x-show="visibleColumns.includes('userName')" class="px-2 py-3 text-slate-600 whitespace-nowrap align-top" x-text="row.asset.userName"></td>
-                                        <td x-show="visibleColumns.includes('leader')" class="px-2 py-3 text-slate-600 whitespace-nowrap align-top" x-text="row.asset.leader"></td>
-                                        <td x-show="visibleColumns.includes('location')" class="px-2 py-3 text-slate-600 align-top">
+                                        <td x-show="$store.app.visibleColumns.includes('userName')" class="px-2 py-3 text-slate-600 whitespace-nowrap align-top" x-text="row.asset.userName"></td>
+                                        <td x-show="$store.app.visibleColumns.includes('leader')" class="px-2 py-3 text-slate-600 whitespace-nowrap align-top" x-text="row.asset.leader"></td>
+                                        <td x-show="$store.app.visibleColumns.includes('location')" class="px-2 py-3 text-slate-600 align-top">
                                             <div class="line-clamp-2" :title="row.asset.location" x-text="row.asset.location"></div>
                                         </td>
-                                        <td x-show="visibleColumns.includes('group')" class="px-2 py-3 text-slate-600 align-top">
+                                        <td x-show="$store.app.visibleColumns.includes('group')" class="px-2 py-3 text-slate-600 align-top">
                                             <span class="bg-sky-50 text-sky-700 border border-sky-200 px-2 py-1 rounded text-xs whitespace-nowrap" x-text="row.asset.group || '未分組'"></span>
                                         </td>
-                                        <td x-show="visibleColumns.includes('category')" class="px-2 py-3 text-slate-600 align-top">
+                                        <td x-show="$store.app.visibleColumns.includes('category')" class="px-2 py-3 text-slate-600 align-top">
                                             <span class="bg-slate-100 px-2 py-1 rounded text-xs whitespace-nowrap" x-text="row.asset.category"></span>
                                         </td>
-                                        <td x-show="visibleColumns.includes('status')" class="px-2 py-3 align-top">
+                                        <td x-show="$store.app.visibleColumns.includes('status')" class="px-2 py-3 align-top">
                                             <template x-if="row.canOpenStatusDetail">
                                                 <button type="button"
                                                         @click="$store.app.handleOpenStatusDetail(row.asset)"
