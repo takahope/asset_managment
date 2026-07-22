@@ -11,6 +11,20 @@ document.addEventListener('alpine:init', function () {
     Alpine.data('filterSection', function () {
         return {
             localSearch: '',
+            allToggleableColumns: [
+                { key: 'systemCategory', label: '系統類別' },
+                { key: 'assetName', label: '財產名稱' },
+                { key: 'aliasDisplay', label: '財產別名' },
+                { key: 'modelBrand', label: '型號/廠牌' },
+                { key: 'userName', label: '使用者' },
+                { key: 'leader', label: '保管人' },
+                { key: 'location', label: '保管位置' },
+                { key: 'group', label: '組別' },
+                { key: 'category', label: '財產類別' },
+                { key: 'status', label: '狀態' }
+            ],
+            visibleColumns: [],
+            isColumnMenuOpen: false,
             debounceTimer: null,
             dropdownOpen: { status: false, leader: false, user: false, group: false, location: false },
             optionSearch: { leader: '', user: '', group: '', location: '' },
@@ -29,6 +43,22 @@ document.addEventListener('alpine:init', function () {
             init: function () {
                 var self = this;
                 this.localSearch = this.$store.app.filters.search;
+                
+                var savedColumns = localStorage.getItem('assetTableVisibleColumns');
+                if (savedColumns) {
+                    try {
+                        self.visibleColumns = JSON.parse(savedColumns);
+                    } catch (e) {
+                        self.visibleColumns = self.allToggleableColumns.map(function(c) { return c.key; });
+                    }
+                } else {
+                    self.visibleColumns = self.allToggleableColumns.map(function(c) { return c.key; });
+                }
+                
+                self.$watch('visibleColumns', function (value) {
+                    localStorage.setItem('assetTableVisibleColumns', JSON.stringify(value));
+                });
+
                 // 外部 filters.search 變化時同步(例如 Scanner 清空搜尋框;舊頁 5376-5378)
                 this.$watch('$store.app.filters.search', function (value) {
                     self.localSearch = value;
@@ -45,8 +75,10 @@ document.addEventListener('alpine:init', function () {
                 // 點擊外部關閉下拉(舊頁 5491-5506;mousedown 語意保留)
                 this._outsideHandler = function (event) {
                     var root = event.target && event.target.closest ? event.target.closest('.fs-dropdown-root') : null;
-                    if (root && self.$root.contains(root)) return;
-                    self.closeAllDropdowns();
+                    if (!root || !self.$root.contains(root)) self.closeAllDropdowns();
+                    
+                    var colRoot = event.target && event.target.closest ? event.target.closest('.column-dropdown-root') : null;
+                    if (!colRoot) self.isColumnMenuOpen = false;
                 };
                 document.addEventListener('mousedown', this._outsideHandler);
             },
