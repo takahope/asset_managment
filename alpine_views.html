@@ -606,6 +606,20 @@ document.addEventListener('alpine:init', function () {
         align-items: center;
         width: 100%;
     }
+
+    /*
+     * 顯示欄位下拉面板:定位/寬度/疊層用具名 class。
+     * 預建 css_tailwind 未收錄 z-[60]/top-full/w-48/lg:right-0 等任意值/lg 變體(無聲失效),
+     * 故不依賴 utility,改比照上方 .filter-* 家族寫具名 CSS。
+     */
+    .column-dropdown-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;            /* 貼齊按鈕右緣往左展開(還原原本 lg:right-0 的用意),避免溢出視窗右側 */
+        margin-top: 8px;
+        width: 12rem;        /* = 原本想要的 w-48 */
+        z-index: 50;         /* 於 .page-shell(z-index:0) 內壓過表格/篩選列;低於 modal(60/1050) */
+    }
 </style>
 
 <!-- ================= Alpine 應用主畫面(對應舊頁 App render 15748-16280) ================= -->
@@ -905,7 +919,7 @@ document.addEventListener('alpine:init', function () {
                     </div>
                     <div class="filter-toolbar-actions grid grid-cols-2 gap-2 flex-shrink-0 w-full lg:w-auto lg:flex lg:flex-wrap">
                         <!-- 顯示欄位選單 -->
-                        <div class="relative column-dropdown-root col-span-2 w-full lg:col-auto lg:w-auto">
+                        <div class="relative column-dropdown-root filter-toolbar-action">
                             <button type="button" @click="isColumnMenuOpen = !isColumnMenuOpen"
                                     class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors border-slate-200 text-slate-700 bg-white hover:bg-slate-50 w-full"
                                     title="自訂顯示欄位">
@@ -913,7 +927,7 @@ document.addEventListener('alpine:init', function () {
                                 顯示欄位
                             </button>
                             <div x-show="isColumnMenuOpen" x-transition.opacity.duration.200ms style="display: none;"
-                                 class="absolute left-0 lg:right-0 lg:left-auto top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1.5 z-[60]">
+                                 class="column-dropdown-menu bg-white rounded-lg shadow-lg border border-slate-200 py-1.5">
                                 <template x-for="col in allToggleableColumns" :key="col.key">
                                     <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer text-sm text-slate-700 transition-colors">
                                         <input type="checkbox" :value="col.key" x-model="visibleColumns"
@@ -924,7 +938,7 @@ document.addEventListener('alpine:init', function () {
                             </div>
                         </div>
                         <button type="button" @click="handleResetAllFilters()" :disabled="!hasActiveFilter"
-                                class="filter-toolbar-action filter-toolbar-action--reset inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-2 w-full lg:col-auto lg:w-auto"
+                                class="filter-toolbar-action inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-2 w-full lg:col-auto lg:w-auto"
                                 :class="hasActiveFilter ? 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50' : 'border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed'"
                                 :title="hasActiveFilter ? '清除所有篩選與搜尋字' : '目前沒有套用的篩選'" aria-label="清除篩選">
                             <i class="fa-solid fa-filter-circle-xmark"></i>
