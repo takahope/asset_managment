@@ -1343,8 +1343,23 @@ document.addEventListener('alpine:init', function () {
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div class="flex flex-col gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200 md:flex-row md:items-center md:justify-between">
                         <div class="flex flex-col gap-2">
-                            <span class="text-sm text-slate-600">
-                                第 <span class="font-semibold text-blue-600" x-text="currentPage"></span> / <span x-text="totalPages"></span> 頁（共 <span class="font-semibold text-blue-600" x-text="assets.length"></span> 筆）
+                            <span class="text-sm text-slate-600 flex flex-wrap items-center gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span>每頁顯示</span>
+                                    <div class="relative">
+                                        <select x-model.number="ROWS_PER_PAGE" @change="currentPage = 1" 
+                                                class="filter-native-select h-7 pl-2 pr-6 py-0.5 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm bg-white text-slate-700">
+                                            <option value="50">50</option>
+                                            <option value="100">100</option>
+                                            <option value="200">200</option>
+                                            <option value="500">500</option>
+                                        </select>
+                                        <div class="filter-select-chevron" style="right: 8px;"></div>
+                                    </div>
+                                    <span>筆</span>
+                                </div>
+                                <span class="hidden sm:inline-block border-l border-slate-300 h-4 mx-1"></span>
+                                <span>第 <span class="font-semibold text-blue-600" x-text="currentPage"></span> / <span x-text="totalPages"></span> 頁（共 <span class="font-semibold text-blue-600" x-text="assets.length"></span> 筆）</span>
                             </span>
                             <div class="md:hidden flex flex-wrap items-center gap-3 text-xs text-slate-500">
                                 <label class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600">
