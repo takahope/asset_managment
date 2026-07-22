@@ -904,6 +904,25 @@ document.addEventListener('alpine:init', function () {
                         </button>
                     </div>
                     <div class="filter-toolbar-actions grid grid-cols-2 gap-2 flex-shrink-0 w-full lg:w-auto lg:flex lg:flex-wrap">
+                        <!-- 顯示欄位選單 -->
+                        <div class="relative column-dropdown-root col-span-2 w-full lg:col-auto lg:w-auto">
+                            <button type="button" @click="isColumnMenuOpen = !isColumnMenuOpen"
+                                    class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors border-slate-200 text-slate-700 bg-white hover:bg-slate-50 w-full"
+                                    title="自訂顯示欄位">
+                                <i class="fa-solid fa-gear"></i>
+                                顯示欄位
+                            </button>
+                            <div x-show="isColumnMenuOpen" x-transition.opacity.duration.200ms style="display: none;"
+                                 class="absolute left-0 lg:right-0 lg:left-auto top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1.5 z-[60]">
+                                <template x-for="col in allToggleableColumns" :key="col.key">
+                                    <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer text-sm text-slate-700 transition-colors">
+                                        <input type="checkbox" :value="col.key" x-model="visibleColumns"
+                                               class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                                        <span x-text="col.label"></span>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
                         <button type="button" @click="handleResetAllFilters()" :disabled="!hasActiveFilter"
                                 class="filter-toolbar-action filter-toolbar-action--reset inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors col-span-2 w-full lg:col-auto lg:w-auto"
                                 :class="hasActiveFilter ? 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50' : 'border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed'"
