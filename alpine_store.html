@@ -326,6 +326,28 @@
                 var filters = this.filters;
                 var self = this;
                 var searchLower = filters.search ? filters.search.toLowerCase() : '';
+
+                var searchTokens = searchLower.split(/[\s,]+/).filter(Boolean);
+                var rangeTokens = [];
+                var keywordTokens = [];
+                searchTokens.forEach(function(token) {
+                    if (token.indexOf('~') !== -1) {
+                        rangeTokens.push(token);
+                    } else {
+                        keywordTokens.push(token);
+                    }
+                });
+                
+                var parsedRanges = rangeTokens.map(function(rt) {
+                    var parts = rt.split('~');
+                    var startBound = (parts[0] || '').trim();
+                    var endBound = (parts[1] || '').trim();
+                    if (endBound) {
+                        endBound += '\uffff';
+                    }
+                    return { start: startBound, end: endBound };
+                });
+
                 return this.allAssets.filter(function (asset) {
                     var statusValues = ensureArray(filters.status);
                     var leaderValues = ensureArray(filters.leader);
@@ -342,7 +364,24 @@
                     var groupMatch = groupValues.length === 0 || groupValues.indexOf(groupName) !== -1;
                     var locationMatch = locationValues.length === 0 || locationValues.indexOf(asset.location) !== -1;
                     var inventoryTaskMatch = !filters.inventoryTaskOnly || self.hasActiveInventoryForAsset(asset.assetId);
-                    var searchMatch = !searchLower || (asset.searchText && asset.searchText.indexOf(searchLower) !== -1);
+                    var keywordMatch = true;
+                    if (keywordTokens.length > 0) {
+                        keywordMatch = keywordTokens.every(function(kw) {
+                            return asset.searchText && asset.searchText.indexOf(kw) !== -1;
+                        });
+                    }
+
+                    var rangeMatch = true;
+                    if (parsedRanges.length > 0) {
+                        var aId = String(asset.assetId || '').toLowerCase();
+                        rangeMatch = parsedRanges.some(function(r) {
+                            var passStart = !r.start || aId >= r.start;
+                            var passEnd = !r.end || aId <= r.end;
+                            return passStart && passEnd;
+                        });
+                    }
+                    var searchMatch = keywordMatch && rangeMatch;
+
                     return statusMatch && categoryMatch && systemCategoryMatch && leaderMatch && userMatch && groupMatch && locationMatch && inventoryTaskMatch && searchMatch;
                 });
             },
