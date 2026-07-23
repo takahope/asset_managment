@@ -4445,6 +4445,9 @@ function exportResolvedLocationErrors() {
 
         if (!sheet) {
           sheet = ss.insertSheet(sheetName);
+        }
+
+        if (sheet.getLastRow() === 0) {
           const headers = ['財產編號', '財產名稱', '系統位置', '標記時間', '處理人信箱', '處理時間'];
           sheet.appendRow(headers);
           sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
