@@ -4480,6 +4480,20 @@ function exportResolvedLocationErrors() {
           sheet.appendRow(headers);
           sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
           sheet.setFrozenRows(1);
+        } else {
+          // Backward compatibility migration: If column E is not "錯誤類型", insert it.
+          // Old headers were: ['財產編號', '財產名稱', '財產位置', '標記時間', '處理人信箱', '處理時間']
+          // New headers are: ['財產編號', '財產名稱', '財產位置', '保管人', '錯誤類型', '標記時間', '處理人信箱', '處理時間']
+          // Wait, the old headers did NOT have 保管人 before either!
+          // So if old sheet has 6 columns, we need to insert columns D (保管人) and E (錯誤類型).
+          const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+          if (existingHeaders[3] !== '保管人' || existingHeaders[4] !== '錯誤類型') {
+            // Insert 2 columns before column D (which is index 4, 1-based)
+            sheet.insertColumnsBefore(4, 2);
+            sheet.getRange(1, 4).setValue('保管人');
+            sheet.getRange(1, 5).setValue('錯誤類型');
+            sheet.getRange(1, 4, 1, 2).setFontWeight('bold');
+          }
         }
 
         const lastRow = sheet.getLastRow();
