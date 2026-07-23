@@ -649,6 +649,55 @@ document.addEventListener('alpine:init', function () {
         width: 12rem;        /* = 原本想要的 w-48 */
         z-index: 50;         /* 於 .page-shell(z-index:0) 內壓過表格/篩選列;低於 modal(60/1050) */
     }
+
+    /* 頁首卡片按鈕版面重構 (避免依賴 frozen tailwind) */
+    /* 頁首卡片按鈕版面重構 (避免依賴 frozen tailwind) */
+    .hero-title-group {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: nowrap;
+        width: 100%;
+        overflow-x: auto;
+    }
+    .hero-title-group .page-title {
+        white-space: nowrap;
+    }
+    .hero-action-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+    /* 強制覆蓋 userstate_alpine.html 中針對 mode-toggle-card 的寬度設定，確保能在同一行 */
+    .hero-action-row .mode-toggle-card--compact {
+        min-width: 0 !important;
+        width: auto !important;
+        flex-shrink: 0;
+        margin-bottom: 0 !important;
+        padding: 6px 12px !important;
+    }
+    .hero-action-row .mode-toggle-card--compact h3 {
+        white-space: nowrap;
+    }
+    
+    @media (min-width: 768px) {
+        .hero-title-group {
+            overflow-x: visible;
+        }
+        .hero-action-row {
+            justify-content: flex-end;
+            overflow-x: visible;
+            padding-bottom: 0;
+            flex-wrap: wrap;
+        }
+    }
 </style>
 
 <!-- ================= Alpine 應用主畫面(對應舊頁 App render 15748-16280) ================= -->
@@ -657,104 +706,107 @@ document.addEventListener('alpine:init', function () {
     <div class="page-shell max-w-[1600px] mx-auto">
         <!-- 頁首 hero -->
         <div class="page-hero mb-6" x-data="pageHero">
-            <div class="page-hero__text">
-                <h1 class="page-title">財產狀態管理</h1>
-                <p class="page-subtitle">
-                    <span class="font-medium text-slate-700" x-show="$store.app.currentUserName" x-text="$store.app.currentUserName"></span><span x-show="$store.app.currentUserName">，</span>歡迎回來，今天是 <span x-text="todayText"></span>
-                </p>
-            </div>
-            <div class="page-hero__actions">
+            <div class="page-hero__text hero-title-group">
                 <template x-if="$store.app.isAdmin">
-                    <div class="hero-status">
-                        <span class="px-3 py-1 rounded-full text-xs font-semibold border"
-                              :class="$store.app.isAdminView ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-teal-50 text-teal-700 border-teal-200'"
-                              x-text="$store.app.isAdminView ? '管理員檢視：全域模式' : '一般檢視：群組模式'"></span>
-                        <div class="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
-                            <button @click="$store.app.handleViewModeChange('user')"
-                                    class="px-3 py-1 text-sm rounded-full transition-colors"
-                                    :class="$store.app.viewMode === 'user' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
-                                    title="一般使用者視角">一般</button>
-                            <button @click="$store.app.handleViewModeChange('admin')"
-                                    class="px-3 py-1 text-sm rounded-full transition-colors"
-                                    :class="$store.app.viewMode === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
-                                    title="管理者視角">管理者</button>
-                        </div>
+                    <div class="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm shrink-0">
+                        <button @click="$store.app.handleViewModeChange('user')"
+                                class="px-3 py-1 text-sm rounded-full transition-colors"
+                                :class="$store.app.viewMode === 'user' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
+                                title="一般使用者視角">一般</button>
+                        <button @click="$store.app.handleViewModeChange('admin')"
+                                class="px-3 py-1 text-sm rounded-full transition-colors"
+                                :class="$store.app.viewMode === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
+                                title="管理者視角">管理者</button>
                     </div>
                 </template>
+                <div>
+                    <h1 class="page-title">財產狀態管理</h1>
+                    <p class="page-subtitle">
+                        <span class="font-medium text-slate-700" x-show="$store.app.currentUserName" x-text="$store.app.currentUserName"></span><span x-show="$store.app.currentUserName">，</span>歡迎回來，今天是 <span x-text="todayText"></span>
+                    </p>
+                </div>
+            </div>
+            <div class="page-hero__actions" style="width: 100%;">
+                <div class="hero-actions-container" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+                    
+                    <!-- 第一列: 載入狀態、待辦、說明、重整、進階批次 -->
+                    <div class="hero-action-row">
+                        <span class="hero-loading shrink-0" x-show="$store.app.isLoadingCards">
+                            <i class="fas fa-spinner fa-spin text-blue-500"></i>
+                            正在載入...
+                        </span>
 
-                <div class="hero-actions">
-                    <span class="hero-loading" x-show="$store.app.isLoadingCards">
-                        <i class="fas fa-spinner fa-spin text-blue-500"></i>
-                        正在載入統計數據...
-                    </span>
+                        <!-- 待辦事項抽屜開關 -->
+                        <button @click="$store.app.toggleSidebar()"
+                                class="hero-btn hero-btn--ghost relative shrink-0" title="待辦事項">
+                            <i class="fa-solid fa-list-check text-slate-600"></i>
+                            <span class="hidden sm:inline">待辦事項</span>
+                            <template x-if="$store.app.sidebarCountsReady && $store.app.sidebarPendingTotal > 0">
+                                <span class="sidebar-badge" x-text="$store.app.sidebarPendingTotal"></span>
+                            </template>
+                            <template x-if="!$store.app.sidebarCountsReady">
+                                <span class="sidebar-badge sidebar-badge--loading"></span>
+                            </template>
+                        </button>
 
-                    <!-- 待辦事項抽屜開關 -->
-                    <button @click="$store.app.toggleSidebar()"
-                            class="hero-btn hero-btn--ghost relative" title="待辦事項">
-                        <i class="fa-solid fa-list-check text-slate-600"></i>
-                        <span class="hidden sm:inline">待辦事項</span>
-                        <template x-if="$store.app.sidebarCountsReady && $store.app.sidebarPendingTotal > 0">
-                            <span class="sidebar-badge" x-text="$store.app.sidebarPendingTotal"></span>
-                        </template>
-                        <template x-if="!$store.app.sidebarCountsReady">
-                            <span class="sidebar-badge sidebar-badge--loading"></span>
-                        </template>
-                    </button>
+                        <button @click="$store.app.showOperationManualModal = true"
+                                class="hero-btn hero-btn--ghost shrink-0" title="開啟操作說明">
+                            <i class="fa-solid fa-book text-slate-500"></i>
+                            <span class="hidden sm:inline">操作說明</span>
+                        </button>
 
-                    <!-- ModeToggleCard(舊頁 6057-6071) -->
-                    <div class="mode-toggle-card mode-toggle-card--compact">
-                        <div class="mode-toggle-text">
-                            <h3>進階批次功能</h3>
+                        <button @click="$store.app.handleRefreshCards()"
+                                :disabled="$store.app.isLoadingCards"
+                                class="hero-refresh bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center group shrink-0"
+                                title="重新整理統計數據" aria-label="重新整理">
+                            <i class="fas fa-sync-alt text-lg transition-transform"
+                               :class="$store.app.isLoadingCards ? 'animate-spin' : 'group-hover:rotate-180'"></i>
+                        </button>
+
+                        <!-- ModeToggleCard(舊頁 6057-6071) -->
+                        <div class="mode-toggle-card mode-toggle-card--compact">
+                            <div class="mode-toggle-text">
+                                <h3>進階批次功能</h3>
+                            </div>
+                            <label class="toggle-switch shrink-0" title="切換進階批次模式">
+                                <input type="checkbox"
+                                       :checked="$store.app.isAdvancedMode"
+                                       @change="$store.app.handleModeToggle($event.target.checked ? 'ADVANCED' : 'STANDARD')">
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
-                        <label class="toggle-switch" title="切換進階批次模式">
-                            <input type="checkbox"
-                                   :checked="$store.app.isAdvancedMode"
-                                   @change="$store.app.handleModeToggle($event.target.checked ? 'ADVANCED' : 'STANDARD')">
-                            <span class="toggle-slider"></span>
-                        </label>
                     </div>
 
-                    <button id="btn-inventory-mgmt" x-show="$store.app.isAdminView"
-                            @click="$store.app.showInventoryMgmtModal = true"
-                            class="hero-btn hero-btn--ghost" title="盤點管理">
-                        <i class="fa-solid fa-clipboard-list text-slate-500"></i>
-                        <span class="hidden sm:inline">盤點管理</span>
-                    </button>
+                    <!-- 第二列: 盤點管理、新增資產、設定、列印條碼 -->
+                    <div class="hero-action-row">
+                        <button id="btn-inventory-mgmt" x-show="$store.app.isAdminView"
+                                @click="$store.app.showInventoryMgmtModal = true"
+                                class="hero-btn hero-btn--ghost" title="盤點管理">
+                            <i class="fa-solid fa-clipboard-list text-slate-500"></i>
+                            <span class="hidden sm:inline">盤點管理</span>
+                        </button>
 
-                    <button x-show="$store.app.isAdminView"
-                            @click="$store.app.showAddAssetModal = true"
-                            class="hero-btn hero-btn--primary" title="新增財產/物品">
-                        <i class="fas fa-plus"></i>
-                        <span class="hidden sm:inline">新增資產</span>
-                    </button>
+                        <button x-show="$store.app.isAdminView"
+                                @click="$store.app.showAddAssetModal = true"
+                                class="hero-btn hero-btn--primary" title="新增財產/物品">
+                            <i class="fas fa-plus"></i>
+                            <span class="hidden sm:inline">新增資產</span>
+                        </button>
 
-                    <button x-show="$store.app.isAdminView"
-                            @click="$store.app.showModelSettingModal = true"
-                            class="hero-btn hero-btn--ghost" title="設定">
-                        <i class="fa-solid fa-cog text-slate-500"></i>
-                        <span class="hidden sm:inline">設定</span>
-                    </button>
+                        <button x-show="$store.app.isAdminView"
+                                @click="$store.app.showModelSettingModal = true"
+                                class="hero-btn hero-btn--ghost" title="設定">
+                            <i class="fa-solid fa-cog text-slate-500"></i>
+                            <span class="hidden sm:inline">設定</span>
+                        </button>
 
-                    <button x-show="$store.app.isAdminView"
-                            @click="if (!window.__WEB_APP_URL) { alert('正在準備列印頁面連結，請稍候再點一次。'); } else { window.open(window.__WEB_APP_URL + '?page=barcodeprint', '_blank'); }"
-                            class="hero-btn hero-btn--ghost" title="開啟列印條碼頁面">
-                        <i class="fa-solid fa-barcode text-emerald-600"></i>
-                        <span class="hidden sm:inline">列印條碼</span>
-                    </button>
-
-                    <button @click="$store.app.showOperationManualModal = true"
-                            class="hero-btn hero-btn--ghost" title="開啟操作說明">
-                        <i class="fa-solid fa-book text-slate-500"></i>
-                        <span class="hidden sm:inline">操作說明</span>
-                    </button>
-
-                    <button @click="$store.app.handleRefreshCards()"
-                            :disabled="$store.app.isLoadingCards"
-                            class="hero-refresh bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center group"
-                            title="重新整理統計數據" aria-label="重新整理">
-                        <i class="fas fa-sync-alt text-lg transition-transform"
-                           :class="$store.app.isLoadingCards ? 'animate-spin' : 'group-hover:rotate-180'"></i>
-                    </button>
+                        <button x-show="$store.app.isAdminView"
+                                @click="if (!window.__WEB_APP_URL) { alert('正在準備列印頁面連結，請稍候再點一次。'); } else { window.open(window.__WEB_APP_URL + '?page=barcodeprint', '_blank'); }"
+                                class="hero-btn hero-btn--ghost" title="開啟列印條碼頁面">
+                            <i class="fa-solid fa-barcode text-emerald-600"></i>
+                            <span class="hidden sm:inline">列印條碼</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
