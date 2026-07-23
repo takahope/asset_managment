@@ -336,8 +336,9 @@ document.addEventListener('alpine:init', function () {
                         var ir = self.parseItemRows(rows, 'CSV');
                         return { propertyRows: [], itemRows: ir.rows, failures: ir.failures };
                     }
-                    var propertySheet = workbook.Sheets['財產總表'];
-                    var itemSheet = workbook.Sheets['物品總表'];
+                    // 匯入端同時相容「財產總表/物品總表」(照說明命名) 與「財產/物品」(自家匯出檔的工作表名稱)
+                    var propertySheet = workbook.Sheets['財產總表'] || workbook.Sheets['財產'];
+                    var itemSheet = workbook.Sheets['物品總表'] || workbook.Sheets['物品'];
                     if (!propertySheet && !itemSheet) {
                         return { propertyRows: [], itemRows: [], failures: [self.buildFailureEntry({ assetType: '匯入', rowIndex: 0, assetId: '', reason: '找不到「財產總表」或「物品總表」工作表', source: 'Excel' })] };
                     }
