@@ -4413,7 +4413,7 @@ function exportResolvedLocationErrors() {
       if (key.indexOf('RESOLVED_LOCERR_') === 0) {
         try {
           const record = JSON.parse(allProps[key]);
-          // 欄位順序：財產編號, 財產名稱, 系統位置, 標記時間, 處理人信箱, 處理時間
+          // 欄位順序：財產編號, 財產名稱, 財產位置, 標記時間, 處理人信箱, 處理時間
           rowsToWrite.push([
             record.assetId || '',
             record.assetName || '',
@@ -4448,7 +4448,7 @@ function exportResolvedLocationErrors() {
         }
 
         if (sheet.getLastRow() === 0) {
-          const headers = ['財產編號', '財產名稱', '系統位置', '標記時間', '處理人信箱', '處理時間'];
+          const headers = ['財產編號', '財產名稱', '財產位置', '標記時間', '處理人信箱', '處理時間'];
           sheet.appendRow(headers);
           sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
           sheet.setFrozenRows(1);
