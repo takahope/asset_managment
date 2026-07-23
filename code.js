@@ -6851,7 +6851,7 @@ function addNewAssetsBatch(payload) {
       if (PROPERTY_COLUMN_INDICES.USER_EMAIL) {
         values[PROPERTY_COLUMN_INDICES.USER_EMAIL - 1] = userEmail;
       }
-      values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = propertyCategory;
+      values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = normalizeText(row.assetCategory) || propertyCategory;
       values[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
       if (assetName.includes('電腦')) {
         if (PROPERTY_COLUMN_INDICES.IS_IT_ASSET) {
@@ -7297,7 +7297,7 @@ function commitAssetsBatch(finalPayload) {
             if (PROPERTY_COLUMN_INDICES.USER_EMAIL) {
                 values[PROPERTY_COLUMN_INDICES.USER_EMAIL - 1] = row._resolvedUserEmail;
             }
-            values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = propertyCategory;
+            values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = normalizeText(row.assetCategory) || propertyCategory;
             values[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
             const finalName = values[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1];
             if (finalName.includes('電腦')) {

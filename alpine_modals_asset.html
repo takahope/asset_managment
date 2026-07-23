@@ -242,25 +242,62 @@ document.addEventListener('alpine:init', function () {
                     assetId: data.assetId || '', reason: data.reason || '', source: data.source || ''
                 };
             },
+            buildHeaderMap: function(headerRow, type) {
+                var PROPERTY_KEYS = {
+                    '財產編號': 'assetId', '財產名稱': 'assetName', '財產別名': 'assetAlias',
+                    '型號/廠牌': 'modelBrand', '單位': 'unit', '取得日期': 'purchaseDate',
+                    '使用年限': 'useLife', '保管地點': 'location', '附屬設備': 'accessory',
+                    '保管人（姓名）': 'keeperName', '使用人（姓名）': 'userName', '財產類別': 'assetCategory'
+                };
+                var ITEM_KEYS = {
+                    '物品編號': 'assetId', '物品名稱': 'assetName', '產品序號': 'productSerial',
+                    '型號/廠牌': 'modelBrand', '取得日期': 'purchaseDate', '使用年限': 'useLife',
+                    '單位': 'unit', '台幣金額': 'amountTwd', '申購單號': 'purchaseOrder',
+                    '財產類別': 'assetCategory', '保管人（姓名）': 'keeperName', '保管地點': 'location'
+                };
+                var REQUIRED = type === 'property' ? ['assetId', 'assetName', 'location', 'keeperName'] : ['assetId', 'assetName', 'location', 'keeperName'];
+                var nameToKey = type === 'property' ? PROPERTY_KEYS : ITEM_KEYS;
+                var map = {};
+                (headerRow || []).forEach(function(cell, index) {
+                    var normalized = String(cell || '').trim();
+                    if (normalized && nameToKey[normalized] && map[nameToKey[normalized]] === undefined) {
+                        map[nameToKey[normalized]] = index;
+                    }
+                });
+                var missing = REQUIRED.filter(function(key) { return map[key] === undefined; });
+                return { map: map, missing: missing, keys: nameToKey };
+            },
             parsePropertyRows: function (rows, sourceLabel) {
                 var self = this;
                 var parsedRows = [], failures = [];
+                if (!rows || rows.length === 0) return { rows: parsedRows, failures: failures };
+                
+                var headerResult = self.buildHeaderMap(rows[0], 'property');
+                if (headerResult.missing.length > 0) {
+                    var missingLabels = headerResult.missing.map(function(k) { return Object.keys(headerResult.keys).find(function(name) { return headerResult.keys[name] === k; }) || k; });
+                    throw new Error(sourceLabel + '缺少必填欄位: ' + missingLabels.join(', '));
+                }
+                var map = headerResult.map;
+
                 (rows || []).forEach(function (row, index) {
                     if (index === 0) return;
                     if (!row || self.isRowEmpty(row)) return;
                     var rowIndex = index + 1, rowErrors = [];
-                    var assetId = self.normalizeImportText(row[0]);
-                    var assetName = self.normalizeImportText(row[1]);
-                    var assetAlias = self.normalizeImportText(row[2]);
-                    var modelBrand = self.normalizeImportText(row[3]);
-                    var unit = self.normalizeImportText(row[4]);
-                    var purchaseDate = self.formatImportDate(row[5]);
-                    var useLife = self.normalizeImportText(row[6]);
-                    var location = self.normalizeImportText(row[7]);
-                    var accessory = self.normalizeImportText(row[8]);
-                    var keeperName = self.normalizeImportText(row[9]);
-                    var userName = self.normalizeImportText(row[10]);
-                    var assetCategory = self.normalizeImportText(row[11]);
+                    var assetId = self.normalizeImportText(row[map.assetId]);
+                    var assetName = self.normalizeImportText(row[map.assetName]);
+                    var assetAlias = self.normalizeImportText(row[map.assetAlias]);
+                    var modelBrand = self.normalizeImportText(row[map.modelBrand]);
+                    var unit = self.normalizeImportText(row[map.unit]);
+                    var purchaseDate = self.formatImportDate(row[map.purchaseDate]);
+                    var useLife = self.normalizeImportText(row[map.useLife]);
+                    var location = self.normalizeImportText(row[map.location]);
+                    var accessory = self.normalizeImportText(row[map.accessory]);
+                    var keeperName = self.normalizeImportText(row[map.keeperName]);
+                    var userName = self.normalizeImportText(row[map.userName]);
+                    
+                    var categoryFromRow = map.assetCategory !== undefined ? self.normalizeImportText(row[map.assetCategory]) : '';
+                    var assetCategory = categoryFromRow || self.propertyCategoryForImport;
+
                     if (!assetId) rowErrors.push('編號必填');
                     if (!assetName) rowErrors.push('名稱必填');
                     if (!location) rowErrors.push('保管地點必填');
@@ -283,22 +320,34 @@ document.addEventListener('alpine:init', function () {
             parseItemRows: function (rows, sourceLabel) {
                 var self = this;
                 var parsedRows = [], failures = [];
+                if (!rows || rows.length === 0) return { rows: parsedRows, failures: failures };
+
+                var headerResult = self.buildHeaderMap(rows[0], 'item');
+                if (headerResult.missing.length > 0) {
+                    var missingLabels = headerResult.missing.map(function(k) { return Object.keys(headerResult.keys).find(function(name) { return headerResult.keys[name] === k; }) || k; });
+                    throw new Error(sourceLabel + '缺少必填欄位: ' + missingLabels.join(', '));
+                }
+                var map = headerResult.map;
+
                 (rows || []).forEach(function (row, index) {
                     if (index === 0) return;
                     if (!row || self.isRowEmpty(row)) return;
                     var rowIndex = index + 1, rowErrors = [];
-                    var assetId = self.normalizeImportText(row[0]);
-                    var assetName = self.normalizeImportText(row[1]);
-                    var productSerial = self.normalizeImportText(row[2]);
-                    var modelBrand = self.normalizeImportText(row[3]);
-                    var purchaseDate = self.formatImportDate(row[4]);
-                    var useLife = self.normalizeImportText(row[5]);
-                    var unit = self.normalizeImportText(row[6]);
-                    var amountTwd = self.normalizeImportText(row[7]);
-                    var purchaseOrder = self.normalizeImportText(row[8]);
-                    var assetCategory = self.normalizeImportText(row[9]);
-                    var keeperName = self.normalizeImportText(row[10]);
-                    var location = self.normalizeImportText(row[11]);
+                    var assetId = self.normalizeImportText(row[map.assetId]);
+                    var assetName = self.normalizeImportText(row[map.assetName]);
+                    var productSerial = self.normalizeImportText(row[map.productSerial]);
+                    var modelBrand = self.normalizeImportText(row[map.modelBrand]);
+                    var purchaseDate = self.formatImportDate(row[map.purchaseDate]);
+                    var useLife = self.normalizeImportText(row[map.useLife]);
+                    var unit = self.normalizeImportText(row[map.unit]);
+                    var amountTwd = self.normalizeImportText(row[map.amountTwd]);
+                    var purchaseOrder = self.normalizeImportText(row[map.purchaseOrder]);
+                    var keeperName = self.normalizeImportText(row[map.keeperName]);
+                    var location = self.normalizeImportText(row[map.location]);
+                    
+                    var categoryFromRow = map.assetCategory !== undefined ? self.normalizeImportText(row[map.assetCategory]) : '';
+                    var assetCategory = categoryFromRow || self.propertyCategoryForImport;
+
                     if (!assetId) rowErrors.push('編號必填');
                     if (!assetName) rowErrors.push('名稱必填');
                     if (!location) rowErrors.push('保管地點必填');
@@ -764,6 +813,7 @@ document.addEventListener('alpine:init', function () {
                                             <select x-model="propertyCategoryForImport" :disabled="isBatchImporting || isSubmitting" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                                 <template x-for="option in propertyCategoryOptions" :key="option"><option :value="option" x-text="option"></option></template>
                                             </select>
+                                            <p class="text-xs text-slate-500 mt-1">(若檔案有「財產類別」並填值則優先以檔案為主)</p>
                                         </div>
                                         <div class="flex items-end">
                                             <button type="button" @click="handlePreviewImport()" :disabled="isBatchImporting || isSubmitting"
@@ -1016,23 +1066,21 @@ document.addEventListener('alpine:init', function () {
                             </div>
                         </div>
                         <div>
-                            <div class="text-base font-semibold text-slate-800 mb-2">欄位順序與必填規則</div>
+                            <div class="text-base font-semibold text-slate-800 mb-2">支援的欄位名稱（順序不限，第一列為表頭）</div>
                             <div class="space-y-4">
                                 <div>
                                     <div class="font-medium text-slate-700 mb-2">財產（財產總表 / 財產 CSV）</div>
                                     <div class="overflow-x-auto border border-slate-200 rounded-lg">
                                         <table class="min-w-[520px] w-full text-sm">
                                             <thead class="bg-slate-50 text-slate-600"><tr>
-                                                <th class="px-3 py-2 text-left border-b border-slate-200">欄位</th>
-                                                <th class="px-3 py-2 text-left border-b border-slate-200">說明</th>
+                                                <th class="px-3 py-2 text-left border-b border-slate-200">欄位名稱</th>
                                                 <th class="px-3 py-2 text-left border-b border-slate-200">必填</th>
                                             </tr></thead>
                                             <tbody class="text-slate-700">
-                                                <template x-for="row in [['A','財產編號','是'],['B','財產名稱','是'],['C','財產別名','否'],['D','型號/廠牌','否'],['E','單位','否'],['F','取得日期','否'],['G','使用年限','否'],['H','保管地點','是'],['I','附屬設備','否'],['J','保管人（姓名）','是'],['K','使用人（姓名）','否（空白會自動帶入保管人）'],['L','財產類別','否（實際以匯入時選擇為準）']]" :key="'p-'+row[0]">
+                                                <template x-for="row in [['財產編號','是'],['財產名稱','是'],['財產別名','否'],['型號/廠牌','否'],['單位','否'],['取得日期','否'],['使用年限','否'],['保管地點','是'],['附屬設備','否'],['保管人（姓名）','是'],['使用人（姓名）','否（空白會自動帶入保管人）'],['財產類別','否（實際以匯入時選擇為準，若有值則優先使用）']]" :key="'p-'+row[0]">
                                                     <tr class="border-b border-slate-100">
                                                         <td class="px-3 py-2 font-mono text-slate-500" x-text="row[0]"></td>
                                                         <td class="px-3 py-2" x-text="row[1]"></td>
-                                                        <td class="px-3 py-2" x-text="row[2]"></td>
                                                     </tr>
                                                 </template>
                                             </tbody>
@@ -1044,16 +1092,14 @@ document.addEventListener('alpine:init', function () {
                                     <div class="overflow-x-auto border border-slate-200 rounded-lg">
                                         <table class="min-w-[520px] w-full text-sm">
                                             <thead class="bg-slate-50 text-slate-600"><tr>
-                                                <th class="px-3 py-2 text-left border-b border-slate-200">欄位</th>
-                                                <th class="px-3 py-2 text-left border-b border-slate-200">說明</th>
+                                                <th class="px-3 py-2 text-left border-b border-slate-200">欄位名稱</th>
                                                 <th class="px-3 py-2 text-left border-b border-slate-200">必填</th>
                                             </tr></thead>
                                             <tbody class="text-slate-700">
-                                                <template x-for="row in [['A','物品編號','是'],['B','物品名稱','是'],['C','產品序號','否'],['D','型號/廠牌','否'],['E','取得日期','否'],['F','使用年限','否'],['G','單位','否'],['H','台幣金額','否'],['I','申購單號','否'],['J','財產類別','否'],['K','保管人（姓名）','是'],['L','保管地點','是']]" :key="'i-'+row[0]">
+                                                <template x-for="row in [['物品編號','是'],['物品名稱','是'],['產品序號','否'],['型號/廠牌','否'],['取得日期','否'],['使用年限','否'],['單位','否'],['台幣金額','否'],['申購單號','否'],['財產類別','否'],['保管人（姓名）','是'],['保管地點','是']]" :key="'i-'+row[0]">
                                                     <tr class="border-b border-slate-100">
                                                         <td class="px-3 py-2 font-mono text-slate-500" x-text="row[0]"></td>
                                                         <td class="px-3 py-2" x-text="row[1]"></td>
-                                                        <td class="px-3 py-2" x-text="row[2]"></td>
                                                     </tr>
                                                 </template>
                                             </tbody>
