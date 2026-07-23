@@ -695,11 +695,11 @@ document.addEventListener('alpine:init', function () {
 </template>
 
 <!-- ===== AddAssetModal ===== -->
+<style scoped>
+    .add-asset-modal-tab-active { border-bottom-width: 2px; border-bottom-color: #10b981; color: #065f46; font-weight: 600; }
+    .add-asset-modal-tab-inactive { border-bottom-width: 2px; border-bottom-color: transparent; color: #64748b; font-weight: 500; }
+</style>
 <template x-if="$store.app.showAddAssetModal && $store.app.isAdminView">
-    <style scoped>
-        .add-asset-modal-tab-active { border-bottom-width: 2px; border-bottom-color: #10b981; color: #065f46; font-weight: 600; }
-        .add-asset-modal-tab-inactive { border-bottom-width: 2px; border-bottom-color: transparent; color: #64748b; font-weight: 500; }
-    </style>
     <div x-data="addAssetModal">
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
