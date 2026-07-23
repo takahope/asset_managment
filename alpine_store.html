@@ -2101,7 +2101,7 @@
                 var asset = this.actionPanelState.asset || this.resolveAssetDetail(this.actionPanelState.assetId);
                 if (!asset || !asset.assetId) { this.toastOrAlert('尚未選擇資產', 'warning'); return; }
 
-                var actionSummaryText = errorType === 'keeper' ? '保管人有誤' : '位置有誤';
+                var actionSummaryText = errorType === 'keeper' ? '保管人有誤' : errorType === 'tag' ? '標籤有誤' : '位置有誤';
 
                 if (this.locationErrorMode === 'queue') {
                     if (window.AssetCartStore) {
@@ -2120,9 +2120,14 @@
                 }
 
                 // immediate 模式：確認後立即送出
-                var confirmMsg = errorType === 'keeper' 
-                    ? '確定標記「' + (asset.assetName || asset.assetId) + '」保管人有誤？\n系統保管人：' + (asset.leader || asset.keeperName || '（無）')
-                    : '確定標記「' + (asset.assetName || asset.assetId) + '」位置有誤？\n系統位置：' + (asset.location || '（無）');
+                var confirmMsg;
+                if (errorType === 'keeper') {
+                    confirmMsg = '確定標記「' + (asset.assetName || asset.assetId) + '」保管人有誤？\n系統保管人：' + (asset.leader || asset.keeperName || '（無）');
+                } else if (errorType === 'tag') {
+                    confirmMsg = '確定標記「' + (asset.assetName || asset.assetId) + '」標籤有誤？';
+                } else {
+                    confirmMsg = '確定標記「' + (asset.assetName || asset.assetId) + '」位置有誤？\n系統位置：' + (asset.location || '（無）');
+                }
                 confirmMsg += '\n\n' + (this.userEmailNotifyEnabled ? '信件通知已開啟，將寄信通知保管人與使用人。' : '信件通知已關閉，僅紀錄。');
                 if (!confirm(confirmMsg)) return;
                 

@@ -4269,13 +4269,17 @@ function sendLocationErrorNotifications_(records) {
       if (!target || notifiedEmails.has(target.toLowerCase())) return;
       notifiedEmails.add(target.toLowerCase());
       
-      const isKeeperError = record.errorType === 'keeper';
-      const subject = isKeeperError 
-        ? `[財產狀態確認] 您的財產「${record.assetName}」保管人需確認` 
+      const et = record.errorType;
+      const subject = et === 'keeper'
+        ? `[財產狀態確認] 您的財產「${record.assetName}」保管人需確認`
+        : et === 'tag'
+        ? `[財產狀態確認] 您的財產「${record.assetName}」標籤需確認`
         : `[財產狀態確認] 您的財產「${record.assetName}」位置需確認`;
         
-      let body = isKeeperError
+      let body = et === 'keeper'
         ? `您好，\n\n系統盤點發現此財產的保管人可能有誤，請您確認實際狀況，若須變更請前往系統申請保管人轉移：\n\n`
+        : et === 'tag'
+        ? `您好，\n\n系統盤點發現此財產的標籤可能有誤，請您確認財產標籤是否與系統一致，若不符請聯繫管理員更正：\n\n`
         : `您好，\n\n系統盤點發現以下財產可能不在系統顯示的位置，請您確認實際位置，若有異動請前往系統申請財產轉移，或將其移動至原地點：\n\n`;
         
       body += `財產編號：${record.assetId}\n`;
@@ -4307,7 +4311,7 @@ function flagLocationError(assetId, errorType) {
     if (isUserEmailEnabled()) {
       notified = sendLocationErrorNotifications_([record]);
     }
-    const typeLabel = (record.errorType === 'keeper') ? '保管人有誤' : '位置有誤';
+    const typeLabel = record.errorType === 'keeper' ? '保管人有誤' : record.errorType === 'tag' ? '標籤有誤' : '位置有誤';
     return notified > 0
       ? `✅ 已標記「${record.assetName}」${typeLabel}，並通知 ${notified} 人。`
       : `✅ 已標記「${record.assetName}」${typeLabel}（未寄信，已留存待確認紀錄）。`;
@@ -4456,7 +4460,7 @@ function exportResolvedLocationErrors() {
       if (key.indexOf('RESOLVED_LOCERR_') === 0) {
         try {
           const record = JSON.parse(allProps[key]);
-          const errorTypeStr = record.errorType === 'keeper' ? '保管人有誤' : '位置有誤';
+          const errorTypeStr = record.errorType === 'keeper' ? '保管人有誤' : record.errorType === 'tag' ? '標籤有誤' : '位置有誤';
           // 欄位順序：財產編號, 財產名稱, 財產位置, 保管人, 錯誤類型, 標記時間, 處理人信箱, 處理時間
           rowsToWrite.push([
             record.assetId || '',

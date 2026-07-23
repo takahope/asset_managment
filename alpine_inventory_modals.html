@@ -133,6 +133,7 @@
                             <button type="button" class="action-panel__button action-panel__button--scrap" :disabled="!hasAsset" @click="$store.app.openQueueActionModal('SCRAP')"><i class="fa-regular fa-trash-can"></i>報廢</button>
                             <button type="button" class="action-panel__button action-panel__button--location-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('position')"><i class="fa-solid fa-location-dot"></i>位置有誤</button>
                             <button type="button" class="action-panel__button action-panel__button--keeper-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('keeper')"><i class="fa-solid fa-user-tag"></i>保管人有誤</button>
+                            <button type="button" class="action-panel__button action-panel__button--tag-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('tag')"><i class="fa-solid fa-tag"></i>標籤有誤</button>
                         </div>
                         <template x-if="hasInventoryTask">
                             <div>

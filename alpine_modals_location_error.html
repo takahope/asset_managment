@@ -5,7 +5,7 @@
      @click.self="$store.app.activeModal = null">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
     <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-      <h3 class="text-base font-semibold text-slate-800"><span class="mr-2">📍</span>需確認財產（位置/保管人有誤）</h3>
+      <h3 class="text-base font-semibold text-slate-800"><span class="mr-2">📍</span>需確認財產（位置/保管人/標籤有誤）</h3>
       <button class="text-slate-400 hover:text-slate-600" @click="$store.app.activeModal = null" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="flex-1 overflow-y-auto p-5">
@@ -26,8 +26,8 @@
                 </div>
                 <div class="text-xs mt-0.5 flex items-center gap-1.5">
                   <span class="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
-                        :class="rec.errorType === 'keeper' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'"
-                        x-text="rec.errorType === 'keeper' ? '保管人有誤' : '位置有誤'"></span>
+                        :class="rec.errorType === 'keeper' ? 'bg-rose-100 text-rose-700' : rec.errorType === 'tag' ? 'loc-err-badge--tag' : 'bg-amber-100 text-amber-700'"
+                        x-text="rec.errorType === 'keeper' ? '保管人有誤' : rec.errorType === 'tag' ? '標籤有誤' : '位置有誤'"></span>
                   <span class="text-slate-500">系統位置：<span x-text="rec.systemLocation || '（無）'"></span></span>
                 </div>
                 <div class="text-xs text-slate-400 mt-0.5" x-text="'標記時間：' + (rec.flaggedAt ? new Date(rec.flaggedAt).toLocaleString('zh-TW') : '')"></div>

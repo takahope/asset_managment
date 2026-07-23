@@ -105,6 +105,7 @@ document.addEventListener('alpine:init', function () {
     Alpine.data('addAssetModal', function () {
         return {
             isLoading: true, isSubmitting: false, dropdownData: null, showBatchImportGuide: false,
+            activeTab: 'single', batchImportType: 'excel',
             assetType: 'property', assetId: '', assetName: '', modelBrand: '', category: '',
             purchaseDate: '', useLife: '', isItAsset: false, isActuallyComputer: false, isIsoScope: false,
             location: '', keeperEmail: '', userEmail: '', remarks: '',
@@ -130,6 +131,13 @@ document.addEventListener('alpine:init', function () {
                 });
             },
             close: function () { this.$store.app.showAddAssetModal = false; },
+            switchTab: function(tab) {
+                this.activeTab = tab;
+                this.batchImportError = '';
+                this.previewData = null;
+                this.batchFile = null;
+                if (this.$refs.batchFileInput) this.$refs.batchFileInput.value = '';
+            },
             get sortedKeepers() {
                 var kd = this.dropdownData && this.dropdownData.keepers;
                 if (!kd) return [];
@@ -351,6 +359,14 @@ document.addEventListener('alpine:init', function () {
             },
             handleBatchFileChange: function (event) {
                 this.batchFile = (event.target.files && event.target.files[0]) || null;
+                if (this.batchFile) {
+                    var fname = this.batchFile.name.toLowerCase();
+                    if (fname.endsWith('.csv')) {
+                        this.batchImportType = 'csv';
+                    } else if (fname.endsWith('.xlsx')) {
+                        this.batchImportType = 'excel';
+                    }
+                }
                 this.batchImportError = '';
                 this.batchImportResult = null;
                 this.previewData = null;
@@ -358,6 +374,7 @@ document.addEventListener('alpine:init', function () {
             cancelPreview: function () {
                 this.previewData = null;
                 this.batchFile = null;
+                if (this.$refs.batchFileInput) this.$refs.batchFileInput.value = '';
             },
             handlePreviewImport: function () {
                 var self = this;
@@ -679,6 +696,10 @@ document.addEventListener('alpine:init', function () {
 
 <!-- ===== AddAssetModal ===== -->
 <template x-if="$store.app.showAddAssetModal && $store.app.isAdminView">
+    <style scoped>
+        .add-asset-modal-tab-active { border-bottom-width: 2px; border-bottom-color: #10b981; color: #065f46; font-weight: 600; }
+        .add-asset-modal-tab-inactive { border-bottom-width: 2px; border-bottom-color: transparent; color: #64748b; font-weight: 500; }
+    </style>
     <div x-data="addAssetModal">
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
@@ -690,6 +711,14 @@ document.addEventListener('alpine:init', function () {
                         <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>
+                <div class="flex border-b border-slate-200 px-6 pt-2 bg-slate-50">
+                    <button @click="switchTab('single')" type="button" class="px-4 py-2 transition-colors mr-2" :class="activeTab === 'single' ? 'add-asset-modal-tab-active' : 'add-asset-modal-tab-inactive hover:text-slate-800'">
+                        單筆新增
+                    </button>
+                    <button @click="switchTab('batch')" type="button" class="px-4 py-2 transition-colors" :class="activeTab === 'batch' ? 'add-asset-modal-tab-active' : 'add-asset-modal-tab-inactive hover:text-slate-800'">
+                        批次匯入
+                    </button>
+                </div>
                 <div class="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)]">
                     <template x-if="isLoading">
                         <div class="flex flex-col items-center justify-center py-12 gap-4">
@@ -698,215 +727,251 @@ document.addEventListener('alpine:init', function () {
                         </div>
                     </template>
                     <template x-if="!isLoading">
-                        <div class="space-y-6">
-                            <!-- 批次匯入 -->
-                            <div class="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                                <div class="flex items-center justify-between gap-3 mb-2">
-                                    <div class="font-medium text-emerald-800"><i class="fas fa-file-import mr-2"></i>批次匯入</div>
-                                    <button type="button" @click="showBatchImportGuide = true" class="text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors">
-                                        <i class="fa-regular fa-circle-question mr-1"></i>使用說明
-                                    </button>
-                                </div>
-                                <p class="text-sm text-slate-600 mb-4">支援 Excel/CSV，需使用匯出相同欄位順序。請依照新舊系統將工作表名稱改為“財產總表”或“物品總表”</p>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">檔案</label>
-                                        <input type="file" accept=".xlsx,.csv" @change="handleBatchFileChange($event)" :disabled="isBatchImporting || isSubmitting" class="w-full text-sm">
-                                        <p class="text-xs text-slate-500 mt-1" x-show="batchFile" x-text="batchFile ? '已選擇：' + batchFile.name : ''"></p>
+                        <div>
+                            <!-- 批次匯入區塊 -->
+                            <div x-show="activeTab === 'batch'" class="space-y-6">
+                                <div class="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                                    <div class="flex items-center justify-between gap-3 mb-2">
+                                        <div class="font-medium text-emerald-800"><i class="fas fa-file-import mr-2"></i>批次匯入</div>
+                                        <button type="button" @click="showBatchImportGuide = true" class="text-sm font-semibold text-emerald-700 hover:text-emerald-900 transition-colors">
+                                            <i class="fa-regular fa-circle-question mr-1"></i>使用說明
+                                        </button>
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">請選擇財產類別</label>
-                                        <select x-model="propertyCategoryForImport" :disabled="isBatchImporting || isSubmitting" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                            <template x-for="option in propertyCategoryOptions" :key="option"><option :value="option" x-text="option"></option></template>
-                                        </select>
-                                        <p class="text-xs text-slate-500 mt-1">CSV，請在下方「系統類別」選擇新系統或舊系統。</p>
-                                    </div>
-                                    <div class="flex items-end">
-                                        <button type="button" @click="handlePreviewImport()" :disabled="isBatchImporting || isSubmitting"
-                                                class="w-full px-4 py-2 rounded-lg text-white font-medium transition-colors"
-                                                :class="(isBatchImporting || isSubmitting) ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'"
-                                                x-text="isBatchImporting ? '分析中...' : '上傳並分析差異'"></button>
-                                    </div>
-                                </div>
-                                <div class="mt-3 text-sm text-red-600" x-show="batchImportError">
-                                    <i class="fa-solid fa-triangle-exclamation mr-2"></i><span x-text="batchImportError"></span>
-                                </div>
-                                <!-- Preview UI -->
-                                <template x-if="previewData">
-                                    <div class="mt-4 p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
-                                        <h4 class="font-bold text-slate-700 mb-3 text-base border-b pb-2">比對結果預覽</h4>
-                                        
-                                        <template x-if="previewData.newAssets.length > 0">
-                                            <div class="mb-4">
-                                                <div class="font-bold text-emerald-700 mb-2 flex items-center bg-emerald-50 px-3 py-1.5 rounded">
-                                                    <i class="fa-solid fa-plus-circle mr-2"></i> 新增資料 (<span x-text="previewData.newAssets.length"></span>)
-                                                </div>
-                                                <div class="max-h-40 overflow-y-auto pl-2">
-                                                    <ul class="list-disc pl-5 text-sm text-slate-600">
-                                                        <template x-for="item in previewData.newAssets">
-                                                            <li><span class="font-medium" x-text="item.assetId"></span> - <span x-text="item.assetName"></span></li>
-                                                        </template>
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        </template>
-
-                                        <template x-if="previewData.updatedAssets.length > 0">
-                                            <div class="mb-4">
-                                                <div class="font-bold text-blue-700 mb-2 flex items-center bg-blue-50 px-3 py-1.5 rounded">
-                                                    <i class="fa-solid fa-pen-to-square mr-2"></i> 更新資料 (<span x-text="previewData.updatedAssets.length"></span>)
-                                                </div>
-                                                <div class="max-h-60 overflow-y-auto pl-2 space-y-3">
-                                                    <template x-for="item in previewData.updatedAssets">
-                                                        <div class="bg-slate-50 border border-slate-200 p-2 rounded text-sm">
-                                                            <div class="font-medium text-slate-800 mb-1"><span x-text="item.assetId"></span> - <span x-text="item.assetName"></span></div>
-                                                            <ul class="list-disc pl-5 text-slate-600">
-                                                                <template x-for="change in item.changes">
-                                                                    <li><span class="font-medium" x-text="change.field"></span>: <del class="text-rose-500 mr-1" x-text="change.oldVal || '(空)'"></del> <i class="fa-solid fa-arrow-right text-slate-400 mx-1 text-xs"></i> <span class="text-emerald-600 font-medium" x-text="change.newVal"></span></li>
-                                                                </template>
-                                                            </ul>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </div>
-                                        </template>
-
-                                        <template x-if="previewData.errorAssets.length > 0">
-                                            <div class="mb-4">
-                                                <div class="font-bold text-rose-700 mb-2 flex items-center bg-rose-50 px-3 py-1.5 rounded">
-                                                    <i class="fa-solid fa-circle-exclamation mr-2"></i> 錯誤/略過 (<span x-text="previewData.errorAssets.length"></span>)
-                                                </div>
-                                                <div class="max-h-40 overflow-y-auto pl-2">
-                                                    <ul class="list-disc pl-5 text-sm text-slate-600">
-                                                        <template x-for="item in previewData.errorAssets">
-                                                            <li><span class="font-medium" x-text="item.assetId || '未提供'"></span>: <span class="text-rose-600" x-text="item.reason"></span></li>
-                                                        </template>
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        </template>
-
-                                        <div class="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100" x-show="previewData.newAssets.length > 0 || previewData.updatedAssets.length > 0">
-                                            <button @click="cancelPreview()" type="button" class="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors">
-                                                取消，重新上傳
-                                            </button>
-                                            <button @click="commitImport()" type="button" :disabled="isBatchImporting" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center">
-                                                <i class="fa-solid fa-check mr-2"></i>確認覆寫並寫入
-                                            </button>
-                                        </div>
-                                        <div class="mt-4 pt-4 border-t text-sm text-slate-500 text-center" x-show="previewData.newAssets.length === 0 && previewData.updatedAssets.length === 0">
-                                            未找到任何可以新增或更新的資料。
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-
-                            <!-- 系統類別 -->
-                            <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                                <div class="font-medium text-slate-700 mb-3"><i class="fas fa-folder-open mr-2 text-slate-500"></i>系統類別</div>
-                                <div class="flex gap-6">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="addAssetType" value="property" x-model="assetType" class="mr-2">
-                                        <span>新系統</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="addAssetType" value="item" x-model="assetType" class="mr-2">
-                                        <span>舊系統</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- 基本資料 -->
-                            <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                                <div class="font-medium text-slate-700 mb-3"><i class="fas fa-info-circle mr-2 text-slate-500"></i>基本資料</div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">編號 <span class="text-red-500">*</span></label>
-                                        <input type="text" x-model="assetId" placeholder="例如：A1120001" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                        <p class="text-xs text-slate-500 mt-1">系統將檢查唯一性</p>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">名稱 <span class="text-red-500">*</span></label>
-                                        <input type="text" x-model="assetName" placeholder="例如：ASUS 筆記型電腦" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">型號/廠牌</label>
-                                        <input type="text" x-model="modelBrand" placeholder="例如：ASUS VivoBook 15" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">類別</label>
-                                        <input type="text" x-model="category" list="add-asset-category-list" placeholder="選擇或輸入類別" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                        <datalist id="add-asset-category-list">
-                                            <template x-for="cat in ((dropdownData && dropdownData.categories) || [])" :key="cat"><option :value="cat"></option></template>
-                                        </datalist>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">取得日期</label>
-                                        <input type="date" x-model="purchaseDate" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">使用年限（年）</label>
-                                        <input type="number" x-model="useLife" min="0" placeholder="例如：3" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                    </div>
-                                </div>
-                                <div class="mt-4 p-3 bg-white rounded-lg border border-slate-200">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="checkbox" x-model="isItAsset" class="mr-2 w-4 h-4">
-                                        <span class="font-medium text-slate-700">此設備是否為資訊資產？</span>
-                                    </label>
-                                    <template x-if="isItAsset">
-                                        <div class="ml-6 mt-3 space-y-2">
+                                    <p class="text-sm text-slate-600 mb-4">支援 Excel/CSV，需使用匯出相同欄位順序。請依照新舊系統將工作表名稱改為“財產總表”或“物品總表”</p>
+                                    
+                                    <div class="mb-4">
+                                        <label class="block text-sm font-medium text-slate-600 mb-2">匯入檔案格式</label>
+                                        <div class="flex gap-4">
                                             <label class="flex items-center cursor-pointer">
-                                                <input type="checkbox" x-model="isActuallyComputer" class="mr-2 w-4 h-4">
-                                                <span class="text-slate-600">此設備為電腦主機/筆電</span>
+                                                <input type="radio" name="batchImportType" value="excel" x-model="batchImportType" class="mr-2">
+                                                <span class="text-sm">Excel (.xlsx)</span>
                                             </label>
                                             <label class="flex items-center cursor-pointer">
-                                                <input type="checkbox" x-model="isIsoScope" class="mr-2 w-4 h-4">
-                                                <span class="text-slate-600">此設備是否在 ISO 驗證範圍內</span>
+                                                <input type="radio" name="batchImportType" value="csv" x-model="batchImportType" class="mr-2">
+                                                <span class="text-sm">CSV (.csv)</span>
                                             </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">檔案</label>
+                                            <input type="file" :accept="batchImportType === 'csv' ? '.csv' : '.xlsx'" x-ref="batchFileInput" @change="handleBatchFileChange($event)" :disabled="isBatchImporting || isSubmitting" class="w-full text-sm">
+                                            <p class="text-xs text-slate-500 mt-1" x-show="batchFile" x-text="batchFile ? '已選擇：' + batchFile.name : ''"></p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">請選擇財產類別</label>
+                                            <select x-model="propertyCategoryForImport" :disabled="isBatchImporting || isSubmitting" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                                <template x-for="option in propertyCategoryOptions" :key="option"><option :value="option" x-text="option"></option></template>
+                                            </select>
+                                        </div>
+                                        <div class="flex items-end">
+                                            <button type="button" @click="handlePreviewImport()" :disabled="isBatchImporting || isSubmitting"
+                                                    class="w-full px-4 py-2 rounded-lg text-white font-medium transition-colors"
+                                                    :class="(isBatchImporting || isSubmitting) ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'"
+                                                    x-text="isBatchImporting ? '分析中...' : '上傳並分析差異'"></button>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 text-sm text-red-600" x-show="batchImportError">
+                                        <i class="fa-solid fa-triangle-exclamation mr-2"></i><span x-text="batchImportError"></span>
+                                    </div>
+                                    <!-- Preview UI -->
+                                    <template x-if="previewData">
+                                        <div class="mt-4 p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
+                                            <h4 class="font-bold text-slate-700 mb-3 text-base border-b pb-2">比對結果預覽</h4>
+                                            
+                                            <template x-if="previewData.newAssets.length > 0">
+                                                <div class="mb-4">
+                                                    <div class="font-bold text-emerald-700 mb-2 flex items-center bg-emerald-50 px-3 py-1.5 rounded">
+                                                        <i class="fa-solid fa-plus-circle mr-2"></i> 新增資料 (<span x-text="previewData.newAssets.length"></span>)
+                                                    </div>
+                                                    <div class="max-h-40 overflow-y-auto pl-2">
+                                                        <ul class="list-disc pl-5 text-sm text-slate-600">
+                                                            <template x-for="item in previewData.newAssets">
+                                                                <li><span class="font-medium" x-text="item.assetId"></span> - <span x-text="item.assetName"></span></li>
+                                                            </template>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <template x-if="previewData.updatedAssets.length > 0">
+                                                <div class="mb-4">
+                                                    <div class="font-bold text-blue-700 mb-2 flex items-center bg-blue-50 px-3 py-1.5 rounded">
+                                                        <i class="fa-solid fa-pen-to-square mr-2"></i> 更新資料 (<span x-text="previewData.updatedAssets.length"></span>)
+                                                    </div>
+                                                    <div class="max-h-60 overflow-y-auto pl-2 space-y-3">
+                                                        <template x-for="item in previewData.updatedAssets">
+                                                            <div class="bg-slate-50 border border-slate-200 p-2 rounded text-sm">
+                                                                <div class="font-medium text-slate-800 mb-1"><span x-text="item.assetId"></span> - <span x-text="item.assetName"></span></div>
+                                                                <ul class="list-disc pl-5 text-slate-600">
+                                                                    <template x-for="change in item.changes">
+                                                                        <li><span class="font-medium" x-text="change.field"></span>: <del class="text-rose-500 mr-1" x-text="change.oldVal || '(空)'"></del> <i class="fa-solid fa-arrow-right text-slate-400 mx-1 text-xs"></i> <span class="text-emerald-600 font-medium" x-text="change.newVal"></span></li>
+                                                                    </template>
+                                                                </ul>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <template x-if="previewData.errorAssets.length > 0">
+                                                <div class="mb-4">
+                                                    <div class="font-bold text-rose-700 mb-2 flex items-center bg-rose-50 px-3 py-1.5 rounded">
+                                                        <i class="fa-solid fa-circle-exclamation mr-2"></i> 錯誤/略過 (<span x-text="previewData.errorAssets.length"></span>)
+                                                    </div>
+                                                    <div class="max-h-40 overflow-y-auto pl-2">
+                                                        <ul class="list-disc pl-5 text-sm text-slate-600">
+                                                            <template x-for="item in previewData.errorAssets">
+                                                                <li><span class="font-medium" x-text="item.assetId || '未提供'"></span>: <span class="text-rose-600" x-text="item.reason"></span></li>
+                                                            </template>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <div class="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100" x-show="previewData.newAssets.length > 0 || previewData.updatedAssets.length > 0">
+                                                <button @click="cancelPreview()" type="button" class="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors">
+                                                    取消，重新上傳
+                                                </button>
+                                                <button @click="commitImport()" type="button" :disabled="isBatchImporting" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center">
+                                                    <i class="fa-solid fa-check mr-2"></i>確認覆寫並寫入
+                                                </button>
+                                            </div>
+                                            <div class="mt-4 pt-4 border-t text-sm text-slate-500 text-center" x-show="previewData.newAssets.length === 0 && previewData.updatedAssets.length === 0">
+                                                未找到任何可以新增或更新的資料。
+                                            </div>
                                         </div>
                                     </template>
                                 </div>
+
+                                <!-- CSV 專用系統類別 -->
+                                <div class="p-4 bg-slate-50 rounded-lg border border-slate-200 mt-4" x-show="batchImportType === 'csv'">
+                                    <div class="font-medium text-slate-700 mb-3">
+                                        <i class="fas fa-folder-open mr-2 text-slate-500"></i>匯入目標系統類別 (CSV 必選)
+                                    </div>
+                                    <div class="flex gap-6">
+                                        <label class="flex items-center cursor-pointer">
+                                            <input type="radio" name="addAssetTypeBatch" value="property" x-model="assetType" class="mr-2">
+                                            <span>新系統 (財產)</span>
+                                        </label>
+                                        <label class="flex items-center cursor-pointer">
+                                            <input type="radio" name="addAssetTypeBatch" value="item" x-model="assetType" class="mr-2">
+                                            <span>舊系統 (物品)</span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
 
-                            <!-- 保管與位置 -->
-                            <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                                <div class="font-medium text-slate-700 mb-3"><i class="fas fa-map-marker-alt mr-2 text-slate-500"></i>保管與位置</div>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">保管地點 <span class="text-red-500">*</span></label>
-                                        <select x-model="location" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                            <option value="">請選擇地點...</option>
-                                            <template x-for="loc in ((dropdownData && dropdownData.locations) || [])" :key="loc"><option :value="loc" x-text="loc"></option></template>
-                                        </select>
+                            <!-- 單筆新增區塊 -->
+                            <div x-show="activeTab === 'single'" class="space-y-6">
+                                <!-- 系統類別 -->
+                                <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div class="font-medium text-slate-700 mb-3"><i class="fas fa-folder-open mr-2 text-slate-500"></i>系統類別</div>
+                                    <div class="flex gap-6">
+                                        <label class="flex items-center cursor-pointer">
+                                            <input type="radio" name="addAssetType" value="property" x-model="assetType" class="mr-2">
+                                            <span>新系統</span>
+                                        </label>
+                                        <label class="flex items-center cursor-pointer">
+                                            <input type="radio" name="addAssetType" value="item" x-model="assetType" class="mr-2">
+                                            <span>舊系統</span>
+                                        </label>
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-600 mb-1">保管人 <span class="text-red-500">*</span></label>
-                                        <select :value="keeperEmail" @change="onKeeperChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                            <option value="">請選擇保管人...</option>
-                                            <template x-for="entry in sortedKeepers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1] + ' (' + entry[0] + ')'"></option></template>
-                                        </select>
-                                    </div>
-                                    <template x-if="assetType === 'property'">
+                                </div>
+
+                                <!-- 基本資料 -->
+                                <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div class="font-medium text-slate-700 mb-3"><i class="fas fa-info-circle mr-2 text-slate-500"></i>基本資料</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label class="block text-sm font-medium text-slate-600 mb-1">使用人（預設同保管人）</label>
-                                            <select x-model="userEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-                                                <option value="">同保管人</option>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">編號 <span class="text-red-500">*</span></label>
+                                            <input type="text" x-model="assetId" placeholder="例如：A1120001" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                            <p class="text-xs text-slate-500 mt-1">系統將檢查唯一性</p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">名稱 <span class="text-red-500">*</span></label>
+                                            <input type="text" x-model="assetName" placeholder="例如：ASUS 筆記型電腦" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">型號/廠牌</label>
+                                            <input type="text" x-model="modelBrand" placeholder="例如：ASUS VivoBook 15" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">類別</label>
+                                            <input type="text" x-model="category" list="add-asset-category-list" placeholder="選擇或輸入類別" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                            <datalist id="add-asset-category-list">
+                                                <template x-for="cat in ((dropdownData && dropdownData.categories) || [])" :key="cat"><option :value="cat"></option></template>
+                                            </datalist>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">取得日期</label>
+                                            <input type="date" x-model="purchaseDate" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">使用年限（年）</label>
+                                            <input type="number" x-model="useLife" min="0" placeholder="例如：3" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 p-3 bg-white rounded-lg border border-slate-200">
+                                        <label class="flex items-center cursor-pointer">
+                                            <input type="checkbox" x-model="isItAsset" class="mr-2 w-4 h-4">
+                                            <span class="font-medium text-slate-700">此設備是否為資訊資產？</span>
+                                        </label>
+                                        <template x-if="isItAsset">
+                                            <div class="ml-6 mt-3 space-y-2">
+                                                <label class="flex items-center cursor-pointer">
+                                                    <input type="checkbox" x-model="isActuallyComputer" class="mr-2 w-4 h-4">
+                                                    <span class="text-slate-600">此設備為電腦主機/筆電</span>
+                                                </label>
+                                                <label class="flex items-center cursor-pointer">
+                                                    <input type="checkbox" x-model="isIsoScope" class="mr-2 w-4 h-4">
+                                                    <span class="text-slate-600">此設備是否在 ISO 驗證範圍內</span>
+                                                </label>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- 保管與位置 -->
+                                <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div class="font-medium text-slate-700 mb-3"><i class="fas fa-map-marker-alt mr-2 text-slate-500"></i>保管與位置</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">保管地點 <span class="text-red-500">*</span></label>
+                                            <select x-model="location" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                                <option value="">請選擇地點...</option>
+                                                <template x-for="loc in ((dropdownData && dropdownData.locations) || [])" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-600 mb-1">保管人 <span class="text-red-500">*</span></label>
+                                            <select :value="keeperEmail" @change="onKeeperChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                                <option value="">請選擇保管人...</option>
                                                 <template x-for="entry in sortedKeepers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1] + ' (' + entry[0] + ')'"></option></template>
                                             </select>
                                         </div>
-                                    </template>
+                                        <template x-if="assetType === 'property'">
+                                            <div>
+                                                <label class="block text-sm font-medium text-slate-600 mb-1">使用人（預設同保管人）</label>
+                                                <select x-model="userEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                                    <option value="">同保管人</option>
+                                                    <template x-for="entry in sortedKeepers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1] + ' (' + entry[0] + ')'"></option></template>
+                                                </select>
+                                            </div>
+                                        </template>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div>
-                                <label class="block text-sm font-medium text-slate-600 mb-1">備註</label>
-                                <textarea x-model="remarks" rows="3" placeholder="選填..." class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"></textarea>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-600 mb-1">備註</label>
+                                    <textarea x-model="remarks" rows="3" placeholder="選填..." class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"></textarea>
+                                </div>
                             </div>
                         </div>
                     </template>
                 </div>
-                <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
+                <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3" x-show="activeTab === 'single'">
                     <button @click="close()" :disabled="isSubmitting" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50">取消</button>
                     <button @click="handleSubmit()" :disabled="isSubmitting || isLoading" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                         <template x-if="isSubmitting"><span class="flex items-center gap-2"><span class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span><span>新增中...</span></span></template>
