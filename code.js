@@ -6883,6 +6883,411 @@ function addNewAssetsBatch(payload) {
 
 
 /**
+ * ✨ [新增] 供 userstate.html 呼叫的「比對分析」API
+ * 回傳 previewData 物件，供前端顯示差異
+ */
+function previewAssetsBatch(payload) {
+  try {
+    if (!checkAdminPermissions()) {
+      return { error: '您沒有權限執行此操作' };
+    }
+
+    const propertyRows = Array.isArray(payload?.propertyRows) ? payload.propertyRows : [];
+    const itemRows = Array.isArray(payload?.itemRows) ? payload.itemRows : [];
+    const propertyCategory = String(payload?.propertyCategory || '').trim();
+
+    if (propertyRows.length === 0 && itemRows.length === 0) {
+      return { newAssets: [], updatedAssets: [], errorAssets: [] };
+    }
+
+    if (propertyRows.length > 0) {
+      const allowedCategories = { '財產': true, '非消耗品': true };
+      if (!propertyCategory || !allowedCategories[propertyCategory]) {
+        return { error: '請選擇正確的財產類別' };
+      }
+    }
+
+    const existingAssets = getAllAssets();
+    const existingMap = new Map();
+    existingAssets.forEach(a => {
+      const id = String(a.assetId || '').trim();
+      if (id) existingMap.set(id, a);
+    });
+    
+    const incomingIdSet = new Set();
+
+    const directory = getKeeperDirectory_();
+    if (!directory.allEmails.length) {
+      return { error: '找不到保管人名單，無法比對' };
+    }
+    const nameToEmail = {};
+    const duplicateNames = new Set();
+    directory.allEmails.forEach(email => {
+      const name = String(directory.emailToName[email] || '').trim();
+      if (!name) return;
+      if (nameToEmail[name] && nameToEmail[name] !== email) {
+        duplicateNames.add(name);
+        return;
+      }
+      nameToEmail[name] = email;
+    });
+
+    const normalizeText = (value) => String(value || '').trim();
+    const resolveNameEmail = (name, label, errors) => {
+      const normalizedName = normalizeText(name);
+      if (!normalizedName) {
+        errors.push(`${label}必填`);
+        return '';
+      }
+      if (normalizedName.includes('@')) {
+        errors.push(`${label}請填姓名`);
+        return '';
+      }
+      if (duplicateNames.has(normalizedName)) {
+        errors.push(`${label}姓名重複，請改用唯一姓名`);
+        return '';
+      }
+      const email = nameToEmail[normalizedName];
+      if (!email) {
+        errors.push(`${label}不在名單中`);
+        return '';
+      }
+      return email;
+    };
+
+    const newAssets = [];
+    const updatedAssets = [];
+    const errorAssets = [];
+
+    const processRow = (row, type) => {
+      const errors = [];
+      const assetId = normalizeText(row.assetId);
+      const assetName = normalizeText(row.assetName);
+      const location = normalizeText(row.location);
+      
+      if (!assetId) {
+        errorAssets.push({ assetId, assetName, reason: '編號必填', type });
+        return;
+      }
+      
+      const isExisting = existingMap.has(assetId);
+      const existingData = isExisting ? existingMap.get(assetId) : null;
+      
+      if (!isExisting) {
+          if (!assetName) errors.push('名稱必填');
+          if (!location) errors.push('保管地點必填');
+          if (type === 'property') {
+              const userName = normalizeText(row.userName) || normalizeText(row.keeperName);
+              if (!userName) errors.push('使用人必填');
+              resolveNameEmail(row.keeperName, '保管人', errors);
+              resolveNameEmail(userName, '使用人', errors);
+          } else {
+              resolveNameEmail(row.keeperName, '保管人', errors);
+          }
+      } else {
+          if (normalizeText(row.keeperName)) {
+             resolveNameEmail(row.keeperName, '保管人', errors);
+          }
+          if (type === 'property' && normalizeText(row.userName)) {
+             resolveNameEmail(row.userName, '使用人', errors);
+          }
+      }
+
+      if (incomingIdSet.has(assetId)) {
+        errors.push('匯入清單內編號重複');
+      }
+      incomingIdSet.add(assetId);
+
+      if (errors.length > 0) {
+        errorAssets.push({ assetId, assetName, reason: errors.join('、'), type });
+        return;
+      }
+
+      if (!isExisting) {
+        const keeperEmail = resolveNameEmail(row.keeperName, '保管人', []);
+        let userEmail = '';
+        if (type === 'property') {
+           const userName = normalizeText(row.userName) || normalizeText(row.keeperName);
+           userEmail = resolveNameEmail(userName, '使用人', []);
+           row._resolvedUserName = userName;
+           row._resolvedUserEmail = userEmail;
+        }
+        row._resolvedKeeperEmail = keeperEmail;
+        newAssets.push({ assetId, assetName, type, rawRow: row });
+      } else {
+        const changes = [];
+        
+        const compareField = (fieldName, rawNewValue, oldVal) => {
+           const newVal = normalizeText(rawNewValue);
+           if (!newVal) return;
+           const cleanOldVal = normalizeText(oldVal);
+           let displayOldVal = cleanOldVal;
+           if (oldVal instanceof Date) {
+               displayOldVal = Utilities.formatDate(oldVal, Session.getScriptTimeZone(), "yyyy/MM/dd");
+           }
+           let displayNewVal = newVal;
+           if (newVal && newVal.includes('/') && !isNaN(Date.parse(newVal))) {
+               const parsedDate = new Date(newVal);
+               displayNewVal = Utilities.formatDate(parsedDate, Session.getScriptTimeZone(), "yyyy/MM/dd");
+               if (oldVal instanceof Date) {
+                   displayOldVal = Utilities.formatDate(oldVal, Session.getScriptTimeZone(), "yyyy/MM/dd");
+               }
+           }
+           
+           if (displayNewVal !== displayOldVal) {
+               changes.push({ field: fieldName, oldVal: displayOldVal, newVal: displayNewVal });
+           }
+        };
+
+        if (type === 'property') {
+            compareField('財產名稱', row.assetName, existingData.assetName);
+            compareField('財產別名', row.assetAlias, existingData.assetAlias);
+            compareField('型號/廠牌', row.modelBrand, existingData.modelBrand);
+            compareField('單位', row.unit, existingData.unit);
+            compareField('取得日期', row.purchaseDate, existingData.purchaseDate);
+            compareField('使用年限', row.useLife, existingData.useLife);
+            compareField('保管地點', row.location, existingData.location);
+            compareField('附屬設備', row.accessory, existingData.accessory);
+            compareField('保管人', row.keeperName, existingData.keeperName);
+            compareField('使用人', row.userName, existingData.userName);
+        } else {
+            compareField('物品名稱', row.assetName, existingData.assetName);
+            compareField('產品序號', row.productSerial, existingData.productSerial);
+            compareField('型號/廠牌', row.modelBrand, existingData.modelBrand);
+            compareField('取得日期', row.purchaseDate, existingData.purchaseDate);
+            compareField('使用年限', row.useLife, existingData.useLife);
+            compareField('單位', row.unit, existingData.unit);
+            compareField('台幣金額', row.amountTwd, existingData.amountTwd);
+            compareField('申購單號', row.purchaseOrder, existingData.purchaseOrder);
+            compareField('保管人', row.keeperName, existingData.keeperName);
+            compareField('保管地點', row.location, existingData.location);
+        }
+        
+        const finalAssetName = normalizeText(row.assetName) || existingData.assetName;
+        if (finalAssetName.includes('電腦') && existingData.isItAsset !== '是') {
+             changes.push({ field: '系統判斷', oldVal: '', newVal: '自動標記為資訊資產(電腦)' });
+        }
+
+        if (changes.length > 0) {
+            if (normalizeText(row.keeperName)) {
+                row._resolvedKeeperEmail = resolveNameEmail(row.keeperName, '保管人', []);
+            }
+            if (type === 'property' && normalizeText(row.userName)) {
+                row._resolvedUserEmail = resolveNameEmail(row.userName, '使用人', []);
+            }
+            updatedAssets.push({ assetId, assetName: existingData.assetName, changes, type, rawRow: row });
+        }
+      }
+    };
+
+    propertyRows.forEach(r => processRow(r, 'property'));
+    itemRows.forEach(r => processRow(r, 'item'));
+
+    return {
+       newAssets,
+       updatedAssets,
+       errorAssets,
+       propertyCategory
+    };
+
+  } catch (e) {
+    Logger.log(`previewAssetsBatch 失敗: ${e.message}`);
+    return { error: e.message };
+  }
+}
+
+/**
+ * ✨ [新增] 供 userstate.html 呼叫的「比對分析」確認寫入 API
+ */
+function commitAssetsBatch(finalPayload) {
+  try {
+    if (!checkAdminPermissions()) {
+      return { error: '您沒有權限執行此操作' };
+    }
+    
+    const { newAssets = [], updatedAssets = [], propertyCategory = '' } = finalPayload;
+    if (newAssets.length === 0 && updatedAssets.length === 0) {
+      return { successCount: 0 };
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const propertySheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+    const itemSheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
+    
+    let propData = [];
+    if (propertySheet && propertySheet.getLastRow() > 1) {
+       propData = propertySheet.getRange(2, 1, propertySheet.getLastRow() - 1, propertySheet.getLastColumn()).getValues();
+    }
+    const propIdToIndex = new Map();
+    propData.forEach((row, idx) => {
+       const id = String(row[PROPERTY_COLUMN_INDICES.ASSET_ID - 1] || '').trim();
+       if (id) propIdToIndex.set(id, idx);
+    });
+
+    let itemData = [];
+    if (itemSheet && itemSheet.getLastRow() > 1) {
+       itemData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, itemSheet.getLastColumn()).getValues();
+    }
+    const itemIdToIndex = new Map();
+    itemData.forEach((row, idx) => {
+       const id = String(row[ITEM_COLUMN_INDICES.ASSET_ID - 1] || '').trim();
+       if (id) itemIdToIndex.set(id, idx);
+    });
+
+    const normalizeText = (value) => String(value || '').trim();
+    const parseDateValue = (value) => {
+      if (!value) return '';
+      if (value instanceof Date) return value;
+      const normalized = normalizeText(value).replace(/-/g, '/');
+      if (!normalized) return '';
+      const parsed = new Date(normalized);
+      if (Number.isNaN(parsed.getTime())) return normalized;
+      return parsed;
+    };
+    
+    const newPropRows = [];
+    const newItemRows = [];
+
+    const assignIfPresent = (targetArray, index, value) => {
+        const val = normalizeText(value);
+        if (val) targetArray[index - 1] = val;
+    };
+    
+    updatedAssets.forEach(asset => {
+        const row = asset.rawRow;
+        const type = asset.type;
+        const assetId = asset.assetId;
+        
+        let targetArray = null;
+        if (type === 'property' && propIdToIndex.has(assetId)) {
+            targetArray = propData[propIdToIndex.get(assetId)];
+            assignIfPresent(targetArray, PROPERTY_COLUMN_INDICES.ASSET_NAME, row.assetName);
+            assignIfPresent(targetArray, PROPERTY_COLUMN_INDICES.ASSET_ALIAS, row.assetAlias);
+            assignIfPresent(targetArray, PROPERTY_COLUMN_INDICES.MODEL_BRAND, row.modelBrand);
+            assignIfPresent(targetArray, PROPERTY_COLUMN_INDICES.UNIT, row.unit);
+            if (normalizeText(row.purchaseDate)) targetArray[PROPERTY_COLUMN_INDICES.PURCHASE_DATE - 1] = parseDateValue(row.purchaseDate);
+            assignIfPresent(targetArray, PROPERTY_COLUMN_INDICES.USE_LIFE, row.useLife);
+            assignIfPresent(targetArray, PROPERTY_COLUMN_INDICES.LOCATION, row.location);
+            assignIfPresent(targetArray, PROPERTY_COLUMN_INDICES.ACCESSORY, row.accessory);
+            
+            if (row._resolvedKeeperEmail) {
+                targetArray[PROPERTY_COLUMN_INDICES.LEADER_NAME - 1] = normalizeText(row.keeperName);
+                targetArray[PROPERTY_COLUMN_INDICES.LEADER_EMAIL - 1] = row._resolvedKeeperEmail;
+            }
+            if (row._resolvedUserEmail) {
+                targetArray[PROPERTY_COLUMN_INDICES.USER_NAME - 1] = normalizeText(row.userName);
+                if (PROPERTY_COLUMN_INDICES.USER_EMAIL) {
+                    targetArray[PROPERTY_COLUMN_INDICES.USER_EMAIL - 1] = row._resolvedUserEmail;
+                }
+            }
+            
+            const finalName = targetArray[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1];
+            if (finalName && finalName.includes('電腦')) {
+                if (PROPERTY_COLUMN_INDICES.IS_IT_ASSET) targetArray[PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
+                if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) targetArray[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
+                const loc = targetArray[PROPERTY_COLUMN_INDICES.LOCATION - 1];
+                if (isStationLocation_(loc) && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
+                    targetArray[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+                }
+            }
+        } else if (type === 'item' && itemIdToIndex.has(assetId)) {
+            targetArray = itemData[itemIdToIndex.get(assetId)];
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.ASSET_NAME, row.assetName);
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.PRODUCT_SERIAL, row.productSerial);
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.MODEL_BRAND, row.modelBrand);
+            if (normalizeText(row.purchaseDate)) targetArray[ITEM_COLUMN_INDICES.PURCHASE_DATE - 1] = parseDateValue(row.purchaseDate);
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.USE_LIFE, row.useLife);
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.UNIT, row.unit);
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.AMOUNT_TWD, row.amountTwd);
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.PURCHASE_ORDER, row.purchaseOrder);
+            assignIfPresent(targetArray, ITEM_COLUMN_INDICES.LOCATION, row.location);
+            
+            if (row._resolvedKeeperEmail) {
+                targetArray[ITEM_COLUMN_INDICES.LEADER_NAME - 1] = normalizeText(row.keeperName);
+                targetArray[ITEM_COLUMN_INDICES.LEADER_EMAIL - 1] = row._resolvedKeeperEmail;
+            }
+        }
+    });
+
+    newAssets.forEach(asset => {
+        const row = asset.rawRow;
+        const type = asset.type;
+        const assetId = asset.assetId;
+        
+        if (type === 'property') {
+            const maxIndex = Math.max(...Object.values(PROPERTY_COLUMN_INDICES));
+            const values = new Array(maxIndex).fill('');
+            values[PROPERTY_COLUMN_INDICES.ASSET_ID - 1] = assetId;
+            values[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1] = normalizeText(row.assetName);
+            values[PROPERTY_COLUMN_INDICES.ASSET_ALIAS - 1] = normalizeText(row.assetAlias);
+            values[PROPERTY_COLUMN_INDICES.MODEL_BRAND - 1] = normalizeText(row.modelBrand);
+            values[PROPERTY_COLUMN_INDICES.UNIT - 1] = normalizeText(row.unit);
+            values[PROPERTY_COLUMN_INDICES.PURCHASE_DATE - 1] = parseDateValue(row.purchaseDate);
+            values[PROPERTY_COLUMN_INDICES.USE_LIFE - 1] = normalizeText(row.useLife);
+            values[PROPERTY_COLUMN_INDICES.LOCATION - 1] = normalizeText(row.location);
+            values[PROPERTY_COLUMN_INDICES.ACCESSORY - 1] = normalizeText(row.accessory);
+            values[PROPERTY_COLUMN_INDICES.LEADER_NAME - 1] = normalizeText(row.keeperName);
+            values[PROPERTY_COLUMN_INDICES.LEADER_EMAIL - 1] = row._resolvedKeeperEmail;
+            values[PROPERTY_COLUMN_INDICES.USER_NAME - 1] = row._resolvedUserName;
+            if (PROPERTY_COLUMN_INDICES.USER_EMAIL) {
+                values[PROPERTY_COLUMN_INDICES.USER_EMAIL - 1] = row._resolvedUserEmail;
+            }
+            values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = propertyCategory;
+            values[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
+            const finalName = values[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1];
+            if (finalName.includes('電腦')) {
+                if (PROPERTY_COLUMN_INDICES.IS_IT_ASSET) values[PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
+                if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
+                const loc = values[PROPERTY_COLUMN_INDICES.LOCATION - 1];
+                if (isStationLocation_(loc) && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
+                    values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+                }
+            }
+            newPropRows.push(values);
+        } else {
+            const maxIndex = Math.max(...Object.values(ITEM_COLUMN_INDICES));
+            const values = new Array(maxIndex).fill('');
+            values[ITEM_COLUMN_INDICES.ASSET_ID - 1] = assetId;
+            values[ITEM_COLUMN_INDICES.ASSET_NAME - 1] = normalizeText(row.assetName);
+            values[ITEM_COLUMN_INDICES.PRODUCT_SERIAL - 1] = normalizeText(row.productSerial);
+            values[ITEM_COLUMN_INDICES.MODEL_BRAND - 1] = normalizeText(row.modelBrand);
+            values[ITEM_COLUMN_INDICES.PURCHASE_DATE - 1] = parseDateValue(row.purchaseDate);
+            values[ITEM_COLUMN_INDICES.USE_LIFE - 1] = normalizeText(row.useLife);
+            values[ITEM_COLUMN_INDICES.UNIT - 1] = normalizeText(row.unit);
+            values[ITEM_COLUMN_INDICES.AMOUNT_TWD - 1] = normalizeText(row.amountTwd);
+            values[ITEM_COLUMN_INDICES.PURCHASE_ORDER - 1] = normalizeText(row.purchaseOrder);
+            values[ITEM_COLUMN_INDICES.ASSET_CATEGORY - 1] = normalizeText(row.assetCategory);
+            values[ITEM_COLUMN_INDICES.LEADER_NAME - 1] = normalizeText(row.keeperName);
+            values[ITEM_COLUMN_INDICES.LEADER_EMAIL - 1] = row._resolvedKeeperEmail;
+            values[ITEM_COLUMN_INDICES.LOCATION - 1] = normalizeText(row.location);
+            values[ITEM_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
+            newItemRows.push(values);
+        }
+    });
+
+    if (propData.length > 0 && propertySheet) {
+       propertySheet.getRange(2, 1, propData.length, propData[0].length).setValues(propData);
+    }
+    if (newPropRows.length > 0 && propertySheet) {
+       propertySheet.getRange(propertySheet.getLastRow() + 1, 1, newPropRows.length, newPropRows[0].length).setValues(newPropRows);
+    }
+
+    if (itemData.length > 0 && itemSheet) {
+       itemSheet.getRange(2, 1, itemData.length, itemData[0].length).setValues(itemData);
+    }
+    if (newItemRows.length > 0 && itemSheet) {
+       itemSheet.getRange(itemSheet.getLastRow() + 1, 1, newItemRows.length, newItemRows[0].length).setValues(newItemRows);
+    }
+    
+    SpreadsheetApp.flush();
+    return { successCount: newAssets.length + updatedAssets.length };
+  } catch (e) {
+    Logger.log(`commitAssetsBatch 失敗: ${e.message}`);
+    return { error: e.message };
+  }
+}
+
+/**
  * ✨ 更新單一資產的基本資訊（僅限管理員）
  * 可更新欄位：名稱、型號/廠牌、類別、取得日期、使用年限、資訊資產標記
  * @param {string} assetId - 資產編號

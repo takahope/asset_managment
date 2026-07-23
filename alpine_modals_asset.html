@@ -108,7 +108,7 @@ document.addEventListener('alpine:init', function () {
             assetType: 'property', assetId: '', assetName: '', modelBrand: '', category: '',
             purchaseDate: '', useLife: '', isItAsset: false, isActuallyComputer: false, isIsoScope: false,
             location: '', keeperEmail: '', userEmail: '', remarks: '',
-            batchFile: null, batchImportError: '', batchImportResult: null, isBatchImporting: false,
+            batchFile: null, batchImportError: '', batchImportResult: null, isBatchImporting: false, previewData: null,
             propertyCategoryForImport: '財產',
             propertyCategoryOptions: ['財產', '非消耗品'],
 
@@ -352,15 +352,21 @@ document.addEventListener('alpine:init', function () {
                 this.batchFile = (event.target.files && event.target.files[0]) || null;
                 this.batchImportError = '';
                 this.batchImportResult = null;
+                this.previewData = null;
             },
-            handleBatchImport: function () {
+            cancelPreview: function () {
+                this.previewData = null;
+                this.batchFile = null;
+            },
+            handlePreviewImport: function () {
                 var self = this;
                 if (this.isBatchImporting || this.isSubmitting) return;
                 this.batchImportError = '';
                 this.batchImportResult = null;
+                this.previewData = null;
                 if (!this.batchFile) { this.batchImportError = '請先選擇要匯入的檔案'; return; }
                 if (!this.dropdownData) { this.batchImportError = '選單資料尚未載入，請稍後再試'; return; }
-                // 匯入需 XLSX(按需載入),再解析
+                
                 window.ensureXLSX().then(function () {
                     return self.parseBatchFile(self.batchFile);
                 }).then(function (parsedResult) {
@@ -372,42 +378,61 @@ document.addEventListener('alpine:init', function () {
                         return;
                     }
                     if (propertyRows.length === 0 && itemRows.length === 0) {
-                        self.batchImportResult = { successCount: 0, failureCount: clientFailures.length, failures: clientFailures };
+                        self.batchImportError = '未找到可匯入的資料列';
                         return;
                     }
                     self.isBatchImporting = true;
-                    self.$store.app.toastProgress('正在批次匯入...');
+                    self.$store.app.toastProgress('正在分析差異...');
                     var payload = { propertyCategory: self.propertyCategoryForImport, propertyRows: propertyRows, itemRows: itemRows };
                     google.script.run
                         .withSuccessHandler(function (response) {
                             self.isBatchImporting = false;
-                            // 先判斷整批失敗,避免在錯誤情形仍顯示成功 toast
                             if (!response || response.error) {
-                                self.$store.app.toastOrAlert('❌ 匯入失敗：' + ((response && response.error) || '未知錯誤'), 'error');
-                                self.batchImportError = (response && response.error) || '匯入失敗';
+                                self.$store.app.toastOrAlert('❌ 分析失敗：' + ((response && response.error) || '未知錯誤'), 'error');
+                                self.batchImportError = (response && response.error) || '分析失敗';
                                 return;
                             }
-                            var serverFailures = Array.isArray(response.failures) ? response.failures : [];
-                            var combinedFailures = clientFailures.concat(serverFailures);
-                            var successCount = Number(response.successCount || 0);
-                            self.batchImportResult = { successCount: successCount, failureCount: combinedFailures.length, failures: combinedFailures };
-                            self.$store.app.toastOrAlert(
-                                combinedFailures.length > 0
-                                    ? ('⚠️ 匯入完成：成功 ' + successCount + ' 筆，失敗 ' + combinedFailures.length + ' 筆')
-                                    : ('✅ 匯入完成：成功 ' + successCount + ' 筆'),
-                                combinedFailures.length > 0 ? 'warning' : 'success'
-                            );
-                            if (successCount > 0) self.$store.app.handleAddAssetSuccess();
+                            if (clientFailures.length > 0) {
+                                response.errorAssets = (response.errorAssets || []).concat(clientFailures.map(function(f) {
+                                    return { assetId: f.assetId, assetName: '', reason: f.reason, type: f.assetType };
+                                }));
+                            }
+                            self.previewData = response;
+                            self.$store.app.toastOrAlert('✅ 分析完成，請查看差異', 'success');
                         })
                         .withFailureHandler(function (error) {
-                            self.$store.app.toastOrAlert('❌ 匯入失敗', 'error');
+                            self.$store.app.toastOrAlert('❌ 分析失敗', 'error');
                             self.isBatchImporting = false;
-                            self.batchImportError = (error && error.message) || '匯入失敗';
+                            self.batchImportError = (error && error.message) || '分析失敗';
                         })
-                        .addNewAssetsBatch(payload);
+                        .previewAssetsBatch(payload);
                 }).catch(function (error) {
                     self.batchImportError = (error && error.message) || '解析檔案失敗';
                 });
+            },
+            commitImport: function () {
+                var self = this;
+                if (!this.previewData) return;
+                this.isBatchImporting = true;
+                self.$store.app.toastProgress('正在寫入資料...');
+                google.script.run
+                    .withSuccessHandler(function (response) {
+                        self.isBatchImporting = false;
+                        if (!response || response.error) {
+                            self.$store.app.toastOrAlert('❌ 寫入失敗：' + ((response && response.error) || '未知錯誤'), 'error');
+                            return;
+                        }
+                        self.previewData = null;
+                        self.batchFile = null;
+                        var successCount = Number(response.successCount || 0);
+                        self.$store.app.toastOrAlert('✅ 匯入完成：成功 ' + successCount + ' 筆', 'success');
+                        if (successCount > 0) self.$store.app.handleAddAssetSuccess();
+                    })
+                    .withFailureHandler(function (error) {
+                        self.$store.app.toastOrAlert('❌ 寫入失敗', 'error');
+                        self.isBatchImporting = false;
+                    })
+                    .commitAssetsBatch(this.previewData);
             }
         };
     });
@@ -696,47 +721,81 @@ document.addEventListener('alpine:init', function () {
                                         <p class="text-xs text-slate-500 mt-1">CSV，請在下方「系統類別」選擇新系統或舊系統。</p>
                                     </div>
                                     <div class="flex items-end">
-                                        <button type="button" @click="handleBatchImport()" :disabled="isBatchImporting || isSubmitting"
+                                        <button type="button" @click="handlePreviewImport()" :disabled="isBatchImporting || isSubmitting"
                                                 class="w-full px-4 py-2 rounded-lg text-white font-medium transition-colors"
                                                 :class="(isBatchImporting || isSubmitting) ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'"
-                                                x-text="isBatchImporting ? '匯入中...' : '開始批次匯入'"></button>
+                                                x-text="isBatchImporting ? '分析中...' : '上傳並分析差異'"></button>
                                     </div>
                                 </div>
                                 <div class="mt-3 text-sm text-red-600" x-show="batchImportError">
                                     <i class="fa-solid fa-triangle-exclamation mr-2"></i><span x-text="batchImportError"></span>
                                 </div>
-                                <template x-if="batchImportResult">
-                                    <div class="mt-4 p-3 bg-white border border-slate-200 rounded-lg">
-                                        <div class="text-sm text-slate-700">
-                                            成功 <span class="font-semibold text-emerald-600" x-text="batchImportResult.successCount"></span> 筆，
-                                            失敗 <span class="font-semibold text-rose-600" x-text="batchImportResult.failureCount"></span> 筆
-                                        </div>
-                                        <template x-if="batchImportResult.failures && batchImportResult.failures.length > 0">
-                                            <div class="mt-3 max-h-40 overflow-y-auto border border-slate-200 rounded-md">
-                                                <table class="w-full text-xs">
-                                                    <thead class="bg-slate-50 sticky top-0">
-                                                        <tr>
-                                                            <th class="px-2 py-2 text-left text-slate-600 border-b">類型</th>
-                                                            <th class="px-2 py-2 text-left text-slate-600 border-b">列號</th>
-                                                            <th class="px-2 py-2 text-left text-slate-600 border-b">編號</th>
-                                                            <th class="px-2 py-2 text-left text-slate-600 border-b">原因</th>
-                                                            <th class="px-2 py-2 text-left text-slate-600 border-b">來源</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody class="divide-y divide-slate-100">
-                                                        <template x-for="(failure, index) in batchImportResult.failures" :key="(failure.assetType||'row')+'-'+(failure.rowIndex||0)+'-'+index">
-                                                            <tr>
-                                                                <td class="px-2 py-2 text-slate-600" x-text="failure.assetType || '-'"></td>
-                                                                <td class="px-2 py-2 text-slate-600" x-text="failure.rowIndex || '-'"></td>
-                                                                <td class="px-2 py-2 text-slate-600 font-mono" x-text="failure.assetId || '-'"></td>
-                                                                <td class="px-2 py-2 text-rose-600" x-text="failure.reason || '-'"></td>
-                                                                <td class="px-2 py-2 text-slate-500" x-text="failure.source || '-'"></td>
-                                                            </tr>
+                                <!-- Preview UI -->
+                                <template x-if="previewData">
+                                    <div class="mt-4 p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
+                                        <h4 class="font-bold text-slate-700 mb-3 text-base border-b pb-2">比對結果預覽</h4>
+                                        
+                                        <template x-if="previewData.newAssets.length > 0">
+                                            <div class="mb-4">
+                                                <div class="font-bold text-emerald-700 mb-2 flex items-center bg-emerald-50 px-3 py-1.5 rounded">
+                                                    <i class="fa-solid fa-plus-circle mr-2"></i> 新增資料 (<span x-text="previewData.newAssets.length"></span>)
+                                                </div>
+                                                <div class="max-h-40 overflow-y-auto pl-2">
+                                                    <ul class="list-disc pl-5 text-sm text-slate-600">
+                                                        <template x-for="item in previewData.newAssets">
+                                                            <li><span class="font-medium" x-text="item.assetId"></span> - <span x-text="item.assetName"></span></li>
                                                         </template>
-                                                    </tbody>
-                                                </table>
+                                                    </ul>
+                                                </div>
                                             </div>
                                         </template>
+
+                                        <template x-if="previewData.updatedAssets.length > 0">
+                                            <div class="mb-4">
+                                                <div class="font-bold text-blue-700 mb-2 flex items-center bg-blue-50 px-3 py-1.5 rounded">
+                                                    <i class="fa-solid fa-pen-to-square mr-2"></i> 更新資料 (<span x-text="previewData.updatedAssets.length"></span>)
+                                                </div>
+                                                <div class="max-h-60 overflow-y-auto pl-2 space-y-3">
+                                                    <template x-for="item in previewData.updatedAssets">
+                                                        <div class="bg-slate-50 border border-slate-200 p-2 rounded text-sm">
+                                                            <div class="font-medium text-slate-800 mb-1"><span x-text="item.assetId"></span> - <span x-text="item.assetName"></span></div>
+                                                            <ul class="list-disc pl-5 text-slate-600">
+                                                                <template x-for="change in item.changes">
+                                                                    <li><span class="font-medium" x-text="change.field"></span>: <del class="text-rose-500 mr-1" x-text="change.oldVal || '(空)'"></del> <i class="fa-solid fa-arrow-right text-slate-400 mx-1 text-xs"></i> <span class="text-emerald-600 font-medium" x-text="change.newVal"></span></li>
+                                                                </template>
+                                                            </ul>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <template x-if="previewData.errorAssets.length > 0">
+                                            <div class="mb-4">
+                                                <div class="font-bold text-rose-700 mb-2 flex items-center bg-rose-50 px-3 py-1.5 rounded">
+                                                    <i class="fa-solid fa-circle-exclamation mr-2"></i> 錯誤/略過 (<span x-text="previewData.errorAssets.length"></span>)
+                                                </div>
+                                                <div class="max-h-40 overflow-y-auto pl-2">
+                                                    <ul class="list-disc pl-5 text-sm text-slate-600">
+                                                        <template x-for="item in previewData.errorAssets">
+                                                            <li><span class="font-medium" x-text="item.assetId || '未提供'"></span>: <span class="text-rose-600" x-text="item.reason"></span></li>
+                                                        </template>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <div class="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100" x-show="previewData.newAssets.length > 0 || previewData.updatedAssets.length > 0">
+                                            <button @click="cancelPreview()" type="button" class="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors">
+                                                取消，重新上傳
+                                            </button>
+                                            <button @click="commitImport()" type="button" :disabled="isBatchImporting" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center">
+                                                <i class="fa-solid fa-check mr-2"></i>確認覆寫並寫入
+                                            </button>
+                                        </div>
+                                        <div class="mt-4 pt-4 border-t text-sm text-slate-500 text-center" x-show="previewData.newAssets.length === 0 && previewData.updatedAssets.length === 0">
+                                            未找到任何可以新增或更新的資料。
+                                        </div>
                                     </div>
                                 </template>
                             </div>
