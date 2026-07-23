@@ -290,6 +290,7 @@
             showInventoryMgmtModal: false,
             showModelSettingModal: false,
             inventoryFeatureEnabled: true,
+            userEmailNotifyEnabled: true,     // ✨ 開機由 core.userEmailNotifyEnabled 覆寫
             locationErrorMode: 'immediate',   // ✨ 開機由 core.locationErrorMode 覆寫
             locationErrorCount: 0,            // ✨ 待確認財產卡片計數
             locationErrorRecords: null,       // ✨ 清單 modal 資料（null=未載入）
@@ -1034,6 +1035,7 @@
                             refs.viewModeInitialized = true;
                         }
                         self.inventoryFeatureEnabled = core.inventoryEnabled !== false;
+                        self.userEmailNotifyEnabled = core.userEmailNotifyEnabled !== false;
                         self.locationErrorMode = core.locationErrorMode === 'queue' ? 'queue' : 'immediate';
                         // 核心資料就緒 → 主表格立即顯示，不等待次要資料
                         self.isLoadingCards = false;
@@ -2121,7 +2123,7 @@
                 var confirmMsg = errorType === 'keeper' 
                     ? '確定標記「' + (asset.assetName || asset.assetId) + '」保管人有誤？\n系統保管人：' + (asset.leader || asset.keeperName || '（無）')
                     : '確定標記「' + (asset.assetName || asset.assetId) + '」位置有誤？\n系統位置：' + (asset.location || '（無）');
-                confirmMsg += '\n\n若信件通知已開啟，將寄信通知保管人與使用人。';
+                confirmMsg += '\n\n' + (this.userEmailNotifyEnabled ? '信件通知已開啟，將寄信通知保管人與使用人。' : '信件通知已關閉，僅紀錄。');
                 if (!confirm(confirmMsg)) return;
                 
                 this.toastProgress('正在標記' + actionSummaryText + '...');

@@ -1105,6 +1105,7 @@ function getUserStateCore(forceUserScope) {
       userState:         userState,
       inventoryEnabled:  isInventoryFeatureEnabled(), // 廉價旗標，前端需先知道以決定是否顯示盤點
       locationErrorMode: getLocationErrorMode_(),      // ✨ 位置有誤執行模式（immediate/queue），前端按鈕分流用
+      userEmailNotifyEnabled: isUserEmailEnabled(),    // ✨ 一般使用者郵件通知開關狀態
       timings:           timings
     };
   } finally {

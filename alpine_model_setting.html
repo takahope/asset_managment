@@ -177,6 +177,8 @@ document.addEventListener('alpine:init', function () {
                             .withSuccessHandler(function () {
                                 self.isSubmitting = false;
                                 self.$store.app.applyInventoryFeatureState(self.inventoryFeatureEnabled);
+                                self.$store.app.userEmailNotifyEnabled = self.userEmailNotifyEnabled;
+                                self.$store.app.locationErrorMode = self.locationErrorMode;
                                 self.close();
                             })
                             .withFailureHandler(function (error) {
