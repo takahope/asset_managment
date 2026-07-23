@@ -337,34 +337,41 @@ function updateStationNameSnapshot_(stationGroups) {
  */
 function getStationCandidates_() {
   const groupNameMap = getHrGroupNameMap_();
+  let hrCandidates = [];
   try {
     const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
     const orgSheet = hrSs.getSheetByName(HR_ORG_TREE_SHEET_NAME);
-    if (!orgSheet || orgSheet.getLastRow() <= 1) return [];
-    const candidates = [];
-    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
-      const code = String(row[2] || '').trim();
-      const hrName = String(row[3] || '').trim();
-      const category = stationCategoryOf_(code);
-      if (code && hrName && category) {
-        candidates.push({ code: code, name: groupNameMap[hrName] || hrName, hrName: hrName, category: category });
-      }
-    });
-    return candidates;
+    
+    if (orgSheet && orgSheet.getLastRow() > 1) {
+      orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
+        const code = String(row[2] || '').trim();
+        const hrName = String(row[3] || '').trim();
+        const category = stationCategoryOf_(code);
+        
+        // 略過 PORTABLE，因其將由外部試算表提供
+        if (code && hrName && category && category !== 'PORTABLE') {
+          hrCandidates.push({ code: code, name: groupNameMap[hrName] || hrName, hrName: hrName, category: category });
+        }
+      });
+    }
   } catch (e) {
     Logger.log('駐站候選直讀 HR 失敗,改用快照:' + e.message);
     try {
       const snapshot = JSON.parse(PropertiesService.getScriptProperties().getProperty('STATION_NAME_SNAPSHOT') || '{}');
-      return Object.keys(snapshot).map(code => ({
+      hrCandidates = Object.keys(snapshot).map(code => ({
         code: code,
         name: groupNameMap[snapshot[code]] || snapshot[code],
         hrName: snapshot[code],
         category: stationCategoryOf_(code)
-      })).filter(c => c.category);
+      })).filter(c => c.category && c.category !== 'PORTABLE');
     } catch (e2) {
-      return [];
+      hrCandidates = [];
     }
   }
+
+  // 合併外部行動駐站
+  const portableStations = getPortableStationObjects_();
+  return hrCandidates.concat(portableStations);
 }
 
 /** [編輯器手動執行] 檢視 directory 組裝結果,核對人數/駐管/組別分布 */

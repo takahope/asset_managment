@@ -173,6 +173,7 @@ const USERSTATE_ASSET_DTO_FIELDS = [
 // 行動駐站清單（出借「借出後放置地點」下拉選單擴充來源）工作表欄位索引
 const PROTABLE_STATION_SHEET_NAME = "行動駐站";
 const PROTABLE_STATION_COLUMN_INDICES = {
+  CODE: 1,     // A欄: 組別代碼
   NAME: 2,     // B欄: 駐站名稱
   DELETED: 6   // F欄: 刪除標記，空白表示尚未刪除
 };
@@ -2730,11 +2731,10 @@ function showReturnDialog() {
 }
 
 /**
- * 讀取「行動駐站」試算表中尚未刪除的駐站名稱，供出借「借出後放置地點」下拉選單擴充使用
- * 判斷邏輯：B 欄為駐站中文名稱，F 欄空白代表該駐站尚未被刪除
- * @returns {string[]} 例如 ["台北車站(行動駐站)", "高雄站(行動駐站)"]
+ * 從外部「行動駐站」試算表讀取有效駐站，轉為物件陣列供設定視窗使用。
+ * @returns {Array<{code:string, name:string, hrName:string, category:string}>}
  */
-function getMobileStationLocations_() {
+function getPortableStationObjects_() {
   try {
     if (!PROTABLE_STATION_SPREADSHEET_ID || PROTABLE_STATION_SPREADSHEET_ID === 'YOUR_PROTABLE_STATION_SPREADSHEET_ID_HERE') {
       return [];
@@ -2748,22 +2748,40 @@ function getMobileStationLocations_() {
     if (lastRow <= 1) return [];
 
     const indices = PROTABLE_STATION_COLUMN_INDICES;
+    // 讀取 A (1) 到 F (6) 欄
     const data = sheet.getRange(2, 1, lastRow - 1, indices.DELETED).getValues();
-    const stationNames = [];
+    const stations = [];
 
     data.forEach(row => {
+      const code = String(row[indices.CODE - 1] || '').trim();
       const stationName = String(row[indices.NAME - 1] || '').trim();
       const deletedMark = String(row[indices.DELETED - 1] || '').trim();
+      
+      // 確保 F 欄空白且名稱存在
       if (stationName && !deletedMark) {
-        stationNames.push(stationName + '(行動駐站)');
+        stations.push({
+          code: code || stationName, // 若沒代碼，回退使用名稱
+          name: stationName,
+          hrName: stationName,
+          category: 'PORTABLE'
+        });
       }
     });
 
-    return stationNames;
+    return stations;
   } catch (e) {
-    Logger.log('讀取行動駐站清單失敗: ' + e.message);
+    Logger.log('讀取行動駐站物件清單失敗: ' + e.message);
     return [];
   }
+}
+
+/**
+ * 讀取「行動駐站」試算表中尚未刪除的駐站名稱，供出借「借出後放置地點」下拉選單擴充使用
+ * 判斷邏輯：B 欄為駐站中文名稱，F 欄空白代表該駐站尚未被刪除
+ * @returns {string[]} 例如 ["台北車站(行動駐站)", "高雄站(行動駐站)"]
+ */
+function getMobileStationLocations_() {
+  return getPortableStationObjects_().map(s => s.name + '(行動駐站)');
 }
 
 /**
