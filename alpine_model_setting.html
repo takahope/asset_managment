@@ -8,7 +8,7 @@ document.addEventListener('alpine:init', function () {
 
     Alpine.data('modelSettingModal', function () {
         return {
-            isLoading: true, isSubmitting: false,
+            isLoading: true, isSubmitting: false, activeTab: 'general',
             enabled: true, provider: 'GEMINI',
             geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
             reportAdminEmails: '', adminEmailNotifyEnabled: false, userEmailNotifyEnabled: true,
@@ -190,110 +190,84 @@ document.addEventListener('alpine:init', function () {
 <!-- ===== AiSettingsModal ===== -->
 <template x-if="$store.app.showModelSettingModal && $store.app.isAdminView">
     <div x-data="modelSettingModal">
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden">
-                <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
+        <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                
+                <!-- Header -->
+                <div class="px-6 py-4 border-b bg-slate-50 flex justify-between items-center shrink-0">
                     <h3 class="text-lg font-bold text-slate-800">
-                        <i class="fa-solid fa-cog mr-2 text-slate-500"></i>設定
+                        <i class="fa-solid fa-cog mr-2 text-slate-500"></i>系統與環境設定
                     </h3>
                     <button @click="close()" :disabled="isSubmitting" class="text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50">
                         <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>
 
-                <div class="px-6 py-4 overflow-y-auto max-h-[calc(90vh-140px)]">
-                    <template x-if="isLoading">
-                        <div class="flex flex-col items-center justify-center py-12 gap-4">
-                            <i class="fas fa-spinner fa-spin text-4xl text-slate-400"></i>
-                            <p class="text-slate-500 font-medium">載入設定中...</p>
-                        </div>
-                    </template>
+                <!-- Body (Sidebar + Content) -->
+                <div class="flex flex-1 overflow-hidden min-h-[500px]">
+                    
+                    <!-- Left Sidebar Navigation -->
+                    <div class="w-56 lg:w-64 border-r border-slate-200 bg-slate-50/50 flex-shrink-0 overflow-y-auto">
+                        <nav class="p-4 space-y-1">
+                            <button @click="activeTab = 'general'" 
+                                    :class="activeTab === 'general' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'" 
+                                    class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex items-center text-sm">
+                                <i class="fa-solid fa-sliders w-6 text-center mr-2" :class="activeTab === 'general' ? 'text-blue-600' : 'text-slate-400'"></i>
+                                一般設定
+                            </button>
+                            <button @click="activeTab = 'notifications'" 
+                                    :class="activeTab === 'notifications' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'" 
+                                    class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex items-center text-sm">
+                                <i class="fa-solid fa-bell w-6 text-center mr-2" :class="activeTab === 'notifications' ? 'text-blue-600' : 'text-slate-400'"></i>
+                                通知與權限
+                            </button>
+                            <button @click="activeTab = 'ai'" 
+                                    :class="activeTab === 'ai' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'" 
+                                    class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex items-center text-sm">
+                                <i class="fa-solid fa-robot w-6 text-center mr-2" :class="activeTab === 'ai' ? 'text-blue-600' : 'text-slate-400'"></i>
+                                AI 助理
+                            </button>
+                            <button @click="activeTab = 'hr'" 
+                                    :class="activeTab === 'hr' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'" 
+                                    class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex items-center text-sm">
+                                <i class="fa-solid fa-people-arrows w-6 text-center mr-2" :class="activeTab === 'hr' ? 'text-blue-600' : 'text-slate-400'"></i>
+                                HR 同步
+                            </button>
+                            <button @click="activeTab = 'locations'" 
+                                    :class="activeTab === 'locations' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'" 
+                                    class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex items-center text-sm">
+                                <i class="fa-solid fa-location-dot w-6 text-center mr-2" :class="activeTab === 'locations' ? 'text-blue-600' : 'text-slate-400'"></i>
+                                地點管理
+                            </button>
+                        </nav>
+                    </div>
 
-                    <template x-if="!isLoading">
-                        <div class="space-y-5">
-                            <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                <span class="text-sm font-medium text-slate-700">啟用智慧導覽助理</span>
-                                <button type="button" role="switch" :aria-checked="!!enabled" @click="enabled = !enabled"
-                                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                        :class="enabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換智慧導覽助理啟用狀態">
-                                    <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                          :class="enabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                                </button>
+                    <!-- Right Content Area -->
+                    <div class="flex-1 overflow-y-auto bg-white relative">
+                        <template x-if="isLoading">
+                            <div class="absolute inset-0 flex flex-col items-center justify-center bg-white z-10 gap-4">
+                                <i class="fas fa-spinner fa-spin text-4xl text-slate-400"></i>
+                                <p class="text-slate-500 font-medium">載入設定中...</p>
                             </div>
+                        </template>
 
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">模型供應商</label>
-                                <select x-model="provider" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="GEMINI">Google Gemini</option>
-                                    <option value="OPENAI">OpenAI (ChatGPT)</option>
-                                    <option value="NVIDIA">NVIDIA AI</option>
-                                </select>
-                                <p class="text-xs text-slate-500 mt-1">
-                                    切換供應商前，請先請系統管理員在 Apps Script 編輯器的「指令碼屬性」新增對應的 API Key（OPENAI_API_KEY / NVIDIA_API_KEY）。
-                                </p>
-                            </div>
-
-                            <div class="space-y-3 border-t border-slate-100 pt-4">
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">GEMINI_MODEL（預設：gemini-2.5-flash）</span>
-                                    <input type="text" x-model="geminiModelId" placeholder="gemini-2.5-flash"
-                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                </label>
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">OPENAI_MODEL_ID（預設：gpt-4o-mini）</span>
-                                    <input type="text" x-model="openaiModelId" placeholder="gpt-4o-mini"
-                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                </label>
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">NVIDIA_MODEL_ID（預設：meta/llama-3.1-70b-instruct，需為支援 chat/completions 的 NIM 模型）</span>
-                                    <input type="text" x-model="nvidiaModelId" placeholder="meta/llama-3.1-70b-instruct"
-                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                </label>
-                            </div>
-
-                            <div class="space-y-3 border-t border-slate-100 pt-4">
-                                <h4 class="text-sm font-semibold text-slate-700">系統設定</h4>
-
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">電腦回報管理員 Email（多筆以逗號或換行分隔）</span>
-                                    <textarea x-model="reportAdminEmails" rows="2" placeholder="admin1@example.com, admin2@example.com"
-                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                                    <p class="text-xs text-amber-600 mt-1">
-                                        ⚠ 「電腦回報」子系統為獨立 GAS 專案，此處儲存僅影響本系統；電腦回報通知收件人需另在該專案的指令碼屬性設定一份。
-                                    </p>
-                                </label>
-
-                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                    <span class="text-sm font-medium text-slate-700">管理員通知信</span>
-                                    <button type="button" role="switch" :aria-checked="!!adminEmailNotifyEnabled" @click="adminEmailNotifyEnabled = !adminEmailNotifyEnabled"
+                        <div class="p-6 h-full" x-show="!isLoading">
+                            
+                            <!-- 1. 一般設定 (General) -->
+                            <div x-show="activeTab === 'general'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-5" style="display: none;">
+                                <h4 class="text-base font-bold text-slate-800 border-b pb-2 mb-4"><i class="fa-solid fa-sliders mr-2 text-slate-400"></i>一般設定</h4>
+                                
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
+                                    <span class="text-sm font-medium text-slate-700">顯示懸浮按鈕 (FAB)</span>
+                                    <button type="button" role="switch" :aria-checked="!!fabMenuEnabled" @click="fabMenuEnabled = !fabMenuEnabled"
                                             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                            :class="adminEmailNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換管理員通知信啟用狀態">
+                                            :class="fabMenuEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換顯示懸浮按鈕">
                                         <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                              :class="adminEmailNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                              :class="fabMenuEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
                                     </button>
                                 </div>
-
-                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                    <span class="text-sm font-medium text-slate-700">一般使用者通知信</span>
-                                    <button type="button" role="switch" :aria-checked="!!userEmailNotifyEnabled" @click="userEmailNotifyEnabled = !userEmailNotifyEnabled"
-                                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                            :class="userEmailNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換一般使用者通知信啟用狀態">
-                                        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                              :class="userEmailNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                                    </button>
-                                </div>
-
-                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                    <span class="text-sm font-medium text-slate-700">同組資產可見</span>
-                                    <button type="button" role="switch" :aria-checked="!!groupProxyEnabled" @click="groupProxyEnabled = !groupProxyEnabled"
-                                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                            :class="groupProxyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換同組資產可見狀態">
-                                        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                              :class="groupProxyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                                    </button>
-                                </div>
-
-                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
                                     <span class="text-sm font-medium text-slate-700">盤點功能</span>
                                     <button type="button" role="switch" :aria-checked="!!inventoryFeatureEnabled" @click="inventoryFeatureEnabled = !inventoryFeatureEnabled"
                                             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
@@ -303,202 +277,336 @@ document.addEventListener('alpine:init', function () {
                                     </button>
                                 </div>
 
-                                <div class="mt-4">
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
+                                    <div>
+                                        <span class="text-sm font-medium text-slate-700 block">同組資產可見</span>
+                                        <span class="text-xs text-slate-500 block mt-0.5">允許檢視同組成員的資產設備</span>
+                                    </div>
+                                    <button type="button" role="switch" :aria-checked="!!groupProxyEnabled" @click="groupProxyEnabled = !groupProxyEnabled"
+                                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                                            :class="groupProxyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換同組資產可見狀態">
+                                        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                              :class="groupProxyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                    </button>
+                                </div>
+
+                                <div class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
                                     <label class="block text-sm font-medium text-slate-700 mb-1">位置有誤執行模式</label>
                                     <select x-model="locationErrorMode"
-                                            class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
                                         <option value="immediate">立即執行（點按鈕即寄信/紀錄）</option>
                                         <option value="queue">加入購物車（批次送出時處理）</option>
                                     </select>
-                                    <p class="mt-1 text-xs text-slate-400">控制動作面板「位置有誤」按鈕的行為。</p>
-                                </div>
-
-                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                    <span class="text-sm font-medium text-slate-700">顯示懸浮按鈕 (FAB)</span>
-                                    <button type="button" role="switch" :aria-checked="!!fabMenuEnabled" @click="fabMenuEnabled = !fabMenuEnabled"
-                                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                            :class="fabMenuEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換顯示懸浮按鈕">
-                                        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                              :class="fabMenuEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
-                                    </button>
+                                    <p class="mt-1 text-xs text-slate-500">控制資產動作面板中「位置有誤」按鈕的行為。</p>
                                 </div>
                             </div>
 
-                            <!-- ✨ 人員資料來源（HR）區塊 -->
-                            <div class="space-y-3 border-t border-slate-100 pt-4">
-                                <h4 class="text-sm font-semibold text-slate-700"><i class="fa-solid fa-people-group mr-1"></i>人員資料來源（HR）</h4>
+                            <!-- 2. 通知與權限 (Notifications) -->
+                            <div x-show="activeTab === 'notifications'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-5" style="display: none;">
+                                <h4 class="text-base font-bold text-slate-800 border-b pb-2 mb-4"><i class="fa-solid fa-bell mr-2 text-slate-400"></i>通知與信箱設定</h4>
 
-                                <label class="block">
-                                    <span class="text-xs text-slate-500 font-bold mb-2 block">組別名稱轉換表 (顯示名稱若空白，則與 HR 正式名稱相同)</span>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                        <span class="text-sm font-medium text-slate-700">管理員通知信</span>
+                                        <button type="button" role="switch" :aria-checked="!!adminEmailNotifyEnabled" @click="adminEmailNotifyEnabled = !adminEmailNotifyEnabled"
+                                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                                                :class="adminEmailNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換管理員通知信">
+                                            <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                  :class="adminEmailNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                        </button>
+                                    </div>
+
+                                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                        <span class="text-sm font-medium text-slate-700">一般使用者通知信</span>
+                                        <button type="button" role="switch" :aria-checked="!!userEmailNotifyEnabled" @click="userEmailNotifyEnabled = !userEmailNotifyEnabled"
+                                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                                                :class="userEmailNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換一般使用者通知信">
+                                            <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                  :class="userEmailNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4 pt-2">
+                                    <label class="block">
+                                        <span class="text-sm font-medium text-slate-700 block mb-1">電腦回報管理員 Email</span>
+                                        <textarea x-model="reportAdminEmails" rows="2" placeholder="多筆以逗號或換行分隔"
+                                                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                        <p class="text-xs text-amber-600 mt-1">⚠ 「電腦回報」子系統為獨立專案，此處儲存僅影響本系統；電腦回報通知收件人需另在該專案指令碼屬性設定。</p>
+                                    </label>
+
+                                    <label class="block">
+                                        <span class="text-sm font-medium text-slate-700 block mb-1">資訊組駐站資產保管人 Email</span>
+                                        <textarea x-model="infoStationCustodianEmails" rows="2" placeholder="多筆以逗號分隔"
+                                                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                    </label>
+
+                                    <label class="block">
+                                        <span class="text-sm font-medium text-slate-700 block mb-1">資訊組駐站資產使用人 Email</span>
+                                        <textarea x-model="infoStationUserEmails" rows="2" placeholder="多筆以逗號分隔"
+                                                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                    </label>
+
+                                    <label class="block">
+                                        <span class="text-sm font-medium text-slate-700 block mb-1">駐站轉中心收案組保管＆使用人 Email</span>
+                                        <textarea x-model="intakeCustodianEmails" rows="2" placeholder="多筆以逗號分隔"
+                                                  class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                    </label>
+
+                                    <label class="block">
+                                        <span class="text-sm font-medium text-slate-700 block mb-1">ISMS 盤點組別</span>
+                                        <input type="text" x-model="ismsInventoryGroups" placeholder="多筆以逗號分隔"
+                                               class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- 3. AI 助理 (AI Assistant) -->
+                            <div x-show="activeTab === 'ai'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-5" style="display: none;">
+                                <h4 class="text-base font-bold text-slate-800 border-b pb-2 mb-4"><i class="fa-solid fa-robot mr-2 text-slate-400"></i>AI 助理設定</h4>
+
+                                <div class="flex items-center justify-between p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                                    <div>
+                                        <span class="text-sm font-bold text-blue-900 block">啟用智慧導覽助理</span>
+                                        <span class="text-xs text-blue-700 block mt-0.5">提供使用者系統操作指引與問答</span>
+                                    </div>
+                                    <button type="button" role="switch" :aria-checked="!!enabled" @click="enabled = !enabled"
+                                            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                                            :class="enabled ? 'bg-blue-600' : 'bg-slate-300'" aria-label="切換智慧導覽助理">
+                                        <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                              :class="enabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                    </button>
+                                </div>
+
+                                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-bold text-slate-700 mb-1">模型供應商</label>
+                                        <select x-model="provider" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm">
+                                            <option value="GEMINI">Google Gemini</option>
+                                            <option value="OPENAI">OpenAI (ChatGPT)</option>
+                                            <option value="NVIDIA">NVIDIA AI</option>
+                                        </select>
+                                        <p class="text-xs text-slate-500 mt-1.5">
+                                            切換供應商前，請先請系統管理員在 Apps Script 編輯器的「指令碼屬性」新增對應的 API Key。
+                                        </p>
+                                    </div>
+
+                                    <div class="space-y-3 pt-2">
+                                        <label class="block">
+                                            <span class="text-xs font-semibold text-slate-600">GEMINI_MODEL <span class="font-normal text-slate-400">（預設：gemini-2.5-flash）</span></span>
+                                            <input type="text" x-model="geminiModelId" placeholder="gemini-2.5-flash"
+                                                   class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm">
+                                        </label>
+                                        <label class="block">
+                                            <span class="text-xs font-semibold text-slate-600">OPENAI_MODEL_ID <span class="font-normal text-slate-400">（預設：gpt-4o-mini）</span></span>
+                                            <input type="text" x-model="openaiModelId" placeholder="gpt-4o-mini"
+                                                   class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm">
+                                        </label>
+                                        <label class="block">
+                                            <span class="text-xs font-semibold text-slate-600">NVIDIA_MODEL_ID <span class="font-normal text-slate-400">（預設：meta/llama-3.1-70b-instruct）</span></span>
+                                            <input type="text" x-model="nvidiaModelId" placeholder="meta/llama-3.1-70b-instruct"
+                                                   class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm">
+                                            <p class="text-xs text-slate-400 mt-1">需為支援 chat/completions 的 NIM 模型</p>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 4. HR 同步 (HR Sync) -->
+                            <div x-show="activeTab === 'hr'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-5" style="display: none;">
+                                <div class="flex items-center justify-between border-b pb-2 mb-4">
+                                    <h4 class="text-base font-bold text-slate-800"><i class="fa-solid fa-people-group mr-2 text-slate-400"></i>人員資料來源（HR）</h4>
+                                    <button type="button" @click="syncFromHr()" :disabled="isSyncing || isSubmitting"
+                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-700 text-white hover:bg-slate-800 transition-colors disabled:opacity-50 shadow-sm flex items-center">
+                                        <i class="fa-solid fa-rotate mr-1.5" :class="isSyncing ? 'fa-spin' : ''"></i><span x-text="isSyncing ? '同步中...' : '立即從 HR 同步'"></span>
+                                    </button>
+                                </div>
+
+                                <div class="bg-blue-50/50 p-3 rounded-lg border border-blue-100 flex items-start gap-3">
+                                    <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                                    <div class="text-xs text-blue-800 space-y-1">
+                                        <p>保管人與組別資料由 HR 主表單向同步。此區清單為主專案不再讀取「保管人/信箱」工作表後的角色設定來源。</p>
+                                        <p class="font-medium" x-text="hrLastSyncAt ? '上次同步時間：' + hrLastSyncAt.replace('T', ' ').slice(0, 16) : '尚未進行過同步'"></p>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <span class="text-sm font-bold text-slate-700 block">組別名稱轉換表</span>
+                                    <p class="text-xs text-slate-500 mb-2">對應 HR 組織名稱為系統內顯示名稱。若右側留白，則預設使用 HR 原名稱。</p>
+                                    
                                     <template x-if="hrOfficialGroups.length === 0">
-                                        <div class="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                                            目前無法取得 HR 組織架構，請確認 HR 主表讀取權限。
-                                            您仍可使用下方進階設定手動輸入 JSON。
+                                        <div class="text-sm text-amber-700 bg-amber-50 p-4 rounded-lg border border-amber-200 flex items-center">
+                                            <i class="fa-solid fa-triangle-exclamation mr-3 text-amber-500 text-lg"></i>
+                                            <div>
+                                                <p class="font-bold">無法取得 HR 組織架構</p>
+                                                <p class="text-xs mt-1">請確認 HR 主表讀取權限。您仍可使用下方進階設定手動輸入 JSON。</p>
+                                            </div>
                                         </div>
                                     </template>
+                                    
                                     <template x-if="hrOfficialGroups.length > 0">
-                                        <div class="relative mb-2">
-                                            <i class="fa-solid fa-search text-slate-400 text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                        <div class="relative mb-3">
+                                            <i class="fa-solid fa-search text-slate-400 text-sm absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                                             <input type="text" x-model="hrGroupSearchQuery" placeholder="搜尋官方名稱或已設定名稱..."
-                                                   class="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                                                   class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm">
                                         </div>
                                     </template>
-                                    <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg bg-white mt-1 divide-y divide-slate-100">
+                                    
+                                    <div class="max-h-[300px] overflow-y-auto border border-slate-200 rounded-lg bg-slate-50 divide-y divide-slate-200">
                                         <template x-for="hrGroup in filteredHrOfficialGroups" :key="hrGroup">
-                                            <div class="flex items-center px-3 py-2 hover:bg-slate-50">
-                                                <div class="w-1/2 text-sm text-slate-700 truncate pr-2" x-text="hrGroup" :title="hrGroup"></div>
+                                            <div class="flex items-center px-4 py-2.5 hover:bg-white transition-colors">
+                                                <div class="w-1/2 text-sm text-slate-700 font-medium truncate pr-3" x-text="hrGroup" :title="hrGroup"></div>
                                                 <div class="w-1/2 flex items-center">
-                                                    <i class="fa-solid fa-arrow-right-long text-slate-300 mx-2 text-xs"></i>
+                                                    <i class="fa-solid fa-arrow-right-long text-slate-400 mx-3"></i>
                                                     <input type="text" x-model="parsedHrGroupNameMap[hrGroup]" :placeholder="hrGroup"
-                                                           class="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                                                           class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
                                                 </div>
                                             </div>
                                         </template>
                                     </div>
-                                </label>
-                                <details class="mt-2">
-                                    <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">進階：編輯原始 JSON</summary>
-                                    <textarea :value="JSON.stringify(parsedHrGroupNameMap, null, 2)" @input="try { parsedHrGroupNameMap = JSON.parse($event.target.value); } catch(e){}" rows="3"
-                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                                </details>
-
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">資訊組駐站資產保管人（email，逗號分隔）</span>
-                                    <textarea x-model="infoStationCustodianEmails" rows="2"
-                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                                </label>
-
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">資訊組駐站資產使用人（email，逗號分隔）</span>
-                                    <textarea x-model="infoStationUserEmails" rows="2"
-                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                                </label>
-
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">駐站轉中心收案組保管＆使用人（email，逗號分隔）</span>
-                                    <textarea x-model="intakeCustodianEmails" rows="2"
-                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                                </label>
-
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">ISMS 盤點組別（逗號分隔）</span>
-                                    <input type="text" x-model="ismsInventoryGroups"
-                                           class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                </label>
-
-                                <div class="flex items-center justify-between pt-1">
-                                    <button type="button" @click="syncFromHr()" :disabled="isSyncing || isSubmitting"
-                                            class="px-3 py-2 text-sm font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-colors disabled:opacity-50">
-                                        <i class="fa-solid fa-rotate mr-1" :class="isSyncing ? 'fa-spin' : ''"></i><span x-text="isSyncing ? '同步中...' : '立即從 HR 同步'"></span>
-                                    </button>
-                                    <span class="text-xs text-slate-400" x-text="hrLastSyncAt ? '上次同步：' + hrLastSyncAt.replace('T', ' ').slice(0, 16) : '尚未同步'"></span>
+                                    
+                                    <details class="mt-4 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                                        <summary class="px-4 py-2 text-xs font-semibold text-slate-600 cursor-pointer hover:bg-slate-100 outline-none select-none">
+                                            <i class="fa-solid fa-code mr-1.5"></i>進階：編輯原始 JSON
+                                        </summary>
+                                        <div class="p-3 border-t border-slate-200 bg-white">
+                                            <textarea :value="JSON.stringify(parsedHrGroupNameMap, null, 2)" @input="try { parsedHrGroupNameMap = JSON.parse($event.target.value); } catch(e){}" rows="5"
+                                                      class="w-full px-3 py-2 border border-slate-300 rounded bg-slate-50 text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                        </div>
+                                    </details>
                                 </div>
-                                <p class="text-xs text-slate-500">保管人/組別由 HR 主表單向同步；此區清單為主專案不再讀「保管人/信箱」後的角色設定來源。</p>
                             </div>
 
-                            <!-- ✨ 存置地點區塊(spec 2026-07-19) -->
-                            <div class="space-y-3 border-t border-slate-100 pt-4">
-                                <h4 class="text-sm font-semibold text-slate-700"><i class="fa-solid fa-location-dot mr-1"></i>存置地點</h4>
+                            <!-- 5. 地點管理 (Locations) -->
+                            <div x-show="activeTab === 'locations'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-5" style="display: none;">
+                                <h4 class="text-base font-bold text-slate-800 border-b pb-2 mb-4"><i class="fa-solid fa-location-dot mr-2 text-slate-400"></i>存置地點與分派</h4>
 
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">靜態地點（一行一個，依填寫順序顯示）</span>
-                                    <textarea x-model="staticLocations" rows="4" placeholder="例：中心八樓&#10;中心九樓"
-                                              class="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                                </label>
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    
+                                    <!-- 靜態地點設定 -->
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-bold text-slate-700 mb-1">靜態地點</label>
+                                            <p class="text-xs text-slate-500 mb-2">一行一個，將依填寫順序顯示於下拉選單前端。</p>
+                                            <textarea x-model="staticLocations" rows="6" placeholder="例：中心八樓&#10;中心九樓"
+                                                      class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"></textarea>
+                                        </div>
 
-                                <div class="space-y-2">
-                                    <span class="text-xs text-slate-500 block">駐站來源（依 HR 組織架構樹自動同步，以類別為單位開關）</span>
-                                    <template x-for="meta in stationCategoryMeta" :key="meta.key">
                                         <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-sm font-medium text-slate-700">
-                                                    <span x-text="meta.label"></span>
-                                                    <span class="text-slate-400" x-text="'（' + candidatesOf(meta.key).length + '）'"></span>
-                                                </span>
-                                                <button type="button" role="switch" :aria-checked="!!stationCategories[meta.key]"
-                                                        @click="stationCategories[meta.key] = !stationCategories[meta.key]"
-                                                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                                        :class="stationCategories[meta.key] ? 'bg-blue-500' : 'bg-slate-300'"
-                                                        :aria-label="'切換' + meta.label">
-                                                    <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                                          :class="stationCategories[meta.key] ? 'translate-x-6' : 'translate-x-1'"></span>
-                                                </button>
+                                            <span class="text-xs font-bold text-slate-600 block mb-2"><i class="fa-solid fa-list-ol mr-1"></i>合併清單預覽</span>
+                                            <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                                <template x-for="(loc, idx) in mergedLocationsPreview" :key="loc + '-' + idx">
+                                                    <span class="px-2 py-1 text-xs rounded bg-white border border-slate-200 text-slate-700 font-medium" x-text="loc"></span>
+                                                </template>
+                                                <span class="text-xs text-slate-400 italic py-1" x-show="mergedLocationsPreview.length === 0">尚未設定任何地點</span>
                                             </div>
-                                            <p class="text-xs text-amber-600 mt-1" x-show="meta.hint" x-text="meta.hint"></p>
-                                            <details class="mt-1" x-show="candidatesOf(meta.key).length > 0">
-                                                <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">檢視包含的駐站</summary>
-                                                <ul class="mt-1 text-xs text-slate-600 space-y-0.5">
-                                                    <template x-for="c in candidatesOf(meta.key)" :key="c.code">
-                                                        <li><span x-text="c.name"></span> <span class="text-slate-400" x-text="'(' + c.code + ')'"></span></li>
-                                                    </template>
-                                                </ul>
-                                            </details>
+                                            <p class="text-[11px] text-slate-400 mt-2">使用者介面下拉順序為：靜態地點在前、駐站地點在後。</p>
                                         </div>
-                                    </template>
-                                    <template x-if="stationCandidates.length === 0">
-                                        <div class="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                                            目前無法取得 HR 駐站清單（HR 讀取失敗且無快照），駐站相關設定暫不可用。
+                                    </div>
+
+                                    <!-- 駐站與目標地點設定 -->
+                                    <div class="space-y-5">
+                                        <div class="space-y-3">
+                                            <div>
+                                                <span class="text-sm font-bold text-slate-700 block mb-1">駐站來源自動匯入</span>
+                                                <p class="text-xs text-slate-500 mb-2">依 HR 組織架構自動同步，可依類別開關是否納入存置地點選單。</p>
+                                            </div>
+                                            
+                                            <template x-for="meta in stationCategoryMeta" :key="meta.key">
+                                                <div class="p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm font-medium text-slate-700">
+                                                            <span x-text="meta.label"></span>
+                                                            <span class="text-slate-400 text-xs ml-1 bg-slate-100 px-1.5 py-0.5 rounded-full" x-text="candidatesOf(meta.key).length + ' 站'"></span>
+                                                        </span>
+                                                        <button type="button" role="switch" :aria-checked="!!stationCategories[meta.key]"
+                                                                @click="stationCategories[meta.key] = !stationCategories[meta.key]"
+                                                                class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+                                                                :class="stationCategories[meta.key] ? 'bg-blue-500' : 'bg-slate-300'">
+                                                            <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
+                                                                  :class="stationCategories[meta.key] ? 'translate-x-4' : 'translate-x-1'"></span>
+                                                        </button>
+                                                    </div>
+                                                    <p class="text-[11px] text-amber-600 mt-1.5" x-show="meta.hint" x-text="meta.hint"></p>
+                                                    
+                                                    <details class="mt-2" x-show="candidatesOf(meta.key).length > 0">
+                                                        <summary class="text-[11px] text-slate-500 cursor-pointer hover:text-slate-700 outline-none select-none">檢視包含的駐站名單</summary>
+                                                        <div class="mt-1.5 p-2 bg-slate-50 rounded border border-slate-100 max-h-24 overflow-y-auto">
+                                                            <ul class="text-[11px] text-slate-600 space-y-1">
+                                                                <template x-for="c in candidatesOf(meta.key)" :key="c.code">
+                                                                    <li class="flex items-center"><i class="fa-solid fa-caret-right text-slate-300 mr-1.5"></i><span x-text="c.name"></span> <span class="text-slate-400 ml-1" x-text="'(' + c.code + ')'"></span></li>
+                                                                </template>
+                                                            </ul>
+                                                        </div>
+                                                    </details>
+                                                </div>
+                                            </template>
+                                            
+                                            <template x-if="stationCandidates.length === 0">
+                                                <div class="text-xs text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                                                    目前無法取得 HR 駐站清單，駐站相關設定暫不可用。
+                                                </div>
+                                            </template>
                                         </div>
-                                    </template>
-                                </div>
 
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">駐站轉資訊組目標地點</span>
-                                    <select x-model="infoLocation"
-                                            class="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            :class="isDangling(infoLocation) ? 'border-amber-400' : 'border-slate-300'">
-                                        <option value="">（未設定）</option>
-                                        <template x-if="isDangling(infoLocation)"><option :value="infoLocation" x-text="infoLocation + '（已不在清單）'"></option></template>
-                                        <template x-for="loc in mergedLocationsPreview" :key="loc"><option :value="loc" x-text="loc"></option></template>
-                                    </select>
-                                    <p class="text-xs text-amber-600 mt-1" x-show="isDangling(infoLocation)">⚠ 此地點不在目前合併清單中，儲存會被拒絕，請重新選擇。</p>
-                                </label>
+                                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
+                                            <h5 class="text-sm font-bold text-slate-700">自動分派目標地點</h5>
+                                            
+                                            <label class="block">
+                                                <span class="text-xs font-semibold text-slate-600 block mb-1">駐站轉「資訊組」目標</span>
+                                                <select x-model="infoLocation"
+                                                        class="w-full px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                                        :class="isDangling(infoLocation) ? 'border-amber-400 bg-amber-50' : 'border-slate-300'">
+                                                    <option value="">（未設定）</option>
+                                                    <template x-if="isDangling(infoLocation)"><option :value="infoLocation" x-text="infoLocation + '（已不在清單）'"></option></template>
+                                                    <template x-for="loc in mergedLocationsPreview" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                                </select>
+                                                <p class="text-[11px] text-amber-600 mt-1" x-show="isDangling(infoLocation)">⚠ 此地點不在目前合併清單中，儲存會被拒絕。</p>
+                                            </label>
 
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">駐站轉中心收案目標地點</span>
-                                    <select x-model="intakeLocation"
-                                            class="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            :class="isDangling(intakeLocation) ? 'border-amber-400' : 'border-slate-300'">
-                                        <option value="">（未設定）</option>
-                                        <template x-if="isDangling(intakeLocation)"><option :value="intakeLocation" x-text="intakeLocation + '（已不在清單）'"></option></template>
-                                        <template x-for="loc in mergedLocationsPreview" :key="loc"><option :value="loc" x-text="loc"></option></template>
-                                    </select>
-                                    <p class="text-xs text-amber-600 mt-1" x-show="isDangling(intakeLocation)">⚠ 此地點不在目前合併清單中，儲存會被拒絕，請重新選擇。</p>
-                                </label>
+                                            <label class="block">
+                                                <span class="text-xs font-semibold text-slate-600 block mb-1">駐站轉「中心收案組」目標</span>
+                                                <select x-model="intakeLocation"
+                                                        class="w-full px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                                        :class="isDangling(intakeLocation) ? 'border-amber-400 bg-amber-50' : 'border-slate-300'">
+                                                    <option value="">（未設定）</option>
+                                                    <template x-if="isDangling(intakeLocation)"><option :value="intakeLocation" x-text="intakeLocation + '（已不在清單）'"></option></template>
+                                                    <template x-for="loc in mergedLocationsPreview" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                                </select>
+                                                <p class="text-[11px] text-amber-600 mt-1" x-show="isDangling(intakeLocation)">⚠ 此地點不在目前合併清單中，儲存會被拒絕。</p>
+                                            </label>
 
-                                <label class="block">
-                                    <span class="text-xs text-slate-500">資訊組電腦專用地點</span>
-                                    <select x-model="infoComputerLocation"
-                                            class="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            :class="isDangling(infoComputerLocation) ? 'border-amber-400' : 'border-slate-300'">
-                                        <option value="">（未設定）</option>
-                                        <template x-if="isDangling(infoComputerLocation)"><option :value="infoComputerLocation" x-text="infoComputerLocation + '（已不在清單）'"></option></template>
-                                        <template x-for="loc in mergedLocationsPreview" :key="loc"><option :value="loc" x-text="loc"></option></template>
-                                    </select>
-                                    <p class="text-xs text-amber-600 mt-1" x-show="isDangling(infoComputerLocation)">⚠ 此地點不在目前合併清單中，儲存會被拒絕，請重新選擇。</p>
-                                </label>
-
-                                <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                    <span class="text-xs text-slate-500 block mb-1">合併清單預覽（使用者下拉順序：靜態在前、駐站在後）</span>
-                                    <div class="flex flex-wrap gap-1">
-                                        <template x-for="(loc, idx) in mergedLocationsPreview" :key="loc + '-' + idx">
-                                            <span class="px-2 py-0.5 text-xs rounded bg-white border border-slate-200 text-slate-600" x-text="loc"></span>
-                                        </template>
-                                        <span class="text-xs text-slate-400" x-show="mergedLocationsPreview.length === 0">（尚無地點）</span>
+                                            <label class="block">
+                                                <span class="text-xs font-semibold text-slate-600 block mb-1">資訊組「電腦」專用地點</span>
+                                                <select x-model="infoComputerLocation"
+                                                        class="w-full px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                                        :class="isDangling(infoComputerLocation) ? 'border-amber-400 bg-amber-50' : 'border-slate-300'">
+                                                    <option value="">（未設定）</option>
+                                                    <template x-if="isDangling(infoComputerLocation)"><option :value="infoComputerLocation" x-text="infoComputerLocation + '（已不在清單）'"></option></template>
+                                                    <template x-for="loc in mergedLocationsPreview" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                                </select>
+                                                <p class="text-[11px] text-amber-600 mt-1" x-show="isDangling(infoComputerLocation)">⚠ 此地點不在目前合併清單中，儲存會被拒絕。</p>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+
                         </div>
-                    </template>
+                    </div>
                 </div>
 
-                <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3">
-                    <button @click="close()" :disabled="isSubmitting" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50">取消</button>
-                    <button @click="save()" :disabled="isSubmitting || isLoading" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <!-- Footer -->
+                <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button @click="close()" :disabled="isSubmitting" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50">
+                        取消
+                    </button>
+                    <button @click="save()" :disabled="isSubmitting || isLoading" class="px-5 py-2 bg-blue-600 font-medium text-white rounded-lg hover:bg-blue-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                         <template x-if="isSubmitting"><span class="flex items-center gap-2"><span class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span><span>儲存中...</span></span></template>
                         <template x-if="!isSubmitting"><span class="flex items-center gap-2"><i class="fas fa-check"></i><span>儲存設定</span></span></template>
                     </button>
                 </div>
+
             </div>
         </div>
     </div>
