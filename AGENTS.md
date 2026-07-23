@@ -46,6 +46,7 @@ PRs should include:
 - Web app access is domain-restricted in `appsscript.json`; confirm this matches deployment needs.
 
 ## Event Log
+- 2026-07-23: Added "Keeper Error" type alongside "Location Error", with dedicated action buttons, distinct notification email copy, and expanded CSV export header schema.
 - 2026-07-20: Replaced single-select Font Awesome chevrons in `alpine_views.html` with CSS-drawn chevrons to avoid missing icon rendering.
 - 2026-07-20: Fixed `alpine_views.html` native select icon positioning by replacing missing frozen Tailwind `right-3` reliance with scoped CSS.
 - 2026-07-20: Added scoped responsive CSS for `alpine_views.html` filter toolbar to avoid missing frozen Tailwind `lg:*` utilities breaking desktop layout.

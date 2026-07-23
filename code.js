@@ -939,6 +939,23 @@ function formatUserStateDateDisplay_(value, timeZone) {
     .find(line => line) || raw;
 }
 
+/**
+ * 將「取得日期」統一格式化為穩定字串，避免民國年被當成西元古代年而位移。
+ * - 字串：只統一分隔符後原樣回傳（保留民國年如 0109/06/15），絕不經過 new Date。
+ * - Date：改用 V8 外推格里曆元件(getFullYear/Month/Date)取回 Y/M/D，
+ *   避開 Utilities.formatDate 底層 Java 儒略曆對 1582 年前日期的 +1 位移（防禦既有壞資料）。
+ */
+function formatRocDateStable_(value) {
+  if (value === null || value === undefined) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    if (Number.isNaN(value.getTime())) return '';
+    return String(value.getFullYear()).padStart(4, '0') + '/' +
+           String(value.getMonth() + 1).padStart(2, '0') + '/' +
+           String(value.getDate()).padStart(2, '0');
+  }
+  return String(value).trim().replace(/-/g, '/');
+}
+
 function getUserStateData(forceUserScope, options) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const normalizedCurrentEmail = String(currentUserEmail).toLowerCase();
@@ -1216,10 +1233,10 @@ function getUserStateExportDataByTargets(targets, forceUserScope) {
       return targetKeySet.has(`${sourceSheet}::${assetId}`);
     });
 
-    const timeZone = Session.getScriptTimeZone();
     const formatCell = (value) => {
+      // 日期一律走穩定格式化：Date 用 V8 元件、字串原樣，避免民國年被 Utilities.formatDate 位移
       if (value instanceof Date) {
-        return Utilities.formatDate(value, timeZone, 'yyyy/MM/dd');
+        return formatRocDateStable_(value);
       }
       if (value === null || value === undefined) return '';
       return String(value);
@@ -7062,21 +7079,15 @@ function previewAssetsBatch(payload) {
         const compareField = (fieldName, rawNewValue, oldVal) => {
            const newVal = normalizeText(rawNewValue);
            if (!newVal) return;
-           const cleanOldVal = normalizeText(oldVal);
-           let displayOldVal = cleanOldVal;
-           if (oldVal instanceof Date) {
-               displayOldVal = Utilities.formatDate(oldVal, Session.getScriptTimeZone(), "yyyy/MM/dd");
-           }
+           // 舊值可能是字串或（既有壞資料的）Date，一律用穩定格式化，不經過 new Date
+           let displayOldVal = (oldVal instanceof Date) ? formatRocDateStable_(oldVal) : normalizeText(oldVal);
            let displayNewVal = newVal;
-           const normalizedNewVal = newVal.replace(/-/g, '/');
-           if (normalizedNewVal && normalizedNewVal.includes('/') && !isNaN(Date.parse(normalizedNewVal))) {
-               const parsedDate = new Date(normalizedNewVal);
-               displayNewVal = Utilities.formatDate(parsedDate, Session.getScriptTimeZone(), "yyyy/MM/dd");
-               if (oldVal instanceof Date) {
-                   displayOldVal = Utilities.formatDate(oldVal, Session.getScriptTimeZone(), "yyyy/MM/dd");
-               }
+           // 日期欄位：只統一分隔符做字串比對；民國年不可 new Date，否則會位移一天
+           if (/^\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(newVal)) {
+               displayNewVal = newVal.replace(/[-.]/g, '/');
+               displayOldVal = displayOldVal.replace(/[-.]/g, '/');
            }
-           
+
            if (displayNewVal !== displayOldVal) {
                changes.push({ field: fieldName, oldVal: displayOldVal, newVal: displayNewVal });
            }
@@ -7091,7 +7102,7 @@ function previewAssetsBatch(payload) {
             compareField('使用年限', row.useLife, existingData.useLife);
             compareField('保管地點', row.location, existingData.location);
             compareField('附屬設備', row.accessory, existingData.accessory);
-            compareField('保管人', row.keeperName, existingData.keeperName);
+            compareField('保管人', row.keeperName, existingData.leaderName);
             compareField('使用人', row.userName, existingData.userName);
         } else {
             compareField('物品名稱', row.assetName, existingData.assetName);
@@ -7102,7 +7113,7 @@ function previewAssetsBatch(payload) {
             compareField('單位', row.unit, existingData.unit);
             compareField('台幣金額', row.amountTwd, existingData.amountTwd);
             compareField('申購單號', row.purchaseOrder, existingData.purchaseOrder);
-            compareField('保管人', row.keeperName, existingData.keeperName);
+            compareField('保管人', row.keeperName, existingData.leaderName);
             compareField('保管地點', row.location, existingData.location);
         }
         
@@ -7185,14 +7196,13 @@ function commitAssetsBatch(finalPayload) {
     });
 
     const normalizeText = (value) => String(value || '').trim();
+    // 取得日期一律以字串保存（保留民國年如 0109/06/15），不再經過 new Date：
+    // 民國年被當成西元古代年時，new Date + 曆法/時區會位移一天，且會污染 master。
     const parseDateValue = (value) => {
       if (!value) return '';
-      if (value instanceof Date) return value;
-      const normalized = normalizeText(value).replace(/-/g, '/');
-      if (!normalized) return '';
-      const parsed = new Date(normalized);
-      if (Number.isNaN(parsed.getTime())) return normalized;
-      return parsed;
+      // 既有壞資料若為 Date，用 V8 元件轉回穩定字串，避免再寫入位移過的 Date
+      if (value instanceof Date) return formatRocDateStable_(value);
+      return normalizeText(value).replace(/-/g, '/');
     };
     
     const newPropRows = [];
