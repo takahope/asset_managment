@@ -291,10 +291,20 @@ function getLocationConfig_() {
   }
 
   const groupNameMap = getHrGroupNameMap_();
-  const stationLocations = stationGroups
-    .filter(g => enabledCategories.indexOf(stationCategoryOf_(g.code)) !== -1)
+  // 過濾出從 HR 讀取且啟用、但不包含 PORTABLE 的駐站 (PORTABLE 從外部試算表讀取)
+  let stationLocations = stationGroups
+    .filter(g => {
+      const cat = stationCategoryOf_(g.code);
+      return cat !== 'PORTABLE' && enabledCategories.indexOf(cat) !== -1;
+    })
     .map(g => groupNameMap[g.name] || g.name)
     .filter(Boolean);
+
+  // 如果設定中有啟用 PORTABLE，則從外部行動駐站試算表讀取並合併
+  if (enabledCategories.indexOf('PORTABLE') !== -1) {
+    const portableStations = getPortableStationObjects_().map(s => s.name);
+    stationLocations = stationLocations.concat(portableStations);
+  }
 
   LOCATION_CONFIG_MEMO_ = {
     locations: staticLocations.concat(stationLocations),
