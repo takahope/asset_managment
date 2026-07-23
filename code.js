@@ -4344,7 +4344,7 @@ function getLocationErrorRecords(forceUserScope) {
 }
 
 /**
- * [手動結案] 刪除一筆紀錄。權限：admin 或該紀錄的 keeper/user 本人（防 IDOR）。
+ * [手動結案] 將位置有誤紀錄加上處理人與時間，改存為 RESOLVED_LOCERR_ 並刪除原紀錄
  * @param {string} assetId
  * @returns {string} 訊息字串
  */
@@ -4353,18 +4353,122 @@ function resolveLocationError(assetId) {
     const props = PropertiesService.getScriptProperties();
     const raw = props.getProperty(LOCATION_ERROR_KEY_PREFIX + assetId);
     if (!raw) return '❌ 找不到此筆位置有誤紀錄（可能已處理）。';
+    
     const record = JSON.parse(raw);
     const currentEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
     const isOwner = currentEmail === String(record.keeperEmail || '').toLowerCase()
       || currentEmail === String(record.userEmail || '').toLowerCase();
+      
     if (!checkAdminPermissions() && !isOwner) {
       return '❌ 權限不足：僅管理員或該資產的保管人/使用人可結案。';
     }
+    
+    // 留存紀錄
+    record.processorEmail = currentEmail;
+    record.processedAt = new Date().toISOString();
+    const timestamp = Date.now();
+    const resolvedKey = 'RESOLVED_LOCERR_' + assetId + '_' + timestamp;
+    
+    props.setProperty(resolvedKey, JSON.stringify(record));
     props.deleteProperty(LOCATION_ERROR_KEY_PREFIX + assetId);
-    return '✅ 已標記為已處理。';
+    
+    return '✅ 已標記為已處理並留存紀錄。';
   } catch (e) {
     Logger.log('resolveLocationError 錯誤：' + e.message);
     return '❌ 結案失敗：' + e.message;
+  }
+}
+
+/**
+ * 取得待匯出的財產稽核紀錄筆數
+ * @returns {number}
+ */
+function getResolvedLocationErrorCount() {
+  const props = PropertiesService.getScriptProperties();
+  const keys = props.getKeys();
+  let count = 0;
+  for (const key of keys) {
+    if (key.indexOf('RESOLVED_LOCERR_') === 0) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * 將 RESOLVED_LOCERR_ 匯出到 Google Sheet「財產稽核紀錄」並清理 ScriptProperties
+ */
+function exportResolvedLocationErrors() {
+  try {
+    if (!checkAdminPermissions()) {
+      return { success: false, message: '權限不足' };
+    }
+
+    const props = PropertiesService.getScriptProperties();
+    const allProps = props.getProperties();
+    const keysToDelete = [];
+    const rowsToWrite = [];
+
+    for (const key in allProps) {
+      if (key.indexOf('RESOLVED_LOCERR_') === 0) {
+        try {
+          const record = JSON.parse(allProps[key]);
+          // 欄位順序：財產編號, 財產名稱, 系統位置, 標記時間, 處理人信箱, 處理時間
+          rowsToWrite.push([
+            record.assetId || '',
+            record.assetName || '',
+            record.systemLocation || '',
+            record.flaggedAt ? new Date(record.flaggedAt).toLocaleString('zh-TW') : '',
+            record.processorEmail || '',
+            record.processedAt ? new Date(record.processedAt).toLocaleString('zh-TW') : ''
+          ]);
+          keysToDelete.push(key);
+        } catch (e) {
+          Logger.log('解析已處理紀錄失敗，已加入刪除排程：' + key);
+          keysToDelete.push(key);
+        }
+      }
+    }
+
+    if (rowsToWrite.length === 0) {
+      // 雖然沒有要寫入的列，但可能有毀損的 key 需要清理
+      keysToDelete.forEach(function(key) { props.deleteProperty(key); });
+      return { success: true, count: 0, message: '目前無待匯出的有效紀錄' };
+    }
+
+    const lock = LockService.getScriptLock();
+    if (lock.tryLock(15000)) {
+      try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheetName = '財產稽核紀錄';
+        let sheet = ss.getSheetByName(sheetName);
+
+        if (!sheet) {
+          sheet = ss.insertSheet(sheetName);
+          const headers = ['財產編號', '財產名稱', '系統位置', '標記時間', '處理人信箱', '處理時間'];
+          sheet.appendRow(headers);
+          sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+          sheet.setFrozenRows(1);
+        }
+
+        const lastRow = sheet.getLastRow();
+        sheet.getRange(lastRow + 1, 1, rowsToWrite.length, rowsToWrite[0].length).setValues(rowsToWrite);
+      } finally {
+        lock.releaseLock();
+      }
+    } else {
+      throw new Error('系統忙碌中，請稍後再試。');
+    }
+
+    // 匯出成功後刪除 properties
+    keysToDelete.forEach(function(key) {
+      props.deleteProperty(key);
+    });
+
+    return { success: true, count: rowsToWrite.length, message: '成功匯出 ' + rowsToWrite.length + ' 筆紀錄' };
+  } catch (e) {
+    Logger.log('exportResolvedLocationErrors 錯誤：' + e.message);
+    return { success: false, message: '匯出失敗：' + e.message };
   }
 }
 

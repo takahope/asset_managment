@@ -51,6 +51,40 @@ document.addEventListener('alpine:init', function () {
                 return !!value && this.mergedLocationsPreview.indexOf(value) === -1;
             },
 
+            auditRecordCount: 0,
+            isExportingAudit: false,
+            loadAuditRecordCount: function () {
+                var self = this;
+                google.script.run
+                    .withSuccessHandler(function (count) {
+                        self.auditRecordCount = count || 0;
+                    })
+                    .withFailureHandler(function (error) {
+                        console.error('載入稽核筆數失敗：', error);
+                    })
+                    .getResolvedLocationErrorCount();
+            },
+            exportAuditRecords: function () {
+                var self = this;
+                if (!confirm('確定要導出並清除目前的所有已處理紀錄嗎？')) return;
+                this.isExportingAudit = true;
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        self.isExportingAudit = false;
+                        if (result && result.success) {
+                            alert(result.message);
+                            self.auditRecordCount = 0;
+                        } else {
+                            alert('導出失敗：' + (result ? result.message : '未知錯誤'));
+                        }
+                    })
+                    .withFailureHandler(function (error) {
+                        self.isExportingAudit = false;
+                        alert('導出發生異常：' + (error && error.message ? error.message : error));
+                    })
+                    .exportResolvedLocationErrors();
+            },
+
             init: function () {
                 var self = this;
                 var copilotLoaded = false, systemLoaded = false;
@@ -238,6 +272,12 @@ document.addEventListener('alpine:init', function () {
                                     class="w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center text-sm">
                                 <i class="fa-solid fa-location-dot w-6 text-center mr-2" :class="activeTab === 'locations' ? 'text-blue-600' : 'text-slate-400'"></i>
                                 地點管理
+                            </button>
+                            <button @click="activeTab = 'audit'; loadAuditRecordCount();" 
+                                    :class="activeTab === 'audit' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'" 
+                                    class="w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center text-sm">
+                                <i class="fa-solid fa-clipboard-check w-6 text-center mr-2" :class="activeTab === 'audit' ? 'text-blue-600' : 'text-slate-400'"></i>
+                                財產稽核
                             </button>
                         </nav>
                     </div>
@@ -593,6 +633,41 @@ document.addEventListener('alpine:init', function () {
                             </div>
 
                         </div>
+
+                            <!-- 6. 財產稽核 (Audit) -->
+                            <template x-if="activeTab === 'audit'">
+                                <div class="p-6">
+                                    <h4 class="text-base font-bold text-slate-800 border-b pb-2 mb-4"><i class="fa-solid fa-clipboard-check mr-2 text-slate-400"></i>財產稽核紀錄</h4>
+                                    
+                                    <div class="bg-blue-50 text-blue-800 p-4 rounded-lg text-sm mb-6 flex items-start gap-3">
+                                        <i class="fa-solid fa-circle-info mt-0.5"></i>
+                                        <div>
+                                            <p class="font-bold mb-1">位置有誤處理紀錄</p>
+                                            <p class="opacity-90 leading-relaxed">當使用者針對位置有誤的財產點擊「已處理」後，系統會在此暫存紀錄。請定期點擊下方按鈕將紀錄匯出至後端 Google Sheet 的「財產稽核紀錄」工作表中，匯出完成後會自動釋放暫存空間。</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between p-5 border border-slate-200 rounded-xl bg-white shadow-sm">
+                                        <div class="flex flex-col">
+                                            <span class="text-slate-500 text-sm font-medium">目前待匯出的紀錄筆數</span>
+                                            <div class="text-3xl font-bold text-slate-800 mt-1" x-text="auditRecordCount"></div>
+                                        </div>
+                                        <button type="button" 
+                                                @click="exportAuditRecords()" 
+                                                :disabled="isExportingAudit || auditRecordCount === 0"
+                                                class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center font-medium shadow-sm">
+                                            <template x-if="isExportingAudit">
+                                                <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+                                            </template>
+                                            <template x-if="!isExportingAudit">
+                                                <i class="fa-solid fa-file-export mr-2"></i>
+                                            </template>
+                                            <span x-text="isExportingAudit ? '導出中...' : '導出至 Sheet 並清除紀錄'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+
                     </div>
                 </div>
 
