@@ -503,7 +503,7 @@ document.addEventListener('alpine:init', function () {
                 { id: 'scrapPending', label: '待列印報廢申請單', countKey: 'scrapPending', dataSource: 'scrap', color: 'bg-orange-500', icon: '🗑️', description: '報廢中的資產（需列印申請單）' },
                 { id: 'transferPending', label: '待列印轉移申請單', countKey: 'transferPending', dataSource: 'secondary', color: 'bg-purple-500', icon: '🔄', description: '已被接收的資產（需列印轉移申請單）' },
                 { id: 'inventory', label: '待盤點', countKey: 'inventory', dataSource: 'secondary', color: 'bg-red-500', icon: '📋', description: '需要您完成的盤點任務' },
-                { id: 'locationError', label: '需確認財產', countKey: 'locationError', dataSource: 'locationError', color: 'bg-amber-500', icon: '📍', description: '系統顯示位置有誤，需確認或申請轉移' }
+                { id: 'locationError', label: '需確認財產', countKey: 'locationError', dataSource: 'locationError', color: 'bg-amber-500', icon: '📍', description: '系統顯示位置或保管人有誤，需確認或申請轉移' }
             ]
         };
     });
@@ -1339,7 +1339,8 @@ document.addEventListener('alpine:init', function () {
                         <button type="button" class="action-panel__button action-panel__button--transfer" :disabled="!hasAsset" @click="$store.app.openQueueActionModal('TRANSFER')"><i class="fa-solid fa-right-left"></i>轉移</button>
                         <button type="button" class="action-panel__button action-panel__button--lend" :disabled="!hasAsset" @click="$store.app.openQueueActionModal('LEND')"><i class="fa-solid fa-hand-holding-hand"></i>出借</button>
                         <button type="button" class="action-panel__button action-panel__button--scrap" :disabled="!hasAsset" @click="$store.app.openQueueActionModal('SCRAP')"><i class="fa-regular fa-trash-can"></i>報廢</button>
-                        <button type="button" class="action-panel__button action-panel__button--location-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction()"><i class="fa-solid fa-location-dot"></i>位置有誤</button>
+                        <button type="button" class="action-panel__button action-panel__button--location-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('position')"><i class="fa-solid fa-location-dot"></i>位置有誤</button>
+                        <button type="button" class="action-panel__button action-panel__button--keeper-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('keeper')"><i class="fa-solid fa-user-tag"></i>保管人有誤</button>
                     </div>
                     <template x-if="hasInventoryTask">
                         <div>

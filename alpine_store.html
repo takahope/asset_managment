@@ -2093,10 +2093,13 @@
                 this.quickActionModalType = modalType;
                 this.closeActionPanel({ keepPending: true });
             },
-            handleLocationErrorAction: function () {
+            handleLocationErrorAction: function (errorType) {
+                errorType = errorType || 'position';
                 var self = this;
                 var asset = this.actionPanelState.asset || this.resolveAssetDetail(this.actionPanelState.assetId);
                 if (!asset || !asset.assetId) { this.toastOrAlert('尚未選擇資產', 'warning'); return; }
+
+                var actionSummaryText = errorType === 'keeper' ? '保管人有誤' : '位置有誤';
 
                 if (this.locationErrorMode === 'queue') {
                     if (window.AssetCartStore) {
@@ -2105,18 +2108,23 @@
                             assetName: asset.assetName || '',
                             actionType: 'LOCATION_ERROR',
                             status: null,
-                            actionPayload: null,
-                            actionSummary: '位置有誤'
+                            actionPayload: { errorType: errorType },
+                            actionSummary: actionSummaryText
                         });
-                        if (added) this.toastOrAlert('已加入進階清單：' + (asset.assetName || asset.assetId) + '（位置有誤）', 'success');
+                        if (added) this.toastOrAlert('已加入進階清單：' + (asset.assetName || asset.assetId) + '（' + actionSummaryText + '）', 'success');
                     }
                     this.closeActionPanel({ keepPending: true });
                     return;
                 }
 
                 // immediate 模式：確認後立即送出
-                if (!confirm('確定標記「' + (asset.assetName || asset.assetId) + '」位置有誤？\n系統位置：' + (asset.location || '（無）') + '\n\n若信件通知已開啟，將寄信通知保管人與使用人。')) return;
-                this.toastProgress('正在標記位置有誤...');
+                var confirmMsg = errorType === 'keeper' 
+                    ? '確定標記「' + (asset.assetName || asset.assetId) + '」保管人有誤？\n系統保管人：' + (asset.leaderName || '（無）')
+                    : '確定標記「' + (asset.assetName || asset.assetId) + '」位置有誤？\n系統位置：' + (asset.location || '（無）');
+                confirmMsg += '\n\n若信件通知已開啟，將寄信通知保管人與使用人。';
+                if (!confirm(confirmMsg)) return;
+                
+                this.toastProgress('正在標記' + actionSummaryText + '...');
                 this.closeActionPanel({ keepPending: true });
                 google.script.run
                     .withSuccessHandler(function (message) {
@@ -2127,7 +2135,7 @@
                     .withFailureHandler(function (error) {
                         self.toastOrAlert('❌ 標記失敗：' + ((error && error.message) || error), 'error');
                     })
-                    .flagLocationError(asset.assetId);
+                    .flagLocationError(asset.assetId, errorType);
             },
             handleResolveLocationError: function (assetId) {
                 var self = this;

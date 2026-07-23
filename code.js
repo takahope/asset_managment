@@ -4186,7 +4186,8 @@ function getLocationErrorMode_() {
  * @param {string} actorEmail 標記者 email
  * @returns {object|null} 找不到資產回 null
  */
-function buildLocationErrorRecord_(assetId, actorEmail) {
+function buildLocationErrorRecord_(assetId, actorEmail, errorType) {
+  errorType = errorType || 'position';
   const located = findAssetLocation(assetId);
   if (!located) return null;
   const indices = located.sheetName === PROPERTY_MASTER_SHEET_NAME
@@ -4202,7 +4203,8 @@ function buildLocationErrorRecord_(assetId, actorEmail) {
     userEmail: String(asset.userEmail || '').trim(),
     userName: String(asset.userName || ''),
     flaggedAt: new Date().toISOString(),
-    flaggedBy: String(actorEmail || '')
+    flaggedBy: String(actorEmail || ''),
+    errorType: errorType
   };
 }
 
@@ -4248,11 +4250,20 @@ function sendLocationErrorNotifications_(records) {
       const target = String(email || '').trim();
       if (!target || notifiedEmails.has(target.toLowerCase())) return;
       notifiedEmails.add(target.toLowerCase());
-      const subject = `[財產位置確認] 您的財產「${record.assetName}」位置需確認`;
-      let body = `您好，\n\n系統盤點發現以下財產可能不在系統顯示的位置，請您確認實際位置，或前往系統申請轉移：\n\n`;
+      
+      const isKeeperError = record.errorType === 'keeper';
+      const subject = isKeeperError 
+        ? `[財產狀態確認] 您的財產「${record.assetName}」保管人需確認` 
+        : `[財產狀態確認] 您的財產「${record.assetName}」位置需確認`;
+        
+      let body = isKeeperError
+        ? `您好，\n\n系統盤點發現此財產的保管人可能有誤，請您確認實際狀況，若須變更請前往系統申請保管人轉移：\n\n`
+        : `您好，\n\n系統盤點發現以下財產可能不在系統顯示的位置，請您確認實際位置，若有異動請前往系統申請財產轉移，或將其移動至原地點：\n\n`;
+        
       body += `財產編號：${record.assetId}\n`;
       body += `財產名稱：${record.assetName}\n`;
-      body += `系統顯示位置：${record.systemLocation}\n\n`;
+      body += `系統顯示位置：${record.systemLocation}\n`;
+      body += `系統保管人：${record.keeperName}\n\n`;
       body += `請點擊下方連結前往資產管理系統確認或申請轉移：\n${appUrl}\n\n`;
       body += `此為系統自動發送郵件。`;
       MailApp.sendEmail(target, subject, body);
@@ -4268,22 +4279,23 @@ function sendLocationErrorNotifications_(records) {
  * @param {string} assetId
  * @returns {string} 訊息字串（成功「✅…」／失敗「❌…」）
  */
-function flagLocationError(assetId) {
+function flagLocationError(assetId, errorType) {
   try {
     const actorEmail = Session.getActiveUser().getEmail();
-    const record = buildLocationErrorRecord_(assetId, actorEmail);
-    if (!record || !record.assetId) return '❌ 位置有誤標記失敗：找不到資產 ' + assetId;
+    const record = buildLocationErrorRecord_(assetId, actorEmail, errorType);
+    if (!record || !record.assetId) return '❌ 標記失敗：找不到資產 ' + assetId;
     writeLocationErrorRecord_(record);
     let notified = 0;
     if (isUserEmailEnabled()) {
       notified = sendLocationErrorNotifications_([record]);
     }
+    const typeLabel = (record.errorType === 'keeper') ? '保管人有誤' : '位置有誤';
     return notified > 0
-      ? `✅ 已標記「${record.assetName}」位置有誤，並通知 ${notified} 人。`
-      : `✅ 已標記「${record.assetName}」位置有誤（未寄信，已留存待確認紀錄）。`;
+      ? `✅ 已標記「${record.assetName}」${typeLabel}，並通知 ${notified} 人。`
+      : `✅ 已標記「${record.assetName}」${typeLabel}（未寄信，已留存待確認紀錄）。`;
   } catch (e) {
     Logger.log('flagLocationError 錯誤：' + e.message + ' at ' + e.stack);
-    return '❌ 位置有誤標記失敗：' + e.message;
+    return '❌ 標記失敗：' + e.message;
   }
 }
 
@@ -4292,29 +4304,42 @@ function flagLocationError(assetId) {
  * @param {string[]} assetIds
  * @returns {string} 摘要字串
  */
-function processBatchLocationErrors(assetIds) {
-  if (!assetIds || assetIds.length === 0) return '您沒有選擇任何項目。';
+function processBatchLocationErrors(assetItems) {
+  if (!assetItems || assetItems.length === 0) return '您沒有選擇任何項目。';
   try {
     const actorEmail = Session.getActiveUser().getEmail();
     const records = [];
     const failed = [];
-    assetIds.forEach(assetId => {
-      const record = buildLocationErrorRecord_(assetId, actorEmail);
+    
+    assetItems.forEach(item => {
+      let assetId = '';
+      let errorType = 'position';
+      if (typeof item === 'string') {
+        assetId = item;
+      } else if (item && item.assetId) {
+        assetId = item.assetId;
+        if (item.actionPayload && item.actionPayload.errorType) {
+          errorType = item.actionPayload.errorType;
+        }
+      }
+      
+      const record = buildLocationErrorRecord_(assetId, actorEmail, errorType);
       if (!record || !record.assetId) { failed.push(assetId); return; }
       writeLocationErrorRecord_(record);
       records.push(record);
     });
+    
     let notified = 0;
     if (isUserEmailEnabled()) {
       notified = sendLocationErrorNotifications_(records);
     }
-    let message = `✅ 已標記 ${records.length} 筆位置有誤`;
+    let message = `✅ 已標記 ${records.length} 筆位置或保管人有誤`;
     if (notified > 0) message += `，通知 ${notified} 人`;
     if (failed.length > 0) message += `；${failed.length} 筆找不到資產已跳過`;
     return message + '。';
   } catch (e) {
     Logger.log('processBatchLocationErrors 錯誤：' + e.message + ' at ' + e.stack);
-    return '❌ 位置有誤批次標記失敗：' + e.message;
+    return '❌ 批次標記失敗：' + e.message;
   }
 }
 
@@ -4413,11 +4438,14 @@ function exportResolvedLocationErrors() {
       if (key.indexOf('RESOLVED_LOCERR_') === 0) {
         try {
           const record = JSON.parse(allProps[key]);
-          // 欄位順序：財產編號, 財產名稱, 財產位置, 標記時間, 處理人信箱, 處理時間
+          const errorTypeStr = record.errorType === 'keeper' ? '保管人有誤' : '位置有誤';
+          // 欄位順序：財產編號, 財產名稱, 財產位置, 保管人, 錯誤類型, 標記時間, 處理人信箱, 處理時間
           rowsToWrite.push([
             record.assetId || '',
             record.assetName || '',
             record.systemLocation || '',
+            record.keeperName || record.keeperEmail || '',
+            errorTypeStr,
             record.flaggedAt ? new Date(record.flaggedAt).toLocaleString('zh-TW') : '',
             record.processorEmail || '',
             record.processedAt ? new Date(record.processedAt).toLocaleString('zh-TW') : ''
@@ -4448,7 +4476,7 @@ function exportResolvedLocationErrors() {
         }
 
         if (sheet.getLastRow() === 0) {
-          const headers = ['財產編號', '財產名稱', '財產位置', '標記時間', '處理人信箱', '處理時間'];
+          const headers = ['財產編號', '財產名稱', '財產位置', '保管人', '錯誤類型', '標記時間', '處理人信箱', '處理時間'];
           sheet.appendRow(headers);
           sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
           sheet.setFrozenRows(1);
