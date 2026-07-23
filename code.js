@@ -7026,8 +7026,9 @@ function previewAssetsBatch(payload) {
                displayOldVal = Utilities.formatDate(oldVal, Session.getScriptTimeZone(), "yyyy/MM/dd");
            }
            let displayNewVal = newVal;
-           if (newVal && newVal.includes('/') && !isNaN(Date.parse(newVal))) {
-               const parsedDate = new Date(newVal);
+           const normalizedNewVal = newVal.replace(/-/g, '/');
+           if (normalizedNewVal && normalizedNewVal.includes('/') && !isNaN(Date.parse(normalizedNewVal))) {
+               const parsedDate = new Date(normalizedNewVal);
                displayNewVal = Utilities.formatDate(parsedDate, Session.getScriptTimeZone(), "yyyy/MM/dd");
                if (oldVal instanceof Date) {
                    displayOldVal = Utilities.formatDate(oldVal, Session.getScriptTimeZone(), "yyyy/MM/dd");
@@ -7100,6 +7101,13 @@ function previewAssetsBatch(payload) {
  * ✨ [新增] 供 userstate.html 呼叫的「比對分析」確認寫入 API
  */
 function commitAssetsBatch(finalPayload) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return { error: '系統忙碌中，請稍後再試' };
+  }
+  
   try {
     if (!checkAdminPermissions()) {
       return { error: '您沒有權限執行此操作' };
@@ -7284,6 +7292,8 @@ function commitAssetsBatch(finalPayload) {
   } catch (e) {
     Logger.log(`commitAssetsBatch 失敗: ${e.message}`);
     return { error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
