@@ -707,18 +707,6 @@ document.addEventListener('alpine:init', function () {
         <!-- 頁首 hero -->
         <div class="page-hero mb-6" x-data="pageHero">
             <div class="page-hero__text hero-title-group">
-                <template x-if="$store.app.isAdmin">
-                    <div class="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm shrink-0">
-                        <button @click="$store.app.handleViewModeChange('user')"
-                                class="px-3 py-1 text-sm rounded-full transition-colors"
-                                :class="$store.app.viewMode === 'user' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
-                                title="一般使用者視角">一般</button>
-                        <button @click="$store.app.handleViewModeChange('admin')"
-                                class="px-3 py-1 text-sm rounded-full transition-colors"
-                                :class="$store.app.viewMode === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
-                                title="管理者視角">管理者</button>
-                    </div>
-                </template>
                 <div>
                     <h1 class="page-title">財產狀態管理</h1>
                     <p class="page-subtitle">
@@ -806,6 +794,19 @@ document.addEventListener('alpine:init', function () {
                             <i class="fa-solid fa-barcode text-emerald-600"></i>
                             <span class="hidden sm:inline">列印條碼</span>
                         </button>
+
+                        <template x-if="$store.app.isAdmin">
+                            <div class="flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm shrink-0">
+                                <button @click="$store.app.handleViewModeChange('user')"
+                                        class="px-3 py-1 text-sm rounded-full transition-colors"
+                                        :class="$store.app.viewMode === 'user' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
+                                        title="一般使用者視角">一般</button>
+                                <button @click="$store.app.handleViewModeChange('admin')"
+                                        class="px-3 py-1 text-sm rounded-full transition-colors"
+                                        :class="$store.app.viewMode === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'"
+                                        title="管理者視角">管理者</button>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>

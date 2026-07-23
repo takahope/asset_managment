@@ -693,7 +693,7 @@ document.addEventListener('alpine:init', function () {
                                         <select x-model="propertyCategoryForImport" :disabled="isBatchImporting || isSubmitting" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                             <template x-for="option in propertyCategoryOptions" :key="option"><option :value="option" x-text="option"></option></template>
                                         </select>
-                                        <p class="text-xs text-slate-500 mt-1">CSV，請在下方「資料類型」選擇財產或物品。</p>
+                                        <p class="text-xs text-slate-500 mt-1">CSV，請在下方「系統類別」選擇新系統或舊系統。</p>
                                     </div>
                                     <div class="flex items-end">
                                         <button type="button" @click="handleBatchImport()" :disabled="isBatchImporting || isSubmitting"
@@ -741,17 +741,17 @@ document.addEventListener('alpine:init', function () {
                                 </template>
                             </div>
 
-                            <!-- 資料類型 -->
+                            <!-- 系統類別 -->
                             <div class="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                                <div class="font-medium text-slate-700 mb-3"><i class="fas fa-folder-open mr-2 text-slate-500"></i>資料類型</div>
+                                <div class="font-medium text-slate-700 mb-3"><i class="fas fa-folder-open mr-2 text-slate-500"></i>系統類別</div>
                                 <div class="flex gap-6">
                                     <label class="flex items-center cursor-pointer">
                                         <input type="radio" name="addAssetType" value="property" x-model="assetType" class="mr-2">
-                                        <span>財產（列入財產總表）</span>
+                                        <span>新系統</span>
                                     </label>
                                     <label class="flex items-center cursor-pointer">
                                         <input type="radio" name="addAssetType" value="item" x-model="assetType" class="mr-2">
-                                        <span>物品（列入物品總表）</span>
+                                        <span>舊系統</span>
                                     </label>
                                 </div>
                             </div>
@@ -883,8 +883,8 @@ document.addEventListener('alpine:init', function () {
                                 <div>
                                     <div class="font-medium text-slate-700">2) CSV（.csv）</div>
                                     <ul class="list-disc pl-5 space-y-1 text-slate-600">
-                                        <li>僅能匯入單一類型（財產或物品）。</li>
-                                        <li>匯入前請先在視窗下方「資料類型」區塊選擇「財產」或「物品」。</li>
+                                        <li>僅能匯入單一類型（新系統或舊系統）。</li>
+                                        <li>匯入前請先在視窗下方「系統類別」區塊選擇「新系統」或「舊系統」。</li>
                                         <li>第一列為欄位名稱，資料從第 2 列開始。</li>
                                     </ul>
                                 </div>
@@ -942,8 +942,8 @@ document.addEventListener('alpine:init', function () {
                             <ol class="list-decimal pl-5 space-y-1 text-slate-600">
                                 <li>點擊「新增資產」開啟視窗。</li>
                                 <li>在「批次匯入」區塊選擇 `.xlsx` 或 `.csv` 檔案。</li>
-                                <li>選擇「財產類別」（財產 / 非消耗品）。僅在匯入財產資料時生效，會寫入財產總表 L 欄。</li>
-                                <li>若為 CSV，請在下方「資料類型」選擇財產或物品。</li>
+                                <li>選擇「財產類別」（財產 / 非消耗品）。僅在匯入新系統資料時生效，會寫入財產總表 L 欄。</li>
+                                <li>若為 CSV，請在下方「系統類別」選擇新系統或舊系統。</li>
                                 <li>點擊「開始批次匯入」。</li>
                                 <li>匯入完成後畫面會顯示成功/失敗筆數與失敗清單。</li>
                             </ol>
