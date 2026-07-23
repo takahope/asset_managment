@@ -10,6 +10,7 @@ document.addEventListener('alpine:init', function () {
     /* ===== FilterSection(舊頁 5356-6039) ===== */
     Alpine.data('filterSection', function () {
         return {
+            isMobileExpanded: false,
             localSearch: '',
             allToggleableColumns: [
                 { key: 'systemCategory', label: '系統類別' },
@@ -573,7 +574,35 @@ document.addEventListener('alpine:init', function () {
         grid-column: span 2 / span 2;
     }
 
+    /* Mobile Filter Card Collapse */
+    .filter-mobile-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+    }
+    .filter-content-collapsed {
+        display: none;
+    }
+    .filter-content-expanded {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
     @media (min-width: 1024px) {
+        .filter-mobile-toggle {
+            display: none !important;
+        }
+        .filter-content-collapsed,
+        .filter-content-expanded {
+            display: flex !important;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 0;
+        }
+
         .filter-toolbar-row {
             flex-direction: row;
             align-items: center;
@@ -899,8 +928,17 @@ document.addEventListener('alpine:init', function () {
 
 
         <!-- 篩選卡(舊頁 5794-6037) -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6" x-data="filterSection">
-            <div class="flex flex-col gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 lg:p-6 mb-6" x-data="filterSection">
+            <!-- 行動裝置收合按鈕 -->
+            <div class="filter-mobile-toggle" @click="isMobileExpanded = !isMobileExpanded">
+                <div class="flex items-center gap-2 text-slate-700 font-medium">
+                    <i class="fa-solid fa-filter text-blue-500"></i>
+                    <span>搜尋與篩選</span>
+                </div>
+                <i class="fa-solid fa-chevron-down text-slate-400 transition-transform" :class="isMobileExpanded ? 'rotate-180' : ''"></i>
+            </div>
+            
+            <div :class="isMobileExpanded ? 'filter-content-expanded' : 'filter-content-collapsed'">
                 <!-- 第 1 行:關鍵字搜尋 + 動作按鈕 -->
                 <div class="filter-toolbar-row flex flex-col gap-3 lg:flex-row lg:items-center">
                     <div class="relative flex-1 min-w-0">
