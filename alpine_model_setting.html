@@ -329,16 +329,6 @@ document.addEventListener('alpine:init', function () {
                                               :class="groupProxyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
                                     </button>
                                 </div>
-
-                                <div class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">位置有誤執行模式</label>
-                                    <select x-model="locationErrorMode"
-                                            class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
-                                        <option value="immediate">立即執行（點按鈕即寄信/紀錄）</option>
-                                        <option value="queue">加入購物車（批次送出時處理）</option>
-                                    </select>
-                                    <p class="mt-1 text-xs text-slate-500">控制資產動作面板中「位置有誤」按鈕的行為。</p>
-                                </div>
                             </div>
 
                             <!-- 2. 通知與權限 (Notifications) -->
@@ -639,6 +629,16 @@ document.addEventListener('alpine:init', function () {
                                 <div class="p-6">
                                     <h4 class="text-base font-bold text-slate-800 border-b pb-2 mb-4"><i class="fa-solid fa-clipboard-check mr-2 text-slate-400"></i>財產稽核紀錄</h4>
                                     
+                                    <div class="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">位置有誤執行模式</label>
+                                        <select x-model="locationErrorMode"
+                                                class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                                            <option value="immediate">立即執行（點按鈕即寄信/紀錄）</option>
+                                            <option value="queue">加入購物車（批次送出時處理）</option>
+                                        </select>
+                                        <p class="mt-1 text-xs text-slate-500">控制資產動作面板中「位置有誤」按鈕的行為。</p>
+                                    </div>
+
                                     <div class="bg-blue-50 text-blue-800 p-4 rounded-lg text-sm mb-6 flex items-start gap-3">
                                         <i class="fa-solid fa-circle-info mt-0.5"></i>
                                         <div>
