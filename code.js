@@ -7372,14 +7372,14 @@ function previewScrapBatch(payload) {
       return { error: '未找到可比對的資料列，請確認上傳檔案格式正確' };
     }
 
-    // 建立「上傳清單」的資產編號 Set（取第一欄，索引 0）
+    // 建立「上傳清單」的資產編號 Set
     const uploadedIdSet = new Set();
     propertyRows.forEach(function(row) {
-      const id = String(row[0] || '').trim();
+      const id = String(row.assetId || row[0] || '').trim();
       if (id) uploadedIdSet.add(id);
     });
     itemRows.forEach(function(row) {
-      const id = String(row[0] || '').trim();
+      const id = String(row.assetId || row[0] || '').trim();
       if (id) uploadedIdSet.add(id);
     });
 
@@ -7518,44 +7518,66 @@ function commitScrapBatch(payload) {
       if (id) itemIdToRowIndex.set(id, idx);
     });
 
-    let scrapCount = 0;
     const timestamp = now.getTime();
+    
+    // 輔助函數：欄位數字轉字母 (A1 Notation)
+    function colToLetter(column) {
+      let temp, letter = '';
+      while (column > 0) {
+        temp = (column - 1) % 26;
+        letter = String.fromCharCode(temp + 65) + letter;
+        column = (column - temp - 1) / 26;
+      }
+      return letter;
+    }
+
+    const propStatusA1 = [];
+    const propDateA1 = [];
+    const itemStatusA1 = [];
+    const itemDateA1 = [];
+    const scrapLogRows = [];
+    let scrapCount = 0;
 
     scrapAssets.forEach(function(asset, seq) {
       const assetId = String(asset.assetId || '').trim();
       const assetType = String(asset.assetType || '').trim();
       if (!assetId) return;
 
-      let targetSheet = null;
-      let targetData = null;
       let targetIdMap = null;
+      let targetData = null;
       let colIndices = null;
-
+      
       if (assetType === 'property') {
-        targetSheet = propertySheet;
-        targetData = propData;
         targetIdMap = propIdToRowIndex;
+        targetData = propData;
         colIndices = PROPERTY_COLUMN_INDICES;
       } else if (assetType === 'item') {
-        targetSheet = itemSheet;
-        targetData = itemData;
         targetIdMap = itemIdToRowIndex;
+        targetData = itemData;
         colIndices = ITEM_COLUMN_INDICES;
       } else {
         return;
       }
 
-      if (!targetSheet || !targetIdMap.has(assetId)) return;
+      if (!targetIdMap.has(assetId)) return;
 
       const dataRowIndex = targetIdMap.get(assetId); // 0-based
       const sheetRowNumber = dataRowIndex + 2;        // 1-based, +1 for header
       const row = targetData[dataRowIndex];
 
-      // 更新總表：O 欄 = 已報廢，U 欄 = 當下時間
-      targetSheet.getRange(sheetRowNumber, colIndices.ASSET_STATUS).setValue('已報廢');
-      targetSheet.getRange(sheetRowNumber, colIndices.LAST_MODIFIED).setValue(now);
+      // 收集 A1 notation
+      const statusColLetter = colToLetter(colIndices.ASSET_STATUS);
+      const dateColLetter = colToLetter(colIndices.LAST_MODIFIED);
+      
+      if (assetType === 'property') {
+        propStatusA1.push(statusColLetter + sheetRowNumber);
+        propDateA1.push(dateColLetter + sheetRowNumber);
+      } else {
+        itemStatusA1.push(statusColLetter + sheetRowNumber);
+        itemDateA1.push(dateColLetter + sheetRowNumber);
+      }
 
-      // 寫入報廢紀錄
+      // 收集報廢紀錄列
       if (scrapLogSheet) {
         const scrapId = 'SCRAP-' + timestamp + '-' + (seq + 1);
         const keeperName = String(row[colIndices.LEADER_NAME - 1] || '').trim();
@@ -7581,11 +7603,27 @@ function commitScrapBatch(payload) {
         logRow[SL_UPDATE_TIME_COLUMN_INDEX - 1]     = now;
         logRow[SL_APPROVER_EMAIL_COLUMN_INDEX - 1]  = adminEmail;
 
-        scrapLogSheet.appendRow(logRow);
+        scrapLogRows.push(logRow);
       }
 
       scrapCount++;
     });
+
+    // 批次執行 Spreadsheet 寫入
+    if (propStatusA1.length > 0 && propertySheet) {
+      propertySheet.getRangeList(propStatusA1).setValue('已報廢');
+      propertySheet.getRangeList(propDateA1).setValue(now);
+    }
+    
+    if (itemStatusA1.length > 0 && itemSheet) {
+      itemSheet.getRangeList(itemStatusA1).setValue('已報廢');
+      itemSheet.getRangeList(itemDateA1).setValue(now);
+    }
+    
+    if (scrapLogRows.length > 0 && scrapLogSheet) {
+      const lastRow = scrapLogSheet.getLastRow();
+      scrapLogSheet.getRange(lastRow + 1, 1, scrapLogRows.length, scrapLogRows[0].length).setValues(scrapLogRows);
+    }
 
     lock.releaseLock();
     return { scrapCount: scrapCount };

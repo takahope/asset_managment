@@ -520,6 +520,16 @@ document.addEventListener('alpine:init', function () {
                 }).then(function (parsedResult) {
                     var propertyRows = parsedResult.propertyRows || [];
                     var itemRows = parsedResult.itemRows || [];
+                    var failures = parsedResult.failures || [];
+                    
+                    // 為了盤點目的，將驗證失敗的列也視為有效清單，只要能擷取出資產編號即可
+                    failures.forEach(function (f) {
+                        if (f.assetId) {
+                            if (f.assetType === '財產') propertyRows.push({ assetId: f.assetId });
+                            else itemRows.push({ assetId: f.assetId });
+                        }
+                    });
+
                     if (propertyRows.length === 0 && itemRows.length === 0) {
                         self.batchImportError = '未找到可比對的資料列';
                         return;
@@ -821,6 +831,14 @@ document.addEventListener('alpine:init', function () {
 <style scoped>
     .add-asset-modal-tab-active { border-bottom-width: 2px; border-bottom-color: #10b981; color: #065f46; font-weight: 600; }
     .add-asset-modal-tab-inactive { border-bottom-width: 2px; border-bottom-color: transparent; color: #64748b; font-weight: 500; }
+    
+    .scrap-preview-table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
+    .scrap-preview-th { text-align: left; padding: 4px 8px; }
+    .scrap-preview-td { padding: 4px 8px; }
+    .scrap-preview-td-bold { font-weight: 600; }
+    .scrap-preview-td-muted { color: #64748b; }
+    .scrap-preview-tr { border-top: 1px solid #f1f5f9; }
+    .scrap-preview-thead-tr { background: #f8fafc; color: #64748b; }
 </style>
 <template x-if="$store.app.showAddAssetModal && $store.app.isAdminView">
     <div x-data="addAssetModal">
@@ -1004,24 +1022,24 @@ document.addEventListener('alpine:init', function () {
                                                         <i class="fa-solid fa-circle-exclamation mr-2"></i>疑似報廢資產（不在清單中）(<span x-text="previewData.scrapAssets.length"></span>)
                                                     </div>
                                                     <div style="max-height: 240px; overflow-y: auto;" class="pl-2">
-                                                        <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                                                        <table class="scrap-preview-table">
                                                             <thead>
-                                                                <tr style="background:#f8fafc; color:#64748b;">
-                                                                    <th style="text-align:left; padding:4px 8px;">資產編號</th>
-                                                                    <th style="text-align:left; padding:4px 8px;">資產名稱</th>
-                                                                    <th style="text-align:left; padding:4px 8px;">目前狀態</th>
-                                                                    <th style="text-align:left; padding:4px 8px;">保管人</th>
-                                                                    <th style="text-align:left; padding:4px 8px;">地點</th>
+                                                                <tr class="scrap-preview-thead-tr">
+                                                                    <th class="scrap-preview-th">資產編號</th>
+                                                                    <th class="scrap-preview-th">資產名稱</th>
+                                                                    <th class="scrap-preview-th">目前狀態</th>
+                                                                    <th class="scrap-preview-th">保管人</th>
+                                                                    <th class="scrap-preview-th">地點</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
                                                                 <template x-for="item in previewData.scrapAssets" :key="item.assetId">
-                                                                    <tr style="border-top:1px solid #f1f5f9;">
-                                                                        <td style="padding:4px 8px; font-weight:600;" x-text="item.assetId"></td>
-                                                                        <td style="padding:4px 8px;" x-text="item.assetName"></td>
-                                                                        <td style="padding:4px 8px; color:#64748b;" x-text="item.currentStatus"></td>
-                                                                        <td style="padding:4px 8px;" x-text="item.keeperName"></td>
-                                                                        <td style="padding:4px 8px;" x-text="item.location"></td>
+                                                                    <tr class="scrap-preview-tr">
+                                                                        <td class="scrap-preview-td scrap-preview-td-bold" x-text="item.assetId"></td>
+                                                                        <td class="scrap-preview-td" x-text="item.assetName"></td>
+                                                                        <td class="scrap-preview-td scrap-preview-td-muted" x-text="item.currentStatus"></td>
+                                                                        <td class="scrap-preview-td" x-text="item.keeperName"></td>
+                                                                        <td class="scrap-preview-td" x-text="item.location"></td>
                                                                     </tr>
                                                                 </template>
                                                             </tbody>
