@@ -1320,7 +1320,12 @@ document.addEventListener('alpine:init', function () {
                             <ul class="list-disc pl-5 space-y-1 text-slate-600">
                                 <li>財產/物品編號需全系統唯一（跨兩張表）。</li>
                                 <li>日期可用 Excel 日期或 `YYYY/MM/DD`，系統會自動轉換。</li>
-                                <li>財產名稱包含「電腦」時，系統會自動標記資訊資產與電腦欄位。</li>
+                                <li><strong>自動標記資訊資產邏輯：</strong>
+                                    <ul class="list-disc pl-5 mt-1">
+                                        <li>財產：依據編號前7碼自動標記為資訊資產。其中若名稱為「個人電腦」或名稱為「主機系統」且別名含「電腦」，將進一步標記為電腦。</li>
+                                        <li>物品：名稱包含特定關鍵字（分享器、印表機、交換器等）將自動標記為資訊資產。</li>
+                                    </ul>
+                                </li>
                             </ul>
                         </div>
                     </div>

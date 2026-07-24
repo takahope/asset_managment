@@ -90,6 +90,44 @@ const ITEM_COLUMN_INDICES = {
 };
 
 
+// --- 自動判定輔助函式 ---
+
+/**
+ * 判斷財產是否為資訊資產 (Property)
+ */
+function isPropertyITAsset(assetId) {
+  if (!assetId) return false;
+  const prefix = String(assetId).substring(0, 7);
+  const num = parseInt(prefix, 10);
+  if (isNaN(num)) return false;
+  
+  if (num >= 3140101 && num <= 3140503) return true;
+  if (num >= 4030204 && num <= 4030206) return true;
+  if (num >= 4050202 && num <= 4050205) return true;
+  
+  return false;
+}
+
+/**
+ * 判斷財產是否為電腦 (Property)
+ */
+function isPropertyComputer(assetName, assetAlias) {
+  const name = String(assetName || '').trim();
+  const alias = String(assetAlias || '').trim();
+  if (name === '個人電腦') return true;
+  if (name === '主機系統' && alias.includes('電腦')) return true;
+  return false;
+}
+
+/**
+ * 判斷物品是否為資訊資產 (Item)
+ */
+function isItemITAsset(assetName) {
+  if (!assetName) return false;
+  const regex = /分享器|路由器|基地台|印表機|複合機|錄音筆|隨身聽|伺服器|網路|隨身碟|硬碟|交換器|條碼列印機|多功能事務機/;
+  return regex.test(String(assetName));
+}
+
 // --- 「申請紀錄」工作表中的欄位索引 ---
 const AL_APP_ID_COLUMN_INDEX = 1;
 const AL_APP_TIME_COLUMN_INDEX = 2;
@@ -6853,16 +6891,19 @@ function addNewAssetsBatch(payload) {
       }
       values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = normalizeText(row.assetCategory) || propertyCategory;
       values[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
-      if (assetName.includes('電腦')) {
+      const finalAlias = normalizeText(row.assetAlias);
+      if (isPropertyITAsset(assetId)) {
         if (PROPERTY_COLUMN_INDICES.IS_IT_ASSET) {
           values[PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
         }
-        if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) {
-          values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
-        }
-        const isStation = isStationLocation_(location);
-        if (isStation && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
-          values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+        if (isPropertyComputer(assetName, finalAlias)) {
+          if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) {
+            values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
+          }
+          const isStation = isStationLocation_(location);
+          if (isStation && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
+            values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+          }
         }
       }
 
@@ -6909,6 +6950,12 @@ function addNewAssetsBatch(payload) {
       values[ITEM_COLUMN_INDICES.LEADER_EMAIL - 1] = keeperEmail;
       values[ITEM_COLUMN_INDICES.LOCATION - 1] = location;
       values[ITEM_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
+      
+      if (isItemITAsset(assetName)) {
+        if (ITEM_COLUMN_INDICES.IS_IT_ASSET) {
+          values[ITEM_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
+        }
+      }
 
       itemValues.push(values);
     };
@@ -7123,8 +7170,19 @@ function previewAssetsBatch(payload) {
         }
         
         const finalAssetName = normalizeText(row.assetName) || existingData.assetName;
-        if (finalAssetName.includes('電腦') && existingData.isItAsset !== '是') {
-             changes.push({ field: '系統判斷', oldVal: '', newVal: '自動標記為資訊資產(電腦)' });
+        const finalAssetAlias = normalizeText(row.assetAlias) || existingData.assetAlias;
+        
+        if (type === 'property') {
+            const isIT = isPropertyITAsset(assetId);
+            const isComp = isIT && isPropertyComputer(finalAssetName, finalAssetAlias);
+            if (isIT && existingData.isItAsset !== '是') {
+                const label = isComp ? '自動標記為資訊資產(電腦)' : '自動標記為資訊資產';
+                changes.push({ field: '系統判斷', oldVal: '', newVal: label });
+            }
+        } else if (type === 'item') {
+            if (isItemITAsset(finalAssetName) && existingData.isItAsset !== '是') {
+                changes.push({ field: '系統判斷', oldVal: '', newVal: '自動標記為資訊資產' });
+            }
         }
 
         if (changes.length > 0) {
@@ -7247,12 +7305,15 @@ function commitAssetsBatch(finalPayload) {
             }
             
             const finalName = targetArray[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1];
-            if (finalName && finalName.includes('電腦')) {
+            const finalAlias = targetArray[PROPERTY_COLUMN_INDICES.ASSET_ALIAS - 1];
+            if (isPropertyITAsset(assetId)) {
                 if (PROPERTY_COLUMN_INDICES.IS_IT_ASSET) targetArray[PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
-                if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) targetArray[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
-                const loc = targetArray[PROPERTY_COLUMN_INDICES.LOCATION - 1];
-                if (isStationLocation_(loc) && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
-                    targetArray[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+                if (isPropertyComputer(finalName, finalAlias)) {
+                    if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) targetArray[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
+                    const loc = targetArray[PROPERTY_COLUMN_INDICES.LOCATION - 1];
+                    if (isStationLocation_(loc) && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
+                        targetArray[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+                    }
                 }
             }
         } else if (type === 'item' && itemIdToIndex.has(assetId)) {
@@ -7270,6 +7331,11 @@ function commitAssetsBatch(finalPayload) {
             if (row._resolvedKeeperEmail) {
                 targetArray[ITEM_COLUMN_INDICES.LEADER_NAME - 1] = normalizeText(row.keeperName);
                 targetArray[ITEM_COLUMN_INDICES.LEADER_EMAIL - 1] = row._resolvedKeeperEmail;
+            }
+            
+            const finalItemName = targetArray[ITEM_COLUMN_INDICES.ASSET_NAME - 1];
+            if (isItemITAsset(finalItemName)) {
+                if (ITEM_COLUMN_INDICES.IS_IT_ASSET) targetArray[ITEM_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
             }
         }
     });
@@ -7300,12 +7366,15 @@ function commitAssetsBatch(finalPayload) {
             values[PROPERTY_COLUMN_INDICES.ASSET_CATEGORY - 1] = normalizeText(row.assetCategory) || propertyCategory;
             values[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] = '在庫';
             const finalName = values[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1];
-            if (finalName.includes('電腦')) {
+            const finalAlias = values[PROPERTY_COLUMN_INDICES.ASSET_ALIAS - 1];
+            if (isPropertyITAsset(assetId)) {
                 if (PROPERTY_COLUMN_INDICES.IS_IT_ASSET) values[PROPERTY_COLUMN_INDICES.IS_IT_ASSET - 1] = '是';
-                if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
-                const loc = values[PROPERTY_COLUMN_INDICES.LOCATION - 1];
-                if (isStationLocation_(loc) && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
-                    values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+                if (isPropertyComputer(finalName, finalAlias)) {
+                    if (PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER) values[PROPERTY_COLUMN_INDICES.IS_ACTUALLY_COMPUTER - 1] = '是';
+                    const loc = values[PROPERTY_COLUMN_INDICES.LOCATION - 1];
+                    if (isStationLocation_(loc) && PROPERTY_COLUMN_INDICES.IS_COMPUTER) {
+                        values[PROPERTY_COLUMN_INDICES.IS_COMPUTER - 1] = '是';
+                    }
                 }
             }
             newPropRows.push(values);
