@@ -127,3 +127,9 @@ return {
 - 根因 ③(跨層欄位名)：`compareField('保管人', …, existingData.keeperName)` 但 V3 asset 物件保管人欄位其實叫 `leaderName`(`code.js:249`) → 讀 undefined → 假差異。修法：改讀 `existingData.leaderName`(兩處 `:7094/:7105`)。
 - 未修(待決)：`addNewAssetsBatch` 的孿生 `parseDateValue`(`code.js:6755`)同病；既有 Date(109) 壞資料主表顯示可能仍位移(顯示層未動)。
 - 通則已沉澱：PLAYBOOK §4-13/14、`gas-serialization-knowledge` Pattern 3、`gas-fullstack` 前後端欄位契約。檔案：`code.js`、`alpine_modals_asset.html`、`alpine_store.html`。
+
+### 2026-07-24 待辦徽章在窄螢幕上緣被裁切
+- 症狀：「待辦事項」按鈕右上角的紅色數字徽章「7」上緣被切掉一截，只在窄螢幕(<768px)出現、桌機正常。前一次提交 `90310c8` 加 `z-index: 50` 想修但無效。
+- 根因(overflow 軸向連動裁切)：`.hero-action-row`(`alpine_views.html:667`)為讓按鈕列在小螢幕可水平捲動而設 `overflow-x: auto`；CSS 規範規定 overflow-x 為非 `visible` 值時，原本 `visible` 的 `overflow-y` 會被強制計算成 `auto` → 該列同時變垂直裁切框。徽章 `.sidebar-badge`(`userstate_alpine.html:328`)`top: -6px` 浮出按鈕上緣，該列無 padding-top → 那 6px 落在 padding box 外被裁切。裁切不受堆疊順序影響，故 `z-index` 無效；桌機版 `@media (min-width:768px)` 改回 `overflow-x: visible`(`alpine_views.html:696`)故正常。
+- 修法：`.hero-action-row` 加 `padding-top: 8px`(容納徽章 6px 溢出 + 餘裕)，桌機媒體查詢一併 `padding-top: 0` 維持零位移；保留水平捲動與角落浮出視覺。`z-index: 50` 保留(對徽章向右探入相鄰按鈕的水平方向仍有防護、且無害)。
+- 通則已沉澱：`gas-fullstack` CSS/佈局節「overflow-x:auto 逼 overflow-y 變 auto → 浮出元素被裁」。檔案：`alpine_views.html`。
