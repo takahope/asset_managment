@@ -2552,8 +2552,14 @@
                             ismsAssetId: asset.ismsAssetId || ''
                         };
                     });
+                if (typeof window.BatchList_init === 'function') {
+                    window.BatchList_init();
+                }
                 if (typeof window.BatchList_rebuildIndex === 'function') {
                     window.BatchList_rebuildIndex();
+                }
+                if (typeof window.Scanner_init === 'function') {
+                    window.Scanner_init();
                 }
                 if (typeof window.Scanner_enhanceSearchBox === 'function') {
                     setTimeout(function () { window.Scanner_enhanceSearchBox(); }, 100);

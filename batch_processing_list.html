@@ -435,9 +435,7 @@
   let BatchList_initialized = false;
 
   // ========== 初始化函數 ==========
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(BatchList_init, 500);
-  });
+  // 改由 alpine_store.html 載入資料後主動呼叫 BatchList_init()，避免早期無效重試
 
   window.BatchList_init = function() {
     if (window.BatchList_initialized) return;

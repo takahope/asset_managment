@@ -182,9 +182,7 @@
   Scanner_audioPlayer.volume = 0.5;
 
   // ========== 初始化函數 ==========
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(Scanner_init, 600); // 稍晚於 BatchList 初始化
-  });
+  // 改由 alpine_store.html 載入資料後主動呼叫 Scanner_init()，避免早期無效重試
 
   window.Scanner_init = function() {
     if (Scanner_initialized) return;
