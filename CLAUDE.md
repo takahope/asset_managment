@@ -119,3 +119,11 @@ return {
 - 根因 A(版面 ①②)：新 UI 用了預建 `css_tailwind.html` **未收錄**的 utility(`z-[60]`/`top-full`/`w-48`/`col-span-2`/`lg:w-auto`)，凍結 Tailwind 下無聲失效。修法：下拉改具名 class `.column-dropdown-menu`(定位+z-index)，按鈕沿用既有 `.filter-toolbar-action`。
 - 根因 B(不顯示 ③)：`visibleColumns` 定義在 `filterSection` 元件，但表格 `<th>/<td>` 的 `x-show` 落在 sibling 元件 `assetTable`，Alpine scope 隔離 → 讀到 undefined → `undefined.includes()` 拋錯被當 falsy → 整欄隱藏。修法：狀態提升到 `Alpine.store('app').visibleColumns`，checkbox 與表格都改讀 `$store.app.visibleColumns`。
 - 通則已沉澱：PLAYBOOK §4-11/12、`gas-fullstack` skill。檔案：`alpine_views.html`、`alpine_store.html`。
+
+### 2026-07-23 匯入比對(previewAssetsBatch)三個 bug 修復
+- 症狀：①用自家匯出檔匯入顯示「未找到可匯入的資料列」②取得日期每次來回 +1 天(0109/06/15→…16→…17)③保管人比對每筆都顯示假差異「(空)→黃阿明」。
+- 根因 ①(工作表名不符)：匯出把工作表命名「財產/物品」(`alpine_store.html:1819/1825`)，匯入卻只認「財產總表/物品總表」(`alpine_modals_asset.html:339`)。修法：匯入端 `Sheets['財產總表'] || Sheets['財產']` 相容兩種名稱。
+- 根因 ②(民國年當西元)：`new Date("0109/06/15")` 把民國109當西元109年，落到儒略曆/LMT 區間 → `Utilities.formatDate`(Java)與 V8 差 1 天；寫入端 `parseDateValue`(`code.js:7188`)更把 Date(109) 固化進 Sheet。修法(民國字串端到端)：新增 `formatRocDateStable_`(Date 用 V8 `getFullYear` 取回、字串原樣)、`parseDateValue` 改存字串、`compareField` 改字串比對、匯出 `formatCell` 改走 helper。
+- 根因 ③(跨層欄位名)：`compareField('保管人', …, existingData.keeperName)` 但 V3 asset 物件保管人欄位其實叫 `leaderName`(`code.js:249`) → 讀 undefined → 假差異。修法：改讀 `existingData.leaderName`(兩處 `:7094/:7105`)。
+- 未修(待決)：`addNewAssetsBatch` 的孿生 `parseDateValue`(`code.js:6755`)同病；既有 Date(109) 壞資料主表顯示可能仍位移(顯示層未動)。
+- 通則已沉澱：PLAYBOOK §4-13/14、`gas-serialization-knowledge` Pattern 3、`gas-fullstack` 前後端欄位契約。檔案：`code.js`、`alpine_modals_asset.html`、`alpine_store.html`。

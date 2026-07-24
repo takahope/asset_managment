@@ -698,6 +698,13 @@ document.addEventListener('alpine:init', function () {
             flex-wrap: wrap;
         }
     }
+
+    /* 手機版隱藏按鈕 */
+    @media (max-width: 639px) {
+        .mobile-hidden-btn {
+            display: none !important;
+        }
+    }
 </style>
 
 <!-- ================= Alpine 應用主畫面(對應舊頁 App render 15748-16280) ================= -->
@@ -745,7 +752,7 @@ document.addEventListener('alpine:init', function () {
 
                         <button @click="$store.app.handleRefreshCards()"
                                 :disabled="$store.app.isLoadingCards"
-                                class="hero-refresh bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center group shrink-0"
+                                class="hero-refresh bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm flex items-center justify-center group shrink-0 mobile-hidden-btn"
                                 title="重新整理統計數據" aria-label="重新整理">
                             <i class="fas fa-sync-alt text-lg transition-transform"
                                :class="$store.app.isLoadingCards ? 'animate-spin' : 'group-hover:rotate-180'"></i>
@@ -769,7 +776,7 @@ document.addEventListener('alpine:init', function () {
                     <div class="hero-action-row">
                         <button id="btn-inventory-mgmt" x-show="$store.app.isAdminView"
                                 @click="$store.app.showInventoryMgmtModal = true"
-                                class="hero-btn hero-btn--ghost" title="盤點管理">
+                                class="hero-btn hero-btn--ghost mobile-hidden-btn" title="盤點管理">
                             <i class="fa-solid fa-clipboard-list text-slate-500"></i>
                             <span class="hidden sm:inline">盤點管理</span>
                         </button>
