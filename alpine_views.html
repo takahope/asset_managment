@@ -673,6 +673,9 @@ document.addEventListener('alpine:init', function () {
         width: 100%;
         justify-content: flex-start;
         overflow-x: auto;
+        /* overflow-x:auto 會強制 overflow-y 計算成 auto → 垂直裁切;
+           加上 padding-top 讓浮出的待辦徽章(top:-6px)落在裁切框內 */
+        padding-top: 8px;
         padding-bottom: 4px;
     }
     /* 強制覆蓋 userstate_alpine.html 中針對 mode-toggle-card 的寬度設定，確保能在同一行 */
@@ -694,6 +697,7 @@ document.addEventListener('alpine:init', function () {
         .hero-action-row {
             justify-content: flex-end;
             overflow-x: visible;
+            padding-top: 0;
             padding-bottom: 0;
             flex-wrap: wrap;
         }
