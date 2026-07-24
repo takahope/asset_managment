@@ -205,7 +205,7 @@ const USERSTATE_ASSET_DTO_FIELDS = [
   'assetId', 'assetName', 'assetAlias', 'productSerial', 'modelBrand',
   'leader', 'leaderEmail', 'userEmail', 'location', 'status',
   'category', 'group', 'userName', 'sourceSheet', 'useLife',
-  'purchaseDate', 'isItAsset', 'isIsoScope', 'ismsAssetId', 'propertyCategory'
+  'purchaseDate', 'isItAsset', 'isActuallyComputer', 'isIsoScope', 'ismsAssetId', 'propertyCategory'
 ];
 
 // 行動駐站清單（出借「借出後放置地點」下拉選單擴充來源）工作表欄位索引
@@ -1071,6 +1071,7 @@ function getUserStateData(forceUserScope, options) {
       useLife: asset.useLife || '',
       purchaseDate: asset.purchaseDate ? (asset.purchaseDate instanceof Date ? asset.purchaseDate.toISOString() : String(asset.purchaseDate)) : '',
       isItAsset: asset.isItAsset || '',
+      isActuallyComputer: asset.isActuallyComputer || '',
       isIsoScope: asset.isIsoScope || '',
       ismsAssetId: String(asset.ismsAssetId || ''),
       propertyCategory: String(asset.propertyCategory || '')
