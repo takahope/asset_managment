@@ -105,7 +105,7 @@ document.addEventListener('alpine:init', function () {
     Alpine.data('addAssetModal', function () {
         return {
             isLoading: true, isSubmitting: false, dropdownData: null, showBatchImportGuide: false,
-            activeTab: 'single', batchImportType: 'excel',
+            activeTab: 'single', batchImportType: 'excel', batchOperationMode: 'update',
             assetType: 'property', assetId: '', assetName: '', modelBrand: '', category: '',
             purchaseDate: '', useLife: '', isItAsset: false, isActuallyComputer: false, isIsoScope: false,
             location: '', keeperEmail: '', userEmail: '', remarks: '',
@@ -133,6 +133,13 @@ document.addEventListener('alpine:init', function () {
             close: function () { this.$store.app.showAddAssetModal = false; },
             switchTab: function(tab) {
                 this.activeTab = tab;
+                this.batchImportError = '';
+                this.previewData = null;
+                this.batchFile = null;
+                if (this.$refs.batchFileInput) this.$refs.batchFileInput.value = '';
+            },
+            switchOperationMode: function(mode) {
+                this.batchOperationMode = mode;
                 this.batchImportError = '';
                 this.previewData = null;
                 this.batchFile = null;
@@ -500,6 +507,73 @@ document.addEventListener('alpine:init', function () {
                         self.isBatchImporting = false;
                     })
                     .commitAssetsBatch(this.previewData);
+            },
+            handleScrapPreview: function () {
+                var self = this;
+                if (this.isBatchImporting || this.isSubmitting) return;
+                this.batchImportError = '';
+                this.previewData = null;
+                if (!this.batchFile) { this.batchImportError = '請先選擇要匯入的檔案'; return; }
+
+                window.ensureXLSX().then(function () {
+                    return self.parseBatchFile(self.batchFile);
+                }).then(function (parsedResult) {
+                    var propertyRows = parsedResult.propertyRows || [];
+                    var itemRows = parsedResult.itemRows || [];
+                    if (propertyRows.length === 0 && itemRows.length === 0) {
+                        self.batchImportError = '未找到可比對的資料列';
+                        return;
+                    }
+                    self.isBatchImporting = true;
+                    self.$store.app.toastProgress('正在比對資產清單...');
+                    var payload = { propertyRows: propertyRows, itemRows: itemRows };
+                    google.script.run
+                        .withSuccessHandler(function (response) {
+                            self.isBatchImporting = false;
+                            if (!response || response.error) {
+                                self.$store.app.toastOrAlert('❌ 比對失敗：' + ((response && response.error) || '未知錯誤'), 'error');
+                                self.batchImportError = (response && response.error) || '比對失敗';
+                                return;
+                            }
+                            self.previewData = Object.assign({ scrapMode: true }, response);
+                            self.$store.app.toastOrAlert('✅ 比對完成，請確認報廢清單', 'success');
+                        })
+                        .withFailureHandler(function (error) {
+                            self.$store.app.toastOrAlert('❌ 比對失敗', 'error');
+                            self.isBatchImporting = false;
+                            self.batchImportError = (error && error.message) || '比對失敗';
+                        })
+                        .previewScrapBatch(payload);
+                }).catch(function (error) {
+                    self.batchImportError = (error && error.message) || '解析檔案失敗';
+                });
+            },
+            commitScrapBatch: function () {
+                var self = this;
+                if (!this.previewData || !this.previewData.scrapMode) return;
+                if (!this.previewData.scrapAssets || this.previewData.scrapAssets.length === 0) return;
+                this.isBatchImporting = true;
+                self.$store.app.toastProgress('正在執行報廢寫入...');
+                var payload = { scrapAssets: this.previewData.scrapAssets };
+                google.script.run
+                    .withSuccessHandler(function (response) {
+                        self.isBatchImporting = false;
+                        if (!response || response.error) {
+                            self.$store.app.toastOrAlert('❌ 報廢失敗：' + ((response && response.error) || '未知錯誤'), 'error');
+                            return;
+                        }
+                        self.previewData = null;
+                        self.batchFile = null;
+                        if (self.$refs.batchFileInput) self.$refs.batchFileInput.value = '';
+                        var scrapCount = Number(response.scrapCount || 0);
+                        self.$store.app.toastOrAlert('✅ 報廢完成：共標記 ' + scrapCount + ' 筆資產為「已報廢」', 'success');
+                        if (scrapCount > 0) self.$store.app.handleAddAssetSuccess();
+                    })
+                    .withFailureHandler(function (error) {
+                        self.$store.app.toastOrAlert('❌ 報廢寫入失敗', 'error');
+                        self.isBatchImporting = false;
+                    })
+                    .commitScrapBatch(payload);
             }
         };
     });
@@ -788,6 +862,24 @@ document.addEventListener('alpine:init', function () {
                                     </div>
                                     <p class="text-sm text-slate-600 mb-4">支援 Excel/CSV，需使用匯出相同欄位順序。請依照新舊系統將工作表名稱改為“財產總表”或“物品總表”</p>
                                     
+                                    <!-- 操作模式 -->
+                                    <div class="mb-4 p-3 bg-white rounded-lg border border-slate-200">
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">操作模式</label>
+                                        <div class="flex gap-6">
+                                            <label class="flex items-center cursor-pointer">
+                                                <input type="radio" name="batchOperationMode" value="update" x-model="batchOperationMode" @change="switchOperationMode('update')" class="mr-2">
+                                                <span class="text-sm font-medium">資料比對更新</span>
+                                            </label>
+                                            <label class="flex items-center cursor-pointer">
+                                                <input type="radio" name="batchOperationMode" value="scrap" x-model="batchOperationMode" @change="switchOperationMode('scrap')" class="mr-2">
+                                                <span class="text-sm font-medium text-rose-700">盤點報廢比對</span>
+                                            </label>
+                                        </div>
+                                        <p class="text-xs text-slate-400 mt-2" x-show="batchOperationMode === 'scrap'">
+                                            <i class="fa-solid fa-triangle-exclamation text-rose-400 mr-1"></i>上傳存活資產清單後，<strong>不在清單中的資產</strong>將被標記為「已報廢」。
+                                        </p>
+                                    </div>
+
                                     <div class="mb-4">
                                         <label class="block text-sm font-medium text-slate-600 mb-2">匯入檔案格式</label>
                                         <div class="flex gap-4">
@@ -808,7 +900,7 @@ document.addEventListener('alpine:init', function () {
                                             <input type="file" :accept="batchImportType === 'csv' ? '.csv' : '.xlsx'" x-ref="batchFileInput" @change="handleBatchFileChange($event)" :disabled="isBatchImporting || isSubmitting" class="w-full text-sm">
                                             <p class="text-xs text-slate-500 mt-1" x-show="batchFile" x-text="batchFile ? '已選擇：' + batchFile.name : ''"></p>
                                         </div>
-                                        <div>
+                                        <div x-show="batchOperationMode === 'update'">
                                             <label class="block text-sm font-medium text-slate-600 mb-1">請選擇財產類別</label>
                                             <select x-model="propertyCategoryForImport" :disabled="isBatchImporting || isSubmitting" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
                                                 <template x-for="option in propertyCategoryOptions" :key="option"><option :value="option" x-text="option"></option></template>
@@ -816,7 +908,7 @@ document.addEventListener('alpine:init', function () {
                                             <p class="text-xs text-slate-500 mt-1">(若檔案有「財產類別」並填值則優先以檔案為主)</p>
                                         </div>
                                         <div class="flex items-end">
-                                            <button type="button" @click="handlePreviewImport()" :disabled="isBatchImporting || isSubmitting"
+                                            <button type="button" @click="batchOperationMode === 'scrap' ? handleScrapPreview() : handlePreviewImport()" :disabled="isBatchImporting || isSubmitting"
                                                     class="w-full px-4 py-2 rounded-lg text-white font-medium transition-colors"
                                                     :class="(isBatchImporting || isSubmitting) ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'"
                                                     x-text="isBatchImporting ? '分析中...' : '上傳並分析差異'"></button>
@@ -825,8 +917,8 @@ document.addEventListener('alpine:init', function () {
                                     <div class="mt-3 text-sm text-red-600" x-show="batchImportError">
                                         <i class="fa-solid fa-triangle-exclamation mr-2"></i><span x-text="batchImportError"></span>
                                     </div>
-                                    <!-- Preview UI -->
-                                    <template x-if="previewData">
+                                    <!-- Preview UI (Update Mode) -->
+                                    <template x-if="previewData && !previewData.scrapMode">
                                         <div class="mt-4 p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
                                             <h4 class="font-bold text-slate-700 mb-3 text-base border-b pb-2">比對結果預覽</h4>
                                             
@@ -891,6 +983,73 @@ document.addEventListener('alpine:init', function () {
                                             <div class="mt-4 pt-4 border-t text-sm text-slate-500 text-center" x-show="previewData.newAssets.length === 0 && previewData.updatedAssets.length === 0">
                                                 未找到任何可以新增或更新的資料。
                                             </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- 報廢比對結果預覽 -->
+                                    <template x-if="previewData && previewData.scrapMode">
+                                        <div class="mt-4 p-4 bg-white border border-rose-200 rounded-lg shadow-sm">
+                                            <h4 class="font-bold text-slate-700 mb-3 text-base border-b pb-2">盤點報廢比對結果</h4>
+                                            <!-- 統計摘要 -->
+                                            <div class="mb-3 text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded">
+                                                比對完成：共掃描 <strong x-text="previewData.totalChecked"></strong> 筆資產 ──
+                                                清單內 <strong class="text-emerald-700" x-text="previewData.inListCount"></strong> 筆 ／
+                                                疑似報廢 <strong class="text-rose-600" x-text="(previewData.scrapAssets || []).length"></strong> 筆
+                                            </div>
+
+                                            <!-- 有疑似報廢 -->
+                                            <template x-if="previewData.scrapAssets && previewData.scrapAssets.length > 0">
+                                                <div>
+                                                    <div class="font-bold text-rose-700 mb-2 flex items-center bg-rose-50 px-3 py-1.5 rounded">
+                                                        <i class="fa-solid fa-circle-exclamation mr-2"></i>疑似報廢資產（不在清單中）(<span x-text="previewData.scrapAssets.length"></span>)
+                                                    </div>
+                                                    <div style="max-height: 240px; overflow-y: auto;" class="pl-2">
+                                                        <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                                                            <thead>
+                                                                <tr style="background:#f8fafc; color:#64748b;">
+                                                                    <th style="text-align:left; padding:4px 8px;">資產編號</th>
+                                                                    <th style="text-align:left; padding:4px 8px;">資產名稱</th>
+                                                                    <th style="text-align:left; padding:4px 8px;">目前狀態</th>
+                                                                    <th style="text-align:left; padding:4px 8px;">保管人</th>
+                                                                    <th style="text-align:left; padding:4px 8px;">地點</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <template x-for="item in previewData.scrapAssets" :key="item.assetId">
+                                                                    <tr style="border-top:1px solid #f1f5f9;">
+                                                                        <td style="padding:4px 8px; font-weight:600;" x-text="item.assetId"></td>
+                                                                        <td style="padding:4px 8px;" x-text="item.assetName"></td>
+                                                                        <td style="padding:4px 8px; color:#64748b;" x-text="item.currentStatus"></td>
+                                                                        <td style="padding:4px 8px;" x-text="item.keeperName"></td>
+                                                                        <td style="padding:4px 8px;" x-text="item.location"></td>
+                                                                    </tr>
+                                                                </template>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                    <!-- 警告與確認按鈕 -->
+                                                    <div class="mt-4 pt-4 border-t border-slate-100">
+                                                        <p class="text-xs text-rose-600 mb-3">
+                                                            <i class="fa-solid fa-triangle-exclamation mr-1"></i>確認後將有 <strong x-text="previewData.scrapAssets.length"></strong> 筆資產標記為「已報廢」，此操作<strong>不可復原</strong>。
+                                                        </p>
+                                                        <div class="flex justify-end gap-3">
+                                                            <button @click="switchOperationMode('scrap')" type="button" class="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors">
+                                                                取消，重新上傳
+                                                            </button>
+                                                            <button @click="commitScrapBatch()" type="button" :disabled="isBatchImporting" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center">
+                                                                <i class="fa-solid fa-fire-flame-curved mr-2"></i>確認執行報廢（<span x-text="previewData.scrapAssets.length"></span> 筆）
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <!-- 無疑似報廢 -->
+                                            <template x-if="!previewData.scrapAssets || previewData.scrapAssets.length === 0">
+                                                <div class="text-sm text-emerald-700 text-center py-4">
+                                                    <i class="fa-solid fa-circle-check mr-2 text-lg"></i>所有資產均在清單中，無需報廢。
+                                                </div>
+                                            </template>
                                         </div>
                                     </template>
                                 </div>

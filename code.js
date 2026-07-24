@@ -7355,6 +7355,249 @@ function commitAssetsBatch(finalPayload) {
 }
 
 /**
+ * ✨ [新增] 盤點報廢比對：上傳存活清單，回傳不在清單中的疑似報廢資產
+ * @param {{propertyRows: Array, itemRows: Array}} payload
+ * @returns {{scrapAssets: Array, totalChecked: number, inListCount: number}|{error: string}}
+ */
+function previewScrapBatch(payload) {
+  try {
+    if (!checkAdminPermissions()) {
+      return { error: '您沒有權限執行此操作' };
+    }
+
+    const propertyRows = Array.isArray(payload?.propertyRows) ? payload.propertyRows : [];
+    const itemRows = Array.isArray(payload?.itemRows) ? payload.itemRows : [];
+
+    if (propertyRows.length === 0 && itemRows.length === 0) {
+      return { error: '未找到可比對的資料列，請確認上傳檔案格式正確' };
+    }
+
+    // 建立「上傳清單」的資產編號 Set（取第一欄，索引 0）
+    const uploadedIdSet = new Set();
+    propertyRows.forEach(function(row) {
+      const id = String(row[0] || '').trim();
+      if (id) uploadedIdSet.add(id);
+    });
+    itemRows.forEach(function(row) {
+      const id = String(row[0] || '').trim();
+      if (id) uploadedIdSet.add(id);
+    });
+
+    if (uploadedIdSet.size === 0) {
+      return { error: '上傳清單中未找到有效的資產編號，請確認第一欄為資產編號' };
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 讀取財產總表
+    const propertySheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+    let propData = [];
+    if (propertySheet && propertySheet.getLastRow() > 1) {
+      propData = propertySheet.getRange(2, 1, propertySheet.getLastRow() - 1, propertySheet.getLastColumn()).getValues();
+    }
+
+    // 讀取物品總表
+    const itemSheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
+    let itemData = [];
+    if (itemSheet && itemSheet.getLastRow() > 1) {
+      itemData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, itemSheet.getLastColumn()).getValues();
+    }
+
+    const scrapAssets = [];
+    let totalChecked = 0;
+    let inListCount = 0;
+
+    // 比對財產總表
+    propData.forEach(function(row) {
+      const assetId = String(row[PROPERTY_COLUMN_INDICES.ASSET_ID - 1] || '').trim();
+      if (!assetId) return;
+      const status = String(row[PROPERTY_COLUMN_INDICES.ASSET_STATUS - 1] || '').trim();
+      if (status === '已報廢') return; // 已報廢者排除
+
+      totalChecked++;
+      if (uploadedIdSet.has(assetId)) {
+        inListCount++;
+      } else {
+        scrapAssets.push({
+          assetId: assetId,
+          assetName: String(row[PROPERTY_COLUMN_INDICES.ASSET_NAME - 1] || '').trim(),
+          assetType: 'property',
+          keeperName: String(row[PROPERTY_COLUMN_INDICES.LEADER_NAME - 1] || '').trim(),
+          location: String(row[PROPERTY_COLUMN_INDICES.LOCATION - 1] || '').trim(),
+          currentStatus: status
+        });
+      }
+    });
+
+    // 比對物品總表
+    itemData.forEach(function(row) {
+      const assetId = String(row[ITEM_COLUMN_INDICES.ASSET_ID - 1] || '').trim();
+      if (!assetId) return;
+      const status = String(row[ITEM_COLUMN_INDICES.ASSET_STATUS - 1] || '').trim();
+      if (status === '已報廢') return;
+
+      totalChecked++;
+      if (uploadedIdSet.has(assetId)) {
+        inListCount++;
+      } else {
+        scrapAssets.push({
+          assetId: assetId,
+          assetName: String(row[ITEM_COLUMN_INDICES.ASSET_NAME - 1] || '').trim(),
+          assetType: 'item',
+          keeperName: String(row[ITEM_COLUMN_INDICES.LEADER_NAME - 1] || '').trim(),
+          location: String(row[ITEM_COLUMN_INDICES.LOCATION - 1] || '').trim(),
+          currentStatus: status
+        });
+      }
+    });
+
+    return {
+      scrapAssets: scrapAssets,
+      totalChecked: totalChecked,
+      inListCount: inListCount
+    };
+
+  } catch (e) {
+    Logger.log('[previewScrapBatch] Error: ' + e.message);
+    return { error: '比對時發生錯誤：' + e.message };
+  }
+}
+
+/**
+ * ✨ [新增] 批次執行報廢：將不在盤點清單中的資產標記為「已報廢」
+ * @param {{scrapAssets: Array<{assetId: string, assetType: 'property'|'item'}>}} payload
+ * @returns {{scrapCount: number}|{error: string}}
+ */
+function commitScrapBatch(payload) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return { error: '系統忙碌中，請稍後再試' };
+  }
+
+  try {
+    if (!checkAdminPermissions()) {
+      lock.releaseLock();
+      return { error: '您沒有權限執行此操作' };
+    }
+
+    const scrapAssets = Array.isArray(payload?.scrapAssets) ? payload.scrapAssets : [];
+    if (scrapAssets.length === 0) {
+      lock.releaseLock();
+      return { scrapCount: 0 };
+    }
+
+    const adminEmail = Session.getActiveUser().getEmail();
+    const now = new Date();
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const propertySheet = ss.getSheetByName(PROPERTY_MASTER_SHEET_NAME);
+    const itemSheet = ss.getSheetByName(ITEM_MASTER_SHEET_NAME);
+    const scrapLogSheet = ss.getSheetByName(SCRAP_LOG_SHEET_NAME);
+
+    // 讀取整份財產總表資料（批次操作）
+    let propData = [];
+    if (propertySheet && propertySheet.getLastRow() > 1) {
+      propData = propertySheet.getRange(2, 1, propertySheet.getLastRow() - 1, propertySheet.getLastColumn()).getValues();
+    }
+    const propIdToRowIndex = new Map(); // assetId -> 0-based index in propData
+    propData.forEach(function(row, idx) {
+      const id = String(row[PROPERTY_COLUMN_INDICES.ASSET_ID - 1] || '').trim();
+      if (id) propIdToRowIndex.set(id, idx);
+    });
+
+    // 讀取整份物品總表資料（批次操作）
+    let itemData = [];
+    if (itemSheet && itemSheet.getLastRow() > 1) {
+      itemData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, itemSheet.getLastColumn()).getValues();
+    }
+    const itemIdToRowIndex = new Map();
+    itemData.forEach(function(row, idx) {
+      const id = String(row[ITEM_COLUMN_INDICES.ASSET_ID - 1] || '').trim();
+      if (id) itemIdToRowIndex.set(id, idx);
+    });
+
+    let scrapCount = 0;
+    const timestamp = now.getTime();
+
+    scrapAssets.forEach(function(asset, seq) {
+      const assetId = String(asset.assetId || '').trim();
+      const assetType = String(asset.assetType || '').trim();
+      if (!assetId) return;
+
+      let targetSheet = null;
+      let targetData = null;
+      let targetIdMap = null;
+      let colIndices = null;
+
+      if (assetType === 'property') {
+        targetSheet = propertySheet;
+        targetData = propData;
+        targetIdMap = propIdToRowIndex;
+        colIndices = PROPERTY_COLUMN_INDICES;
+      } else if (assetType === 'item') {
+        targetSheet = itemSheet;
+        targetData = itemData;
+        targetIdMap = itemIdToRowIndex;
+        colIndices = ITEM_COLUMN_INDICES;
+      } else {
+        return;
+      }
+
+      if (!targetSheet || !targetIdMap.has(assetId)) return;
+
+      const dataRowIndex = targetIdMap.get(assetId); // 0-based
+      const sheetRowNumber = dataRowIndex + 2;        // 1-based, +1 for header
+      const row = targetData[dataRowIndex];
+
+      // 更新總表：O 欄 = 已報廢，U 欄 = 當下時間
+      targetSheet.getRange(sheetRowNumber, colIndices.ASSET_STATUS).setValue('已報廢');
+      targetSheet.getRange(sheetRowNumber, colIndices.LAST_MODIFIED).setValue(now);
+
+      // 寫入報廢紀錄
+      if (scrapLogSheet) {
+        const scrapId = 'SCRAP-' + timestamp + '-' + (seq + 1);
+        const keeperName = String(row[colIndices.LEADER_NAME - 1] || '').trim();
+        const userName = colIndices.USER_NAME ? String(row[colIndices.USER_NAME - 1] || '').trim() : '';
+        const location = String(row[colIndices.LOCATION - 1] || '').trim();
+        const assetCategory = String(row[colIndices.ASSET_CATEGORY - 1] || '').trim();
+        const assetName = String(row[colIndices.ASSET_NAME - 1] || '').trim();
+        const modelBrand = String(row[colIndices.MODEL_BRAND - 1] || '').trim();
+
+        const logRow = [];
+        logRow[SL_SCRAP_ID_COLUMN_INDEX - 1]       = scrapId;
+        logRow[SL_APPLY_TIME_COLUMN_INDEX - 1]      = now;
+        logRow[SL_ASSET_ID_COLUMN_INDEX - 1]        = assetId;
+        logRow[SL_APPLICANT_EMAIL_COLUMN_INDEX - 1] = adminEmail;
+        logRow[SL_KEEPER_NAME_COLUMN_INDEX - 1]     = keeperName;
+        logRow[SL_USER_NAME_COLUMN_INDEX - 1]       = userName;
+        logRow[SL_LOCATION_COLUMN_INDEX - 1]        = location;
+        logRow[SL_ASSET_CATEGORY_COLUMN_INDEX - 1]  = assetCategory;
+        logRow[SL_ASSET_NAME_COLUMN_INDEX - 1]      = assetName;
+        logRow[SL_MODEL_BRAND_COLUMN_INDEX - 1]     = modelBrand;
+        logRow[SL_SCRAP_REASON_COLUMN_INDEX - 1]    = '批次匯入比對結果';
+        logRow[SL_STATUS_COLUMN_INDEX - 1]          = '已報廢';
+        logRow[SL_UPDATE_TIME_COLUMN_INDEX - 1]     = now;
+        logRow[SL_APPROVER_EMAIL_COLUMN_INDEX - 1]  = adminEmail;
+
+        scrapLogSheet.appendRow(logRow);
+      }
+
+      scrapCount++;
+    });
+
+    lock.releaseLock();
+    return { scrapCount: scrapCount };
+
+  } catch (e) {
+    Logger.log('[commitScrapBatch] Error: ' + e.message);
+    try { lock.releaseLock(); } catch (_) {}
+    return { error: '執行報廢時發生錯誤：' + e.message };
+  }
+}
+
+/**
  * ✨ 更新單一資產的基本資訊（僅限管理員）
  * 可更新欄位：名稱、型號/廠牌、類別、取得日期、使用年限、資訊資產標記
  * @param {string} assetId - 資產編號
