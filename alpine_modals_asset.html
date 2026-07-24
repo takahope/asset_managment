@@ -247,13 +247,13 @@ document.addEventListener('alpine:init', function () {
                     '財產編號': 'assetId', '財產名稱': 'assetName', '財產別名': 'assetAlias',
                     '型號/廠牌': 'modelBrand', '單位': 'unit', '取得日期': 'purchaseDate',
                     '使用年限': 'useLife', '保管地點': 'location', '附屬設備': 'accessory',
-                    '保管人（姓名）': 'keeperName', '使用人（姓名）': 'userName', '財產類別': 'assetCategory'
+                    '保管人': 'keeperName', '使用人': 'userName', '財產類別': 'assetCategory'
                 };
                 var ITEM_KEYS = {
                     '物品編號': 'assetId', '物品名稱': 'assetName', '產品序號': 'productSerial',
                     '型號/廠牌': 'modelBrand', '取得日期': 'purchaseDate', '使用年限': 'useLife',
                     '單位': 'unit', '台幣金額': 'amountTwd', '申購單號': 'purchaseOrder',
-                    '財產類別': 'assetCategory', '保管人（姓名）': 'keeperName', '保管地點': 'location'
+                    '財產類別': 'assetCategory', '保管人': 'keeperName', '保管地點': 'location'
                 };
                 var REQUIRED = type === 'property' ? ['assetId', 'assetName', 'location', 'keeperName'] : ['assetId', 'assetName', 'location', 'keeperName'];
                 var nameToKey = type === 'property' ? PROPERTY_KEYS : ITEM_KEYS;
@@ -1077,7 +1077,7 @@ document.addEventListener('alpine:init', function () {
                                                 <th class="px-3 py-2 text-left border-b border-slate-200">必填</th>
                                             </tr></thead>
                                             <tbody class="text-slate-700">
-                                                <template x-for="row in [['財產編號','是'],['財產名稱','是'],['財產別名','否'],['型號/廠牌','否'],['單位','否'],['取得日期','否'],['使用年限','否'],['保管地點','是'],['附屬設備','否'],['保管人（姓名）','是'],['使用人（姓名）','否（空白會自動帶入保管人）'],['財產類別','否（實際以匯入時選擇為準，若有值則優先使用）']]" :key="'p-'+row[0]">
+                                                <template x-for="row in [['財產編號','是'],['財產名稱','是'],['財產別名','否'],['型號/廠牌','否'],['單位','否'],['取得日期','否'],['使用年限','否'],['保管地點','是'],['附屬設備','否'],['保管人','是'],['使用人','否（空白會自動帶入保管人）'],['財產類別','否（實際以匯入時選擇為準，若有值則優先使用）']]" :key="'p-'+row[0]">
                                                     <tr class="border-b border-slate-100">
                                                         <td class="px-3 py-2 font-mono text-slate-500" x-text="row[0]"></td>
                                                         <td class="px-3 py-2" x-text="row[1]"></td>
@@ -1096,7 +1096,7 @@ document.addEventListener('alpine:init', function () {
                                                 <th class="px-3 py-2 text-left border-b border-slate-200">必填</th>
                                             </tr></thead>
                                             <tbody class="text-slate-700">
-                                                <template x-for="row in [['物品編號','是'],['物品名稱','是'],['產品序號','否'],['型號/廠牌','否'],['取得日期','否'],['使用年限','否'],['單位','否'],['台幣金額','否'],['申購單號','否'],['財產類別','否'],['保管人（姓名）','是'],['保管地點','是']]" :key="'i-'+row[0]">
+                                                <template x-for="row in [['物品編號','是'],['物品名稱','是'],['產品序號','否'],['型號/廠牌','否'],['取得日期','否'],['使用年限','否'],['單位','否'],['台幣金額','否'],['申購單號','否'],['財產類別','否'],['保管人','是'],['保管地點','是']]" :key="'i-'+row[0]">
                                                     <tr class="border-b border-slate-100">
                                                         <td class="px-3 py-2 font-mono text-slate-500" x-text="row[0]"></td>
                                                         <td class="px-3 py-2" x-text="row[1]"></td>
