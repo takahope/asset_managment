@@ -613,18 +613,20 @@
             inset: 0;
             z-index: 1050;
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             justify-content: center;
-            padding: 32px 16px;
+            padding: 16px;
             overflow-y: auto;
             background: rgba(15, 23, 42, 0.6);
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
             opacity: 0;
             visibility: hidden;
             transition: opacity .15s ease, visibility .15s ease;
         }
         .lm-modal.is-open { opacity: 1; visibility: visible; }
         .lm-dialog { width: 100%; max-width: 500px; margin: auto; }
-        .lm-dialog--lg { max-width: 900px; }
+        .lm-dialog--lg { max-width: 1152px; }
         .lm-card {
             background: var(--surface, #fff);
             border-radius: 16px;
@@ -649,7 +651,8 @@
             border-top: 1px solid #e2e8f0;
             background: var(--surface-muted, #f8fafc);
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
+            align-items: center;
             gap: 8px;
         }
         .lm-close {
@@ -667,10 +670,98 @@
         /* 表格 */
         .lm-table { width: 100%; border-collapse: collapse; font-size: 14px; }
         .lm-table th, .lm-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: middle; }
-        .lm-table thead th { background: #f1f5f9; font-weight: 600; color: var(--ink-700, #334155); }
+        .lm-table thead th { background: #f1f5f9; font-weight: 600; color: var(--ink-700, #334155); border-bottom-width: 2px; }
         .lm-table--hover tbody tr:hover { background: #f8fafc; }
         .lm-table-scroll { max-height: 60vh; overflow-y: auto; }
-        .lm-table-scroll thead th { position: sticky; top: 0; z-index: 1; }
+        .lm-table-scroll thead th { position: sticky; top: 0; z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+        /* ── pendingApproval header 色相 ── */
+        .lm-header--cyan { background: #ecfeff; }
+        .lm-header--cyan .lm-title { color: #155e75; }
+        .lm-header--cyan .lm-close { color: #0891b2; }
+        .lm-header--cyan .lm-close:hover { color: #155e75; }
+
+        /* ── pendingApproval 篩選區卡片 ── */
+        .lm-filter-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .lm-filter-stats {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #475569;
+        }
+        .lm-filter-stats strong {
+            color: #0891b2;
+            font-weight: 700;
+        }
+
+        /* ── pending footer 選擇計數 ── */
+        .lm-footer__stats {
+            font-size: 14px;
+            color: #475569;
+        }
+        .lm-footer__stats strong {
+            color: #0891b2;
+            font-weight: 700;
+        }
+        .lm-footer__actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        /* ── lm-modal 分頁 ── */
+        .lm-modal .pagination {
+            display: flex;
+            gap: 6px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .lm-modal .page-item .page-link {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            color: #475569;
+            cursor: pointer;
+            transition: background-color 0.15s, border-color 0.15s;
+        }
+        .lm-modal .page-item .page-link:hover {
+            background: #f1f5f9;
+        }
+        .lm-modal .page-item.disabled .page-link {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* ── pending checkbox 色 ── */
+        .lm-table .pending-approval-checkbox,
+        #pending-select-all {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #06b6d4;
+        }
+
+        /* ── pending 勾選行高亮 ── */
+        .lm-table .lm-row--selected {
+            background: #ecfeff !important;
+        }
+
+        /* ── pending 變更箭頭色 ── */
+        .lm-change-arrow {
+            color: #0891b2;
+        }
 
         /* 按鈕 */
         .lm-btn {
@@ -1657,24 +1748,27 @@
     <div class="lm-modal" id="pendingApprovalModal" tabindex="-1" role="dialog" aria-labelledby="pendingApprovalTitle" aria-hidden="true">
         <div class="lm-dialog lm-dialog--lg" role="document">
             <div class="lm-card">
-                <div class="lm-header">
-                    <h5 class="lm-title" id="pendingApprovalTitle">待接收資產清單</h5>
+                <div class="lm-header lm-header--cyan">
+                    <h5 class="lm-title" id="pendingApprovalTitle"><i class="fas fa-inbox mr-2"></i>待接收資產清單</h5>
                     <button type="button" class="lm-close" data-dismiss="modal">
-                        <span>&times;</span>
+                        <i class="fas fa-xmark"></i>
                     </button>
                 </div>
                 <div class="lm-body">
-                    <div class="lm-field-row mb-2">
-                        <div class="lm-field">
-                            <label for="pending-location-filter">依原保管地點篩選</label>
-                            <select id="pending-location-filter" class="lm-select">
-                                <option value="">-- 顯示全部 --</option>
-                            </select>
+                    <div class="lm-filter-card">
+                        <div class="lm-field-row">
+                            <div class="lm-field">
+                                <label for="pending-location-filter">依原保管地點篩選</label>
+                                <select id="pending-location-filter" class="lm-select">
+                                    <option value="">-- 顯示全部 --</option>
+                                </select>
+                            </div>
+                            <div class="lm-field">
+                                <label for="pending-search-box">關鍵字搜尋 (產編/產名/原保管人)</label>
+                                <input type="text" id="pending-search-box" class="lm-input" placeholder="輸入關鍵字">
+                            </div>
                         </div>
-                        <div class="lm-field">
-                            <label for="pending-search-box">關鍵字搜尋 (產編/產名/原保管人)</label>
-                            <input type="text" id="pending-search-box" class="lm-input" placeholder="輸入關鍵字">
-                        </div>
+                        <div class="lm-filter-stats" id="pending-filter-stats"></div>
                     </div>
                     <div class="lm-table-scroll">
                         <table class="lm-table lm-table--hover">
@@ -1698,8 +1792,11 @@
                     <div id="pending-pagination" class="flex justify-between items-center mt-2"></div>
                 </div>
                 <div class="lm-footer">
-                    <button type="button" class="lm-btn lm-btn--outline-danger" onclick="submitPendingRejection()">拒絕所選</button>
-                    <button type="button" class="lm-btn lm-btn--success" onclick="submitPendingApproval()">接受所選</button>
+                    <div class="lm-footer__stats" id="pending-selected-stats">已選擇 <strong>0</strong> 筆</div>
+                    <div class="lm-footer__actions">
+                        <button type="button" class="lm-btn lm-btn--outline-danger" id="pending-reject-btn" onclick="submitPendingRejection()"><i class="fas fa-times-circle mr-1"></i>拒絕所選</button>
+                        <button type="button" class="lm-btn lm-btn--success" id="pending-approve-btn" onclick="submitPendingApproval()"><i class="fas fa-check mr-1"></i>接受所選</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1920,7 +2017,10 @@
                 document.getElementById('pending-select-all').addEventListener('change', (event) => {
                     document.querySelectorAll('.pending-approval-checkbox').forEach(cb => {
                         cb.checked = event.target.checked;
+                        var tr = cb.closest('tr');
+                        if (tr) tr.classList.toggle('lm-row--selected', event.target.checked);
                     });
+                    updatePendingSelectedCount();
                 });
                 document.getElementById('pendingApprovalModal').dataset.initialized = 'true';
             }
@@ -2034,6 +2134,10 @@
                 checkbox.type = 'checkbox';
                 checkbox.className = 'pending-approval-checkbox';
                 checkbox.value = item.appId;
+                checkbox.addEventListener('change', function() {
+                    row.classList.toggle('lm-row--selected', this.checked);
+                    updatePendingSelectedCount();
+                });
                 checkboxTd.appendChild(checkbox);
                 row.appendChild(checkboxTd);
 
@@ -2058,7 +2162,7 @@
                     if (hasChange) {
                         td.appendChild(document.createTextNode(oldVal || ''));
                         const arrow = document.createElement('span');
-                        arrow.className = 'text-blue-600';
+                        arrow.className = 'lm-change-arrow';
                         arrow.textContent = ' → ';
                         td.appendChild(arrow);
                         td.appendChild(document.createTextNode(newVal || ''));
@@ -2108,6 +2212,23 @@
             listBody.appendChild(fragment);
             renderPendingPagination();
             document.getElementById('pending-select-all').checked = false;
+            updatePendingSelectedCount();
+            updatePendingFilterStats();
+        }
+
+        function updatePendingSelectedCount() {
+            var count = document.querySelectorAll('.pending-approval-checkbox:checked').length;
+            var statsEl = document.getElementById('pending-selected-stats');
+            if (statsEl) statsEl.innerHTML = '已選擇 <strong>' + count + '</strong> 筆';
+        }
+
+        function updatePendingFilterStats() {
+            var statsEl = document.getElementById('pending-filter-stats');
+            if (statsEl) {
+                var filtered = window.filteredPendingApprovals ? window.filteredPendingApprovals.length : 0;
+                var total = window.pendingApprovals ? window.pendingApprovals.length : 0;
+                statsEl.innerHTML = '顯示 <strong>' + filtered + '</strong> / ' + total + ' 筆';
+            }
         }
 
         function renderPendingPagination() {
@@ -2286,6 +2407,23 @@
             paginationEl.appendChild(nav);
         }
 
+        function setPendingBtnLoading(isLoading, activeBtn) {
+            var approveBtn = document.getElementById('pending-approve-btn');
+            var rejectBtn = document.getElementById('pending-reject-btn');
+            if (isLoading) {
+                if (approveBtn) approveBtn.disabled = true;
+                if (rejectBtn) rejectBtn.disabled = true;
+                if (activeBtn && activeBtn === 'approve' && approveBtn) {
+                    approveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>處理中...';
+                } else if (activeBtn && activeBtn === 'reject' && rejectBtn) {
+                    rejectBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>處理中...';
+                }
+            } else {
+                if (approveBtn) { approveBtn.disabled = false; approveBtn.innerHTML = '<i class="fas fa-check mr-1"></i>接受所選'; }
+                if (rejectBtn) { rejectBtn.disabled = false; rejectBtn.innerHTML = '<i class="fas fa-times-circle mr-1"></i>拒絕所選'; }
+            }
+        }
+
         function submitPendingApproval() {
             const selected = Array.from(document.querySelectorAll('.pending-approval-checkbox:checked')).map(cb => cb.value);
             if (selected.length === 0) {
@@ -2293,15 +2431,18 @@
                 return;
             }
 
+            setPendingBtnLoading(true, 'approve');
             showToastProgress('正在處理接收作業...');
             google.script.run
                 .withSuccessHandler(message => {
+                    setPendingBtnLoading(false);
                     hideToastProgress('處理完成！', 300);
                     $('#pendingApprovalModal').modal('hide');
                     alert(message);
                     window.refreshReactData && window.refreshReactData();
                 })
                 .withFailureHandler(error => {
+                    setPendingBtnLoading(false);
                     hideToastProgress('處理失敗！', 300);
                     alert('處理失敗：' + error.message);
                 })
@@ -2318,15 +2459,18 @@
                 return;
             }
 
+            setPendingBtnLoading(true, 'reject');
             showToastProgress('正在處理拒絕作業...');
             google.script.run
                 .withSuccessHandler(message => {
+                    setPendingBtnLoading(false);
                     hideToastProgress('處理完成！', 300);
                     $('#pendingApprovalModal').modal('hide');
                     alert(message);
                     window.refreshReactData && window.refreshReactData();
                 })
                 .withFailureHandler(error => {
+                    setPendingBtnLoading(false);
                     hideToastProgress('處理失敗！', 300);
                     alert('處理失敗：' + error.message);
                 })
