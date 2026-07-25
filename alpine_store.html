@@ -244,6 +244,47 @@
             isReady: false,
             secondaryLoaded: false,   // 次要資料（抽屜卡片）是否已靜默載入完成
             sidebarOpen: false,        // 左側功能抽屜開合狀態
+            isSidebarAutoOpened: false,
+            sidebarHoverTimer: null,
+            sidebarCloseTimer: null,
+
+            handleSidebarEdgeEnter: function () {
+                if (this.sidebarHoverTimer) clearTimeout(this.sidebarHoverTimer);
+                if (this.sidebarCloseTimer) clearTimeout(this.sidebarCloseTimer);
+                
+                this.sidebarHoverTimer = setTimeout(() => {
+                    if (!this.sidebarOpen) {
+                        this.sidebarOpen = true;
+                        this.isSidebarAutoOpened = true; // 標記為自動展開
+                    }
+                }, 120);
+            },
+            
+            handleSidebarEdgeLeave: function () {
+                if (this.sidebarHoverTimer) {
+                    clearTimeout(this.sidebarHoverTimer);
+                    this.sidebarHoverTimer = null;
+                }
+            },
+
+            handleSidebarDrawerEnter: function () {
+                if (this.sidebarCloseTimer) {
+                    clearTimeout(this.sidebarCloseTimer);
+                    this.sidebarCloseTimer = null;
+                }
+            },
+
+            handleSidebarDrawerLeave: function () {
+                // 只有自動展開的側邊欄才啟用自動關閉
+                if (!this.isSidebarAutoOpened) return;
+                
+                if (this.sidebarCloseTimer) clearTimeout(this.sidebarCloseTimer);
+                this.sidebarCloseTimer = setTimeout(() => {
+                    this.sidebarOpen = false;
+                    this.isSidebarAutoOpened = false;
+                }, 300);
+            },
+            
             allAssets: [],
             isAdmin: false,
             viewMode: 'user',
@@ -1129,7 +1170,12 @@
             },
 
             /* ── 左側功能抽屜開合 ── */
-            toggleSidebar: function () { this.sidebarOpen = !this.sidebarOpen; },
+            toggleSidebar: function () { 
+                this.sidebarOpen = !this.sidebarOpen; 
+                if (this.sidebarOpen) {
+                    this.isSidebarAutoOpened = false; // 手動開啟，關閉自動收合
+                }
+            },
 
             /* ── 卡片重新整理(舊頁 14185-14309 refreshCardData;並行載入 + 最短顯示時間) ── */
             refreshCardData: function () {

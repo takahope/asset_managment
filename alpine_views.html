@@ -836,6 +836,10 @@ document.addEventListener('alpine:init', function () {
 
         <!-- 左側功能抽屜：轉移中/待接收/出借中/待列印報廢單/待列印轉移單/待盤點(舊頁 3441-3531 卡片移入) -->
         <div x-data="dashboardCards">
+            <!-- 滑鼠移至左側邊緣自動展開感應條 -->
+            <div class="sidebar-hover-trigger"
+                 @mouseenter="$store.app.handleSidebarEdgeEnter()"
+                 @mouseleave="$store.app.handleSidebarEdgeLeave()"></div>
             <!-- 遮罩：點擊關閉 -->
             <div class="sidebar-overlay"
                  x-show="$store.app.sidebarOpen"
@@ -844,7 +848,9 @@ document.addEventListener('alpine:init', function () {
                  style="display:none;"></div>
             <!-- 抽屜本體 -->
             <aside class="sidebar-drawer"
-                   :class="$store.app.sidebarOpen ? 'sidebar-drawer--open' : ''">
+                   :class="$store.app.sidebarOpen ? 'sidebar-drawer--open' : ''"
+                   @mouseenter="$store.app.handleSidebarDrawerEnter()"
+                   @mouseleave="$store.app.handleSidebarDrawerLeave()">
                 <div class="sidebar-drawer__header">
                     <h3 class="sidebar-drawer__title">待辦事項</h3>
                     <button class="sidebar-drawer__close" @click="$store.app.sidebarOpen = false" aria-label="關閉待辦事項">

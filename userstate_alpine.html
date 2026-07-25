@@ -254,6 +254,23 @@
         }
 
         /* ── 左側功能抽屜（待辦事項） ── */
+        /* ── 左側邊欄滑鼠自動展開感應區 (僅桌面滑鼠裝置生效) ── */
+        .sidebar-hover-trigger {
+            display: none;
+        }
+        @media (hover: hover) and (pointer: fine) {
+            .sidebar-hover-trigger {
+                display: block;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 16px;
+                height: 100vh;
+                z-index: 1190;
+                pointer-events: auto;
+            }
+        }
+
         .sidebar-overlay {
             position: fixed;
             inset: 0;
