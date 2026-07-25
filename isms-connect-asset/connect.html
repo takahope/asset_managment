@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>資產與資訊資產對照管理</title>
+  <title>資訊資產分類編號管理</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -527,7 +527,7 @@
       <div class="card mb-6">
         <div class="flex border-b">
           <button class="tab-btn active" data-tab="assets" onclick="switchTab('assets')">
-            <i class="fas fa-list mr-2"></i>資產清單
+            <i class="fas fa-list mr-2"></i>資訊資產清單
           </button>
           <button class="tab-btn" data-tab="mapping" onclick="switchTab('mapping')">
             <i class="fas fa-link mr-2"></i>對照作業
@@ -610,7 +610,7 @@
                   <span id="mappingAssetCount" class="text-sm text-gray-500 ml-2">(0 筆)</span>
                 </h3>
                 <div id="selectedAssetsList" class="space-y-2 max-h-80 overflow-y-auto">
-                  <p class="text-gray-400 text-sm">請先在「資產清單」選擇資產</p>
+                  <p class="text-gray-400 text-sm">請先在「資訊資產清單」選擇資產</p>
                 </div>
               </div>
 
@@ -1107,7 +1107,7 @@
       countSpan.textContent = `(${selectedAssetIds.size} 筆)`;
 
       if (selectedAssetIds.size === 0) {
-        container.innerHTML = '<p class="text-gray-400 text-sm">請先在「資產清單」選擇資產</p>';
+        container.innerHTML = '<p class="text-gray-400 text-sm">請先在「資訊資產清單」選擇資產</p>';
         return;
       }
 
