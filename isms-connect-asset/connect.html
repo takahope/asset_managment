@@ -173,15 +173,18 @@
     .col-asset-name { min-width: 180px; }
     .col-brand { min-width: 110px; }
 
-    /* 廠牌型號:單筆長序號會把整欄撐到 max-content(數百 px),連帶把保管人推到很遠。
+    /* 可換行儲存格:.data-table td 的 white-space:nowrap 會讓「單筆超長內容」
+       把整欄撐到 max-content,短內容那幾列看起來就是一大片空白。
        改成允許換行 —— 內容完整顯示不截斷,只是折成多行。
        用內層 div 是因為 auto table layout 下 <td> 的 max-width 不保證生效。 */
-    .cell-brand {
-      max-width: 240px;   /* 240 而非 200:少折一兩行,可讀性較好 */
+    .cell-brand,
+    .cell-name {
       white-space: normal;      /* 覆蓋 .data-table td 的 nowrap */
       overflow-wrap: anywhere;  /* 不含空白的長序號也能斷 */
       line-height: 1.5;
     }
+    .cell-brand { max-width: 240px; }  /* 240 而非 200:少折一兩行,可讀性較好 */
+    .cell-name  { max-width: 180px; }  /* 與 .col-asset-name 的 min-width 對齊 → 欄寬固定 180 */
     .col-person { min-width: 90px; }
     .col-location { min-width: 120px; }
     .col-group { min-width: 100px; }
@@ -932,7 +935,7 @@
               <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleAssetSelection('${escapeHtml(asset.assetId)}')">
             </td>
             <td class="font-mono text-sm">${escapeHtml(asset.assetId)}</td>
-            <td>${escapeHtml(asset.assetName)}</td>
+            <td><div class="cell-name">${escapeHtml(asset.assetName)}</div></td>
             <td><div class="cell-brand">${escapeHtml(asset.modelBrand || '-')}</div></td>
             <td>${escapeHtml(asset.leaderName)}</td>
             <td>${escapeHtml(asset.userName)}</td>
