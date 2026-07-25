@@ -156,6 +156,15 @@ clearHrGroupMapCache()    // 改完 HR 主表或 Script Property 後清快取（
 
 ## 事件紀錄
 
+### 2026-07-26 對照頁表格欄位之間出現大片空白
+- 症狀：`connect.html` 資產清單表格，廠牌型號與保管人之間、資產名稱與廠牌型號之間各有數百 px 空白；縮 `min-width` 無效。
+- 根因（同一機制發作兩次）：`.data-table td` 有 `white-space: nowrap`，只要該欄**任何一列**有超長內容（實測：資產名稱最長 21 字「Zyxel AC1200 4G 寬頻路由器」、廠牌型號含長序號），整欄就被撐到 max-content；短內容那幾列看到的就是空白。畫面上看得到的列全是短的，所以完全看不出兇手在哪。
+- 走錯的一步：先加 `.col-asset-name { width: 100% }` 想讓它吸走剩餘空間——但 `width:100%` **只能分配「剩餘」空間**，當某欄已被 max-content 撐到表格溢出時根本沒有剩餘可分，該招完全失效，反而在後續造成新的大空隙。
+- 判斷訊號：**表格溢出容器、且各欄實際寬度比例與 min-width 比例明顯不符** → 就是 max-content 在主導，不是空間攤分。（實例：min-width 180:150，實測卻是 365:1050。）
+- 修法：`.cell-name` / `.cell-brand` 內層 `<div>` + `white-space: normal` + `overflow-wrap: anywhere` + `max-width`（不截斷，只折行）。用內層 div 是因為 auto table layout 下 `<td>` 的 `max-width` 不保證生效。`max-width` 與該欄 `min-width` 設同值即可鎖死欄寬。另 `#assetTable { width: auto }` 讓表格不強制滿版（代價：寬螢幕右側留白，這是「零空隙」的必然結果）。
+- 排除項：**不是 Tailwind 造成的**。`connect.html:24` 載的是 Play CDN(JIT) 版，與主專案凍結的預建 `css_tailwind.html` 不同，任意值 class 在這裡會生效；表格也只用具名 class，Preflight 對 `table` 只設 `border-collapse`。
+- 通則已沉澱：`gas-fullstack` CSS/佈局節。檔案：`connect.html`。
+
 ### 2026-07-25 補上寫入端點缺少的權限檢查
 - 症狀（潛在，非使用者回報）：白名單只擋在 `doGet`，但 `google.script.run` 是獨立入口不經過 `doGet`；8 支寫入端點中只有 `deleteIsmsAsset` 檢查管理員，其餘（`createIsmsAsset` / `updateIsmsAsset` / `createMappings` / `updateMapping` / `deleteMappings` / `initMappingSheet` / `clearHrGroupMapCache`）任何網域使用者都能在 console 直接呼叫。
 - 修法：新增守門函式 `assertWriteAccess_(requireAdmin)`（`code.js:139`），沿用既有 `getPermissionLists_()` 的 5 分鐘快取，一次取回 `{ok, email, isAdmin, error}`；8 支寫入端點在**搶鎖之前**呼叫，新增/編輯=白名單、刪除/結構變更=管理員。
