@@ -113,6 +113,11 @@ function getPermissionLists_() {
 
 /**
  * 清除權限快取(改完權限工作表後可手動執行)
+ *
+ * ⚠️ 這是唯一「刻意不做權限檢查」的寫入型端點,原因是會死鎖:
+ * 管理員把自己加進「權限」B 欄後要清快取才會生效,但若此函式先檢查管理員,
+ * 檢查讀到的正是那份還沒清掉的舊快取 → 永遠過不了 → 只能乾等 5 分鐘。
+ * 影響面僅止於「強迫下次重讀工作表」,不洩漏也不竄改資料,故接受此風險。
  */
 function clearPermissionCache() {
   CacheService.getScriptCache().remove('isms_permission_lists_v1');
@@ -134,6 +139,46 @@ function checkIsAdmin_(email) {
   if (!email) return false;
   const lists = getPermissionLists_();
   return lists.admins.has(String(email).toLowerCase().trim());
+}
+
+/**
+ * 寫入端點統一守門。
+ *
+ * 為什麼每個寫入端點都要自己呼叫:google.script.run 直接打到後端函式,
+ * **不會經過 doGet**,所以 doGet 的白名單擋不到它。任何拿得到 Web App URL
+ * 的網域使用者都能在 console 直接呼叫後端函式。
+ *
+ * 權限模型是「角色制」而非「擁有者制」:資訊資產與對照表沒有擁有者欄位,
+ * 是全所共用的登錄簿(ISMS 承辦人本來就要代表全所建對照),因此不做
+ * leaderEmail/userEmail 比對,只分白名單與管理員兩級。
+ *
+ * 讀不到「權限」工作表時 getPermissionLists_() 回傳空集合 → 一律拒絕(fail-closed)。
+ *
+ * @param {boolean} requireAdmin true=僅管理員(B 欄);false=白名單即可(A 或 B 欄)
+ * @returns {{ok:boolean, email:string, isAdmin:boolean, error:string}}
+ */
+function assertWriteAccess_(requireAdmin) {
+  const email = String(Session.getActiveUser().getEmail() || '').trim();
+  if (!email) {
+    console.warn('權限拒絕(取不到身分)');
+    return { ok: false, email: '', isAdmin: false, error: '無法取得您的帳號身分,請重新登入後再試。' };
+  }
+
+  const key = email.toLowerCase();
+  const lists = getPermissionLists_();
+  const isAdmin = lists.admins.has(key);
+
+  if (!lists.whitelist.has(key)) {
+    console.warn('權限拒絕(非白名單):' + email);
+    return { ok: false, email: email, isAdmin: false, error: '您的帳號不在資訊資產系統的授權名單中,請聯絡系統管理員。' };
+  }
+
+  if (requireAdmin && !isAdmin) {
+    console.warn('權限拒絕(非管理員):' + email);
+    return { ok: false, email: email, isAdmin: false, error: '此操作僅限管理員。' };
+  }
+
+  return { ok: true, email: email, isAdmin: isAdmin, error: '' };
 }
 
 /**
@@ -240,9 +285,15 @@ function getHrEmailToGroupMap_() {
 
 /**
  * 清除 HR 組別對照快取(改 HR/property 後可手動執行)
+ * 僅限管理員。與 clearPermissionCache 不同,這裡沒有死鎖問題
+ * (權限快取與 HR 快取是兩把不同的 key)。
  */
 function clearHrGroupMapCache() {
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+
   CacheService.getScriptCache().remove(HR_GROUP_MAP_CACHE_KEY);
+  return { success: true, message: 'HR 組別對照快取已清除' };
 }
 
 /**
@@ -590,6 +641,10 @@ function getDropdownOptions() {
  * @returns {Object} { success, ismsAssetId, serial, assetValue }
  */
 function createIsmsAsset(form) {
+  // 🛡️ 權限守門(先擋再搶鎖,未授權的呼叫不佔用 LockService)
+  const access = assertWriteAccess_(false);
+  if (!access.ok) return { success: false, error: access.error };
+
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000); // 最多等 10 秒，避免並發撞號
@@ -785,6 +840,10 @@ function findIsmsAssetRow_(ismsAssetId) {
  * 編輯資訊資產(可修改:名稱、說明、狀態、CIA)
  */
 function updateIsmsAsset(form) {
+  // 🛡️ 權限守門(先擋再搶鎖)
+  const access = assertWriteAccess_(false);
+  if (!access.ok) return { success: false, error: access.error };
+
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -859,14 +918,13 @@ function updateIsmsAsset(form) {
  * 刪除資訊資產(僅管理員)
  */
 function deleteIsmsAsset(ismsAssetId, reason) {
+  // 🛡️ 權限守門:刪除僅限管理員(先擋再搶鎖)
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-
-    const email = Session.getActiveUser().getEmail() || '';
-    if (!checkIsAdmin_(email)) {
-      return { success: false, error: '僅管理員可刪除' };
-    }
 
     const targetId = (ismsAssetId || '').toString().trim();
     if (!targetId) return { success: false, error: '資訊資產編號必填' };
@@ -978,8 +1036,12 @@ function checkExistingMappings(assetIds) {
  * @returns {Object} 操作結果
  */
 function createMappings(assetIds, ismsAssetId, remarks = '') {
+  // 🛡️ 權限守門
+  const access = assertWriteAccess_(false);
+  if (!access.ok) return { success: false, error: access.error };
+
   try {
-    const email = Session.getActiveUser().getEmail();
+    const email = access.email;
     const timestamp = new Date().toISOString();
 
     const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
@@ -1032,6 +1094,10 @@ function createMappings(assetIds, ismsAssetId, remarks = '') {
  * @returns {Object} 操作結果
  */
 function updateMapping(assetId, newIsmsAssetId) {
+  // 🛡️ 權限守門
+  const access = assertWriteAccess_(false);
+  if (!access.ok) return { success: false, error: access.error };
+
   try {
     const mappingMap = getMappingMap_();
     const existing = mappingMap.get(assetId);
@@ -1061,6 +1127,10 @@ function updateMapping(assetId, newIsmsAssetId) {
  * @returns {Object} 操作結果
  */
 function deleteMappings(assetIds) {
+  // 🛡️ 權限守門:刪除僅限管理員(與 deleteIsmsAsset 同級)
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+
   try {
     const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
     const sheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
@@ -1339,6 +1409,10 @@ function getSoftwareDropdownOptions() {
  * 初始化對照表工作表
  */
 function initMappingSheet() {
+  // 🛡️ 權限守門:建立工作表屬結構變更,僅限管理員
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+
   try {
     const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
     let sheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
