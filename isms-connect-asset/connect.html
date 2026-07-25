@@ -161,19 +161,23 @@
       background: #eff6ff;
     }
 
+    /* 資產清單表格改為寬度由內容決定(不強制滿版)。
+       原因:寬螢幕下容器約 2300px、內容只需約 1200px,只要 width:100%,
+       多出來的空間一定得塞在某處 —— 不是集中成單一大空隙,就是平均攤給每一欄。
+       要零空隙就只能讓表格不滿版,代價是右側留白。 */
+    #assetTable { width: auto; }
+
     /* 表格欄位寬度設定 (具名 scoped CSS class 避免 Tailwind 凍結限制) */
-    /* width:100% 只掛在資產名稱欄 = 由它吸走容器內所有剩餘空間,
-       其餘欄位才會各自收斂到 min-width,不會被平均攤寬。不截斷任何內容。 */
     .col-checkbox { width: 48px; min-width: 48px; text-align: center; }
     .col-asset-id { min-width: 120px; }
-    .col-asset-name { min-width: 180px; width: 100%; }
+    .col-asset-name { min-width: 180px; }
     .col-brand { min-width: 110px; }
 
     /* 廠牌型號:單筆長序號會把整欄撐到 max-content(數百 px),連帶把保管人推到很遠。
        改成允許換行 —— 內容完整顯示不截斷,只是折成多行。
        用內層 div 是因為 auto table layout 下 <td> 的 max-width 不保證生效。 */
     .cell-brand {
-      max-width: 200px;
+      max-width: 240px;   /* 240 而非 200:少折一兩行,可讀性較好 */
       white-space: normal;      /* 覆蓋 .data-table td 的 nowrap */
       overflow-wrap: anywhere;  /* 不含空白的長序號也能斷 */
       line-height: 1.5;
