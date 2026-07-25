@@ -504,7 +504,7 @@ function getAssetsWithMappingStatus(options = {}) {
       const propertyData = propertySheet.getDataRange().getValues();
       for (let i = 1; i < propertyData.length; i++) {
         const asset = mapRowToAssetObject_(propertyData[i], PROPERTY_COLUMN_INDICES, '財產');
-        if (asset.assetId && asset.assetStatus !== '已報廢') {
+        if (asset.assetId && asset.assetStatus !== '已報廢' && String(asset.isItAsset || '').trim() === '是') {
           // 使用雙層分組邏輯計算組別
           asset.group = getAssetGroup_(asset, emailToGroupMap);
           assets.push(asset);
@@ -518,7 +518,7 @@ function getAssetsWithMappingStatus(options = {}) {
       const itemData = itemSheet.getDataRange().getValues();
       for (let i = 1; i < itemData.length; i++) {
         const asset = mapRowToAssetObject_(itemData[i], ITEM_COLUMN_INDICES, '物品');
-        if (asset.assetId && asset.assetStatus !== '已報廢') {
+        if (asset.assetId && asset.assetStatus !== '已報廢' && String(asset.isItAsset || '').trim() === '是') {
           // 使用雙層分組邏輯計算組別
           asset.group = getAssetGroup_(asset, emailToGroupMap);
           assets.push(asset);
