@@ -70,7 +70,7 @@ function getCurrentUser() {
  */
 function getPermissionLists_() {
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'isms_permission_lists_v2';
+  const cacheKey = 'isms_permission_lists_v3';
   const cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -96,23 +96,27 @@ function getPermissionLists_() {
   }
 
   // 2. 載入一般使用者白名單 (HR 人員主檔)
-  try {
-    const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
-    const personnelSheet = hrSs.getSheetByName(CONFIG.HR_PERSONNEL_SHEET_NAME);
-    if (personnelSheet && personnelSheet.getLastRow() >= 1) {
-      // 讀取 A、C 兩欄(信箱與狀態)
-      const data = personnelSheet.getRange(1, 1, personnelSheet.getLastRow(), 3).getValues();
-      for (let i = 0; i < data.length; i++) {
-        const email = String(data[i][0] || '').trim().toLowerCase();
-        const status = String(data[i][2] || '').trim();
-        // 狀態在 HR_ACTIVE_STATUSES 陣列中才放行
-        if (email && email.indexOf('@') > 0 && HR_ACTIVE_STATUSES.indexOf(status) !== -1) {
-          whitelist.add(email);
+  // 新增功能開關：如果 ENABLE_HR_WHITELIST 被設為 'false'，則跳過載入 HR 名單
+  const enableHrWhitelist = PropertiesService.getScriptProperties().getProperty('ENABLE_HR_WHITELIST');
+  if (enableHrWhitelist !== 'false') {
+    try {
+      const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
+      const personnelSheet = hrSs.getSheetByName(CONFIG.HR_PERSONNEL_SHEET_NAME);
+      if (personnelSheet && personnelSheet.getLastRow() >= 1) {
+        // 讀取 A、C 兩欄(信箱與狀態)
+        const data = personnelSheet.getRange(1, 1, personnelSheet.getLastRow(), 3).getValues();
+        for (let i = 0; i < data.length; i++) {
+          const email = String(data[i][0] || '').trim().toLowerCase();
+          const status = String(data[i][2] || '').trim();
+          // 狀態在 HR_ACTIVE_STATUSES 陣列中才放行
+          if (email && email.indexOf('@') > 0 && HR_ACTIVE_STATUSES.indexOf(status) !== -1) {
+            whitelist.add(email);
+          }
         }
       }
+    } catch (e) {
+      console.error('讀取 HR 權限工作表失敗:', e);
     }
-  } catch (e) {
-    console.error('讀取 HR 權限工作表失敗:', e);
   }
 
   try {
@@ -134,7 +138,7 @@ function getPermissionLists_() {
  * 影響面僅止於「強迫下次重讀工作表」,不洩漏也不竄改資料,故接受此風險。
  */
 function clearPermissionCache() {
-  CacheService.getScriptCache().remove('isms_permission_lists_v2');
+  CacheService.getScriptCache().remove('isms_permission_lists_v3');
 }
 
 /**
