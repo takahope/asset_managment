@@ -104,6 +104,7 @@ function isPropertyITAsset(assetId) {
   if (num >= 3140101 && num <= 3140503) return true;
   if (num >= 4030204 && num <= 4030206) return true;
   if (num >= 4050202 && num <= 4050205) return true;
+  if (num >= 6010318 && num <= 6010321) return true;
   
   return false;
 }

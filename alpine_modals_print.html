@@ -121,6 +121,11 @@ document.addEventListener('alpine:init', function () {
         return {
             selectedLendIds: [], selectAll: false, isSubmitting: false,
             filters: { location: '', startDate: '', endDate: '', overdueOnly: '', search: '' },
+            visibleColumns: {
+                assetId: true, assetName: true, assetAlias: true, modelBrand: true,
+                keeperName: true, userName: false, lenderName: false, borrower: true,
+                expectedReturnDate: true, originalLocation: false, lendingLocation: true, reason: true
+            },
 
             init: function () {
                 var self = this;
@@ -661,6 +666,23 @@ document.addEventListener('alpine:init', function () {
                                 <label class="block text-xs font-medium text-slate-600 mb-1">關鍵字搜尋（財產編號、保管人、使用人、出借人、借用人、出借事由）</label>
                                 <input type="text" x-model="filters.search" placeholder="輸入關鍵字搜尋..." :disabled="isSubmitting" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
+                            <div class="mt-4 border-t border-slate-200 pt-4">
+                                <label class="block text-xs font-medium text-slate-600 mb-2">顯示欄位設定（勾選以顯示）</label>
+                                <div class="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-700">
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.assetId" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">財產編號</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.assetName" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">財產名稱</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.assetAlias" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">財產別名</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.modelBrand" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">型號/廠牌</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.keeperName" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">保管人</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.userName" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">使用人</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.lenderName" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">出借人</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.borrower" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">借用人</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.expectedReturnDate" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">預計歸還日</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.originalLocation" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">原放置地點</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.lendingLocation" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">出借後地點</label>
+                                    <label class="inline-flex items-center cursor-pointer"><input type="checkbox" x-model="visibleColumns.reason" class="w-4 h-4 mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">出借事由</label>
+                                </div>
+                            </div>
                             <div class="mt-3 text-sm text-slate-600">顯示 <span class="font-bold text-blue-600" x-text="filteredAssets.length"></span> / <span x-text="lentAssetsDetails.length"></span> 筆</div>
                         </div>
                         <template x-if="filteredAssets.length === 0">
@@ -670,39 +692,39 @@ document.addEventListener('alpine:init', function () {
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm border-collapse">
                                     <thead class="bg-slate-50 sticky top-0 shadow-sm"><tr>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:5%"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer"></th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">財產編號</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:15%">財產名稱</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">財產別名</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">型號/廠牌</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">保管人</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">使用人</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">出借人</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:10%">借用人</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">預計歸還日</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:12%">原放置地點</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:15%">出借後地點</th>
-                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200" style="width:21%">出借事由</th>
+                                        <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer"></th>
+                                        <th x-show="visibleColumns.assetId" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">財產編號</th>
+                                        <th x-show="visibleColumns.assetName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">財產名稱</th>
+                                        <th x-show="visibleColumns.assetAlias" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">財產別名</th>
+                                        <th x-show="visibleColumns.modelBrand" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">型號/廠牌</th>
+                                        <th x-show="visibleColumns.keeperName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">保管人</th>
+                                        <th x-show="visibleColumns.userName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">使用人</th>
+                                        <th x-show="visibleColumns.lenderName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">出借人</th>
+                                        <th x-show="visibleColumns.borrower" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">借用人</th>
+                                        <th x-show="visibleColumns.expectedReturnDate" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">預計歸還日</th>
+                                        <th x-show="visibleColumns.originalLocation" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">原放置地點</th>
+                                        <th x-show="visibleColumns.lendingLocation" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">出借後地點</th>
+                                        <th x-show="visibleColumns.reason" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">出借事由</th>
                                     </tr></thead>
                                     <tbody class="divide-y divide-slate-100">
                                         <template x-for="(asset, index) in filteredAssets" :key="'lent-' + asset.lendId + '-' + index">
                                             <tr class="hover:bg-slate-50 transition-colors" :class="isOverdue(asset) ? 'bg-red-50' : ''">
                                                 <td class="px-3 py-3"><input type="checkbox" :checked="selectedLendIds.indexOf(asset.lendId) !== -1" @change="handleCheckboxChange(asset.lendId)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer"></td>
-                                                <td class="px-3 py-3 font-mono text-slate-600" x-text="asset.assetId"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.assetName || '-'"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.modelBrand || '-'"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.keeperName || '-'"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.userName || '-'"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.lenderName || '-'"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.borrower || '-'"></td>
-                                                <td class="px-3 py-3" :class="isOverdue(asset) ? 'text-red-600 font-semibold' : 'text-slate-600'">
+                                                <td x-show="visibleColumns.assetId" class="px-3 py-3 font-mono text-slate-600 whitespace-nowrap" x-text="asset.assetId"></td>
+                                                <td x-show="visibleColumns.assetName" class="px-3 py-3 text-slate-600 whitespace-nowrap" x-text="asset.assetName || '-'"></td>
+                                                <td x-show="visibleColumns.assetAlias" class="px-3 py-3 text-slate-600 whitespace-nowrap" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
+                                                <td x-show="visibleColumns.modelBrand" class="px-3 py-3 text-slate-600 whitespace-nowrap" x-text="asset.modelBrand || '-'"></td>
+                                                <td x-show="visibleColumns.keeperName" class="px-3 py-3 text-slate-600 whitespace-nowrap" x-text="asset.keeperName || '-'"></td>
+                                                <td x-show="visibleColumns.userName" class="px-3 py-3 text-slate-600 whitespace-nowrap" x-text="asset.userName || '-'"></td>
+                                                <td x-show="visibleColumns.lenderName" class="px-3 py-3 text-slate-600 whitespace-nowrap" x-text="asset.lenderName || '-'"></td>
+                                                <td x-show="visibleColumns.borrower" class="px-3 py-3 text-slate-600 whitespace-nowrap" x-text="asset.borrower || '-'"></td>
+                                                <td x-show="visibleColumns.expectedReturnDate" class="px-3 py-3 whitespace-nowrap" :class="isOverdue(asset) ? 'text-red-600 font-semibold' : 'text-slate-600'">
                                                     <span x-text="asset.expectedReturnDate"></span>
                                                     <i x-show="isOverdue(asset)" class="fas fa-exclamation-triangle ml-1"></i>
                                                 </td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.originalLocation || '-'"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.lendingLocation || '-'"></td>
-                                                <td class="px-3 py-3 text-slate-600" x-text="asset.reason"></td>
+                                                <td x-show="visibleColumns.originalLocation" class="px-3 py-3 text-slate-600 min-w-[120px]" x-text="asset.originalLocation || '-'"></td>
+                                                <td x-show="visibleColumns.lendingLocation" class="px-3 py-3 text-slate-600 min-w-[120px]" x-text="asset.lendingLocation || '-'"></td>
+                                                <td x-show="visibleColumns.reason" class="px-3 py-3 text-slate-600 min-w-[150px]" x-text="asset.reason"></td>
                                             </tr>
                                         </template>
                                     </tbody>
