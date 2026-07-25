@@ -70,7 +70,7 @@ function getCurrentUser() {
  */
 function getPermissionLists_() {
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'isms_permission_lists_v1';
+  const cacheKey = 'isms_permission_lists_v2';
   const cached = cache.get(cacheKey);
   if (cached) {
     try {
@@ -81,24 +81,38 @@ function getPermissionLists_() {
 
   const whitelist = new Set();
   const admins = new Set();
+
+  // 1. 優先載入管理員名單 (Script Properties)
+  const adminProp = PropertiesService.getScriptProperties().getProperty('ISMS_ADMIN_EMAILS') || '';
+  if (adminProp) {
+    const adminList = adminProp.split(',');
+    for (let i = 0; i < adminList.length; i++) {
+      const email = adminList[i].trim().toLowerCase();
+      if (email && email.indexOf('@') > 0) {
+        admins.add(email);
+        whitelist.add(email); // 管理員自動視為白名單
+      }
+    }
+  }
+
+  // 2. 載入一般使用者白名單 (HR 人員主檔)
   try {
-    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(CONFIG.ISMS_PERMISSION_SHEET_NAME);
-    if (sheet && sheet.getLastRow() >= 1) {
-      // 讀 A、B 兩欄(可能有表頭,從第 1 列開始全收,toLowerCase 後比對自然會排除非 email)
-      const data = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
+    const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
+    const personnelSheet = hrSs.getSheetByName(CONFIG.HR_PERSONNEL_SHEET_NAME);
+    if (personnelSheet && personnelSheet.getLastRow() >= 1) {
+      // 讀取 A、C 兩欄(信箱與狀態)
+      const data = personnelSheet.getRange(1, 1, personnelSheet.getLastRow(), 3).getValues();
       for (let i = 0; i < data.length; i++) {
-        const a = String(data[i][0] || '').trim().toLowerCase();
-        const b = String(data[i][1] || '').trim().toLowerCase();
-        if (a && a.indexOf('@') > 0) whitelist.add(a);
-        if (b && b.indexOf('@') > 0) {
-          admins.add(b);
-          whitelist.add(b); // 管理員自動視為白名單
+        const email = String(data[i][0] || '').trim().toLowerCase();
+        const status = String(data[i][2] || '').trim();
+        // 狀態在 HR_ACTIVE_STATUSES 陣列中才放行
+        if (email && email.indexOf('@') > 0 && HR_ACTIVE_STATUSES.indexOf(status) !== -1) {
+          whitelist.add(email);
         }
       }
     }
   } catch (e) {
-    console.error('讀取權限工作表失敗:', e);
+    console.error('讀取 HR 權限工作表失敗:', e);
   }
 
   try {
@@ -120,7 +134,7 @@ function getPermissionLists_() {
  * 影響面僅止於「強迫下次重讀工作表」,不洩漏也不竄改資料,故接受此風險。
  */
 function clearPermissionCache() {
-  CacheService.getScriptCache().remove('isms_permission_lists_v1');
+  CacheService.getScriptCache().remove('isms_permission_lists_v2');
 }
 
 /**
