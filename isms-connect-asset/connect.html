@@ -977,11 +977,24 @@
     // ==========================================
     /** 唯一的「重算並重繪」入口：任何篩選變動都呼叫這支 */
     function applyFilters() {
-      var filtered = getFilteredAssets();
-      renderAssetTable(filtered);
-      renderStatCards(computeStats(filtered));
+      renderAssetTable(getFilteredAssets());
+      renderStatCards(computeStats(getStatusFacetAssets()));
       renderGroupChips();
       renderStatCardActiveState();
+    }
+
+    /**
+     * 統計卡的計算基礎：套用「除 mappedStatus 以外」的所有維度。
+     *
+     * 與組別晶片同一原則 —— 每個分面的計數都要排除它自己那一維，否則點下去
+     * 其他選項就全部歸零、失去比較與點回去的能力（點「已對照」之後
+     * 「未對照」變 0、「總數」變 3，三張卡就都廢了）。
+     *
+     * 副作用：狀態篩選啟用時「資產總數」不等於表格列數。這正是選中卡片
+     * 有藍色外框的用意 —— 它標示目前正在看哪一個子集。
+     */
+    function getStatusFacetAssets() {
+      return allAssets.filter(function(a) { return matchesFilters(a, 'mappedStatus'); });
     }
 
     function renderGroupChips() {
