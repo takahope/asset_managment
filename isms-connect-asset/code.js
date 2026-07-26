@@ -587,23 +587,6 @@ function getAssetsWithMappingStatus(options = {}) {
   }
 }
 
-/**
- * 取得所有組別清單
- */
-function getGroupList() {
-  try {
-    const result = getAssetsWithMappingStatus();
-    if (!result.success) return { success: false, error: result.error };
-
-    // 使用計算後的 group 欄位（而非 defaultGroup）
-    const groups = [...new Set(result.assets.map(a => a.group).filter(g => g))];
-    groups.sort();
-
-    return { success: true, groups };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
 
 // ==========================================
 // 資訊資產 API
@@ -1105,39 +1088,6 @@ function createMappings(assetIds, ismsAssetId, remarks = '') {
   }
 }
 
-/**
- * 更新單筆對照
- * @param {string} assetId - 資產編號
- * @param {string} newIsmsAssetId - 新的資訊資產編號
- * @returns {Object} 操作結果
- */
-function updateMapping(assetId, newIsmsAssetId) {
-  // 🛡️ 權限守門
-  const access = assertWriteAccess_(false);
-  if (!access.ok) return { success: false, error: access.error };
-
-  try {
-    const mappingMap = getMappingMap_();
-    const existing = mappingMap.get(assetId);
-
-    if (!existing || !existing.rowIndex) {
-      return { success: false, error: '找不到該資產的對照記錄' };
-    }
-
-    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
-    const email = Session.getActiveUser().getEmail();
-    const timestamp = new Date().toISOString();
-
-    sheet.getRange(existing.rowIndex, MAPPING_COLUMN_INDICES.ISMS_ASSET_ID).setValue(newIsmsAssetId);
-    sheet.getRange(existing.rowIndex, MAPPING_COLUMN_INDICES.CREATED_TIME).setValue(timestamp);
-    sheet.getRange(existing.rowIndex, MAPPING_COLUMN_INDICES.CREATED_BY).setValue(email);
-
-    return { success: true, message: '對照更新成功' };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
 
 /**
  * 刪除對照
@@ -1184,121 +1134,8 @@ function deleteMappings(assetIds) {
 }
 
 // ==========================================
-// 報表 API
+// 頁面導航
 // ==========================================
-
-/**
- * 取得對照統計資料
- */
-function getMappingStatistics() {
-  try {
-    const result = getAssetsWithMappingStatus();
-    if (!result.success) return result;
-
-    // 依組別統計（使用計算後的 group 欄位）
-    const groupStats = {};
-    for (const asset of result.assets) {
-      const group = asset.group || '未分組';
-      if (!groupStats[group]) {
-        groupStats[group] = { total: 0, mapped: 0 };
-      }
-      groupStats[group].total++;
-      if (asset.isMapped) {
-        groupStats[group].mapped++;
-      }
-    }
-
-    // 轉換為陣列
-    const groupStatsArray = Object.entries(groupStats).map(([group, stats]) => ({
-      group,
-      total: stats.total,
-      mapped: stats.mapped,
-      unmapped: stats.total - stats.mapped,
-      rate: stats.total > 0 ? Math.round((stats.mapped / stats.total) * 100) : 0
-    }));
-
-    groupStatsArray.sort((a, b) => a.group.localeCompare(b.group, 'zh-TW'));
-
-    return {
-      success: true,
-      overall: result.statistics,
-      byGroup: groupStatsArray
-    };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * 查詢某資訊資產下的所有資產
- * @param {string} ismsAssetId - 資訊資產編號
- */
-function getAssetsByIsmsAsset(ismsAssetId) {
-  try {
-    const result = getAssetsWithMappingStatus();
-    if (!result.success) return result;
-
-    const assets = result.assets.filter(a => a.mappedIsmsAssetId === ismsAssetId);
-
-    return {
-      success: true,
-      ismsAssetId,
-      assets,
-      count: assets.length
-    };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * 匯出對照報表（CSV 格式）
- */
-function exportMappingReport() {
-  try {
-    const result = getAssetsWithMappingStatus();
-    if (!result.success) return result;
-
-    const ismsResult = getIsmsAssets();
-    const ismsMap = {};
-    if (ismsResult.success) {
-      for (const isms of ismsResult.assets) {
-        ismsMap[isms.ismsAssetId] = isms;
-      }
-    }
-
-    // 建立 CSV 內容
-    const headers = ['資產編號', '資產名稱', '資產類別', '保管人', '地點', '組別', '對照狀態', '資訊資產編號', '資訊資產名稱', '資訊資產類別'];
-    const rows = result.assets.map(asset => {
-      const isms = ismsMap[asset.mappedIsmsAssetId] || {};
-      return [
-        asset.assetId,
-        asset.assetName,
-        asset.assetCategory,
-        asset.leaderName,
-        asset.location,
-        asset.group,
-        asset.isMapped ? '已對照' : '未對照',
-        asset.mappedIsmsAssetId || '',
-        isms.name || '',
-        isms.category || ''
-      ];
-    });
-
-    // 組合 CSV
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    return {
-      success: true,
-      csvContent,
-      filename: `資產對照報表_${new Date().toISOString().slice(0, 10)}.csv`
-    };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
 
 /**
  * 取得浮動按鈕導航連結

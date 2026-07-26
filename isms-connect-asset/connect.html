@@ -1062,10 +1062,22 @@
       });
 
       return [headers].concat(rows).map(function(row) {
-        return row.map(function(cell) {
-          return '"' + String(cell == null ? '' : cell).replace(/"/g, '""') + '"';
-        }).join(',');
+        return row.map(sanitizeCsvCell).join(',');
       }).join('\n');
+    }
+
+    /**
+     * CSV 儲存格跳脫 + 公式注入防護。
+     *
+     * 引號跳脫只解決分隔符問題,不解決公式解析:Excel / LibreOffice / Sheets
+     * 會把以 = + - @ 或 tab/CR 開頭的儲存格當公式執行,**即使它包在引號內**。
+     * 總表由多人維護且有批次匯入管道,惡意字串(如 =HYPERLINK(...))進得來,
+     * 承辦人用 Excel 開匯出檔就會觸發。前置單引號讓它被當成純文字。
+     */
+    function sanitizeCsvCell(value) {
+      var s = String(value == null ? '' : value);
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
     }
 
     function downloadCsv(csvContent, filename) {
