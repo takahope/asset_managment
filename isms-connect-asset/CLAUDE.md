@@ -62,8 +62,10 @@ clearHrGroupMapCache()    // 改完 HR 主表或 Script Property 後清快取（
 | URL | 檔案 | 功能 |
 |-----|------|------|
 | 預設 | `index.html` (2449 行) | 資訊資產清單、新增/編輯/刪除、重複編號偵測、CSV/XLSX/PDF 匯出 |
-| `?page=connect` | `connect.html` (1630 行) | 資產 ↔ 資訊資產多對一對照、條碼掃描、統計報表 |
+| `?page=connect` | `connect.html` | **單頁**：資產清單＋分面篩選＋底部對照動作條＋CSV 匯出（2026-07-26 合併，見下） |
 | `?page=softwarelist` | `softwarelist.html` (1173 行) | 軟體清冊唯讀檢視與匯出 |
+
+`connect.html` 原本有四個分頁（資產清單／對照作業／資訊資產／報表查詢），2026-07-26 合併為單頁：後三個分頁被重新理解為「同一份資料的不同切面」，轉化為主清單上的篩選器與操作。**不要再新增分頁**，新功能請掛在篩選列、統計卡或底部動作條上。詳見「事件紀錄 2026-07-26」與 `docs/superpowers/specs/2026-07-26-connect-single-page-design.md`。
 
 **三頁沒有共用的 partial、沒有 `include()`、沒有前端框架**（父專案是 Alpine.js SPA，這裡不是）。每頁自帶一份 `state` 物件、自己的 `showToast` / `esc` / FAB 程式碼——修一個 bug 常常要在三個檔案各修一次。CDN 依賴（Tailwind、Font Awesome、SheetJS、jsPDF、Quagga2）由各頁 `<head>` 各自載入。
 
@@ -80,7 +82,7 @@ clearHrGroupMapCache()    // 改完 HR 主表或 Script Property 後清快取（
 | 端點 | 層級 | 備註 |
 |------|------|------|
 | `createIsmsAsset` / `updateIsmsAsset` | 白名單 | 一般承辦人即可新增/編輯 |
-| `createMappings` / `updateMapping` | 白名單 | 同上 |
+| `createMappings` | 白名單 | 同上（`updateMapping` 已於 2026-07-26 移除，功能被它涵蓋） |
 | `deleteIsmsAsset` / `deleteMappings` | 管理員 | 刪除類一律管理員 |
 | `initMappingSheet` | 管理員 | 結構變更 |
 | `clearHrGroupMapCache` | 管理員 | |
@@ -155,6 +157,16 @@ clearHrGroupMapCache()    // 改完 HR 主表或 Script Property 後清快取（
 - 工作表名稱、欄位索引全部集中在 `env.js`，`code.js` 內不出現字面量欄號（唯一例外是「保管人/信箱」fallback 的 `'保管人/信箱'` 與 B/G 欄硬編碼）
 
 ## 事件紀錄
+
+### 2026-07-26 connect.html 四分頁合併為單頁
+- 動機：勾選資產後要切到「對照作業」分頁才能建立對照，流程被切斷。
+- 關鍵發現：四個分頁的資料在 `DOMContentLoaded` 就全部載入完畢，分頁只是視覺隱藏；且主表每筆資產已帶著 `group` / `isMapped` / `mappedIsmsAssetId` 回到前端 —— 後三個分頁的功能所需原料前端全都現成，可純前端計算。
+- 做法：資訊資產分頁 → 篩選列的下拉（只列**實際有資產對照上去**的編號＋筆數）；報表查詢分頁 → 可點擊統計卡＋組別晶片列＋前端 CSV 匯出；對照作業分頁 → 勾選 ≥1 才滑出的底部動作條。
+- **分面計數規則（最重要的一條）**：每個分面的計數都要**排除它自己那一維** —— 統計卡排除 `mappedStatus`、組別晶片排除 `group`。否則點下去其他選項全部歸零，就再也不能比較也不能點回去。實作為 `matchesFilters(asset, excludeDim)` 的 `excludeDim` 參數。
+- 效益：首載後端呼叫 5 → 3；兩張總表完整重讀 3 次 → 1 次（`getGroupList` 與 `getMappingStatistics` 內部各自又完整呼叫一次 `getAssetsWithMappingStatus`）。`code.js` 1460 → 1300 行，移除 5 支死碼端點；`deleteMappings` 刻意保留為唯一可移除對照的維運工具。
+- 順帶修補：`loadUserInfo` 補上 `withFailureHandler`（原本完全沒有）；表格載入失敗改為錯誤列＋重試鈕而非永遠轉圈；CSV 匯出補上公式注入防護（`sanitizeCsvCell`，缺陷繼承自被刪除的後端 `exportMappingReport`）。
+- **踩到 4 次同型錯誤**：刪除元素／函式時只追一種名字形態，漏掉其他引用點 —— `filterAssets`（條碼掃描 IIFE 內還在呼叫）、`goToMappingBtn`（`updateSelectionUI` 還在寫它的 `.disabled`）、`loadStatistics`（`switchTab` 內的延遲載入）、`reportSelect`（只 grep 了 DOM id `reportIsmsSelect`，沒 grep 變數名）。共通點：`node --check` 只驗語法，**抓不到未宣告變數這種執行期錯誤**。正解是刪除前把該物的**函式名／變數名／DOM id 三種形態全部列出來 grep**。
+- 通則已沉澱：`gas-fullstack` 前端節。檔案：`connect.html`、`code.js`。設計與計畫：`docs/superpowers/specs|plans/2026-07-26-connect-single-page-*.md`。
 
 ### 2026-07-26 對照頁表格欄位之間出現大片空白
 - 症狀：`connect.html` 資產清單表格，廠牌型號與保管人之間、資產名稱與廠牌型號之間各有數百 px 空白；縮 `min-width` 無效。
