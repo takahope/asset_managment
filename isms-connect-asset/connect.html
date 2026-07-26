@@ -609,6 +609,9 @@
               <button class="btn-secondary" onclick="loadAssets()">
                 <i class="fas fa-sync-alt mr-2"></i>重新整理
               </button>
+              <button class="btn-secondary" onclick="exportFiltered()">
+                <i class="fas fa-download mr-2"></i>匯出篩選結果
+              </button>
             </div>
 
             <!-- 組別晶片列：數字排除 group 維度，點選後其他組仍可橫向比較 -->
@@ -997,6 +1000,68 @@
     function setIsmsFilter(ismsAssetId) {
       filterState.ismsAssetId = ismsAssetId || '';
       applyFilters();
+    }
+
+    // ==========================================
+    // 匯出（取代後端 exportMappingReport）
+    // ==========================================
+
+    /**
+     * 組出 CSV。欄位順序與標題必須與原後端 exportMappingReport 完全一致（10 欄），
+     * 確保既有使用者拿到的檔案格式不變。
+     * @param {Array} assets 要匯出的資產
+     * @returns {string}
+     */
+    function buildExportCsv(assets) {
+      var ismsMap = {};
+      for (var i = 0; i < allIsmsAssets.length; i++) {
+        ismsMap[allIsmsAssets[i].ismsAssetId] = allIsmsAssets[i];
+      }
+
+      var headers = ['資產編號', '資產名稱', '資產類別', '保管人', '地點', '組別',
+                     '對照狀態', '資訊資產編號', '資訊資產名稱', '資訊資產類別'];
+
+      var rows = assets.map(function(a) {
+        var isms = ismsMap[a.mappedIsmsAssetId] || {};
+        return [
+          a.assetId, a.assetName, a.assetCategory, a.leaderName, a.location, a.group,
+          a.isMapped ? '已對照' : '未對照',
+          a.mappedIsmsAssetId || '', isms.name || '', isms.category || ''
+        ];
+      });
+
+      return [headers].concat(rows).map(function(row) {
+        return row.map(function(cell) {
+          return '"' + String(cell == null ? '' : cell).replace(/"/g, '""') + '"';
+        }).join(',');
+      }).join('\n');
+    }
+
+    function downloadCsv(csvContent, filename) {
+      // BOM 讓 Excel 正確辨識 UTF-8 中文
+      var blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function exportFiltered() {
+      var assets = getFilteredAssets();
+      if (assets.length === 0) {
+        showToast('目前篩選結果沒有資料可匯出', 'error');
+        return;
+      }
+      var d = new Date();
+      var stamp = d.getFullYear() + '-' +
+                  String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(d.getDate()).padStart(2, '0');
+      downloadCsv(buildExportCsv(assets), '資產對照報表_' + stamp + '.csv');
+      showToast('已匯出 ' + assets.length + ' 筆', 'success');
     }
 
     /** 點已選中的狀態＝取消；'' 一律代表全部 */
