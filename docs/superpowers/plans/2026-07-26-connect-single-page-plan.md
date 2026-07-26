@@ -565,7 +565,20 @@ git commit -m "feat(connect): clickable stat cards and group filter chips
 
 `tab-assets` 與 `tab-mapping` 兩個 `<div>` 的 `class="tab-content"` / `class="tab-content hidden"` 一律改為 `class=""`（或直接移除 class 屬性）。`tab-mapping` 移除 `hidden` 後會顯示在資產表下方——這是本任務的暫時狀態，Task 5 會把它改造成底部動作條。
 
-刪除 `:597-604` 那段「已選擇 N 筆 + 前往對照」的 `<div>`（`goToMappingBtn` 已無用），但**保留** `<span id="selectedCount">`，把它移進 `tab-mapping` 區塊的標題列，避免 `updateSelectionUI()` 找不到元素而拋錯：
+刪除 `:597-604` 那段「已選擇 N 筆 + 前往對照」的 `<div>`（`goToMappingBtn` 已無用）。
+
+**同時必須改 `updateSelectionUI()`**——它第 2 行直接寫 `document.getElementById('goToMappingBtn').disabled`，按鈕刪掉後會在**每次勾選資產時**拋 `TypeError: Cannot set properties of null`，讓勾選功能整個壞掉。改為：
+
+```javascript
+    function updateSelectionUI() {
+      document.getElementById('selectedCount').textContent = selectedAssetIds.size;
+      renderSelectedList();
+    }
+```
+
+（`renderSelectedList` 是 Task 5 才更名的；在 Task 4 這一步先維持呼叫 `updateMappingTab()`，Task 5 Step 3 再一併改名。）
+
+並**保留** `<span id="selectedCount">`，把它移進 `tab-mapping` 區塊的標題列，避免 `updateSelectionUI()` 找不到元素而拋錯：
 
 ```html
                 <h3 class="font-semibold text-gray-900 mb-4">

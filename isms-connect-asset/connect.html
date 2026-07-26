@@ -816,8 +816,6 @@
       loadUserInfo();
       loadAssets();
       loadIsmsAssets();
-      loadGroupList();
-      loadStatistics();
       setupEventListeners();
     });
 
@@ -857,7 +855,16 @@
           if (result.success) {
             allAssets = result.assets;
             renderAssetTable(allAssets);
-            updateStats(result.statistics);
+            renderStatCards(computeStats(allAssets));
+
+            // 組別下拉改吃前端衍生資料（取代已移除的 loadGroupList）
+            var groupSelect = document.getElementById('groupFilter');
+            if (groupSelect) {
+              groupSelect.innerHTML = '<option value="">全部組別</option>' +
+                deriveGroupList().map(function(g) {
+                  return '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>';
+                }).join('');
+            }
           } else {
             showToast(result.error, 'error');
           }
@@ -887,33 +894,6 @@
           showToast('載入資訊資產失敗: ' + err.message, 'error');
         })
         .getIsmsAssets({});
-    }
-
-    function loadGroupList() {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) {
-            const select = document.getElementById('groupFilter');
-            select.innerHTML = '<option value="">全部組別</option>';
-            result.groups.forEach(function(group) {
-              const option = document.createElement('option');
-              option.value = group;
-              option.textContent = group;
-              select.appendChild(option);
-            });
-          }
-        })
-        .getGroupList();
-    }
-
-    function loadStatistics() {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) {
-            renderGroupStats(result.byGroup);
-          }
-        })
-        .getMappingStatistics();
     }
 
     // ==========================================
@@ -1024,11 +1004,96 @@
       }).join('');
     }
 
-    function updateStats(stats) {
+    function renderStatCards(stats) {
       document.getElementById('statTotal').textContent = stats.totalCount;
       document.getElementById('statMapped').textContent = stats.mappedCount;
       document.getElementById('statUnmapped').textContent = stats.unmappedCount;
       document.getElementById('statRate').textContent = stats.mappingRate + '%';
+    }
+
+    // ==========================================
+    // 篩選狀態（單一真相）與衍生計算
+    // ==========================================
+    var filterState = {
+      keyword: '',        // 搜尋關鍵字（已 toLowerCase）
+      group: '',          // '' = 全部組別
+      mappedStatus: '',   // '' = 全部 | 'mapped' | 'unmapped'
+      ismsAssetId: ''     // '' = 全部資訊資產
+    };
+
+    /**
+     * 判斷單筆資產是否通過篩選。
+     * @param {Object} asset
+     * @param {string|null} excludeDim 要略過的維度名（'group' 等），null = 全部維度都套用
+     * @returns {boolean}
+     */
+    function matchesFilters(asset, excludeDim) {
+      if (excludeDim !== 'keyword' && filterState.keyword) {
+        var k = filterState.keyword;
+        var hit = asset.assetId.toLowerCase().indexOf(k) >= 0 ||
+                  asset.assetName.toLowerCase().indexOf(k) >= 0 ||
+                  asset.leaderName.toLowerCase().indexOf(k) >= 0 ||
+                  asset.location.toLowerCase().indexOf(k) >= 0;
+        if (!hit) return false;
+      }
+      if (excludeDim !== 'group' && filterState.group) {
+        if ((asset.group || '未分組') !== filterState.group) return false;
+      }
+      if (excludeDim !== 'mappedStatus' && filterState.mappedStatus) {
+        if (filterState.mappedStatus === 'mapped' && !asset.isMapped) return false;
+        if (filterState.mappedStatus === 'unmapped' && asset.isMapped) return false;
+      }
+      if (excludeDim !== 'ismsAssetId' && filterState.ismsAssetId) {
+        if (asset.mappedIsmsAssetId !== filterState.ismsAssetId) return false;
+      }
+      return true;
+    }
+
+    function getFilteredAssets() {
+      return allAssets.filter(function(a) { return matchesFilters(a, null); });
+    }
+
+    /** 統計卡：套用「全部」篩選維度 —— 描述「當前這批資料是什麼」 */
+    function computeStats(assets) {
+      var total = assets.length;
+      var mapped = 0;
+      for (var i = 0; i < assets.length; i++) {
+        if (assets[i].isMapped) mapped++;
+      }
+      return {
+        totalCount: total,
+        mappedCount: mapped,
+        unmappedCount: total - mapped,
+        mappingRate: total > 0 ? Math.round((mapped / total) * 100) : 0
+      };
+    }
+
+    /** 全部出現過的組別，去重排序（取代後端 getGroupList） */
+    function deriveGroupList() {
+      var seen = {};
+      var list = [];
+      for (var i = 0; i < allAssets.length; i++) {
+        var g = allAssets[i].group || '未分組';
+        if (!seen[g]) { seen[g] = true; list.push(g); }
+      }
+      return list.sort(function(a, b) { return a.localeCompare(b, 'zh-TW'); });
+    }
+
+    /**
+     * 晶片計數：套用「除 group 以外」的所有維度。
+     * 若也套用 group，點選任一組後其他組會全部歸零，晶片就失去橫向比較的價值。
+     */
+    function computeGroupCounts() {
+      var counts = {};
+      for (var i = 0; i < allAssets.length; i++) {
+        var a = allAssets[i];
+        if (!matchesFilters(a, 'group')) continue;
+        var g = a.group || '未分組';
+        counts[g] = (counts[g] || 0) + 1;
+      }
+      return deriveGroupList().map(function(g) {
+        return { group: g, count: counts[g] || 0 };
+      });
     }
 
     // ==========================================
@@ -1196,11 +1261,8 @@
         content.classList.add('hidden');
       });
       document.getElementById('tab-' + tabName).classList.remove('hidden');
-
-      // 載入資料
-      if (tabName === 'report') {
-        loadStatistics();
-      }
+      // 原本切到 report 分頁時會 loadStatistics()，該函式已移除；
+      // 組別統計改由主清單的晶片列承接，整個 report 分頁在 Task 4 會被拆除。
     }
 
     function goToMapping() {
@@ -1248,8 +1310,7 @@
             showToast(result.message, 'success');
             selectedAssetIds.clear();
             updateSelectionUI();
-            loadAssets();
-            loadStatistics();
+            loadAssets();   // 連帶重算統計卡，不需再單獨呼叫後端統計
             document.getElementById('mappingRemarks').value = '';
             document.getElementById('ismsAssetSelect').value = '';
           } else {
