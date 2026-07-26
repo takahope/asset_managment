@@ -820,10 +820,21 @@
     });
 
     function setupEventListeners() {
-      // 資產搜尋
-      document.getElementById('assetSearch').addEventListener('input', debounce(filterAssets, 300));
-      document.getElementById('groupFilter').addEventListener('change', filterAssets);
-      document.getElementById('unmappedOnly').addEventListener('change', filterAssets);
+      // 資產搜尋／篩選：一律先寫 filterState，再走統一的 applyFilters
+      document.getElementById('assetSearch').addEventListener('input', debounce(function() {
+        filterState.keyword = document.getElementById('assetSearch').value.toLowerCase().trim();
+        applyFilters();
+      }, 300));
+
+      document.getElementById('groupFilter').addEventListener('change', function() {
+        filterState.group = document.getElementById('groupFilter').value;
+        applyFilters();
+      });
+
+      document.getElementById('unmappedOnly').addEventListener('change', function() {
+        filterState.mappedStatus = document.getElementById('unmappedOnly').checked ? 'unmapped' : '';
+        applyFilters();
+      });
 
       // 資訊資產搜尋
       document.getElementById('ismsSearch').addEventListener('input', debounce(filterIsmsSelect, 300));
@@ -854,17 +865,19 @@
         .withSuccessHandler(function(result) {
           if (result.success) {
             allAssets = result.assets;
-            renderAssetTable(allAssets);
-            renderStatCards(computeStats(allAssets));
 
-            // 組別下拉改吃前端衍生資料（取代已移除的 loadGroupList）
+            // 組別下拉改吃前端衍生資料（取代已移除的 loadGroupList）。
+            // 先重建選項再 applyFilters，確保既有的 filterState.group 仍能對應到選項。
             var groupSelect = document.getElementById('groupFilter');
             if (groupSelect) {
               groupSelect.innerHTML = '<option value="">全部組別</option>' +
                 deriveGroupList().map(function(g) {
                   return '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>';
                 }).join('');
+              groupSelect.value = filterState.group;
             }
+
+            applyFilters();   // 渲染表格 + 統計卡，並保留使用者當前的篩選條件
           } else {
             showToast(result.error, 'error');
           }
@@ -1099,31 +1112,11 @@
     // ==========================================
     // 篩選與搜尋
     // ==========================================
-    function filterAssets() {
-      const keyword = document.getElementById('assetSearch').value.toLowerCase();
-      const group = document.getElementById('groupFilter').value;
-      const unmappedOnly = document.getElementById('unmappedOnly').checked;
-
-      let filtered = allAssets;
-
-      if (keyword) {
-        filtered = filtered.filter(function(a) {
-          return a.assetId.toLowerCase().includes(keyword) ||
-                 a.assetName.toLowerCase().includes(keyword) ||
-                 a.leaderName.toLowerCase().includes(keyword) ||
-                 a.location.toLowerCase().includes(keyword);
-        });
-      }
-
-      if (group) {
-        filtered = filtered.filter(function(a) { return a.group === group; });
-      }
-
-      if (unmappedOnly) {
-        filtered = filtered.filter(function(a) { return !a.isMapped; });
-      }
-
+    /** 唯一的「重算並重繪」入口：任何篩選變動都呼叫這支 */
+    function applyFilters() {
+      var filtered = getFilteredAssets();
       renderAssetTable(filtered);
+      renderStatCards(computeStats(filtered));
     }
 
     function filterIsmsSelect() {
@@ -1707,7 +1700,8 @@
                 this.value = ''; // 清空搜尋框
               } else {
                 // 找不到，保持搜尋模式
-                filterAssets();
+                filterState.keyword = this.value.toLowerCase().trim();
+                applyFilters();
               }
             }
           }
