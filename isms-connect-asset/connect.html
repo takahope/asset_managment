@@ -200,6 +200,36 @@
     }
     .chip.is-active .chip__count { background: rgba(255,255,255,0.25); color: #fff; }
 
+    /* 底部浮出動作條：勾選 >=1 才滑出，未勾選時完全不佔版面 */
+    .action-bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 12px 24px;
+      background: #fff; border-top: 1px solid #e2e8f0;
+      box-shadow: 0 -4px 20px rgba(15,23,42,0.10);
+      transform: translateY(110%); transition: transform 0.2s ease;
+    }
+    .action-bar.is-open { transform: translateY(0); }
+    .action-bar__count {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-weight: 600; color: #1d4ed8; cursor: pointer; white-space: nowrap;
+    }
+    .action-bar__field { display: flex; align-items: center; gap: 8px; }
+    .action-bar__spacer { flex: 1 1 auto; }
+
+    /* 已選清單浮層 */
+    .selected-popover {
+      position: fixed; left: 24px; bottom: 76px; z-index: 41;
+      width: min(420px, calc(100vw - 48px)); max-height: 320px; overflow-y: auto;
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(15,23,42,0.16); padding: 12px;
+      display: none;
+    }
+    .selected-popover.is-open { display: block; }
+
+    /* 動作條展開時，避免遮住表格最後一列 */
+    body.has-action-bar { padding-bottom: 88px; }
+
     .badge {
       display: inline-block;
       padding: 4px 10px;
@@ -613,46 +643,48 @@
               </table>
             </div>
           </div>
-
-          <!-- 對照作業（Task 5 會改造成底部浮出動作條） -->
-          <div>
-            <div class="grid md:grid-cols-2 gap-6">
-              <!-- 左側：已選資產 -->
-              <div class="border rounded-lg p-4">
-                <h3 class="font-semibold text-gray-900 mb-4">
-                  <i class="fas fa-box mr-2 text-blue-600"></i>待對照資產
-                  <span id="mappingAssetCount" class="text-sm text-gray-500 ml-2">(0 筆)</span>
-                  <span id="selectedCount" class="hidden">0</span>
-                </h3>
-                <div id="selectedAssetsList" class="space-y-2 max-h-80 overflow-y-auto">
-                  <p class="text-gray-400 text-sm">請先在上方清單勾選資產</p>
-                </div>
-              </div>
-
-              <!-- 右側：選擇資訊資產 -->
-              <div class="border rounded-lg p-4">
-                <h3 class="font-semibold text-gray-900 mb-4">
-                  <i class="fas fa-shield-alt mr-2 text-green-600"></i>選擇資訊資產
-                </h3>
-                <input type="text" id="ismsSearch" class="search-input w-full mb-4" placeholder="搜尋資訊資產...">
-                <select id="ismsAssetSelect" class="select-input w-full mb-4" size="8">
-                  <option value="">-- 請選擇資訊資產 --</option>
-                </select>
-
-                <div class="mb-4">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">備註</label>
-                  <textarea id="mappingRemarks" class="w-full p-3 border rounded-lg" rows="2" placeholder="選填"></textarea>
-                </div>
-
-                <button id="createMappingBtn" class="btn-primary w-full" onclick="createMapping()" disabled>
-                  <i class="fas fa-link mr-2"></i>建立對照
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </main>
+
+    <!-- 已選資產浮層（點動作條的「已選 N 筆」展開） -->
+    <div id="selectedPopover" class="selected-popover">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-semibold text-gray-900 text-sm">
+          待對照資產 <span id="mappingAssetCount" class="text-gray-500">(0 筆)</span>
+        </span>
+        <button class="text-gray-400 hover:text-gray-600" onclick="toggleSelectedPopover()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div id="selectedAssetsList" class="space-y-2"></div>
+    </div>
+
+    <!-- 底部浮出動作條：取代原本的「對照作業」分頁 -->
+    <div id="actionBar" class="action-bar">
+      <span class="action-bar__count" onclick="toggleSelectedPopover()">
+        <i class="fas fa-chevron-up"></i>
+        已選 <span id="selectedCount">0</span> 筆
+      </span>
+
+      <div class="action-bar__field">
+        <input type="text" id="ismsSearch" class="search-input" placeholder="搜尋資訊資產…" style="width:180px">
+        <select id="ismsAssetSelect" class="select-input" style="min-width:240px">
+          <option value="">-- 請選擇資訊資產 --</option>
+        </select>
+      </div>
+
+      <div class="action-bar__field">
+        <input type="text" id="mappingRemarks" class="search-input" placeholder="備註（選填）" style="width:180px">
+      </div>
+
+      <div class="action-bar__spacer"></div>
+
+      <button id="createMappingBtn" class="btn-primary" onclick="createMapping()" disabled>
+        <i class="fas fa-link mr-2"></i>建立對照
+      </button>
+    </div>
+
 
     <!-- Toast 容器 -->
     <div id="toastContainer"></div>
@@ -1031,17 +1063,32 @@
 
     function updateSelectionUI() {
       document.getElementById('selectedCount').textContent = selectedAssetIds.size;
-      updateMappingTab();
+      renderSelectedList();
+      renderActionBar();
     }
 
-    function updateMappingTab() {
+    /** 勾選 >=1 才滑出動作條；歸零時一併收起浮層，避免留下孤兒浮層 */
+    function renderActionBar() {
+      var hasSelection = selectedAssetIds.size > 0;
+      document.getElementById('actionBar').classList.toggle('is-open', hasSelection);
+      document.body.classList.toggle('has-action-bar', hasSelection);
+      if (!hasSelection) {
+        document.getElementById('selectedPopover').classList.remove('is-open');
+      }
+    }
+
+    function toggleSelectedPopover() {
+      document.getElementById('selectedPopover').classList.toggle('is-open');
+    }
+
+    function renderSelectedList() {
       const container = document.getElementById('selectedAssetsList');
       const countSpan = document.getElementById('mappingAssetCount');
 
       countSpan.textContent = `(${selectedAssetIds.size} 筆)`;
 
       if (selectedAssetIds.size === 0) {
-        container.innerHTML = '<p class="text-gray-400 text-sm">請先在「資訊資產清單」選擇資產</p>';
+        container.innerHTML = '<p class="text-gray-400 text-sm">請先在上方清單勾選資產</p>';
         return;
       }
 
