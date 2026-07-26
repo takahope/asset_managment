@@ -752,9 +752,25 @@
     function loadUserInfo() {
       google.script.run
         .withSuccessHandler(function(user) {
-          document.getElementById('userInfo').textContent = user.email;
+          document.getElementById('userInfo').textContent =
+            (user && user.email) ? user.email : '(未知使用者)';
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('userInfo').textContent = '(無法取得使用者)';
+          console.error('loadUserInfo 失敗:', err);
         })
         .getCurrentUser();
+    }
+
+    /** 失敗時把 loading spinner 收斂成錯誤列，附重試入口（PLAYBOOK §4-9） */
+    function renderTableError(message) {
+      document.getElementById('assetTableBody').innerHTML =
+        '<tr><td colspan="10" class="text-center py-8">' +
+        '<div class="text-red-600 mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>' +
+        escapeHtml(message) + '</div>' +
+        '<button class="btn-secondary" onclick="loadAssets()">' +
+        '<i class="fas fa-rotate-right mr-2"></i>重試</button>' +
+        '</td></tr>';
     }
 
     function loadAssets() {
@@ -769,11 +785,11 @@
             allAssets = result.assets;
             applyFilters();   // 表格 + 統計卡 + 晶片列，並保留使用者當前的篩選條件
           } else {
-            showToast(result.error, 'error');
+            renderTableError('載入資產失敗：' + (result.error || '未知錯誤'));
           }
         })
         .withFailureHandler(function(err) {
-          showToast('載入失敗: ' + err.message, 'error');
+          renderTableError('載入資產失敗：' + (err && err.message ? err.message : err));
         })
         .getAssetsWithMappingStatus({});
     }
@@ -786,13 +802,28 @@
             populateIsmsSelect();      // 對照用選單
             renderIsmsFilterOptions(); // 主清單的資訊資產篩選器
           } else {
-            showToast(result.error, 'error');
+            disableIsmsSelectors('資訊資產載入失敗：' + (result.error || '未知錯誤'));
           }
         })
         .withFailureHandler(function(err) {
-          showToast('載入資訊資產失敗: ' + err.message, 'error');
+          disableIsmsSelectors('資訊資產載入失敗：' + (err && err.message ? err.message : err));
         })
         .getIsmsAssets({});
+    }
+
+    /**
+     * 資訊資產載入失敗時降級：停用兩個選單但不阻擋主清單。
+     * 資產清單仍可瀏覽、篩選、匯出。
+     */
+    function disableIsmsSelectors(msg) {
+      var filterSel = document.getElementById('ismsFilter');
+      var mapSel = document.getElementById('ismsAssetSelect');
+      filterSel.innerHTML = '<option value="">（資訊資產載入失敗）</option>';
+      filterSel.disabled = true;
+      mapSel.innerHTML = '<option value="">（資訊資產載入失敗）</option>';
+      mapSel.disabled = true;
+      showToast(msg, 'error');
+      console.error(msg);
     }
 
     // ==========================================
