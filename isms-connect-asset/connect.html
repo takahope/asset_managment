@@ -191,6 +191,32 @@
     .col-status { min-width: 100px; }
     .col-info-id { min-width: 140px; }
 
+    /* 可點擊統計卡 */
+    .stat-card.is-clickable { cursor: pointer; transition: all 0.15s; }
+    .stat-card.is-clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(15,23,42,0.10); }
+    .stat-card.is-active { outline: 2px solid #2563eb; outline-offset: -2px; background: #eff6ff; }
+
+    /* 組別晶片列 */
+    .chip-row {
+      display: flex; flex-wrap: nowrap; gap: 8px;
+      overflow-x: auto; padding: 4px 0 8px;
+    }
+    .chip {
+      flex: 0 0 auto;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px;
+      border: 1px solid #e2e8f0; background: #fff;
+      color: #334155; font-size: 0.875rem; cursor: pointer;
+      white-space: nowrap; transition: all 0.15s;
+    }
+    .chip:hover { border-color: #93c5fd; background: #f8fafc; }
+    .chip.is-active { border-color: #2563eb; background: #2563eb; color: #fff; }
+    .chip__count {
+      min-width: 20px; padding: 0 6px; border-radius: 999px;
+      background: #f1f5f9; color: #475569; font-size: 0.75rem; font-weight: 600;
+    }
+    .chip.is-active .chip__count { background: rgba(255,255,255,0.25); color: #fff; }
+
     .badge {
       display: inline-block;
       padding: 4px 10px;
@@ -502,15 +528,15 @@
     <main class="max-w-[1500px] mx-auto px-4 md:px-8 py-8">
       <!-- 統計卡片 -->
       <div id="statsSection" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div class="stat-card">
+        <div class="stat-card is-clickable" id="cardTotal" onclick="setMappedStatusFilter('')">
           <div class="stat-value" id="statTotal">-</div>
-          <div class="stat-label">總資訊資產數</div>
+          <div class="stat-label">資產總數</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card is-clickable" id="cardMapped" onclick="setMappedStatusFilter('mapped')">
           <div class="stat-value text-green-600" id="statMapped">-</div>
           <div class="stat-label">已對照</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card is-clickable" id="cardUnmapped" onclick="setMappedStatusFilter('unmapped')">
           <div class="stat-value text-amber-600" id="statUnmapped">-</div>
           <div class="stat-label">未對照</div>
         </div>
@@ -582,17 +608,13 @@
               <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
                 <i class="fas fa-camera mr-2"></i>掃描條碼
               </button>
-              <select id="groupFilter" class="select-input">
-                <option value="">全部組別</option>
-              </select>
-              <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" id="unmappedOnly" class="w-4 h-4">
-                <span>僅顯示未對照</span>
-              </label>
               <button class="btn-secondary" onclick="loadAssets()">
                 <i class="fas fa-sync-alt mr-2"></i>重新整理
               </button>
             </div>
+
+            <!-- 組別晶片列：數字排除 group 維度，點選後其他組仍可橫向比較 -->
+            <div class="chip-row" id="groupChips"></div>
 
             <div class="mb-4 flex items-center justify-between">
               <div class="text-sm text-gray-500">
@@ -826,14 +848,11 @@
         applyFilters();
       }, 300));
 
-      document.getElementById('groupFilter').addEventListener('change', function() {
-        filterState.group = document.getElementById('groupFilter').value;
-        applyFilters();
-      });
-
-      document.getElementById('unmappedOnly').addEventListener('change', function() {
-        filterState.mappedStatus = document.getElementById('unmappedOnly').checked ? 'unmapped' : '';
-        applyFilters();
+      // 組別晶片用事件委派（晶片每次重繪，不能逐顆綁）
+      document.getElementById('groupChips').addEventListener('click', function(e) {
+        var chip = e.target.closest('.chip');
+        if (!chip) return;
+        setGroupFilter(chip.dataset.group || '');
       });
 
       // 資訊資產搜尋
@@ -865,19 +884,7 @@
         .withSuccessHandler(function(result) {
           if (result.success) {
             allAssets = result.assets;
-
-            // 組別下拉改吃前端衍生資料（取代已移除的 loadGroupList）。
-            // 先重建選項再 applyFilters，確保既有的 filterState.group 仍能對應到選項。
-            var groupSelect = document.getElementById('groupFilter');
-            if (groupSelect) {
-              groupSelect.innerHTML = '<option value="">全部組別</option>' +
-                deriveGroupList().map(function(g) {
-                  return '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>';
-                }).join('');
-              groupSelect.value = filterState.group;
-            }
-
-            applyFilters();   // 渲染表格 + 統計卡，並保留使用者當前的篩選條件
+            applyFilters();   // 表格 + 統計卡 + 晶片列，並保留使用者當前的篩選條件
           } else {
             showToast(result.error, 'error');
           }
@@ -1117,6 +1124,48 @@
       var filtered = getFilteredAssets();
       renderAssetTable(filtered);
       renderStatCards(computeStats(filtered));
+      renderGroupChips();
+      renderStatCardActiveState();
+    }
+
+    function renderGroupChips() {
+      var counts = computeGroupCounts();
+      var total = counts.reduce(function(n, c) { return n + c.count; }, 0);
+
+      // 用 data-group + 事件委派，不用 inline onclick：
+      // escapeHtml 會把 ' 轉成 &#039;，而 HTML 屬性解析器會在 JS 看到之前把它解回 '，
+      // 塞進 onclick="setGroupFilter('...')" 的字串就會被截斷。
+      var html = '<button type="button" class="chip' + (filterState.group === '' ? ' is-active' : '') +
+                 '" data-group=""><span>全部</span>' +
+                 '<span class="chip__count">' + total + '</span></button>';
+
+      html += counts.map(function(c) {
+        var active = filterState.group === c.group ? ' is-active' : '';
+        return '<button type="button" class="chip' + active +
+               '" data-group="' + escapeHtml(c.group) + '">' +
+               '<span>' + escapeHtml(c.group) + '</span>' +
+               '<span class="chip__count">' + c.count + '</span></button>';
+      }).join('');
+
+      document.getElementById('groupChips').innerHTML = html;
+    }
+
+    /** 點已選中的組別＝取消，回到全部 */
+    function setGroupFilter(group) {
+      filterState.group = (filterState.group === group) ? '' : group;
+      applyFilters();
+    }
+
+    /** 點已選中的狀態＝取消；'' 一律代表全部 */
+    function setMappedStatusFilter(status) {
+      filterState.mappedStatus = (filterState.mappedStatus === status) ? '' : status;
+      applyFilters();
+    }
+
+    function renderStatCardActiveState() {
+      document.getElementById('cardTotal').classList.toggle('is-active', filterState.mappedStatus === '');
+      document.getElementById('cardMapped').classList.toggle('is-active', filterState.mappedStatus === 'mapped');
+      document.getElementById('cardUnmapped').classList.toggle('is-active', filterState.mappedStatus === 'unmapped');
     }
 
     function filterIsmsSelect() {
