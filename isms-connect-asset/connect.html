@@ -783,7 +783,8 @@
         .withSuccessHandler(function(result) {
           if (result.success) {
             allAssets = result.assets;
-            applyFilters();   // 表格 + 統計卡 + 晶片列，並保留使用者當前的篩選條件
+            applyFilters();            // 表格 + 統計卡 + 晶片列，並保留使用者當前的篩選條件
+            renderIsmsFilterOptions(); // 選項來自 allAssets 的對照結果，兩支載入誰先到都要重繪
           } else {
             renderTableError('載入資產失敗：' + (result.error || '未知錯誤'));
           }
@@ -876,7 +877,6 @@
       }).join('');
 
       select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
-      reportSelect.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
     }
 
 
@@ -1013,19 +1013,40 @@
     }
 
     /**
-     * 主清單的資訊資產篩選器。只列 HW / EV 類別，與對照用選單口徑一致。
-     * 取代原本的「資訊資產」分頁與「依資訊資產查詢」。
+     * 主清單的資訊資產篩選器，取代原本的「資訊資產」分頁與「依資訊資產查詢」。
+     *
+     * 只列出「實際有資產對照上去」的編號 —— 列全部 HW/EV 沒有意義,
+     * 選到還沒有對照的編號只會得到空清單。選項後方的數字是該編號底下的資產筆數。
+     *
+     * 資料來源同時依賴 allAssets(誰對照到誰)與 allIsmsAssets(編號的名稱),
+     * 而這兩份由不同的非同步呼叫載入,先後不定 —— 因此本函式在兩邊的
+     * successHandler 都會被呼叫一次,設計成可重複執行且會自行收斂。
      */
     function renderIsmsFilterOptions() {
-      var options = allIsmsAssets.filter(function(a) {
-        return a.category === 'HW' || a.category === 'EV';
-      }).map(function(a) {
-        return '<option value="' + escapeHtml(a.ismsAssetId) + '">' +
-               escapeHtml(a.ismsAssetId) + ' · ' + escapeHtml(a.name) + '</option>';
+      var nameById = {};
+      for (var i = 0; i < allIsmsAssets.length; i++) {
+        nameById[allIsmsAssets[i].ismsAssetId] = allIsmsAssets[i].name;
+      }
+
+      var counts = {};
+      for (var j = 0; j < allAssets.length; j++) {
+        var id = String(allAssets[j].mappedIsmsAssetId || '').trim();
+        if (!id) continue;
+        counts[id] = (counts[id] || 0) + 1;
+      }
+
+      var ids = Object.keys(counts).sort(function(a, b) {
+        return a.localeCompare(b, 'zh-TW');
+      });
+
+      var options = ids.map(function(id) {
+        var label = id + (nameById[id] ? ' · ' + nameById[id] : '') + '（' + counts[id] + '）';
+        return '<option value="' + escapeHtml(id) + '">' + escapeHtml(label) + '</option>';
       }).join('');
+
       var sel = document.getElementById('ismsFilter');
       sel.innerHTML = '<option value="">全部資訊資產</option>' + options;
-      sel.value = filterState.ismsAssetId;
+      sel.value = filterState.ismsAssetId;   // 重繪後保留使用者的選擇
     }
 
     function setIsmsFilter(ismsAssetId) {
