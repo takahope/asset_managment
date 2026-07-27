@@ -185,6 +185,18 @@ clearIsoScopeCache()      // 改完 HR 組織架構樹 I 欄（認證駐站）�
 - **HR 讀不到時 fail-closed**：`getCertifiedStationMap_()` 直接 throw，絕不降級成空集合。
   降級會讓全部駐站資產靜默判成「不在範圍」。這與 `getEmailToGroupMap_()` 會靜默降級讀
   「保管人/信箱」的行為**刻意不同**。
+
+- **fail-closed 的邊界刻意畫在 ISO 入口，不在 `getDropdownOptions()`**（不要「統一」它們）：
+  `getDropdownOptions()` 讀不到 E 欄時仍回 `success:true` 並附
+  `businessProcessFlagColumnAvailable: false`——因為它同時供 `index.html` 的新增資訊資產
+  表單使用，改成 throw 會把那個表單一起弄壞。fail-closed 只加在 ISO 判定專用的
+  `getCertifiedProcessSet_()`：旗標欄不可用時 throw。
+  該函式另有**部署防呆**——欄位為 `undefined` 即視為線上 `code.js` 是舊版並明確要求重貼，
+  因為手動貼檔部署下「線上與本地不一致」是常態風險，而它的症狀（認證流程集合變空）
+  與「真的沒有任何認證流程」一模一樣。
+  `getDropdownOptions()` 迴圈後那行 `console.log` 是為了讓三種失敗模式可分辨：
+  **log 沒出現**=線上舊版、**業務流程 0 筆**=B 欄 key 文字不符、
+  **有筆數但已認證 0 筆**=E 欄旗標值形狀不被接受（全形Ｖ、核取方塊的 boolean 等）。
 - 補號歸併鍵 = **地點 + 資產名稱 + 財產類別 + 組別**，駐站與非駐站同規則（組別不同就拆）。
   **廠牌型號欄含序號，不可入鍵**——用它會靜默退化成一台一筆且不報錯。
   組別為 `未分組` 或查不到代號者不補號，列入「無法處理」清單。
