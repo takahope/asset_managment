@@ -545,7 +545,11 @@ function getAssetsWithMappingStatus(options = {}) {
         ...asset,
         isMapped: !!mapping,
         mappedIsmsAssetId: mapping ? mapping.ismsAssetId : '',
-        mappingRemarks: mapping ? mapping.remarks : ''
+        mappingRemarks: mapping ? mapping.remarks : '',
+        // ISO 範圍基準線(對照表 F/G/H):上次套用掃描的結果,非即時真相
+        isoScope: mapping ? mapping.isoScope : '',
+        isoBasis: mapping ? mapping.isoBasis : '',
+        isoJudgedAt: mapping ? mapping.isoJudgedAt : ''
       };
     });
 

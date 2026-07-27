@@ -614,6 +614,9 @@
               </button>
             </div>
 
+            <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
+            <div class="chip-row" id="isoChips"></div>
+
             <!-- 組別晶片列：數字排除 group 維度，點選後其他組仍可橫向比較 -->
             <div class="chip-row" id="groupChips"></div>
 
@@ -633,11 +636,13 @@
                     <th class="col-group">組別</th>
                     <th class="col-status">對照狀態</th>
                     <th class="col-info-id">資訊資產編號</th>
+                    <th class="col-status">ISO 範圍</th>
+                    <th class="col-location">認證依據</th>
                   </tr>
                 </thead>
                 <tbody id="assetTableBody">
                   <tr>
-                    <td colspan="10" class="text-center py-8 text-gray-500">
+                    <td colspan="12" class="text-center py-8 text-gray-500">
                       <div class="loading-spinner mx-auto mb-2"></div>
                       載入中...
                     </td>
@@ -739,6 +744,13 @@
         setGroupFilter(chip.dataset.group || '');
       });
 
+      // ISO 範圍晶片用事件委派（晶片每次重繪，不能逐顆綁）
+      document.getElementById('isoChips').addEventListener('click', function(e) {
+        var chip = e.target.closest('.chip');
+        if (!chip) return;
+        setIsoFilter(chip.dataset.iso || '');
+      });
+
       // 資訊資產搜尋（對照用選單）
       document.getElementById('ismsSearch').addEventListener('input', debounce(filterIsmsSelect, 300));
 
@@ -765,7 +777,7 @@
     /** 失敗時把 loading spinner 收斂成錯誤列，附重試入口（PLAYBOOK §4-9） */
     function renderTableError(message) {
       document.getElementById('assetTableBody').innerHTML =
-        '<tr><td colspan="10" class="text-center py-8">' +
+        '<tr><td colspan="12" class="text-center py-8">' +
         '<div class="text-red-600 mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>' +
         escapeHtml(message) + '</div>' +
         '<button class="btn-secondary" onclick="loadAssets()">' +
@@ -775,7 +787,7 @@
 
     function loadAssets() {
       document.getElementById('assetTableBody').innerHTML = `
-        <tr><td colspan="10" class="text-center py-8 text-gray-500">
+        <tr><td colspan="12" class="text-center py-8 text-gray-500">
           <div class="loading-spinner mx-auto mb-2"></div>載入中...
         </td></tr>`;
 
@@ -834,7 +846,7 @@
       const tbody = document.getElementById('assetTableBody');
 
       if (assets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
         return;
       }
 
@@ -858,6 +870,8 @@
                 : '<span class="badge badge-warning"><i class="fas fa-times mr-1"></i>未對照</span>'}
             </td>
             <td class="font-mono text-sm">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
+            <td>${escapeHtml(isoLabelOf(asset))}</td>
+            <td><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
           </tr>
         `;
       }).join('');
@@ -894,8 +908,35 @@
       keyword: '',        // 搜尋關鍵字（已 toLowerCase）
       group: '',          // '' = 全部組別
       mappedStatus: '',   // '' = 全部 | 'mapped' | 'unmapped'
-      ismsAssetId: ''     // '' = 全部資訊資產
+      ismsAssetId: '',    // '' = 全部資訊資產
+      isoScope: ''        // '' = 全部 | 'V' 在範圍 | '?' 待判定 | 'out' 不在範圍 | 'unmapped' 未對照
     };
+
+    /**
+     * 對照表 F 欄的值 → 前端顯示用狀態。
+     * 未對照的資產沒有基準線可讀，另成一態。
+     */
+    function isoStateOf(asset) {
+      if (!asset.isMapped) return 'unmapped';
+      var cell = String(asset.isoScope || '').trim();
+      if (cell === 'V') return 'V';
+      if (cell === '?') return '?';
+      return 'out';
+    }
+
+    function isoLabelOf(asset) {
+      var state = isoStateOf(asset);
+      if (state === 'V') return '✅ 在範圍';
+      if (state === '?') return '❓ 待判定';
+      if (state === 'out') return '⬜ 不在範圍';
+      return '— 未對照';
+    }
+
+    /** 點已選中的狀態＝取消，回到全部（與 setGroupFilter 同慣例） */
+    function setIsoFilter(value) {
+      filterState.isoScope = (filterState.isoScope === value) ? '' : value;
+      applyFilters();
+    }
 
     /**
      * 判斷單筆資產是否通過篩選。
@@ -921,6 +962,11 @@
       }
       if (excludeDim !== 'ismsAssetId' && filterState.ismsAssetId) {
         if (asset.mappedIsmsAssetId !== filterState.ismsAssetId) return false;
+      }
+      // ISO 範圍維度。excludeDim === 'isoScope' 時跳過，讓晶片算自己的數字時
+      // 排除自己那一維 —— 否則點下去其他選項全部歸零就再也點不回來。
+      if (excludeDim !== 'isoScope' && filterState.isoScope) {
+        if (isoStateOf(asset) !== filterState.isoScope) return false;
       }
       return true;
     }
@@ -980,6 +1026,7 @@
       renderAssetTable(getFilteredAssets());
       renderStatCards(computeStats(getStatusFacetAssets()));
       renderGroupChips();
+      renderIsoChips();
       renderStatCardActiveState();
     }
 
@@ -1017,6 +1064,35 @@
       }).join('');
 
       document.getElementById('groupChips').innerHTML = html;
+    }
+
+    /**
+     * ISO 範圍晶片：計數排除 isoScope 自己那一維（與組別晶片同一原則）。
+     * 用 data-iso + 事件委派，理由同 renderGroupChips 的註解。
+     */
+    function renderIsoChips() {
+      var pool = allAssets.filter(function(a) { return matchesFilters(a, 'isoScope'); });
+      var counts = { 'V': 0, '?': 0, 'out': 0, 'unmapped': 0 };
+      for (var i = 0; i < pool.length; i++) {
+        var state = isoStateOf(pool[i]);
+        if (counts[state] !== undefined) counts[state]++;
+      }
+
+      var chips = [
+        { value: '', label: '全部範圍', count: pool.length },
+        { value: 'V', label: '✅ 在範圍', count: counts['V'] },
+        { value: '?', label: '❓ 待判定', count: counts['?'] },
+        { value: 'out', label: '⬜ 不在範圍', count: counts['out'] },
+        { value: 'unmapped', label: '— 未對照', count: counts['unmapped'] }
+      ];
+
+      document.getElementById('isoChips').innerHTML = chips.map(function(c) {
+        var active = filterState.isoScope === c.value ? ' is-active' : '';
+        return '<button type="button" class="chip' + active +
+               '" data-iso="' + escapeHtml(c.value) + '">' +
+               '<span>' + escapeHtml(c.label) + '</span>' +
+               '<span class="chip__count">' + c.count + '</span></button>';
+      }).join('');
     }
 
     /** 點已選中的組別＝取消，回到全部 */
