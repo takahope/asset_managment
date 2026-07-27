@@ -716,3 +716,92 @@ function writeMappingBaseline_(judgements, newMappings, email, now) {
   }
   return { newRows: newRows, updatedRows: updatedRows };
 }
+
+
+function _tmpVerifyAll() {
+  // 1. 認證駐站應為 6 家
+  var stations = getCertifiedStationMap_();
+  var certified = Object.keys(stations).filter(function(k) { return stations[k].certified; });
+  console.log('駐站總數:', Object.keys(stations).length, '/ 認證駐站:', certified.length, '→', certified.join(', '));
+
+  // 2. 「收案系統」必須存在且 E 欄打 V ← 這條最容易漏
+  var processes = getCertifiedProcessSet_();
+  console.log('認證業務流程:', Object.keys(processes).join(', '));
+  console.log('★ 收案系統是否認證:', !!processes[STATION_DEFAULT_BUSINESS_PROCESS]);
+
+  // 3. 組別代號對照
+  console.log('組別代號:', JSON.stringify(getGroupCodeMap_().byDisplay));
+
+  // 4. 試算（唯讀）
+  var r = previewIsoScopeScan();
+  if (!r.success) { console.log('✗ 試算失敗:', r.error); return; }
+  console.log('統計:', JSON.stringify(r.summary));
+  console.log('進入範圍', r.diff.entering.length, '台 / 離開範圍', r.diff.leaving.length, '台');
+  console.log('將補號', r.autoCreate.length, '筆:', JSON.stringify(r.autoCreate.slice(0, 5)));
+  console.log('無法處理:', JSON.stringify(r.skipped));
+  console.log('與主表 Z 欄不一致:', r.zColumnMismatch, '台');
+}
+
+function _tmpDiagDropdown() {
+  var ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(CONFIG.DROPDOWN_SHEET_NAME);
+  console.log('最大欄數:', sheet.getMaxColumns(), '/ 最後一列:', sheet.getLastRow());
+
+  // 原始讀 A~F，只印「業務流程」那幾列，連字元碼一起印
+  var n = Math.min(sheet.getLastRow(), 60);
+  sheet.getRange(1, 1, n, 6).getValues().forEach(function(row, i) {
+    if (String(row[1]).trim() !== '業務流程') return;
+    var e = row[4];
+    console.log('列' + (i + 1) +
+      ' | C=' + JSON.stringify(row[2]) +
+      ' | D=' + JSON.stringify(row[3]) +
+      ' | E=' + JSON.stringify(e) +
+      ' | E型別=' + typeof e +
+      ' | E字元碼=[' + String(e).split('').map(function(ch) {
+          return ch.charCodeAt(0);
+        }).join(',') + ']');
+  });
+
+  // ★ 判斷線上 code.js 是新版還是舊版
+  var opts = getDropdownOptions();
+  console.log('success:', opts.success, opts.error || '');
+  var first = (opts.businessProcesses || [])[0];
+  console.log('第一筆業務流程:', JSON.stringify(first));
+  console.log('★★ 線上 code.js 是新版嗎:', !!first && ('isCertified' in first));
+}
+
+function _tmpDiagProcesses() {
+  var ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(CONFIG.DROPDOWN_SHEET_NAME);
+  var last = sheet.getLastRow();
+  console.log('讀取全部 ' + last + ' 列（上次只讀 60 列，所以什麼都沒印出來）');
+
+  var rows = sheet.getRange(1, 1, last, 6).getValues();
+  var hit = 0, flagged = 0;
+
+  rows.forEach(function(row, i) {
+    if (String(row[1] || '').trim() !== '業務流程') return;
+    hit++;
+    var e = row[4];
+    var codes = String(e).split('').map(function(c) { return c.charCodeAt(0); }).join(',');
+    if (String(e).trim() !== '') flagged++;
+    console.log('列' + (i + 1) +
+      ' | C=' + JSON.stringify(row[2]) +
+      ' | E=' + JSON.stringify(e) +
+      ' | 型別=' + (typeof e) +
+      ' | 字元碼=[' + codes + ']' +
+      ' | 現行判定=' + isCertifiedFlagValue_(e));
+  });
+
+  console.log('業務流程列數:', hit, '/ E 欄非空的列數:', flagged);
+
+  // 命中 0 列就把 B 欄實際的 key 全列出來，看是不是文字不符
+  if (hit === 0) {
+    var keys = {};
+    rows.forEach(function(row) {
+      var k = String(row[1] || '').trim();
+      if (k) keys[k] = (keys[k] || 0) + 1;
+    });
+    console.log('B 欄實際出現的 key:', JSON.stringify(keys));
+  }
+}
