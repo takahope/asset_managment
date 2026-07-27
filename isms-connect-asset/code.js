@@ -1277,7 +1277,10 @@ function initMappingSheet() {
     }
 
     sheet = ss.insertSheet(CONFIG.MAPPING_SHEET_NAME);
-    sheet.appendRow(['資產編號', '資訊資產編號', '建立時間', '建立人', '備註']);
+    sheet.appendRow([
+      '資產編號', '資訊資產編號', '建立時間', '建立人', '備註',
+      '驗證範圍', '認證依據', '判定時間'
+    ]);
 
     // 設定欄寬
     sheet.setColumnWidth(1, 150);
@@ -1285,6 +1288,9 @@ function initMappingSheet() {
     sheet.setColumnWidth(3, 180);
     sheet.setColumnWidth(4, 200);
     sheet.setColumnWidth(5, 200);
+    sheet.setColumnWidth(6, 90);
+    sheet.setColumnWidth(7, 180);
+    sheet.setColumnWidth(8, 180);
 
     // 凍結標題列
     sheet.setFrozenRows(1);

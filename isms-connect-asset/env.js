@@ -22,6 +22,9 @@ const CONFIG = {
   // 權限工作表(位於 ISMS 試算表): A 欄=白名單 Email、B 欄=管理員 Email
   ISMS_PERMISSION_SHEET_NAME: '權限',
 
+  // ISO 範圍例外(人工釘死個案;讀取生效,維護走試算表手動編輯)
+  ISO_EXCEPTION_SHEET_NAME: 'ISO範圍例外',
+
   // 管理員名單(legacy,位於主試算表;已停用,改用 ISMS_PERMISSION_SHEET_NAME)
   ADMIN_LIST_SHEET_NAME: '管理員名單',
 
@@ -107,13 +110,16 @@ const ISMS_ASSET_COLUMN_INDICES = {
   BUSINESS_PROCESS: 22   // V欄: 業務流程
 };
 
-// 資產對照表欄位索引
+// 資產對照表欄位索引(F/G/H 為 ISO 範圍基準線,見 spec 2026-07-27 §4.1)
 const MAPPING_COLUMN_INDICES = {
   ASSET_ID: 1,           // A欄: 資產編號
   ISMS_ASSET_ID: 2,      // B欄: 資訊資產編號
-  CREATED_TIME: 3,       // C欄: 建立時間
-  CREATED_BY: 4,         // D欄: 建立人
-  REMARKS: 5             // E欄: 備註
+  CREATED_TIME: 3,       // C欄: 建立時間(掃描套用時不覆寫)
+  CREATED_BY: 4,         // D欄: 建立人(掃描套用時不覆寫)
+  REMARKS: 5,            // E欄: 備註
+  ISO_SCOPE: 6,          // F欄: 驗證範圍 V=在範圍 / ?=待判定 / 空=不在範圍
+  ISO_BASIS: 7,          // G欄: 認證依據
+  ISO_JUDGED_AT: 8       // H欄: 判定時間(ISO 字串)
 };
 
 // 軟體清冊欄位索引（A~I 欄）
@@ -128,6 +134,41 @@ const SOFTWARE_COLUMN_INDICES = {
   TYPE_CODE: 8,          // H欄: 類型代碼
   SERIAL_NO: 9           // I欄: 編號
 };
+
+// ==========================================
+// ISO 驗證範圍判定(spec 2026-07-27)
+// ==========================================
+
+// HR 組織架構樹欄位索引(1-based)
+// ⚠️ CERTIFIED_FLAG 是跨專案契約:station_status/code.js:953 寫入第 9 欄,兩邊改動須同步
+const HR_ORG_TREE_COLUMN_INDICES = {
+  CODE: 3,            // C欄: 組織代碼
+  NAME: 4,            // D欄: 名稱(HR 原名,需經 HR_GROUP_NAME_MAP 轉慣用名)
+  CERTIFIED_FLAG: 9   // I欄: 認證駐站旗標
+};
+
+const STATION_CODE_PREFIX = 'GRP-CO-';              // 駐站組織代碼字首,與 station_status 一致
+const STATION_DEFAULT_BUSINESS_PROCESS = '收案系統'; // 駐站資產補號時寫入 V 欄
+const ISO_SCAN_DEFAULT_CATEGORY_CODE = 'HW';        // 自動補號固定用的資訊資產類別代號
+const ISO_UNASSIGNED_GROUP_NAME = '未分組';          // getAssetGroup_ 三層 fallback 的兜底值
+
+// ISO範圍例外工作表欄位索引
+const ISO_EXCEPTION_COLUMN_INDICES = {
+  ASSET_ID: 1,      // A欄: 資產編號
+  FORCED_VALUE: 2,  // B欄: 強制值(在範圍 / 不在範圍)
+  REASON: 3,        // C欄: 理由
+  OPERATOR: 4,      // D欄: 操作者
+  TIMESTAMP: 5      // E欄: 時間
+};
+
+// 判定狀態列舉(台級)
+const ISO_JUDGEMENT = { IN: 'IN', OUT: 'OUT', PENDING: 'PENDING' };
+
+// 聚合狀態列舉(資訊資產級)
+const ISO_AGGREGATE = { ALL: 'ALL', PARTIAL: 'PARTIAL', NONE: 'NONE', PENDING: 'PENDING' };
+
+// 對照表 F 欄的三種值
+const ISO_SCOPE_CELL = { IN: 'V', PENDING: '?', OUT: '' };
 
 // 資訊資產操作紀錄欄位索引
 const ISMS_OP_LOG_COLUMN_INDICES = {
