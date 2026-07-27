@@ -211,6 +211,24 @@ function getCertifiedProcessSet_() {
   if (!options.success) {
     throw new Error('讀取下拉選單失敗,無法取得認證業務流程:' + options.error);
   }
+
+  // 部署防呆:本專案靠手動貼檔部署,線上與本地不一致是常態風險。
+  // 舊版 getDropdownOptions 不回這個欄位,也不回 isCertified —— 那會讓認證流程
+  // 集合靜默變空,症狀與「真的沒有認證流程」完全相同。在此擋下並明示。
+  if (options.businessProcessFlagColumnAvailable === undefined) {
+    throw new Error(
+      '線上 getDropdownOptions() 是舊版(未回傳旗標欄狀態),認證業務流程讀不到。請重貼 code.js。'
+    );
+  }
+
+  // fail-closed:讀不到 E 欄時不可回空集合當成「沒有任何認證流程」——
+  // 那會讓所有非駐站資產靜默判成不在範圍。與 getCertifiedStationMap_ 同一立場。
+  if (options.businessProcessFlagColumnAvailable === false) {
+    throw new Error(
+      '「下拉選單」工作表欄數不足,讀不到 E 欄認證旗標,無法判定 ISO 範圍。請確認該工作表至少有 A~E 欄。'
+    );
+  }
+
   const set = {};
   (options.businessProcesses || []).forEach(item => {
     if (item.isCertified) set[item.display] = true;

@@ -618,19 +618,24 @@ function getDropdownOptions() {
     const statuses = [];
     const businessProcesses = [];
 
+    // 旗標欄是否讀得到。false 時 getCertifiedProcessSet_() 會 throw(fail-closed),
+    // 不讓「讀不到」被誤當成「沒有任何認證流程」。
+    let flagColumnAvailable = true;
+
     if (sheet.getLastRow() > 1) {
       // B~E 四欄:key / 顯示 / 代號 / 認證範圍旗標。
-      // 舊試算表可能只有 B~D,欄數不足時退回 3 欄並視所有流程為未認證。
-      const wanted = sheet.getMaxColumns() >= 5 ? 4 : 3;
-      if (wanted < 4) {
-        console.error('「下拉選單」工作表欄數不足 5,讀不到 E 欄認證旗標,所有業務流程視為未認證。');
+      // 舊試算表可能只有 B~D,欄數不足時退回 3 欄。
+      flagColumnAvailable = sheet.getMaxColumns() >= 5;
+      const wanted = flagColumnAvailable ? 4 : 3;
+      if (!flagColumnAvailable) {
+        console.error('「下拉選單」工作表欄數不足 5,讀不到 E 欄認證旗標。');
       }
       const data = sheet.getRange(2, 2, sheet.getLastRow() - 1, wanted).getValues();
       for (let i = 0; i < data.length; i++) {
         const key = data[i][0] ? String(data[i][0]).trim() : '';     // B 欄
         const display = data[i][1] ? String(data[i][1]).trim() : ''; // C 欄
         const code = data[i][2] ? String(data[i][2]).trim() : '';    // D 欄
-        const certFlag = wanted >= 4 ? data[i][3] : '';              // E 欄
+        const certFlag = flagColumnAvailable ? data[i][3] : '';      // E 欄
         if (!key || !display) continue;
 
         if (key === '資訊資產類別' || key === '類別') categories.push({ display, code });
@@ -642,7 +647,19 @@ function getDropdownOptions() {
       }
     }
 
-    return { success: true, categories, groups, statuses, businessProcesses };
+    // 診斷:讓三種失敗模式在執行記錄裡可分辨——
+    // 這行沒出現=線上是舊版 code.js;業務流程 0 筆=B 欄 key 不符;
+    // 有筆數但已認證 0 筆=E 欄旗標值不被接受。
+    const certifiedCount = businessProcesses.filter(p => p.isCertified).length;
+    console.log(
+      `下拉選單解析:業務流程 ${businessProcesses.length} 筆、已認證 ${certifiedCount} 筆` +
+      `(旗標欄可用=${flagColumnAvailable})`
+    );
+
+    return {
+      success: true, categories, groups, statuses, businessProcesses,
+      businessProcessFlagColumnAvailable: flagColumnAvailable
+    };
   } catch (e) {
     console.error('getDropdownOptions 錯誤:', e);
     return { success: false, error: e.message };
