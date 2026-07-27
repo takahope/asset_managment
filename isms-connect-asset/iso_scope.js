@@ -70,6 +70,67 @@ function aggregateIsmsScope_(judgements) {
   return { state: ISO_AGGREGATE.NONE, inCount: 0, total: total };
 }
 
+/**
+ * 把未對照的實體資產按歸併鍵分組,產出補號預告(spec §6.2)。
+ *
+ * 歸併鍵 = 地點 + 資產名稱 + 財產類別 + 歸屬組別。組別入鍵讓 S 欄在每組內
+ * 必然唯一,因此 S 與 G 永遠一對一;駐站與非駐站適用同一條規則,沒有特例。
+ *
+ * ⚠️ 廠牌型號欄不可入鍵——該欄混有序號,每台唯一,會讓歸併靜默退化成一台一筆。
+ *
+ * @param {Array<Object>} assets 未對照資產,需有 assetId/assetName/assetCategory/location/group
+ * @param {{byDisplay: Object, byCode: Object}} groupCodeMap
+ * @returns {{groups: Array<Object>, skipped: Array<Object>}}
+ */
+function buildAutoCreateGroups_(assets, groupCodeMap) {
+  const buckets = {};
+
+  assets.forEach(asset => {
+    const location = String(asset.location || '').trim();
+    const assetName = String(asset.assetName || '').trim();
+    const category = String(asset.assetCategory || '').trim();
+    const groupName = String(asset.group || '').trim();
+    const key = [location, assetName, category, groupName].join('|');
+
+    if (!buckets[key]) {
+      buckets[key] = {
+        key: key,
+        location: location,
+        assetName: assetName,
+        category: category,
+        groupName: groupName,
+        groupCode: groupCodeMap.byDisplay[groupName] || '',
+        assetIds: []
+      };
+    }
+    buckets[key].assetIds.push(asset.assetId);
+  });
+
+  const groups = [];
+  const skipped = [];
+  Object.keys(buckets).forEach(key => {
+    const bucket = buckets[key];
+    if (bucket.groupName === ISO_UNASSIGNED_GROUP_NAME) {
+      bucket.reason = '組別解析失敗(未分組)';
+      skipped.push(bucket);
+      return;
+    }
+    if (!bucket.groupCode) {
+      bucket.reason = `組別「${bucket.groupName}」查不到代號`;
+      skipped.push(bucket);
+      return;
+    }
+    if (!bucket.assetName) {
+      bucket.reason = '資產名稱為空,無法命名資訊資產';
+      skipped.push(bucket);
+      return;
+    }
+    groups.push(bucket);
+  });
+
+  return { groups: groups, skipped: skipped };
+}
+
 // -----------------------------------------------------------------
 // ② 讀取層
 // -----------------------------------------------------------------
