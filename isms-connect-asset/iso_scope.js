@@ -301,3 +301,198 @@ function ensureIsoExceptionSheet_() {
   sheet.setFrozenRows(1);
   return sheet;
 }
+
+// -----------------------------------------------------------------
+// ④ 端點
+// -----------------------------------------------------------------
+
+/**
+ * 逐台判定 + 與對照表 F 欄比差異 + 算補號預告。**完全唯讀,不寫任何資料。**
+ * 權限:白名單。
+ * @returns {Object}
+ */
+function previewIsoScopeScan() {
+  try {
+    const email = getCurrentUserEmail_();
+    if (!isInWhitelist_(email)) {
+      return { success: false, error: '您沒有權限執行範圍掃描。' };
+    }
+
+    const plan = computeIsoScopePlan_();
+    return Object.assign({ success: true }, plan.report);
+  } catch (e) {
+    console.error('previewIsoScopeScan 錯誤:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * 掃描的計算核心。preview 與 apply 共用,確保套用時重算的邏輯與試算完全一致
+ * (spec §5.4 TOCTOU)。
+ * @returns {{report: Object, judgements: Array, groups: Array}}
+ */
+function computeIsoScopePlan_() {
+  const ctx = buildIsoScopeContext_();
+  const groupCodeMap = getGroupCodeMap_();
+
+  const assetResult = getAssetsWithMappingStatus();
+  if (!assetResult.success) throw new Error('讀取資產清單失敗:' + assetResult.error);
+  const assets = assetResult.assets;
+
+  const ismsResult = getIsmsAssets();
+  if (!ismsResult.success) throw new Error('讀取資訊資產失敗:' + ismsResult.error);
+  const ismsById = {};
+  // getIsmsAssets 回傳的鍵是 assets(code.js:990),不是 ismsAssets
+  (ismsResult.assets || []).forEach(item => { ismsById[item.ismsAssetId] = item; });
+
+  const mappingMap = getMappingMap_();
+  const now = new Date().toISOString();
+
+  const judgements = [];
+  const entering = [];
+  const leaving = [];
+  const unmapped = [];
+  let zMismatch = 0;
+
+  assets.forEach(asset => {
+    const ismsAsset = asset.mappedIsmsAssetId ? (ismsById[asset.mappedIsmsAssetId] || null) : null;
+    const verdict = judgeAssetIsoScope_(ctx, asset, ismsAsset);
+    const cell = verdict.status === ISO_JUDGEMENT.IN ? ISO_SCOPE_CELL.IN
+               : verdict.status === ISO_JUDGEMENT.PENDING ? ISO_SCOPE_CELL.PENDING
+               : ISO_SCOPE_CELL.OUT;
+
+    judgements.push({
+      assetId: asset.assetId,
+      ismsAssetId: asset.mappedIsmsAssetId || '',
+      status: verdict.status,
+      basis: verdict.basis,
+      cell: cell,
+      judgedAt: now
+    });
+
+    if (!asset.isMapped) unmapped.push(asset);
+
+    // 與對照表 F 欄(基準線)比差異
+    const mapping = mappingMap.get(asset.assetId);
+    const previous = mapping ? mapping.isoScope : '';
+    if (mapping && previous !== cell) {
+      const record = {
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        location: asset.location,
+        basis: verdict.basis,
+        previousScope: previous
+      };
+      if (cell === ISO_SCOPE_CELL.IN) entering.push(record);
+      else if (previous === ISO_SCOPE_CELL.IN) leaving.push(record);
+    }
+
+    // 與主表 Z 欄的舊人工真相比對(僅計數供參考,不回寫)
+    const zSaysIn = String(asset.isIsoScope || '').trim() === '是';
+    if (zSaysIn !== (verdict.status === ISO_JUDGEMENT.IN)) zMismatch++;
+  });
+
+  // 聚合到資訊資產層級
+  const byIsms = {};
+  judgements.forEach(j => {
+    if (!j.ismsAssetId) return;
+    if (!byIsms[j.ismsAssetId]) byIsms[j.ismsAssetId] = [];
+    byIsms[j.ismsAssetId].push(j);
+  });
+  const summary = { inScope: 0, partial: 0, pending: 0, outScope: 0 };
+  Object.keys(byIsms).forEach(id => {
+    const agg = aggregateIsmsScope_(byIsms[id]);
+    if (agg.state === ISO_AGGREGATE.ALL) summary.inScope++;
+    else if (agg.state === ISO_AGGREGATE.PARTIAL) summary.partial++;
+    else if (agg.state === ISO_AGGREGATE.PENDING) summary.pending++;
+    else summary.outScope++;
+  });
+
+  // 補號預告
+  const built = buildAutoCreateGroups_(unmapped, groupCodeMap);
+  const serialTracker = {};
+  const autoCreate = built.groups.map(group => {
+    return {
+      key: group.key,
+      location: group.location,
+      assetName: group.assetName,
+      category: group.category,
+      groupCode: group.groupCode,
+      groupName: group.groupName,
+      count: group.assetIds.length,
+      previewId: previewNextIsmsAssetId_(group.groupCode, serialTracker)
+    };
+  });
+
+  return {
+    report: {
+      generatedAt: now,
+      summary: summary,
+      diff: { entering: entering, leaving: leaving },
+      autoCreate: autoCreate,
+      skipped: built.skipped.map(s => ({
+        key: s.key, location: s.location, assetName: s.assetName,
+        groupName: s.groupName, count: s.assetIds.length, reason: s.reason
+      })),
+      zColumnMismatch: zMismatch,
+      totals: {
+        assets: assets.length,
+        mapped: assets.length - unmapped.length,
+        unmapped: unmapped.length
+      }
+    },
+    judgements: judgements,
+    groups: built.groups
+  };
+}
+
+/**
+ * 取得目前使用者 email(統一入口,方便測試與除錯)。
+ * @returns {string}
+ */
+function getCurrentUserEmail_() {
+  return String(Session.getActiveUser().getEmail() || '').toLowerCase().trim();
+}
+
+/**
+ * 預告下一個資訊資產編號(唯讀,不寫入)。serialTracker 讓同一次試算中
+ * 同組別的多筆預告不會撞號。
+ * @param {string} groupCode
+ * @param {Object} serialTracker { [groupCode]: 已配發到的序號 }
+ * @returns {string}
+ */
+function previewNextIsmsAssetId_(groupCode, serialTracker) {
+  if (serialTracker[groupCode] === undefined) {
+    serialTracker[groupCode] = readMaxIsmsSerial_(groupCode, ISO_SCAN_DEFAULT_CATEGORY_CODE);
+  }
+  serialTracker[groupCode] += 1;
+  const padded = String(serialTracker[groupCode]).padStart(3, '0');
+  return `${groupCode}-${ISO_SCAN_DEFAULT_CATEGORY_CODE}-${padded}`;
+}
+
+/**
+ * 掃資訊資產清單 A 欄,取某組別+類別目前的最大流水號。
+ * 沿用 createIsmsAsset 的「A 欄是唯一真相」策略(code.js:684)。
+ * @param {string} groupCode
+ * @param {string} categoryCode
+ * @returns {number}
+ */
+function readMaxIsmsSerial_(groupCode, categoryCode) {
+  const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.ISMS_ASSET_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() <= 1) return 0;
+
+  const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp('^' + escapeRegExp(groupCode) + '-' + escapeRegExp(categoryCode) + '-(\\d+)$', 'i');
+  const idx = ISMS_ASSET_COLUMN_INDICES;
+  const ids = sheet.getRange(2, idx.ISMS_ASSET_ID, sheet.getLastRow() - 1, 1).getValues();
+
+  let max = 0;
+  ids.forEach(row => {
+    const m = String(row[0] || '').trim().match(pattern);
+    if (!m) return;
+    const serial = Number(m[1]);
+    if (!isNaN(serial) && serial > max) max = serial;
+  });
+  return max;
+}
