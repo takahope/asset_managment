@@ -805,3 +805,54 @@ function _tmpDiagProcesses() {
     console.log('B 欄實際出現的 key:', JSON.stringify(keys));
   }
 }
+
+/**
+ * 診斷:組別名對不上代號時,一次釐清三件事——
+ * ①下拉選單提供哪些組別 ②HR_GROUP_NAME_MAP 實際內容 ③問題資產的組別是從哪一層推導出來的。
+ */
+function _tmpDiagGroupCode() {
+  // ① 下拉選單的組別主檔
+  var opt = getDropdownOptions();
+  if (!opt.success) { console.log('✗ 讀下拉選單失敗:', opt.error); return; }
+  console.log('① 下拉選單「組別」共 ' + (opt.groups || []).length + ' 筆:');
+  (opt.groups || []).forEach(function(g) {
+    console.log('   ' + JSON.stringify(g.display) + ' → ' + JSON.stringify(g.code));
+  });
+
+  // ② Script Property 的實際別名表
+  var nameMap = getHrGroupNameMap_();
+  var keys = Object.keys(nameMap);
+  console.log('② HR_GROUP_NAME_MAP 共 ' + keys.length + ' 筆:', JSON.stringify(nameMap));
+
+  // ③ 問題組別的資產,追組別是哪一層推出來的
+  var TARGETS = { '策略組': 1, '釋出組': 1 };
+  var emailToGroupMap = getEmailToGroupMap_();
+  var res = getAssetsWithMappingStatus();
+  if (!res.success) { console.log('✗ 讀資產失敗:', res.error); return; }
+
+  var hit = 0;
+  res.assets.forEach(function(a) {
+    if (!TARGETS[String(a.group || '').trim()]) return;
+    if (hit++ >= 6) return;
+    var ue = String(a.userEmail || '').toLowerCase().trim();
+    var le = String(a.leaderEmail || '').toLowerCase().trim();
+    var source = a.defaultGroup ? 'AE欄 DEFAULT_GROUP'
+      : (ue && emailToGroupMap[ue]) ? '使用人 email'
+      : (le && emailToGroupMap[le]) ? '保管人 email' : '未知';
+    console.log('③ ' + a.assetId + ' | ' + a.location + ' / ' + a.assetName +
+      ' | group=' + JSON.stringify(a.group) +
+      ' | 來源=' + source +
+      ' | AE欄=' + JSON.stringify(a.defaultGroup || ''));
+  });
+  console.log('③ 命中 ' + hit + ' 台(最多列 6 台)');
+
+  // ④ 直接判定:慣用名能不能經 map 反推回下拉選單的名字
+  var byDisplay = {};
+  (opt.groups || []).forEach(function(g) { if (g.display && g.code) byDisplay[g.display] = g.code; });
+  Object.keys(TARGETS).forEach(function(alias) {
+    var hrName = keys.filter(function(k) { return nameMap[k] === alias; });
+    console.log('④ ' + alias + ' → 直接查代號=' + JSON.stringify(byDisplay[alias] || null) +
+      ' / map 反推 HR 原名=' + JSON.stringify(hrName) +
+      ' → 該原名的代號=' + JSON.stringify(hrName.length ? (byDisplay[hrName[0]] || null) : null));
+  });
+}
