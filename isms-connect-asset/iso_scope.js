@@ -71,6 +71,77 @@ function aggregateIsmsScope_(judgements) {
 }
 
 // -----------------------------------------------------------------
+// ② 讀取層
+// -----------------------------------------------------------------
+
+const ISO_STATION_CACHE_KEY = 'iso_certified_station_map_v1';
+const ISO_STATION_CACHE_SECONDS = 600; // 與 HR 組別快取同為 10 分鐘
+
+/**
+ * 讀 HR 組織架構樹,建立「地點慣用名 → 駐站資訊」對照(spec §3.2)。
+ *
+ * key 必須是慣用名而非 HR 原名:資產地點欄存的是主專案
+ * hr_directory.js:300 經 HR_GROUP_NAME_MAP 轉換後的字串。
+ *
+ * ⚠️ fail-closed(spec §8.1):HR 讀不到就 throw,絕不回空物件。
+ * 回空物件會讓全部駐站資產被判成「不在範圍」且無聲無息。
+ *
+ * @returns {Object<string, {code: string, name: string, certified: boolean}>}
+ */
+function getCertifiedStationMap_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(ISO_STATION_CACHE_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_) { /* 快取毀損,重讀 */ }
+  }
+
+  const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
+  const orgSheet = hrSs.getSheetByName(CONFIG.HR_ORG_TREE_SHEET_NAME);
+  if (!orgSheet || orgSheet.getLastRow() <= 1) {
+    throw new Error(`HR「${CONFIG.HR_ORG_TREE_SHEET_NAME}」讀取失敗或無資料,無法判定認證駐站。`);
+  }
+
+  const idx = HR_ORG_TREE_COLUMN_INDICES;
+  const numCols = Math.max(idx.CERTIFIED_FLAG, idx.NAME, idx.CODE);
+  if (orgSheet.getMaxColumns() < numCols) {
+    throw new Error(`HR「${CONFIG.HR_ORG_TREE_SHEET_NAME}」欄數不足 ${numCols},讀不到認證旗標欄。`);
+  }
+
+  const groupNameMap = getHrGroupNameMap_();
+  const rows = orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, numCols).getValues();
+  const map = {};
+
+  rows.forEach(row => {
+    const code = String(row[idx.CODE - 1] || '').trim();
+    if (code.toUpperCase().indexOf(STATION_CODE_PREFIX) !== 0) return;
+    const hrName = String(row[idx.NAME - 1] || '').trim();
+    if (!hrName) return;
+    const displayName = groupNameMap[hrName] || hrName;
+    map[displayName] = {
+      code: code,
+      name: displayName,
+      certified: isCertifiedFlagValue_(row[idx.CERTIFIED_FLAG - 1])
+    };
+  });
+
+  try {
+    cache.put(ISO_STATION_CACHE_KEY, JSON.stringify(map), ISO_STATION_CACHE_SECONDS);
+  } catch (_) { /* 快取寫入失敗不影響功能 */ }
+  return map;
+}
+
+/**
+ * 清除認證駐站快取(改完 HR 組織架構樹 I 欄後執行,否則要等 10 分鐘)。
+ * 僅限管理員。
+ */
+function clearIsoScopeCache() {
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+  CacheService.getScriptCache().remove(ISO_STATION_CACHE_KEY);
+  return { success: true, message: '認證駐站快取已清除' };
+}
+
+// -----------------------------------------------------------------
 // ③ 工作表維運
 // -----------------------------------------------------------------
 

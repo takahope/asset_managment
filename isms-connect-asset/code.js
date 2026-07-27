@@ -266,9 +266,11 @@ function getHrEmailToGroupMap_() {
   const orgSheet = hrSs.getSheetByName(CONFIG.HR_ORG_TREE_SHEET_NAME);
   const codeToOrgName = {};
   if (orgSheet && orgSheet.getLastRow() > 1) {
-    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
-      const code = String(row[2] || '').trim();
-      const name = String(row[3] || '').trim();
+    const orgIdx = HR_ORG_TREE_COLUMN_INDICES;
+    const orgCols = Math.max(orgIdx.CODE, orgIdx.NAME);
+    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, orgCols).getValues().forEach(row => {
+      const code = String(row[orgIdx.CODE - 1] || '').trim();
+      const name = String(row[orgIdx.NAME - 1] || '').trim();
       if (code && name) codeToOrgName[code] = name;
     });
   }
