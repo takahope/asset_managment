@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `isms-connect-asset` 是資產管理系統的**獨立 GAS 子專案**（父層 `../CLAUDE.md` 描述整個 monorepo）。職責是把「內部資產編號」與「ISMS 資訊資產編號」做對照，並提供資訊資產清單 / 軟體清冊的 CRUD 介面。
 
+程式碼分兩個檔：`code.js`（既有 API）與 `iso_scope.js`（ISO 範圍判定與掃描，2026-07-27 新增；
+`code.js` 已 1296 行，再擴充難以維護，作法比照主專案的 `hr_directory.js`）。
+
 **與主專案不共用任何常數**——`env.js` 的欄位索引是從主專案**複製**過來的副本。主專案新增欄位不必同步；**移動既有欄位（改變欄位順序）時必須手動同步這裡的 `PROPERTY_COLUMN_INDICES` / `ITEM_COLUMN_INDICES`**，否則本專案會讀到錯位資料而不報錯。
 
 ## 部署與驗證
@@ -26,7 +29,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 initMappingSheet()        // 建立「資產對照表」工作表 + 表頭 + 欄寬（已存在則跳過）
 clearPermissionCache()    // 改完「權限」工作表後清快取（否則要等 5 分鐘）
 clearHrGroupMapCache()    // 改完 HR 主表或 Script Property 後清快取（否則要等 10 分鐘）
+clearIsoScopeCache()      // 改完 HR 組織架構樹 I 欄（認證駐站）後清快取（否則要等 10 分鐘）
 ```
+
+「ISO範圍例外」工作表由 `ensureIsoExceptionSheet_()` 建立；例外表不存在時判定不會失敗
+（回空例外集合），與認證駐站的 fail-closed 不同。
 
 「資訊資產操作紀錄」工作表由 `ensureOperationLogSheet_()` 在第一次寫 log 時自動建立，不需手動初始化。
 
@@ -62,7 +69,7 @@ clearHrGroupMapCache()    // 改完 HR 主表或 Script Property 後清快取（
 | URL | 檔案 | 功能 |
 |-----|------|------|
 | 預設 | `index.html` (2449 行) | 資訊資產清單、新增/編輯/刪除、重複編號偵測、CSV/XLSX/PDF 匯出 |
-| `?page=connect` | `connect.html` | **單頁**：資產清單＋分面篩選＋底部對照動作條＋CSV 匯出（2026-07-26 合併，見下） |
+| `?page=connect` | `connect.html` | **單頁**：資產清單＋分面篩選＋ISO 範圍晶片與掃描＋底部對照動作條＋CSV 匯出 |
 | `?page=softwarelist` | `softwarelist.html` (1173 行) | 軟體清冊唯讀檢視與匯出 |
 
 `connect.html` 原本有四個分頁（資產清單／對照作業／資訊資產／報表查詢），2026-07-26 合併為單頁：後三個分頁被重新理解為「同一份資料的不同切面」，轉化為主清單上的篩選器與操作。**不要再新增分頁**，新功能請掛在篩選列、統計卡或底部動作條上。詳見「事件紀錄 2026-07-26」與 `docs/superpowers/specs/2026-07-26-connect-single-page-design.md`。
@@ -155,6 +162,40 @@ clearHrGroupMapCache()    // 改完 HR 主表或 Script Property 後清快取（
 - **私有函式以底線結尾**（`getPermissionLists_`、`mapRowToAssetObject_`）——GAS 慣例，底線結尾的函式不會出現在編輯器的執行下拉選單，也不能被 `google.script.run` 呼叫。**前端要呼叫的函式絕對不能加底線**。
 - 註解用繁體中文，保持簡潔
 - 工作表名稱、欄位索引全部集中在 `env.js`，`code.js` 內不出現字面量欄號（唯一例外是「保管人/信箱」fallback 的 `'保管人/信箱'` 與 B/G 欄硬編碼）
+
+### 8. ISO 驗證範圍判定（spec 2026-07-27，程式碼在 `iso_scope.js`）
+
+判定核心是台級純函式 `judgeAssetIsoScope_()`，優先序：**例外 > 駐站認證狀態 > 業務流程**。
+`iso_scope.js` 刻意分三段（純函式／讀取層／端點），純函式不碰任何 GAS API，
+可用 `node test/iso_scope.test.cjs` 在本地跑 23 個斷言（`test/` 不進版控，也不會被誤貼到 GAS）。
+
+- **認證駐站的真相是 HR「組織架構樹」I 欄**（值 `V` 或 `認證駐站`），由 `station_status` 專案的
+  `syncCertifiedStationFlagsToOrgSheet_()`（`station_status/code.js:938`）寫入。
+  **這是跨專案契約**——`HR_ORG_TREE_COLUMN_INDICES.CERTIFIED_FLAG = 9` 與那邊的
+  `orgSheet.getRange(item.rowIndex, 9)` 必須同步，任一邊改欄位順序都會靜默錯位。
+  本專案不讀也不需要 `認證駐站紀錄`（那張表在 station_status 自己綁定的試算表）。
+- **地點反查駐站必須套 `HR_GROUP_NAME_MAP`**：資產地點欄存的是慣用名，組織架構樹 D 欄是 HR 原名，
+  直接比對會全部對不上。`getCertifiedStationMap_()` 的 key 已經是慣用名。
+- **認證業務流程**是「下拉選單」工作表 key=`業務流程` 列的 **E 欄** `V` 旗標。
+  `STATION_DEFAULT_BUSINESS_PROCESS`（`收案系統`）**必須在該清單且 E 欄打 `V`**——
+  駐站分支平常不看業務流程，但設備轉出駐站的瞬間就改看它，漏打會無聲掉出範圍。
+- **對照表 F/G/H 欄兼任基準線**。F 欄三值：`V` 在範圍 / `?` 待判定 / 空 不在範圍。
+  它是**上次套用的結果，不是即時真相**；畫面顯示永遠是即時推導，差異 = 即時推導 vs F 欄。
+  用三值而非 V/空，是為了讓「在範圍→待判定」不被誤報成「離開範圍」。
+- **HR 讀不到時 fail-closed**：`getCertifiedStationMap_()` 直接 throw，絕不降級成空集合。
+  降級會讓全部駐站資產靜默判成「不在範圍」。這與 `getEmailToGroupMap_()` 會靜默降級讀
+  「保管人/信箱」的行為**刻意不同**。
+- 補號歸併鍵 = **地點 + 資產名稱 + 財產類別 + 組別**，駐站與非駐站同規則（組別不同就拆）。
+  **廠牌型號欄含序號，不可入鍵**——用它會靜默退化成一台一筆且不報錯。
+  組別為 `未分組` 或查不到代號者不補號，列入「無法處理」清單。
+- 補號的 **CIA 刻意留空**（填 1/1/1 會混進資產價值統計變成「看起來已完成」），
+  所以**不重用 `createIsmsAsset()`**（它強制 CIA 1~4）；類別固定 `HW`。
+- 套用**不重用 `createMappings()`**：它逐筆 `appendRow`，200 台就是 200 趟 API 往返。
+  改成讀整表、記憶體內改完、一次 `setValues`。既有列的 C/D 欄不覆寫。
+- 權限：`previewIsoScopeScan` 白名單（唯讀）、`applyIsoScopeScan` **管理員**。
+  套用時重算並比對前端帶回的筆數以擋 TOCTOU。
+- 前端 ISO 晶片**必須傳 `excludeDim: 'isoScope'`**，並用 `data-iso` + 事件委派
+  （不可用 inline `onclick`，理由見 `connect.html` 的 `renderGroupChips` 註解）。
 
 ## 事件紀錄
 
