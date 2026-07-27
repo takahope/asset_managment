@@ -23,7 +23,7 @@ function doGet(e) {
   var title = '資訊資產清單';
   if (page === 'connect') { file = 'connect'; title = '資產與資訊資產對照管理'; }
   else if (page === 'softwarelist') { file = 'softwarelist'; title = '軟體清冊管理'; }
-  const html = HtmlService.createHtmlOutputFromFile(file);
+  const html = HtmlService.createTemplateFromFile(file).evaluate();
   html.setTitle(title);
   html.addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   html.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -52,6 +52,13 @@ function createAccessDeniedPage_(email) {
 // ==========================================
 // 輔助函式
 // ==========================================
+
+/**
+ * 引入外部 HTML/JS 檔案的輔助函式
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
 
 /**
  * 取得當前使用者資訊
