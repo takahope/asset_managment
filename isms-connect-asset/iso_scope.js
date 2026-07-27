@@ -496,3 +496,197 @@ function readMaxIsmsSerial_(groupCode, categoryCode) {
   });
   return max;
 }
+
+/**
+ * 套用掃描結果:建號 → 建對照 → 覆寫 F/G/H → 寫 log。
+ * 權限:管理員(spec §9)。守門在搶鎖之前。
+ *
+ * TOCTOU(spec §5.4):不信任前端帶回的預告內容,重新完整計算一次;
+ * 若筆數與前端帶回的不符即中止,要求重新試算。
+ *
+ * @param {{generatedAt: string, autoCreateCount: number, enteringCount: number, leavingCount: number}} payload
+ * @returns {Object}
+ */
+function applyIsoScopeScan(payload) {
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+
+    const plan = computeIsoScopePlan_();
+    const report = plan.report;
+
+    // TOCTOU 檢查
+    if (payload && typeof payload.autoCreateCount === 'number') {
+      const drifted =
+        report.autoCreate.length !== payload.autoCreateCount ||
+        report.diff.entering.length !== payload.enteringCount ||
+        report.diff.leaving.length !== payload.leavingCount;
+      if (drifted) {
+        return {
+          success: false,
+          error: '資料在試算之後已變動(可能有人剛完成轉移或對照),請重新執行掃描後再套用。'
+        };
+      }
+    }
+
+    const email = access.email;
+    const now = new Date().toISOString();
+
+    // ① 建立資訊資產(逐筆 appendRow + flush,沿用三道防撞號;量級=歸併後筆數)
+    const created = [];
+    const newMappings = [];
+    plan.groups.forEach(group => {
+      const ismsAssetId = appendIsmsAssetRow_(group);
+      created.push({ ismsAssetId: ismsAssetId, count: group.assetIds.length });
+      group.assetIds.forEach(assetId => {
+        newMappings.push({ assetId: assetId, ismsAssetId: ismsAssetId });
+      });
+    });
+
+    // ② 重算判定(新建的對照會改變非駐站資產的業務流程來源)
+    const finalPlan = plan.groups.length ? computeIsoScopePlan_() : plan;
+
+    // ③ 對照表一次寫完:新列 + 既有列的 F/G/H
+    const written = writeMappingBaseline_(finalPlan.judgements, newMappings, email, now);
+
+    return {
+      success: true,
+      created: created.length,
+      mappingsWritten: written.newRows,
+      baselineRows: written.updatedRows,
+      message: `已建立 ${created.length} 筆資訊資產、寫入 ${written.newRows} 筆對照、更新 ${written.updatedRows} 列基準線。`
+    };
+  } catch (e) {
+    console.error('applyIsoScopeScan 錯誤:', e);
+    return { success: false, error: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+/**
+ * 依歸併組建立一列資訊資產。CIA 刻意留空(spec §6.3):填 1/1/1 會混進
+ * 資產價值統計變成「看起來已完成」,空白才是待補訊號。因此不重用
+ * createIsmsAsset()(它強制 CIA 為 1~4)。
+ * @param {Object} group buildAutoCreateGroups_ 的一組
+ * @returns {string} 產出的資訊資產編號
+ */
+function appendIsmsAssetRow_(group) {
+  const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.ISMS_ASSET_SHEET_NAME);
+  if (!sheet) throw new Error('找不到資訊資產工作表');
+
+  const idx = ISMS_ASSET_COLUMN_INDICES;
+  const categoryCode = ISO_SCAN_DEFAULT_CATEGORY_CODE;
+
+  // 三道防線:掃 A 欄取 max → 遞增 → 確認不存在
+  const existingIds = {};
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(2, idx.ISMS_ASSET_ID, sheet.getLastRow() - 1, 1).getValues()
+      .forEach(row => {
+        const id = String(row[0] || '').trim().toLowerCase();
+        if (id) existingIds[id] = true;
+      });
+  }
+  let serial = readMaxIsmsSerial_(group.groupCode, categoryCode) + 1;
+  let ismsAssetId = `${group.groupCode}-${categoryCode}-${String(serial).padStart(3, '0')}`;
+  while (existingIds[ismsAssetId.toLowerCase()]) {
+    serial += 1;
+    ismsAssetId = `${group.groupCode}-${categoryCode}-${String(serial).padStart(3, '0')}`;
+  }
+
+  const isStation = !!getCertifiedStationMap_()[group.location];
+  const row = new Array(22).fill('');
+  row[idx.ISMS_ASSET_ID - 1] = ismsAssetId;
+  row[idx.CATEGORY - 1] = categoryCode;
+  row[idx.NAME - 1] = group.assetName;
+  row[idx.QUANTITY - 1] = group.assetIds.length;
+  row[idx.LOCATION - 1] = group.location;
+  row[idx.RESPONSIBLE_UNIT - 1] = group.groupName;
+  row[idx.GROUP - 1] = group.groupCode;
+  row[idx.SERIAL_NO - 1] = serial;
+  row[idx.BUSINESS_PROCESS - 1] = isStation ? STATION_DEFAULT_BUSINESS_PROCESS : '';
+  // O/P/Q(CIA)與 R(資產價值)刻意留空
+
+  sheet.appendRow(row);
+  SpreadsheetApp.flush();
+
+  const snapshot = mapRowToIsmsAssetObject_(
+    sheet.getRange(sheet.getLastRow(), 1, 1, 22).getValues()[0]
+  );
+  logIsmsOperation_('掃描新增', ismsAssetId, '', null, snapshot, 'ISO 範圍掃描自動補號');
+
+  return ismsAssetId;
+}
+
+/**
+ * 對照表一次寫完:讀整表 → 記憶體內加新列、改 F/G/H → 一次 setValues 覆寫。
+ *
+ * ⚠️ 不可重用 createMappings():它每筆一次 appendRow / 四次 setValue,
+ * 200 台就是 200 趟 API 往返(spec §5.3)。
+ * ⚠️ 既有列的 C(建立時間)/D(建立人)不覆寫。
+ *
+ * @param {Array} judgements computeIsoScopePlan_ 的台級判定
+ * @param {Array<{assetId: string, ismsAssetId: string}>} newMappings
+ * @param {string} email
+ * @param {string} now ISO 字串
+ * @returns {{newRows: number, updatedRows: number}}
+ */
+function writeMappingBaseline_(judgements, newMappings, email, now) {
+  const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
+  if (!sheet) {
+    const init = initMappingSheet();
+    if (!init.success) throw new Error('對照表不存在且自動建立失敗:' + init.error);
+    sheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
+  }
+
+  const idx = MAPPING_COLUMN_INDICES;
+  const width = idx.ISO_JUDGED_AT;
+  const lastRow = sheet.getLastRow();
+  const existing = lastRow > 1
+    ? sheet.getRange(2, 1, lastRow - 1, width).getValues()
+    : [];
+
+  // 既有列索引
+  const rowByAssetId = {};
+  existing.forEach((row, i) => {
+    const assetId = String(row[idx.ASSET_ID - 1] || '').trim();
+    if (assetId) rowByAssetId[assetId] = i;
+  });
+
+  // 追加新對照列
+  let newRows = 0;
+  newMappings.forEach(m => {
+    if (rowByAssetId[m.assetId] !== undefined) return; // 已有列,只更新不新增
+    const row = new Array(width).fill('');
+    row[idx.ASSET_ID - 1] = m.assetId;
+    row[idx.ISMS_ASSET_ID - 1] = m.ismsAssetId;
+    row[idx.CREATED_TIME - 1] = now;
+    row[idx.CREATED_BY - 1] = email;
+    row[idx.REMARKS - 1] = 'ISO 範圍掃描自動建立';
+    existing.push(row);
+    rowByAssetId[m.assetId] = existing.length - 1;
+    newRows++;
+  });
+
+  // 寫入 F/G/H
+  let updatedRows = 0;
+  judgements.forEach(j => {
+    const i = rowByAssetId[j.assetId];
+    if (i === undefined) return; // 未對照的資產不寫基準線
+    existing[i][idx.ISO_SCOPE - 1] = j.cell;
+    existing[i][idx.ISO_BASIS - 1] = j.basis;
+    existing[i][idx.ISO_JUDGED_AT - 1] = j.judgedAt;
+    updatedRows++;
+  });
+
+  if (existing.length) {
+    sheet.getRange(2, 1, existing.length, width).setValues(existing);
+    SpreadsheetApp.flush();
+  }
+  return { newRows: newRows, updatedRows: updatedRows };
+}
