@@ -24,6 +24,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <?!= include('quagga'); ?>
+  <style id="dynamic-col-styles"></style>
 
   <style>
     :root {
@@ -615,6 +616,53 @@
               <button class="btn-secondary" onclick="runIsoScan()">
                 <i class="fas fa-shield-alt mr-2"></i>執行範圍掃描
               </button>
+              
+              <!-- 顯示欄位切換 -->
+              <div class="relative inline-block text-left">
+                <button class="btn-secondary" onclick="document.getElementById('colDropdown').classList.toggle('hidden')">
+                  <i class="fas fa-columns mr-2"></i>顯示欄位
+                </button>
+                <div id="colDropdown" class="absolute z-10 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden" style="right: 0;">
+                  <div class="p-3 flex flex-col gap-2 max-h-64 overflow-y-auto">
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="assetName" checked onchange="updateColumnVisibility()">
+                      <span>資產名稱</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="brand" checked onchange="updateColumnVisibility()">
+                      <span>廠牌型號</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="leaderName" checked onchange="updateColumnVisibility()">
+                      <span>保管人</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="userName" checked onchange="updateColumnVisibility()">
+                      <span>使用人</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="location" checked onchange="updateColumnVisibility()">
+                      <span>地點</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="group" checked onchange="updateColumnVisibility()">
+                      <span>組別</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="mappedStatus" checked onchange="updateColumnVisibility()">
+                      <span>對照狀態</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="isoScope" checked onchange="updateColumnVisibility()">
+                      <span>ISO 範圍</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="isoBasis" checked onchange="updateColumnVisibility()">
+                      <span>認證依據</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
@@ -627,20 +675,20 @@
               <table class="data-table" id="assetTable">
                 <thead>
                   <tr>
-                    <th class="col-checkbox">
+                    <th class="col-checkbox" data-col="checkbox">
                       <input type="checkbox" id="selectAllAssets" onchange="toggleSelectAll()">
                     </th>
-                    <th class="col-asset-id">資產編號</th>
-                    <th class="col-asset-name">資產名稱</th>
-                    <th class="col-brand">廠牌型號</th>
-                    <th class="col-person">保管人</th>
-                    <th class="col-person">使用人</th>
-                    <th class="col-location">地點</th>
-                    <th class="col-group">組別</th>
-                    <th class="col-status">對照狀態</th>
-                    <th class="col-info-id">資訊資產編號</th>
-                    <th class="col-status">ISO 範圍</th>
-                    <th class="col-location">認證依據</th>
+                    <th class="col-asset-id" data-col="assetId">資產編號</th>
+                    <th class="col-asset-name" data-col="assetName">資產名稱</th>
+                    <th class="col-brand" data-col="brand">廠牌型號</th>
+                    <th class="col-person" data-col="leaderName">保管人</th>
+                    <th class="col-person" data-col="userName">使用人</th>
+                    <th class="col-location" data-col="location">地點</th>
+                    <th class="col-group" data-col="group">組別</th>
+                    <th class="col-status" data-col="mappedStatus">對照狀態</th>
+                    <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
+                    <th class="col-status" data-col="isoScope">ISO 範圍</th>
+                    <th class="col-location" data-col="isoBasis">認證依據</th>
                   </tr>
                 </thead>
                 <tbody id="assetTableBody">
@@ -738,6 +786,28 @@
     let allIsmsAssets = [];
     let selectedAssetIds = new Set();
     let pendingMappingData = null;
+
+    // ==========================================
+    // 欄位顯示隱藏邏輯
+    // ==========================================
+    function updateColumnVisibility() {
+      let styleHtml = '';
+      document.querySelectorAll('.col-toggle-cb').forEach(cb => {
+        if (!cb.checked) {
+          styleHtml += `#assetTable [data-col="${cb.value}"] { display: none !important; }\n`;
+        }
+      });
+      document.getElementById('dynamic-col-styles').innerHTML = styleHtml;
+    }
+
+    document.addEventListener('click', function(e) {
+      const dropdown = document.getElementById('colDropdown');
+      if (!dropdown) return;
+      const button = dropdown.previousElementSibling;
+      if (!dropdown.contains(e.target) && !button.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
 
     // ==========================================
     // 初始化
@@ -873,24 +943,24 @@
         const isSelected = selectedAssetIds.has(asset.assetId);
         return `
           <tr class="${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtml(asset.assetId)}">
-            <td class="checkbox-wrapper">
+            <td class="checkbox-wrapper" data-col="checkbox">
               <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleAssetSelection('${escapeHtml(asset.assetId)}')">
             </td>
-            <td class="font-mono text-sm">${escapeHtml(asset.assetId)}</td>
-            <td><div class="cell-name">${escapeHtml(asset.assetName)}</div></td>
-            <td><div class="cell-brand">${escapeHtml(asset.modelBrand || '-')}</div></td>
-            <td>${escapeHtml(asset.leaderName)}</td>
-            <td>${escapeHtml(asset.userName)}</td>
-            <td>${escapeHtml(asset.location)}</td>
-            <td>${escapeHtml(asset.group)}</td>
-            <td>
+            <td class="font-mono text-sm" data-col="assetId">${escapeHtml(asset.assetId)}</td>
+            <td data-col="assetName"><div class="cell-name">${escapeHtml(asset.assetName)}</div></td>
+            <td data-col="brand"><div class="cell-brand">${escapeHtml(asset.modelBrand || '-')}</div></td>
+            <td data-col="leaderName">${escapeHtml(asset.leaderName)}</td>
+            <td data-col="userName">${escapeHtml(asset.userName)}</td>
+            <td data-col="location">${escapeHtml(asset.location)}</td>
+            <td data-col="group">${escapeHtml(asset.group)}</td>
+            <td data-col="mappedStatus">
               ${asset.isMapped
                 ? '<span class="badge badge-success"><i class="fas fa-check mr-1"></i>已對照</span>'
                 : '<span class="badge badge-warning"><i class="fas fa-times mr-1"></i>未對照</span>'}
             </td>
-            <td class="font-mono text-sm">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
-            <td>${escapeHtml(isoLabelOf(asset))}</td>
-            <td><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
+            <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
+            <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
+            <td data-col="isoBasis"><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
           </tr>
         `;
       }).join('');
