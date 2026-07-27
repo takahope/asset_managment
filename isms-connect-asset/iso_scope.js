@@ -255,10 +255,13 @@ function getGroupCodeMap_() {
   }
   const byDisplay = {};
   const byCode = {};
+  const nameMap = getHrGroupNameMap_();
   (options.groups || []).forEach(item => {
     if (!item.display || !item.code) return;
     byDisplay[item.display] = item.code;
     byCode[item.code] = item.display;
+    const alias = nameMap[item.display];
+    if (alias && !byDisplay[alias]) byDisplay[alias] = item.code;
   });
   return { byDisplay: byDisplay, byCode: byCode };
 }
@@ -543,6 +546,7 @@ function applyIsoScopeScan(payload) {
 
     const plan = computeIsoScopePlan_();
     const report = plan.report;
+    const groupCodeMap = getGroupCodeMap_();
 
     // TOCTOU 檢查
     if (payload && typeof payload.autoCreateCount === 'number') {
@@ -565,7 +569,7 @@ function applyIsoScopeScan(payload) {
     const created = [];
     const newMappings = [];
     plan.groups.forEach(group => {
-      const ismsAssetId = appendIsmsAssetRow_(group);
+      const ismsAssetId = appendIsmsAssetRow_(group, groupCodeMap);
       created.push({ ismsAssetId: ismsAssetId, count: group.assetIds.length });
       group.assetIds.forEach(assetId => {
         newMappings.push({ assetId: assetId, ismsAssetId: ismsAssetId });
@@ -598,9 +602,10 @@ function applyIsoScopeScan(payload) {
  * 資產價值統計變成「看起來已完成」,空白才是待補訊號。因此不重用
  * createIsmsAsset()(它強制 CIA 為 1~4)。
  * @param {Object} group buildAutoCreateGroups_ 的一組
+ * @param {Object} groupCodeMap getGroupCodeMap_() 的回傳值
  * @returns {string} 產出的資訊資產編號
  */
-function appendIsmsAssetRow_(group) {
+function appendIsmsAssetRow_(group, groupCodeMap) {
   const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
   const sheet = ss.getSheetByName(CONFIG.ISMS_ASSET_SHEET_NAME);
   if (!sheet) throw new Error('找不到資訊資產工作表');
@@ -631,7 +636,7 @@ function appendIsmsAssetRow_(group) {
   row[idx.NAME - 1] = group.assetName;
   row[idx.QUANTITY - 1] = group.assetIds.length;
   row[idx.LOCATION - 1] = group.location;
-  row[idx.RESPONSIBLE_UNIT - 1] = group.groupName;
+  row[idx.RESPONSIBLE_UNIT - 1] = groupCodeMap.byCode[group.groupCode] || group.groupName;
   row[idx.GROUP - 1] = group.groupCode;
   row[idx.SERIAL_NO - 1] = serial;
   row[idx.BUSINESS_PROCESS - 1] = isStation ? STATION_DEFAULT_BUSINESS_PROCESS : '';
