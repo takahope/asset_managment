@@ -9,12 +9,20 @@
 // -----------------------------------------------------------------
 
 /**
- * 認證旗標判定。沿用 station_status/code.js:957 的寬鬆比對,兩邊語意必須一致。
- * @param {*} value 組織架構樹 I 欄的值
+ * 認證旗標判定。語意沿用 station_status/code.js:957,但多做一層全形正規化。
+ *
+ * 用途有二:HR 組織架構樹 I 欄(認證駐站)、下拉選單 E 欄(認證業務流程)。
+ *
+ * ⚠️ NFKC 是必要的,不是防禦性程式碼:中文輸入法很容易打出全形Ｖ(U+FF36),
+ * 在儲存格裡與半形 V(U+0056)幾乎無法用肉眼分辨,而 toUpperCase() 只處理
+ * 大小寫、不處理全半形。2026-07-27 實際踩到——三列打勾只有兩列生效。
+ * NFKC 同時會把全形空白 U+3000 摺成一般空白,交給後面的 trim() 清掉。
+ *
+ * @param {*} value 儲存格原始值
  * @returns {boolean}
  */
 function isCertifiedFlagValue_(value) {
-  const normalized = String(value || '').trim().toUpperCase();
+  const normalized = String(value || '').normalize('NFKC').trim().toUpperCase();
   return normalized === 'V' || normalized === '認證駐站';
 }
 
