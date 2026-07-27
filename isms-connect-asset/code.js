@@ -612,17 +612,26 @@ function getDropdownOptions() {
     const businessProcesses = [];
 
     if (sheet.getLastRow() > 1) {
-      const data = sheet.getRange(2, 2, sheet.getLastRow() - 1, 3).getValues();
+      // B~E 四欄:key / 顯示 / 代號 / 認證範圍旗標。
+      // 舊試算表可能只有 B~D,欄數不足時退回 3 欄並視所有流程為未認證。
+      const wanted = sheet.getMaxColumns() >= 5 ? 4 : 3;
+      if (wanted < 4) {
+        console.error('「下拉選單」工作表欄數不足 5,讀不到 E 欄認證旗標,所有業務流程視為未認證。');
+      }
+      const data = sheet.getRange(2, 2, sheet.getLastRow() - 1, wanted).getValues();
       for (let i = 0; i < data.length; i++) {
         const key = data[i][0] ? String(data[i][0]).trim() : '';     // B 欄
         const display = data[i][1] ? String(data[i][1]).trim() : ''; // C 欄
         const code = data[i][2] ? String(data[i][2]).trim() : '';    // D 欄
+        const certFlag = wanted >= 4 ? data[i][3] : '';              // E 欄
         if (!key || !display) continue;
 
         if (key === '資訊資產類別' || key === '類別') categories.push({ display, code });
         else if (key === '組別') groups.push({ display, code });
         else if (key === '資訊資產狀態' || key === '資產狀態' || key === '狀態') statuses.push({ display, code });
-        else if (key === '業務流程') businessProcesses.push({ display });
+        else if (key === '業務流程') {
+          businessProcesses.push({ display, isCertified: isCertifiedFlagValue_(certFlag) });
+        }
       }
     }
 

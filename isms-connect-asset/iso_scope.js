@@ -141,6 +141,41 @@ function clearIsoScopeCache() {
   return { success: true, message: '認證駐站快取已清除' };
 }
 
+/**
+ * 認證業務流程集合(下拉選單 key=業務流程 且 E 欄為 V)。
+ * @returns {Object<string, boolean>}
+ */
+function getCertifiedProcessSet_() {
+  const options = getDropdownOptions();
+  if (!options.success) {
+    throw new Error('讀取下拉選單失敗,無法取得認證業務流程:' + options.error);
+  }
+  const set = {};
+  (options.businessProcesses || []).forEach(item => {
+    if (item.isCertified) set[item.display] = true;
+  });
+  return set;
+}
+
+/**
+ * 組別中文名 ↔ 代號雙向對照(補號時 S/G 欄互推用)。
+ * @returns {{byDisplay: Object<string,string>, byCode: Object<string,string>}}
+ */
+function getGroupCodeMap_() {
+  const options = getDropdownOptions();
+  if (!options.success) {
+    throw new Error('讀取下拉選單失敗,無法取得組別對照:' + options.error);
+  }
+  const byDisplay = {};
+  const byCode = {};
+  (options.groups || []).forEach(item => {
+    if (!item.display || !item.code) return;
+    byDisplay[item.display] = item.code;
+    byCode[item.code] = item.display;
+  });
+  return { byDisplay: byDisplay, byCode: byCode };
+}
+
 // -----------------------------------------------------------------
 // ③ 工作表維運
 // -----------------------------------------------------------------
