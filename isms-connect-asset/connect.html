@@ -612,6 +612,9 @@
               <button class="btn-secondary" onclick="exportFiltered()">
                 <i class="fas fa-download mr-2"></i>匯出篩選結果
               </button>
+              <button class="btn-secondary" onclick="runIsoScan()">
+                <i class="fas fa-shield-alt mr-2"></i>執行範圍掃描
+              </button>
             </div>
 
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
@@ -708,6 +711,22 @@
         <div class="flex justify-end gap-3">
           <button class="btn-secondary" onclick="closeConfirmModal()">取消</button>
           <button class="btn-danger" onclick="confirmOverwrite()">確認覆蓋</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ISO 範圍掃描報告（試算，尚未寫入） -->
+    <div id="isoScanModal" class="modal-overlay hidden">
+      <div class="modal-content" style="max-width:720px">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+          <i class="fas fa-shield-alt text-blue-500 mr-2"></i>ISO 範圍掃描報告
+        </h3>
+        <p class="text-sm text-gray-500 mb-4">以下為試算結果，尚未寫入任何資料。</p>
+        <div id="isoScanBody" class="text-sm text-gray-700 max-h-96 overflow-y-auto"></div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button class="btn-secondary" onclick="closeIsoScanModal()">關閉</button>
+          <button class="btn-secondary" onclick="exportIsoScan()">匯出核對</button>
+          <button id="isoApplyBtn" class="btn-primary" onclick="applyIsoScan()">確認套用</button>
         </div>
       </div>
     </div>
@@ -1188,6 +1207,123 @@
       var s = String(value == null ? '' : value);
       if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
       return '"' + s.replace(/"/g, '""') + '"';
+    }
+
+    // ==========================================
+    // ISO 範圍掃描
+    // ==========================================
+    var isoScanReport = null;
+
+    function runIsoScan() {
+      showToast('掃描中，請稍候…', 'info');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (!result.success) { showToast(result.error || '掃描失敗', 'error'); return; }
+          isoScanReport = result;
+          renderIsoScanReport(result);
+          document.getElementById('isoScanModal').classList.remove('hidden');
+        })
+        .withFailureHandler(function(err) {
+          showToast('掃描失敗：' + (err && err.message ? err.message : '未知錯誤'), 'error');
+        })
+        .previewIsoScopeScan();
+    }
+
+    function renderIsoScanReport(r) {
+      var rows = [];
+      rows.push('<div class="mb-3"><strong>資訊資產範圍統計</strong><br>' +
+        '✅ 全部在範圍 ' + r.summary.inScope + ' 筆　' +
+        '⚠️ 部分在範圍 ' + r.summary.partial + ' 筆　' +
+        '❓ 待判定 ' + r.summary.pending + ' 筆　' +
+        '⬜ 不在範圍 ' + r.summary.outScope + ' 筆</div>');
+
+      rows.push('<div class="mb-3"><strong>與基準線的差異</strong><br>' +
+        '↗ 進入範圍 ' + r.diff.entering.length + ' 台　' +
+        '↙ 離開範圍 ' + r.diff.leaving.length + ' 台</div>');
+
+      if (r.diff.leaving.length) {
+        rows.push('<div class="mb-3">離開範圍：<ul class="list-disc ml-6">' +
+          r.diff.leaving.slice(0, 20).map(function(x) {
+            return '<li>' + escapeHtml(x.assetId) + ' ' + escapeHtml(x.assetName) +
+                   '（' + escapeHtml(x.location) + '）→ ' + escapeHtml(x.basis) + '</li>';
+          }).join('') + '</ul>' +
+          (r.diff.leaving.length > 20 ? '<em>僅顯示前 20 台，完整清單請按「匯出核對」</em>' : '') +
+          '</div>');
+      }
+
+      if (r.autoCreate.length) {
+        rows.push('<div class="mb-3"><strong>將自動補號 ' + r.autoCreate.length + ' 筆</strong>' +
+          '<ul class="list-disc ml-6">' + r.autoCreate.map(function(g) {
+            return '<li>' + escapeHtml(g.previewId) + '　' + escapeHtml(g.assetName) +
+                   ' ×' + g.count + '（' + escapeHtml(g.location) + ' / ' + escapeHtml(g.groupName) + '）</li>';
+          }).join('') + '</ul></div>');
+      }
+
+      if (r.skipped.length) {
+        rows.push('<div class="mb-3 text-amber-700"><strong>無法處理 ' + r.skipped.length + ' 組</strong>' +
+          '<ul class="list-disc ml-6">' + r.skipped.map(function(s) {
+            return '<li>' + escapeHtml(s.location) + ' / ' + escapeHtml(s.assetName) +
+                   ' ×' + s.count + ' — ' + escapeHtml(s.reason) + '</li>';
+          }).join('') + '</ul></div>');
+      }
+
+      rows.push('<div class="text-gray-500">與主表 Z 欄不一致 ' + r.zColumnMismatch +
+        ' 台（僅供人工核對，本系統不回寫主表）</div>');
+
+      document.getElementById('isoScanBody').innerHTML = rows.join('');
+    }
+
+    function closeIsoScanModal() {
+      document.getElementById('isoScanModal').classList.add('hidden');
+    }
+
+    function applyIsoScan() {
+      if (!isoScanReport) return;
+      var btn = document.getElementById('isoApplyBtn');
+      btn.disabled = true;
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          if (!result.success) { showToast(result.error || '套用失敗', 'error'); return; }
+          showToast(result.message, 'success');
+          closeIsoScanModal();
+          loadAssets();
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          showToast('套用失敗：' + (err && err.message ? err.message : '未知錯誤'), 'error');
+        })
+        .applyIsoScopeScan({
+          generatedAt: isoScanReport.generatedAt,
+          autoCreateCount: isoScanReport.autoCreate.length,
+          enteringCount: isoScanReport.diff.entering.length,
+          leavingCount: isoScanReport.diff.leaving.length
+        });
+    }
+
+    function exportIsoScan() {
+      if (!isoScanReport) return;
+      var lines = [['類型', '資產編號', '資產名稱', '地點', '依據/原因']
+        .map(sanitizeCsvCell).join(',')];
+
+      isoScanReport.diff.entering.forEach(function(x) {
+        lines.push(['進入範圍', x.assetId, x.assetName, x.location, x.basis]
+          .map(sanitizeCsvCell).join(','));
+      });
+      isoScanReport.diff.leaving.forEach(function(x) {
+        lines.push(['離開範圍', x.assetId, x.assetName, x.location, x.basis]
+          .map(sanitizeCsvCell).join(','));
+      });
+      isoScanReport.autoCreate.forEach(function(g) {
+        lines.push(['將補號', g.previewId, g.assetName + ' ×' + g.count, g.location, g.groupName]
+          .map(sanitizeCsvCell).join(','));
+      });
+      isoScanReport.skipped.forEach(function(s) {
+        lines.push(['無法處理', '', s.assetName + ' ×' + s.count, s.location, s.reason]
+          .map(sanitizeCsvCell).join(','));
+      });
+
+      downloadCsv(lines.join('\n'), 'iso_scope_scan.csv');
     }
 
     function downloadCsv(csvContent, filename) {
