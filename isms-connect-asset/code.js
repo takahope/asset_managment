@@ -425,6 +425,9 @@ function getMappingMap_() {
         createdTime: row[indices.CREATED_TIME - 1] ? row[indices.CREATED_TIME - 1].toString() : '',
         createdBy: row[indices.CREATED_BY - 1] ? row[indices.CREATED_BY - 1].toString() : '',
         remarks: row[indices.REMARKS - 1] ? row[indices.REMARKS - 1].toString() : '',
+        isoScope: row[indices.ISO_SCOPE - 1] ? row[indices.ISO_SCOPE - 1].toString().trim() : '',
+        isoBasis: row[indices.ISO_BASIS - 1] ? row[indices.ISO_BASIS - 1].toString() : '',
+        isoJudgedAt: row[indices.ISO_JUDGED_AT - 1] ? row[indices.ISO_JUDGED_AT - 1].toString() : '',
         rowIndex: i + 1
       });
     }

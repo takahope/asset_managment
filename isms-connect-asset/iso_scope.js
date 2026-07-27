@@ -176,6 +176,47 @@ function getGroupCodeMap_() {
   return { byDisplay: byDisplay, byCode: byCode };
 }
 
+/**
+ * 讀「ISO範圍例外」工作表(spec §4.2)。工作表不存在時回空物件——
+ * 例外是選用機制,沒有例外表不該讓判定失敗(與認證駐站的 fail-closed 不同)。
+ * @returns {Object<string, {forced: string, reason: string}>}
+ */
+function getIsoExceptionMap_() {
+  const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.ISO_EXCEPTION_SHEET_NAME);
+  const map = {};
+  if (!sheet || sheet.getLastRow() <= 1) return map;
+
+  const idx = ISO_EXCEPTION_COLUMN_INDICES;
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, idx.TIMESTAMP).getValues();
+  rows.forEach(row => {
+    const assetId = String(row[idx.ASSET_ID - 1] || '').trim();
+    const forcedRaw = String(row[idx.FORCED_VALUE - 1] || '').trim();
+    if (!assetId || !forcedRaw) return;
+    const forced = forcedRaw === '在範圍' ? ISO_JUDGEMENT.IN
+                 : forcedRaw === '不在範圍' ? ISO_JUDGEMENT.OUT
+                 : null;
+    if (!forced) {
+      console.error(`ISO範圍例外:資產 ${assetId} 的強制值「${forcedRaw}」無法識別,已略過。`);
+      return;
+    }
+    map[assetId] = { forced: forced, reason: String(row[idx.REASON - 1] || '').trim() };
+  });
+  return map;
+}
+
+/**
+ * 組裝判定用 context。認證駐站讀取失敗會往外 throw(fail-closed)。
+ * @returns {{stationMap: Object, certifiedProcesses: Object, exceptions: Object}}
+ */
+function buildIsoScopeContext_() {
+  return {
+    stationMap: getCertifiedStationMap_(),
+    certifiedProcesses: getCertifiedProcessSet_(),
+    exceptions: getIsoExceptionMap_()
+  };
+}
+
 // -----------------------------------------------------------------
 // ③ 工作表維運
 // -----------------------------------------------------------------
