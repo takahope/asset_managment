@@ -658,6 +658,9 @@
                   </div>
                 </div>
               </div>
+              <select id="locationFilter" class="select-input" onchange="setFilterState('location', this.value)">
+                <option value="">全部地點(數量)</option>
+              </select>
             </div>
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
@@ -673,9 +676,6 @@
               </select>
               <select id="userFilter" class="select-input" onchange="setFilterState('userName', this.value)">
                 <option value="">全部使用人</option>
-              </select>
-              <select id="locationFilter" class="select-input" onchange="setFilterState('location', this.value)">
-                <option value="">全部地點(數量)</option>
               </select>
               <select id="isoBasisFilter" class="select-input" onchange="setFilterState('isoBasis', this.value)">
                 <option value="">全部認證依據(資產數量/資訊資產數量)</option>
