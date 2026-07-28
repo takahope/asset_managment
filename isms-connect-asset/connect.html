@@ -737,6 +737,15 @@
         <input type="text" id="mappingRemarks" class="search-input" placeholder="備註（選填）" style="width:180px">
       </div>
 
+      <div class="action-bar__field">
+        <select id="businessProcessSelect" class="select-input" style="min-width:200px">
+          <option value="">-- 業務流程：不變更 --</option>
+        </select>
+        <button id="applyBusinessProcessBtn" class="btn-secondary" onclick="applyBusinessProcess()" disabled>
+          <i class="fas fa-diagram-project mr-2"></i>套用業務流程
+        </button>
+      </div>
+
       <div class="action-bar__spacer"></div>
 
       <button id="createMappingBtn" class="btn-primary" onclick="createMapping()" disabled>
@@ -786,6 +795,10 @@
     let allIsmsAssets = [];
     let selectedAssetIds = new Set();
     let pendingMappingData = null;
+    let isCurrentUserAdmin = false;
+    let allBusinessProcesses = [];
+    let businessProcessOptionsAvailable = false;
+    let pendingBusinessProcessData = null;
 
     // ==========================================
     // 欄位顯示隱藏邏輯
@@ -816,6 +829,7 @@
       loadUserInfo();
       loadAssets();
       loadIsmsAssets();
+      loadBusinessProcessOptions();
       setupEventListeners();
     });
 
@@ -845,6 +859,10 @@
 
       // 資訊資產選擇
       document.getElementById('ismsAssetSelect').addEventListener('change', updateCreateMappingBtn);
+
+      // 業務流程選值變動時，同時更新套用鈕與「建立對照」的動態文案
+      document.getElementById('businessProcessSelect')
+        .addEventListener('change', onBusinessProcessChange);
     }
 
     // ==========================================
@@ -855,12 +873,91 @@
         .withSuccessHandler(function(user) {
           document.getElementById('userInfo').textContent =
             (user && user.email) ? user.email : '(未知使用者)';
+          isCurrentUserAdmin = !!(user && user.isAdmin);
+          applyAdminGating();
         })
         .withFailureHandler(function(err) {
           document.getElementById('userInfo').textContent = '(無法取得使用者)';
+          isCurrentUserAdmin = false;   // 取不到身分一律當非管理員
+          applyAdminGating();
           console.error('loadUserInfo 失敗:', err);
         })
         .getCurrentUser();
+    }
+
+    /**
+     * 業務流程僅管理員可設定。停用而非隱藏——隱藏會讓承辦人以為功能不存在，
+     * 轉而直接改試算表，那是更難稽核的路徑。
+     * 這只是 UI 提示；真正的守門在後端 setIsmsBusinessProcessBatch 的
+     * assertWriteAccess_(true)——google.script.run 不經過 doGet，前端 disabled 攔不住 console。
+     */
+    function applyAdminGating() {
+      var sel = document.getElementById('businessProcessSelect');
+      var btn = document.getElementById('applyBusinessProcessBtn');
+      var hint = isCurrentUserAdmin ? '' : '僅管理員可設定業務流程';
+      // 兩個條件要一起看：選項載入失敗時就算是管理員也不能用。
+      // 這兩件事是各自獨立的非同步流程，只看其中一個會被後到的那個覆蓋掉。
+      sel.disabled = !isCurrentUserAdmin || !businessProcessOptionsAvailable;
+      sel.title = hint;
+      btn.title = hint;
+      updateApplyBusinessProcessBtn();
+    }
+
+    /**
+     * 業務流程選項。isCertified 一併留著，確認對話框要用它決定 ISO 提示措辭。
+     * 讀不到就停用這個功能，但不影響對照與主清單（fail-open）。
+     * 這與後端 getCertifiedProcessSet_() 的 fail-closed 刻意不同：
+     * UI 選項讀不到只是少一個功能，判定依據讀不到會產出錯誤結論。
+     */
+    function loadBusinessProcessOptions() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (!result || !result.success) {
+            disableBusinessProcessSelector(
+              '業務流程選項載入失敗：' + ((result && result.error) || '未知錯誤'));
+            return;
+          }
+          allBusinessProcesses = result.businessProcesses || [];
+          var html = '<option value="">-- 業務流程：不變更 --</option>' +
+                     '<option value="__CLEAR__">— 清除業務流程 —</option>';
+          allBusinessProcesses.forEach(function(p) {
+            html += '<option value="' + escapeHtml(p.display) + '">' +
+                    escapeHtml(p.display) + '</option>';
+          });
+          document.getElementById('businessProcessSelect').innerHTML = html;
+          businessProcessOptionsAvailable = true;
+          applyAdminGating();
+        })
+        .withFailureHandler(function(err) {
+          disableBusinessProcessSelector(
+            '業務流程選項載入失敗：' + (err && err.message ? err.message : err));
+        })
+        .getDropdownOptions();
+    }
+
+    function disableBusinessProcessSelector(msg) {
+      var sel = document.getElementById('businessProcessSelect');
+      sel.innerHTML = '<option value="">（業務流程載入失敗）</option>';
+      businessProcessOptionsAvailable = false;
+      sel.disabled = true;
+      document.getElementById('applyBusinessProcessBtn').disabled = true;
+      showToast(msg, 'error');
+      console.error(msg);
+    }
+
+    /**
+     * 「套用業務流程」的啟用條件：管理員 + 選項可用 + 有勾選 + 有選值。
+     * 「不變更」（空值）不算選值。
+     */
+    function updateApplyBusinessProcessBtn() {
+      var value = document.getElementById('businessProcessSelect').value;
+      document.getElementById('applyBusinessProcessBtn').disabled =
+        !isCurrentUserAdmin || !businessProcessOptionsAvailable ||
+        selectedAssetIds.size === 0 || value === '';
+    }
+
+    function onBusinessProcessChange() {
+      updateApplyBusinessProcessBtn();
     }
 
     /** 失敗時把 loading spinner 收斂成錯誤列，附重試入口（PLAYBOOK §4-9） */
@@ -1489,6 +1586,7 @@
       document.getElementById('selectedCount').textContent = selectedAssetIds.size;
       renderSelectedList();
       renderActionBar();
+      updateApplyBusinessProcessBtn();
     }
 
     /** 勾選 >=1 才滑出動作條；歸零時一併收起浮層，避免留下孤兒浮層 */
