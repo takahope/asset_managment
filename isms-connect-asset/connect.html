@@ -787,6 +787,20 @@
         </div>
       </div>
     </div>
+
+    <!-- 批次設定業務流程確認（僅在存在未勾選的關聯資產時跳出） -->
+    <div id="businessProcessModal" class="modal-overlay hidden">
+      <div class="modal-content" style="max-width:640px">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+          <i class="fas fa-diagram-project text-blue-500 mr-2"></i>確認設定業務流程
+        </h3>
+        <div id="businessProcessBody" class="text-sm text-gray-700 max-h-96 overflow-y-auto"></div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button class="btn-secondary" onclick="closeBusinessProcessModal()">取消</button>
+          <button id="businessProcessConfirmBtn" class="btn-primary" onclick="confirmBusinessProcess()">確認套用</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1715,6 +1729,208 @@
       btn.disabled = false;
       btn.innerHTML = '<i class="fas fa-link mr-2"></i>建立對照';
       updateCreateMappingBtn();
+    }
+
+    // ==========================================
+    // 業務流程批次設定
+    // ==========================================
+
+    /**
+     * 由勾選的實體資產反查目標資訊資產，並算出波及範圍。
+     *
+     * affectedCount 的定義必須與後端 countAffectedAssets_() 完全一致：
+     * 目標資訊資產底下**所有**已對照實體資產（含未勾選者）。
+     * 兩邊定義若不同，TOCTOU 檢查會每次都誤判成「資料已變動」。
+     *
+     * @returns {{targets: Array<{ismsAssetId, selected, total, before}>,
+     *            unmapped: Array<string>, affectedCount: number, hiddenCount: number}}
+     */
+    function resolveBusinessProcessTargets() {
+      var targets = {};
+      var unmapped = [];
+
+      selectedAssetIds.forEach(function(assetId) {
+        var asset = allAssets.find(function(a) { return a.assetId === assetId; });
+        if (!asset) return;
+        var id = String(asset.mappedIsmsAssetId || '').trim();
+        if (!asset.isMapped || !id) { unmapped.push(assetId); return; }
+        if (!targets[id]) {
+          var isms = allIsmsAssets.find(function(x) { return x.ismsAssetId === id; });
+          targets[id] = {
+            ismsAssetId: id,
+            selected: 0,
+            total: 0,
+            before: (isms && isms.businessProcess) ? isms.businessProcess : ''
+          };
+        }
+        targets[id].selected++;
+      });
+
+      // total 要掃全表，不能只看勾選的——這正是「隱形波及」的來源
+      allAssets.forEach(function(a) {
+        var id = String(a.mappedIsmsAssetId || '').trim();
+        if (id && targets[id]) targets[id].total++;
+      });
+
+      var list = Object.keys(targets).map(function(k) { return targets[k]; });
+      return {
+        targets: list,
+        unmapped: unmapped,
+        affectedCount: list.reduce(function(s, t) { return s + t.total; }, 0),
+        hiddenCount: list.reduce(function(s, t) { return s + (t.total - t.selected); }, 0)
+      };
+    }
+
+    /** 下拉的 __CLEAR__ 哨兵值轉成後端認得的空字串 */
+    function businessProcessSelectValue() {
+      var raw = document.getElementById('businessProcessSelect').value;
+      return raw === '__CLEAR__' ? '' : raw;
+    }
+
+    /**
+     * ISO 提示只陳述**流程層級**的事實，不預測逐台結果。
+     * 駐站資產不看業務流程，而駐站認證狀態需讀 HR 組織架構樹 I 欄，只有後端知道；
+     * 前端手上的 asset.isoScope 是對照表 F 欄的基準線，不是即時真相。
+     * 逐台預測要另開後端判定端點，與 ISO 掃描的預覽高度重疊，故不做。
+     */
+    function isoHintFor(value) {
+      if (value === '') {
+        return '清除後，這些資訊資產底下的<strong>非駐站</strong>實體資產將回到「待判定」；駐站資產不受影響。';
+      }
+      var p = allBusinessProcesses.find(function(x) { return x.display === value; });
+      var name = escapeHtml(value);
+      if (p && p.isCertified) {
+        return '「' + name + '」屬於 ISO 認證業務流程。套用後，這些資訊資產底下的' +
+               '<strong>非駐站</strong>實體資產將納入驗證範圍；駐站資產不受影響' +
+               '（其範圍由駐站認證狀態決定）。';
+      }
+      return '「' + name + '」<strong>不</strong>屬於 ISO 認證業務流程。套用後，這些資訊資產底下的' +
+             '<strong>非駐站</strong>實體資產將脫離驗證範圍；駐站資產不受影響。';
+    }
+
+    /**
+     * 「套用業務流程」進入點。
+     * 只有在偵測到未勾選的關聯資產時才跳確認——沒有隱形波及就直接套用，
+     * 不打斷順暢的情況。
+     */
+    function applyBusinessProcess() {
+      var value = businessProcessSelectValue();
+      var info = resolveBusinessProcessTargets();
+
+      if (info.targets.length === 0) {
+        showToast('勾選的資產都尚未對照，沒有可設定的資訊資產', 'error');
+        return;
+      }
+
+      pendingBusinessProcessData = {
+        ismsAssetIds: info.targets.map(function(t) { return t.ismsAssetId; }),
+        value: value,
+        expectedAffectedCount: info.affectedCount
+      };
+
+      if (info.hiddenCount > 0) {
+        renderBusinessProcessConfirm(info, value);
+        document.getElementById('businessProcessModal').classList.remove('hidden');
+        return;
+      }
+      confirmBusinessProcess();
+    }
+
+    function renderBusinessProcessConfirm(info, value) {
+      var label = value === '' ? '（清除）' : escapeHtml(value);
+      var html = '<p class="mb-3">將把業務流程設為 <strong>' + label + '</strong>：</p>' +
+                 '<div class="bg-gray-50 rounded-lg p-3 mb-4 space-y-2">';
+
+      info.targets.forEach(function(t) {
+        var hidden = t.total - t.selected;
+        html += '<div class="flex items-center justify-between gap-3">' +
+                '<span class="font-mono text-xs">' + escapeHtml(t.ismsAssetId) + '</span>' +
+                '<span class="text-gray-600">' +
+                  escapeHtml(t.before || '(未設定)') + ' → ' + label +
+                '</span>' +
+                '<span class="text-gray-500 text-xs">掛 ' + t.total + ' 台' +
+                  (hidden > 0
+                    ? '（其中 <strong class="text-amber-600">' + hidden + ' 台未勾選</strong>）'
+                    : '（全部已勾選）') +
+                '</span></div>';
+      });
+      html += '</div>';
+
+      html += '<p class="text-blue-700 bg-blue-50 rounded p-3 mb-3">' +
+              '<i class="fas fa-circle-info mr-2"></i>' + isoHintFor(value) + '</p>';
+
+      if (info.unmapped.length > 0) {
+        html += '<p class="text-amber-700 bg-amber-50 rounded p-3">' +
+                '<i class="fas fa-triangle-exclamation mr-2"></i>' +
+                info.unmapped.length + ' 台勾選的資產尚未對照，將略過（不會自動補號）。</p>';
+      }
+
+      document.getElementById('businessProcessBody').innerHTML = html;
+    }
+
+    function closeBusinessProcessModal() {
+      document.getElementById('businessProcessModal').classList.add('hidden');
+      pendingBusinessProcessData = null;
+    }
+
+    function confirmBusinessProcess() {
+      if (!pendingBusinessProcessData) return;
+      var d = pendingBusinessProcessData;
+      doApplyBusinessProcess(d.ismsAssetIds, d.value, d.expectedAffectedCount, function() {
+        closeBusinessProcessModal();
+      });
+    }
+
+    /**
+     * 送出批次設定。錯誤走 withSuccessHandler 裡的 result.success 判斷——
+     * 後端一律回 {success:...} 而不 throw，withFailureHandler 只會在連線層失敗時觸發。
+     */
+    function doApplyBusinessProcess(ismsAssetIds, value, expectedAffectedCount, onDone) {
+      var btn = document.getElementById('businessProcessConfirmBtn');
+      var applyBtn = document.getElementById('applyBusinessProcessBtn');
+      btn.disabled = true;
+      applyBtn.disabled = true;
+      btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.success) {
+            var parts = [];
+            if (result.updated.length) parts.push(result.updated.length + ' 筆已更新');
+            if (result.noChange.length) parts.push(result.noChange.length + ' 筆無變更');
+            if (result.skipped.length) parts.push(result.skipped.length + ' 筆略過');
+            showToast(parts.join('、') || '沒有需要更新的資料', 'success');
+            (result.skipped || []).forEach(function(s) {
+              console.warn('略過 ' + s.ismsAssetId + '：' + s.reason);
+            });
+            selectedAssetIds.clear();
+            document.getElementById('businessProcessSelect').value = '';
+            updateSelectionUI();
+            loadAssets();
+            loadIsmsAssets();   // 業務流程改了，前端快取的 allIsmsAssets 要跟著更新
+          } else {
+            showToast((result && result.error) || '設定失敗', 'error');
+          }
+          resetBusinessProcessBtn();
+          if (onDone) onDone();
+        })
+        .withFailureHandler(function(err) {
+          showToast('設定失敗: ' + (err && err.message ? err.message : err), 'error');
+          resetBusinessProcessBtn();
+          if (onDone) onDone();
+        })
+        .setIsmsBusinessProcessBatch({
+          ismsAssetIds: ismsAssetIds,
+          businessProcess: value,
+          expectedAffectedCount: expectedAffectedCount
+        });
+    }
+
+    function resetBusinessProcessBtn() {
+      var btn = document.getElementById('businessProcessConfirmBtn');
+      btn.disabled = false;
+      btn.innerHTML = '確認套用';
+      updateApplyBusinessProcessBtn();
     }
 
     function showConfirmModal(existingMappings) {
