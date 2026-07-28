@@ -378,13 +378,21 @@ function getEmailToGroupMap_() {
   return map;
 }
 
+function normalizeGroupName_(groupName) {
+  if (!groupName) return '未分組';
+  var g = String(groupName).trim();
+  if (g === '策略組') return '專案規劃組';
+  if (g === '釋出組') return '資料運用組';
+  return g;
+}
+
 /**
  * 取得資產的組別（優先使用 DEFAULT_GROUP，其次查詢使用人 email，最後查詢保管人 email）
  */
 function getAssetGroup_(asset, emailToGroupMap) {
   // 第一優先：使用資產的 DEFAULT_GROUP
   if (asset.defaultGroup) {
-    return String(asset.defaultGroup).trim();
+    return normalizeGroupName_(asset.defaultGroup);
   }
 
   // 第二優先：根據使用人 email 查詢組別
@@ -392,7 +400,7 @@ function getAssetGroup_(asset, emailToGroupMap) {
     const normalizedEmail = String(asset.userEmail).toLowerCase().trim();
     const groupName = emailToGroupMap[normalizedEmail];
     if (groupName) {
-      return groupName;
+      return normalizeGroupName_(groupName);
     }
   }
 
@@ -401,7 +409,7 @@ function getAssetGroup_(asset, emailToGroupMap) {
     const normalizedLeaderEmail = String(asset.leaderEmail).toLowerCase().trim();
     const groupName = emailToGroupMap[normalizedLeaderEmail];
     if (groupName) {
-      return groupName;
+      return normalizeGroupName_(groupName);
     }
   }
 
@@ -587,7 +595,7 @@ function getAssetsWithMappingStatus(options = {}) {
             isItAsset: '-',
             isIsoScope: '-',
             defaultGroup: '-',
-            group: ismsAsset.responsibleUnit || '未分組',
+            group: normalizeGroupName_(ismsAsset.responsibleUnit),
             sourceSheet: '資訊資產',
             isMapped: false,
             mappedIsmsAssetId: ismsAsset.ismsAssetId,
