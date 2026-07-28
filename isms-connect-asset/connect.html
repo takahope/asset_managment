@@ -656,10 +656,10 @@
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
             <div class="flex flex-wrap items-center gap-4 mb-4">
-              <select id="ismsFilter" class="select-input" onchange="setIsmsFilter(this.value)">
+              <select id="ismsFilter" class="select-input" style="max-width: 200px; text-overflow: ellipsis;" onchange="setIsmsFilter(this.value)">
                 <option value="">全部資訊資產</option>
               </select>
-              <select id="assetNameFilter" class="select-input" onchange="setFilterState('assetName', this.value)">
+              <select id="assetNameFilter" class="select-input" style="max-width: 200px; text-overflow: ellipsis;" onchange="setFilterState('assetName', this.value)">
                 <option value="">全部資產名稱(數量)</option>
               </select>
               <select id="leaderFilter" class="select-input" style="min-width: 0; width: 120px;" onchange="setFilterState('leaderName', this.value)">
