@@ -764,14 +764,11 @@
         <select id="businessProcessSelect" class="select-input" style="min-width:200px">
           <option value="">-- 業務流程：不變更 --</option>
         </select>
-        <button id="applyBusinessProcessBtn" class="btn-secondary" onclick="applyBusinessProcess()" disabled>
-          <i class="fas fa-diagram-project mr-2"></i>套用業務流程
-        </button>
       </div>
 
       <div class="action-bar__spacer"></div>
 
-      <button id="createMappingBtn" class="btn-primary" onclick="createMapping()" disabled>
+      <button id="createMappingBtn" class="btn-primary" onclick="handleUnifiedAction()" disabled>
         <i class="fas fa-link mr-2"></i>建立對照
       </button>
     </div>
@@ -895,7 +892,10 @@
       document.getElementById('ismsSearch').addEventListener('input', debounce(filterIsmsSelect, 300));
 
       // 資訊資產選擇
-      document.getElementById('ismsAssetSelect').addEventListener('change', updateCreateMappingBtn);
+      document.getElementById('ismsAssetSelect').addEventListener('change', function() {
+        updateCreateMappingBtn();
+        refreshCreateMappingBtnLabel();
+      });
 
       // 業務流程選值變動時，同時更新套用鈕與「建立對照」的動態文案
       document.getElementById('businessProcessSelect')
@@ -930,14 +930,12 @@
      */
     function applyAdminGating() {
       var sel = document.getElementById('businessProcessSelect');
-      var btn = document.getElementById('applyBusinessProcessBtn');
       var hint = isCurrentUserAdmin ? '' : '僅管理員可設定業務流程';
       // 兩個條件要一起看：選項載入失敗時就算是管理員也不能用。
       // 這兩件事是各自獨立的非同步流程，只看其中一個會被後到的那個覆蓋掉。
       sel.disabled = !isCurrentUserAdmin || !businessProcessOptionsAvailable;
       sel.title = hint;
-      btn.title = hint;
-      updateApplyBusinessProcessBtn();
+      updateCreateMappingBtn();
     }
 
     /**
@@ -977,24 +975,13 @@
       sel.innerHTML = '<option value="">（業務流程載入失敗）</option>';
       businessProcessOptionsAvailable = false;
       sel.disabled = true;
-      document.getElementById('applyBusinessProcessBtn').disabled = true;
+      updateCreateMappingBtn();
       showToast(msg, 'error');
       console.error(msg);
     }
 
-    /**
-     * 「套用業務流程」的啟用條件：管理員 + 選項可用 + 有勾選 + 有選值。
-     * 「不變更」（空值）不算選值。
-     */
-    function updateApplyBusinessProcessBtn() {
-      var value = document.getElementById('businessProcessSelect').value;
-      document.getElementById('applyBusinessProcessBtn').disabled =
-        !isCurrentUserAdmin || !businessProcessOptionsAvailable ||
-        selectedAssetIds.size === 0 || value === '';
-    }
-
     function onBusinessProcessChange() {
-      updateApplyBusinessProcessBtn();
+      updateCreateMappingBtn();
       refreshCreateMappingBtnLabel();
     }
 
@@ -1005,11 +992,18 @@
      * 一個下拉配兩顆按鈕會使作用對象無法從畫面判斷，所以用按鈕文案在點擊前揭露。
      */
     function createMappingBtnLabel() {
-      var willSetProcess = isCurrentUserAdmin && businessProcessOptionsAvailable &&
-                           document.getElementById('businessProcessSelect').value !== '';
-      return willSetProcess
-        ? '<i class="fas fa-link mr-2"></i>建立對照並設定業務流程'
-        : '<i class="fas fa-link mr-2"></i>建立對照';
+      var ismsAssetId = document.getElementById('ismsAssetSelect').value;
+      var bpValue = document.getElementById('businessProcessSelect').value;
+      var hasIsms = ismsAssetId !== '';
+      var hasBp = isCurrentUserAdmin && businessProcessOptionsAvailable && bpValue !== '';
+
+      if (hasIsms && hasBp) {
+        return '<i class="fas fa-link mr-2"></i>建立對照並設定業務流程';
+      } else if (hasBp && !hasIsms) {
+        return '<i class="fas fa-diagram-project mr-2"></i>套用業務流程';
+      } else {
+        return '<i class="fas fa-link mr-2"></i>建立對照';
+      }
     }
 
     function refreshCreateMappingBtnLabel() {
@@ -1831,11 +1825,29 @@
     }
 
     function updateCreateMappingBtn() {
-      const ismsAssetId = document.getElementById('ismsAssetSelect').value;
-      document.getElementById('createMappingBtn').disabled = selectedAssetIds.size === 0 || !ismsAssetId;
+      var ismsAssetId = document.getElementById('ismsAssetSelect').value;
+      var bpValue = document.getElementById('businessProcessSelect').value;
+      var hasIsms = ismsAssetId !== '';
+      var hasBp = isCurrentUserAdmin && businessProcessOptionsAvailable && bpValue !== '';
+
+      var canCreateMapping = selectedAssetIds.size > 0 && hasIsms;
+      var canApplyBp = selectedAssetIds.size > 0 && hasBp;
+
+      document.getElementById('createMappingBtn').disabled = !(canCreateMapping || canApplyBp);
     }
 
+    function handleUnifiedAction() {
+      var ismsAssetId = document.getElementById('ismsAssetSelect').value;
+      var bpValue = document.getElementById('businessProcessSelect').value;
+      var hasIsms = ismsAssetId !== '';
+      var hasBp = isCurrentUserAdmin && businessProcessOptionsAvailable && bpValue !== '';
 
+      if (hasIsms) {
+        createMapping();
+      } else if (hasBp) {
+        applyBusinessProcess();
+      }
+    }
 
     // ==========================================
     // 對照操作
@@ -2084,10 +2096,14 @@
      */
     function doApplyBusinessProcess(ismsAssetIds, value, expectedAffectedCount, onDone) {
       var btn = document.getElementById('businessProcessConfirmBtn');
-      var applyBtn = document.getElementById('applyBusinessProcessBtn');
+      var mainBtn = document.getElementById('createMappingBtn');
+      
       btn.disabled = true;
-      applyBtn.disabled = true;
+      mainBtn.dataset.busy = '1';
+      mainBtn.disabled = true;
+      
       btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
+      mainBtn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
 
       google.script.run
         .withSuccessHandler(function(result) {
@@ -2127,7 +2143,12 @@
       var btn = document.getElementById('businessProcessConfirmBtn');
       btn.disabled = false;
       btn.innerHTML = '確認套用';
-      updateApplyBusinessProcessBtn();
+      
+      var mainBtn = document.getElementById('createMappingBtn');
+      mainBtn.dataset.busy = '';
+      mainBtn.disabled = false;
+      refreshCreateMappingBtnLabel();
+      updateCreateMappingBtn();
     }
 
     function showConfirmModal(existingMappings) {
