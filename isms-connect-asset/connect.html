@@ -679,16 +679,16 @@
               </div>
             </div>
 
-            <!-- 對照狀態晶片列 -->
-            <div class="flex items-center mb-2">
-              <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">對照狀態：</span>
-              <div class="chip-row flex-1 min-w-0" id="mappedStatusChips"></div>
-            </div>
-
-            <!-- 使用狀態晶片列 -->
-            <div class="flex items-center mb-2">
-              <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">使用狀態：</span>
-              <div class="chip-row flex-1 min-w-0" id="usageStatusChips"></div>
+            <!-- 對照與使用狀態晶片列 -->
+            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-2 gap-4">
+              <div class="flex items-center flex-1 min-w-0 w-full">
+                <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">對照狀態：</span>
+                <div class="chip-row flex-1 min-w-0" id="mappedStatusChips"></div>
+              </div>
+              <div class="flex items-center shrink-0">
+                <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">使用狀態：</span>
+                <div class="chip-row flex-1 min-w-0" id="usageStatusChips"></div>
+              </div>
             </div>
 
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
