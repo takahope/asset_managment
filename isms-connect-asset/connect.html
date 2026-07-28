@@ -671,15 +671,18 @@
               <select id="assetNameFilter" class="select-input" onchange="setFilterState('assetName', this.value)">
                 <option value="">全部資產名稱(數量)</option>
               </select>
-              <select id="leaderFilter" class="select-input" onchange="setFilterState('leaderName', this.value)">
+              <select id="leaderFilter" class="select-input" style="max-width: 140px;" onchange="setFilterState('leaderName', this.value)">
                 <option value="">全部保管人</option>
               </select>
-              <select id="userFilter" class="select-input" onchange="setFilterState('userName', this.value)">
-                <option value="">全部使用人</option>
-              </select>
-              <select id="isoBasisFilter" class="select-input" onchange="setFilterState('isoBasis', this.value)">
-                <option value="">全部認證依據(資產數量/資訊資產數量)</option>
-              </select>
+              <!-- 強制將使用人與認證依據綁在同一行 -->
+              <div class="flex items-center gap-4">
+                <select id="userFilter" class="select-input" style="max-width: 140px;" onchange="setFilterState('userName', this.value)">
+                  <option value="">全部使用人</option>
+                </select>
+                <select id="isoBasisFilter" class="select-input" onchange="setFilterState('isoBasis', this.value)">
+                  <option value="">全部認證依據(資產/資訊資產)</option>
+                </select>
+              </div>
             </div>
 
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
@@ -1499,7 +1502,7 @@
       
       var selBasis = document.getElementById('isoBasisFilter');
       if (selBasis) {
-        selBasis.innerHTML = buildIsoBasisOptions(isoBasisMap, '全部認證依據(資產數量/資訊資產數量)');
+        selBasis.innerHTML = buildIsoBasisOptions(isoBasisMap, '全部認證依據(資產/資訊資產)');
         selBasis.value = filterState.isoBasis;
       }
     }
