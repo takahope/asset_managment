@@ -596,11 +596,9 @@
         </div>
       </div>
 
-      <div class="card mb-6">
-        <div class="p-6">
-          <div>
-            <div class="flex flex-wrap items-center gap-4 mb-6">
-              <input type="text" id="assetSearch" class="search-input" placeholder="搜尋資產編號、名稱、保管人...">
+      <div class="card mb-6 p-6">
+        <div class="flex flex-wrap items-center gap-4 mb-6">
+          <input type="text" id="assetSearch" class="search-input" placeholder="搜尋資產編號、名稱、保管人...">
               <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
                 <i class="fas fa-camera mr-2"></i>掃描條碼
               </button>
@@ -670,10 +668,12 @@
 
             <!-- 組別晶片列：數字排除 group 維度，點選後其他組仍可橫向比較 -->
             <div class="chip-row" id="groupChips"></div>
+      </div>
 
-            <div class="overflow-x-auto">
-              <table class="data-table" id="assetTable">
-                <thead>
+      <div class="card overflow-hidden mb-6">
+        <div class="overflow-x-auto">
+          <table class="data-table" id="assetTable">
+            <thead>
                   <tr>
                     <th class="col-checkbox" data-col="checkbox">
                       <input type="checkbox" id="selectAllAssets" onchange="toggleSelectAll()">
@@ -701,8 +701,6 @@
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
       </div>
     </main>
 
