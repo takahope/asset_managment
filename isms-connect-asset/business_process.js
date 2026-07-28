@@ -104,3 +104,111 @@ function countAffectedAssets_(mappingRows, targetIds) {
   }
   return count;
 }
+
+// ------------------------------------------
+// ② 端點
+// ------------------------------------------
+
+/**
+ * 批次設定資訊資產的業務流程(V 欄)。管理員限定。
+ *
+ * 為何不擴充 updateIsmsAsset:那支強制 name 非空且 CIA 為 1~4,
+ * 而 ISO 掃描補號產生的資產刻意留空 CIA,會被它擋下——那批正是最需要補業務流程的。
+ *
+ * 刻意不做的事:
+ * - 不更新對照表 F/G/H 欄(ISO 基準線)。F 欄的定義是「上次掃描套用的結果」,
+ *   改業務流程後**應該**在下次掃描顯示為一筆待套用差異,那是稽核軌跡;
+ *   在此順手改掉等於讓變更繞過掃描的確認關卡。
+ * - 不對未對照的實體資產補號。補號是 ISO 掃描的職責,兩處都做會出現兩條編號產生路徑。
+ *
+ * @param {{ismsAssetIds: Array<string>, businessProcess: string, expectedAffectedCount: number}} payload
+ * @returns {{success:boolean, updated?:Array, skipped?:Array, noChange?:Array, error?:string}}
+ */
+function setIsmsBusinessProcessBatch(payload) {
+  // 🛡️ 守門在搶鎖之前:未授權的呼叫不該佔用全域鎖
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    if (!payload || typeof payload !== 'object') {
+      return { success: false, error: '參數不正確' };
+    }
+    const targetIds = Array.isArray(payload.ismsAssetIds) ? payload.ismsAssetIds : [];
+    if (targetIds.length === 0) {
+      return { success: false, error: '未指定資訊資產' };
+    }
+    const newValue = String(payload.businessProcess == null ? '' : payload.businessProcess).trim();
+
+    // 值域檢查:不接受自由輸入
+    const options = getDropdownOptions();
+    if (!options.success) {
+      return { success: false, error: '讀取下拉選單失敗:' + options.error };
+    }
+    const allowed = (options.businessProcesses || []).map(p => p.display);
+    if (!isAllowedBusinessProcess_(newValue, allowed)) {
+      return { success: false, error: '業務流程「' + newValue + '」不在允許清單內' };
+    }
+
+    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+
+    // TOCTOU:後端重算波及台數,與前端畫面當下的數字比對
+    if (typeof payload.expectedAffectedCount === 'number') {
+      const mappingSheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
+      const mappingRows = mappingSheet ? mappingSheet.getDataRange().getValues() : [];
+      const actual = countAffectedAssets_(mappingRows, targetIds);
+      if (actual !== payload.expectedAffectedCount) {
+        return {
+          success: false,
+          error: '資料已變動,請重新整理後再試(畫面顯示 ' + payload.expectedAffectedCount +
+                 ' 台,實際 ' + actual + ' 台)'
+        };
+      }
+    }
+
+    const sheet = ss.getSheetByName(CONFIG.ISMS_ASSET_SHEET_NAME);
+    if (!sheet) return { success: false, error: '找不到資訊資產工作表' };
+
+    const rows = sheet.getDataRange().getValues();
+    const plan = buildBusinessProcessPlan_(rows, targetIds, newValue);
+    const idx = ISMS_ASSET_COLUMN_INDICES;
+
+    // 讀整表 → 記憶體改 → 一次 setValues 寫回 V 欄整欄。
+    // 逐格 setValue 會是 N 趟 API 往返,200 筆就吃掉大半個 6 分鐘配額。
+    if (plan.updates.length > 0) {
+      const column = [];
+      for (let r = 1; r < rows.length; r++) {
+        column.push([rows[r][idx.BUSINESS_PROCESS - 1]]);
+      }
+      plan.updates.forEach(u => { column[u.rowIndex - 2] = [u.after]; });
+      sheet.getRange(2, idx.BUSINESS_PROCESS, column.length, 1).setValues(column);
+      SpreadsheetApp.flush();
+    }
+
+    // 稽核 log:前後快照都由記憶體裡那列組出來,不再回頭讀表(避免 N 次全表掃描)
+    plan.updates.forEach(u => {
+      const beforeRow = rows[u.rowIndex - 1].slice();
+      const beforeObj = mapRowToIsmsAssetObject_(beforeRow);
+      const afterRow = beforeRow.slice();
+      afterRow[idx.BUSINESS_PROCESS - 1] = u.after;
+      const afterObj = mapRowToIsmsAssetObject_(afterRow);
+      logIsmsOperation_('編輯', u.ismsAssetId, 'businessProcess', beforeObj, afterObj, '批次設定業務流程');
+    });
+
+    return {
+      success: true,
+      updated: plan.updates.map(u => ({
+        ismsAssetId: u.ismsAssetId, before: u.before, after: u.after
+      })),
+      skipped: plan.skipped,
+      noChange: plan.noChange
+    };
+  } catch (e) {
+    console.error('setIsmsBusinessProcessBatch 錯誤:', e);
+    return { success: false, error: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
