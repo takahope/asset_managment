@@ -1215,7 +1215,7 @@
      */
     function matchesFilters(asset, excludeDim) {
       if (excludeDim !== 'keyword' && filterState.keyword) {
-        var k = filterState.keyword;
+        var k = filterState.keyword.toLowerCase();
         var hit = asset.assetId.toLowerCase().indexOf(k) >= 0 ||
                   asset.assetName.toLowerCase().indexOf(k) >= 0 ||
                   asset.leaderName.toLowerCase().indexOf(k) >= 0 ||
@@ -1252,7 +1252,7 @@
       
       // 如果勾選了「所有駐站」，地點文字必須包含「駐站」
       if (filterState.stationOnly && excludeDim !== 'stationOnly') {
-        if (!asset.location || !asset.location.includes('駐站')) {
+        if (!asset.location || !String(asset.location).includes('駐站')) {
           return false;
         }
       }
