@@ -646,7 +646,7 @@
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
             <div class="flex flex-wrap items-center gap-4 mb-4">
-              <select id="ismsFilter" class="select-input" style="min-width: 0; max-width: 140px; text-overflow: ellipsis;" onchange="setIsmsFilter(this.value)">
+              <select id="ismsFilter" class="select-input" style="min-width: 0; max-width: 150px; text-overflow: ellipsis;" onchange="setIsmsFilter(this.value)">
                 <option value="">全部資訊資產</option>
               </select>
               <select id="categoryFilter" class="select-input" style="min-width: 0; width: 120px; text-overflow: ellipsis;" onchange="setFilterState('category', this.value)">
@@ -669,12 +669,12 @@
               </div>
               <!-- 地點與駐站快篩綁定在一起 -->
               <div class="flex items-center gap-3">
-                <select id="locationFilter" class="select-input" style="min-width: 0; width: 130px;" onchange="setFilterState('location', this.value)">
+                <select id="locationFilter" class="select-input" style="min-width: 0; width: 150px;" onchange="setFilterState('location', this.value)">
                   <option value="">全部地點(數量)</option>
                 </select>
                 <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
                   <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
-                  <span class="whitespace-nowrap">所有駐站</span>
+                  <span class="whitespace-nowrap">駐站</span>
                 </label>
               </div>
             </div>
