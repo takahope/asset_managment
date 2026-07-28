@@ -717,8 +717,8 @@
                     <th class="col-location" data-col="location">地點</th>
                     <th class="col-group" data-col="group">組別</th>
                     <th class="col-status" data-col="mappedStatus">對照狀態</th>
-                    <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
                     <th class="col-status" data-col="usageStatus">使用狀態</th>
+                    <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
                     <th class="col-business" data-col="businessProcess">業務流程</th>
                     <th class="col-status" data-col="isoScope">ISO 範圍</th>
                     <th class="col-location" data-col="isoBasis">認證依據</th>
@@ -1122,8 +1122,8 @@
                 ? '<span class="badge badge-success"><i class="fas fa-check mr-1"></i>已對照</span>'
                 : '<span class="badge badge-warning"><i class="fas fa-times mr-1"></i>未對照</span>'}
             </td>
-            <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
             <td data-col="usageStatus">${escapeHtml(asset.usageStatus || '')}</td>
+            <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
             <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
             <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
             <td data-col="isoBasis"><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
