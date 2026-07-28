@@ -660,9 +660,16 @@
                   </div>
                 </div>
               </div>
-              <select id="locationFilter" class="select-input" onchange="setFilterState('location', this.value)">
-                <option value="">全部地點(數量)</option>
-              </select>
+              <!-- 地點與駐站快篩綁定在一起 -->
+              <div class="flex items-center gap-3">
+                <select id="locationFilter" class="select-input" onchange="setFilterState('location', this.value)">
+                  <option value="">全部地點(數量)</option>
+                </select>
+                <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
+                  <span class="whitespace-nowrap">所有駐站</span>
+                </label>
+              </div>
             </div>
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
@@ -1170,6 +1177,7 @@
       leaderName: '',
       userName: '',
       location: '',
+      stationOnly: false,
       isoBasis: ''
     };
 
@@ -1241,6 +1249,14 @@
       if (excludeDim !== 'location' && filterState.location) {
         if (asset.location !== filterState.location) return false;
       }
+      
+      // 如果勾選了「所有駐站」，地點文字必須包含「駐站」
+      if (filterState.stationOnly && excludeDim !== 'stationOnly') {
+        if (!asset.location || !asset.location.includes('駐站')) {
+          return false;
+        }
+      }
+
       if (excludeDim !== 'isoBasis' && filterState.isoBasis) {
         if (asset.isoBasis !== filterState.isoBasis) return false;
       }
