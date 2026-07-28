@@ -69,7 +69,7 @@ clearIsoScopeCache()      // 改完 HR 組織架構樹 I 欄（認證駐站）�
 | URL | 檔案 | 功能 |
 |-----|------|------|
 | 預設 | `index.html` (2449 行) | 資訊資產清單、新增/編輯/刪除、重複編號偵測、CSV/XLSX/PDF 匯出 |
-| `?page=connect` | `connect.html` | **單頁**：資產清單＋分面篩選＋ISO 範圍晶片與掃描＋底部對照動作條＋CSV 匯出 |
+| `?page=connect` | `connect.html` | **單頁**：資產清單＋分面篩選＋ISO 範圍晶片與掃描＋底部對照動作條＋業務流程批次設定＋CSV 匯出 |
 | `?page=softwarelist` | `softwarelist.html` (1173 行) | 軟體清冊唯讀檢視與匯出 |
 
 `connect.html` 原本有四個分頁（資產清單／對照作業／資訊資產／報表查詢），2026-07-26 合併為單頁：後三個分頁被重新理解為「同一份資料的不同切面」，轉化為主清單上的篩選器與操作。**不要再新增分頁**，新功能請掛在篩選列、統計卡或底部動作條上。詳見「事件紀錄 2026-07-26」與 `docs/superpowers/specs/2026-07-26-connect-single-page-design.md`。
@@ -145,6 +145,14 @@ clearIsoScopeCache()      // 改完 HR 組織架構樹 I 欄（認證駐站）�
 - **XSS 寫法三頁不一致**：`index.html` 走 DOM API（`createElement` / `textContent`），`connect.html` 與 `softwarelist.html` 走 `innerHTML` + 自帶的 `escapeHtml()` / `esc()`。**沿用你所在檔案的既有寫法**，不要在 `index.html` 引進 `innerHTML`，也不要在另外兩檔漏掉 escape。
 - `index.html` 的 `detectAndRenderDuplicates()` 會在載入後掃出重複的資訊資產編號並跳出警示面板——這是資料品質提示，不是 bug。
 - `connect.html` 的條碼掃描（Quagga2）有自訂格式化規則：20 碼去前 2 位，之後切成 `7-4-7`（`formatBarcode`，`:1391`），規則與主應用程式一致。
+- **業務流程只能透過 `setIsmsBusinessProcessBatch`（`business_process.js`）修改**。
+  `updateIsmsAsset` 完全不碰 V 欄，而且它強制 CIA 為 1~4——ISO 掃描補號的資產
+  刻意留空 CIA，會被它擋下。**不要為了「統一」而把 V 欄併進 `updateIsmsAsset`。**
+- **前端 `resolveBusinessProcessTargets()` 的 `affectedCount` 與後端
+  `countAffectedAssets_()` 是同一個定義**（目標資訊資產底下所有已對照實體資產，
+  含未勾選者）。改動任一邊都必須同步，否則 TOCTOU 檢查每次都誤判成「資料已變動」。
+- **動作條的「清除業務流程」用哨兵值 `__CLEAR__`，不是空字串**。空字串代表「不變更」。
+  兩者共用同一個值是批次編輯 UI 的經典缺陷，一次誤觸就會洗掉一批資料。
 
 ### 8. 回傳值協定
 
@@ -214,6 +222,20 @@ clearIsoScopeCache()      // 改完 HR 組織架構樹 I 欄（認證駐站）�
   （不可用 inline `onclick`，理由見 `connect.html` 的 `renderGroupChips` 註解）。
 
 ## 事件紀錄
+
+### 2026-07-28 connect.html 批次指定業務流程
+- 動機：ISO 判定的 `PENDING`（非駐站 + 業務流程未填）在系統內無解——`createIsmsAsset` 會寫 V 欄，但 `updateIsmsAsset` 完全不碰它，業務流程建立後只能手動改試算表。
+- **關鍵發現：「建立對照時順帶填」與「批次修改既有」是同一件事。** 動作條的 `ismsAssetSelect` 從 `allIsmsAssets` 填充，永遠只能選既有資訊資產，`createMappings` 不會建立新的——所以兩條路的寫入對象與波及範圍相同，共用同一支端點與同一個確認流程。設計初期以為前者比較安全，是錯的。
+- 做法：新增 `business_process.js`（純函式層 + 單一端點，比照 `iso_scope.js` 的切法）；動作條加業務流程下拉與套用鈕；波及範圍純前端由 `allAssets` 算，寫入前經後端重算比對擋 TOCTOU。
+- **一個控制項、兩個作用對象**：動作條上「套用業務流程」作用於勾選資產反查出的集合，「建立對照」作用於下拉選定的那一筆。解法是動態按鈕文案（有選值時變成「建立對照並設定業務流程」），而不是加說明文字——說明文字會被略過，按鈕文案是點擊前必看的最後一個字串。
+- **`resetCreateMappingBtn` 原本把標籤寫死**，動態文案做完後每次建立對照結束都會被它洗回去。這是本專案第 5 次踩「改一個東西時只追一種名字形態」——這次在計畫階段就先 grep `建立對照` 字串把它揪出來。
+- **「清除」與「不變更」必須是兩個不同的值**（`__CLEAR__` vs `''`）。批次編輯 UI 以單一空值同時代表兩者，是那種上線半年後才被發現、且已經洗掉一批資料的缺陷。
+- **C 路徑的 TOCTOU 必然失敗，除非先重載**：建立對照會改變波及台數，用建立前的數字送出去會被後端擋下。所以 `applyBusinessProcessAfterMapping` 先 `loadAssets(onDone)` 再算——這是 `loadAssets` 新增回呼參數的唯一理由，失敗路徑刻意不呼叫回呼。
+- **兩個獨立的非同步條件會互相覆蓋**：「非管理員」與「選項載入失敗」都會停用那個下拉，但它們是兩條各自的流程，只看其中一個會被後到的那個設回 enabled。用 `businessProcessOptionsAvailable` 旗標讓 `applyAdminGating()` 同時看兩個條件。
+- **刻意不更新對照表 F/G/H 欄（ISO 基準線）**。F 欄的定義是「上次掃描套用的結果」，改業務流程後應該在下次掃描顯示為待套用差異，那是稽核軌跡；順手改掉等於讓變更繞過掃描的確認關卡。
+- 權限：全部管理員（使用者決定）。已知不對稱：白名單使用者新增資訊資產時可填業務流程，事後卻不能改——這是刻意接受的取捨。
+- fail-open / fail-closed 的邊界：`getDropdownOptions()` 載入失敗只停用這個功能（UI 選項讀不到只是少一個功能），與 `getCertifiedProcessSet_()` 的 fail-closed（判定依據讀不到會產出錯誤結論）刻意不同。
+- 檔案：`business_process.js`、`connect.html`。設計與計畫：`docs/superpowers/specs|plans/2026-07-28-connect-business-process-batch-*.md`。
 
 ### 2026-07-26 connect.html 四分頁合併為單頁
 - 動機：勾選資產後要切到「對照作業」分頁才能建立對照，流程被切斷。
