@@ -542,25 +542,7 @@
 
     <!-- 主內容區 -->
     <main class="max-w-[1500px] mx-auto px-4 md:px-8 py-8">
-      <!-- 統計卡片 -->
-      <div id="statsSection" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div class="stat-card is-clickable" id="cardTotal" onclick="setMappedStatusFilter('')">
-          <div class="stat-value" id="statTotal">-</div>
-          <div class="stat-label">資產總數</div>
-        </div>
-        <div class="stat-card is-clickable" id="cardMapped" onclick="setMappedStatusFilter('mapped')">
-          <div class="stat-value text-green-600" id="statMapped">-</div>
-          <div class="stat-label">已對照</div>
-        </div>
-        <div class="stat-card is-clickable" id="cardUnmapped" onclick="setMappedStatusFilter('unmapped')">
-          <div class="stat-value text-amber-600" id="statUnmapped">-</div>
-          <div class="stat-label">未對照</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-blue-600" id="statRate">-</div>
-          <div class="stat-label">對照率</div>
-        </div>
-      </div>
+      <!-- 統計卡片（已移除，改用晶片列） -->
 
       <!-- 移動裝置掃描大卡片 -->
       <div class="mobile-scan-card">
@@ -692,6 +674,12 @@
                   <option value="">全部認證依據(資產/資訊資產)</option>
                 </select>
               </div>
+            </div>
+
+            <!-- 對照狀態晶片列 -->
+            <div class="flex items-center mb-2">
+              <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">對照狀態：</span>
+              <div class="chip-row flex-1 min-w-0" id="mappedStatusChips"></div>
             </div>
 
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
@@ -1157,11 +1145,14 @@
     }
 
 
-    function renderStatCards(stats) {
-      document.getElementById('statTotal').textContent = stats.totalCount;
-      document.getElementById('statMapped').textContent = stats.mappedCount;
-      document.getElementById('statUnmapped').textContent = stats.unmappedCount;
-      document.getElementById('statRate').textContent = stats.mappingRate + '%';
+    function renderMappedStatusChips() {
+      var stats = computeStats(getStatusFacetAssets());
+      var html = '<div class="chip ' + (filterState.mappedStatus === '' ? 'active' : '') + '" onclick="setMappedStatusFilter(\'\')">總資訊資產數 (' + stats.totalCount + ')</div>';
+      html += '<div class="chip ' + (filterState.mappedStatus === 'mapped' ? 'active border-green-200 bg-green-50 text-green-700' : '') + '" onclick="setMappedStatusFilter(\'mapped\')">已對照 (' + stats.mappedCount + ')</div>';
+      html += '<div class="chip ' + (filterState.mappedStatus === 'unmapped' ? 'active border-amber-200 bg-amber-50 text-amber-700' : '') + '" onclick="setMappedStatusFilter(\'unmapped\')">未對照 (' + stats.unmappedCount + ')</div>';
+      
+      var container = document.getElementById('mappedStatusChips');
+      if (container) container.innerHTML = html;
     }
 
     // ==========================================
@@ -1316,10 +1307,9 @@
     /** 唯一的「重算並重繪」入口：任何篩選變動都呼叫這支 */
     function applyFilters() {
       renderAssetTable(getFilteredAssets());
-      renderStatCards(computeStats(getStatusFacetAssets()));
+      renderMappedStatusChips();
       renderGroupChips();
       renderIsoChips();
-      renderStatCardActiveState();
     }
 
     /**
@@ -1722,11 +1712,7 @@
       applyFilters();
     }
 
-    function renderStatCardActiveState() {
-      document.getElementById('cardTotal').classList.toggle('is-active', filterState.mappedStatus === '');
-      document.getElementById('cardMapped').classList.toggle('is-active', filterState.mappedStatus === 'mapped');
-      document.getElementById('cardUnmapped').classList.toggle('is-active', filterState.mappedStatus === 'unmapped');
-    }
+
 
     function filterIsmsSelect() {
       const keyword = document.getElementById('ismsSearch').value.toLowerCase();
