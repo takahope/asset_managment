@@ -682,6 +682,12 @@
               <div class="chip-row flex-1 min-w-0" id="mappedStatusChips"></div>
             </div>
 
+            <!-- 使用狀態晶片列 -->
+            <div class="flex items-center mb-2">
+              <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">使用狀態：</span>
+              <div class="chip-row flex-1 min-w-0" id="usageStatusChips"></div>
+            </div>
+
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
             <div class="flex items-center mb-1">
               <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">ISO範圍：</span>
@@ -712,6 +718,8 @@
                     <th class="col-group" data-col="group">組別</th>
                     <th class="col-status" data-col="mappedStatus">對照狀態</th>
                     <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
+                    <th class="col-status" data-col="usageStatus">使用狀態</th>
+                    <th class="col-business" data-col="businessProcess">業務流程</th>
                     <th class="col-status" data-col="isoScope">ISO 範圍</th>
                     <th class="col-location" data-col="isoBasis">認證依據</th>
                   </tr>
@@ -1115,6 +1123,8 @@
                 : '<span class="badge badge-warning"><i class="fas fa-times mr-1"></i>未對照</span>'}
             </td>
             <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
+            <td data-col="usageStatus">${escapeHtml(asset.usageStatus || '')}</td>
+            <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
             <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
             <td data-col="isoBasis"><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
           </tr>
@@ -1156,6 +1166,7 @@
       keyword: '',        // 搜尋關鍵字（已 toLowerCase）
       group: '',          // '' = 全部組別
       mappedStatus: '',   // '' = 全部 | 'mapped' | 'unmapped'
+      usageStatus: '',    // '' = 全部使用狀態
       ismsAssetId: '',    // '' = 全部資訊資產
       isoScope: '',       // '' = 全部 | 'V' 在範圍 | '?' 待判定 | 'out' 不在範圍 | 'unmapped' 未對照
       assetName: '',
@@ -1216,6 +1227,9 @@
       }
       if (excludeDim !== 'ismsAssetId' && filterState.ismsAssetId) {
         if (asset.mappedIsmsAssetId !== filterState.ismsAssetId) return false;
+      }
+      if (excludeDim !== 'usageStatus' && filterState.usageStatus) {
+        if (String(asset.usageStatus || '').trim() !== filterState.usageStatus) return false;
       }
       // ISO 範圍維度。excludeDim === 'isoScope' 時跳過，讓晶片算自己的數字時
       // 排除自己那一維 —— 否則點下去其他選項全部歸零就再也點不回來。
@@ -1302,8 +1316,39 @@
     function applyFilters() {
       renderAssetTable(getFilteredAssets());
       renderMappedStatusChips();
+      renderUsageStatusChips();
       renderGroupChips();
       renderIsoChips();
+    }
+
+    function setUsageStatusFilter(status) {
+      filterState.usageStatus = (filterState.usageStatus === status) ? '' : status;
+      applyFilters();
+    }
+
+    function renderUsageStatusChips() {
+      // 在「只套用對照狀態」的子集合上做統計，避免受自己篩選影響（可依需求改為 getFilteredAssets 扣除 usageStatus，這裡先簡單沿用 getStatusFacetAssets 或全域統計）
+      // 改用：排除 usageStatus 自己維度的資產
+      var validAssets = allAssets.filter(function(a) { return matchesFilters(a, 'usageStatus'); });
+      var counts = {};
+      var total = 0;
+      validAssets.forEach(function(a) {
+        var status = String(a.usageStatus || '').trim();
+        counts[status] = (counts[status] || 0) + 1;
+        total++;
+      });
+      
+      var sortedStatuses = Object.keys(counts).sort();
+      var html = '<div class="chip ' + (filterState.usageStatus === '' ? 'active' : '') + '" onclick="setUsageStatusFilter(\'\')">全部 (' + total + ')</div>';
+      
+      sortedStatuses.forEach(function(status) {
+        var displayStr = status === '' ? '未填寫' : status;
+        var activeClass = filterState.usageStatus === status ? 'active' : '';
+        html += '<div class="chip ' + activeClass + '" onclick="setUsageStatusFilter(\'' + status + '\')">' + displayStr + ' (' + counts[status] + ')</div>';
+      });
+      
+      var container = document.getElementById('usageStatusChips');
+      if (container) container.innerHTML = html;
     }
 
     /**

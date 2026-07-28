@@ -545,9 +545,17 @@ function getAssetsWithMappingStatus(options = {}) {
     // 取得對照表
     const mappingMap = getMappingMap_();
 
+    // 取得所有資訊資產，建立以 ismsAssetId 為 key 的 Map
+    const ismsRes = getIsmsAssets();
+    const ismsMap = new Map();
+    if (ismsRes.success) {
+      ismsRes.assets.forEach(a => ismsMap.set(a.ismsAssetId, a));
+    }
+
     // 合併對照狀態
     const result = assets.map(asset => {
       const mapping = mappingMap.get(asset.assetId);
+      const ismsAsset = mapping ? ismsMap.get(mapping.ismsAssetId) : null;
       return {
         ...asset,
         isMapped: !!mapping,
@@ -556,9 +564,43 @@ function getAssetsWithMappingStatus(options = {}) {
         // ISO 範圍基準線(對照表 F/G/H):上次套用掃描的結果,非即時真相
         isoScope: mapping ? mapping.isoScope : '',
         isoBasis: mapping ? mapping.isoBasis : '',
-        isoJudgedAt: mapping ? mapping.isoJudgedAt : ''
+        isoJudgedAt: mapping ? mapping.isoJudgedAt : '',
+        usageStatus: ismsAsset ? ismsAsset.status : '',
+        businessProcess: ismsAsset ? ismsAsset.businessProcess : ''
       };
     });
+
+    // 找出未對照的資訊資產，轉化為虛擬實體資產塞入 result
+    const mappedIsmsAssetIds = new Set(Array.from(mappingMap.values()).map(m => m.ismsAssetId));
+    if (ismsRes.success) {
+      ismsRes.assets.forEach(ismsAsset => {
+        if (!mappedIsmsAssetIds.has(ismsAsset.ismsAssetId)) {
+          result.push({
+            assetId: '無實體資產',
+            assetName: ismsAsset.name,
+            modelBrand: '-',
+            location: '-',
+            leaderName: '-',
+            userName: '-',
+            assetCategory: '-',
+            assetStatus: '-',
+            isItAsset: '-',
+            isIsoScope: '-',
+            defaultGroup: '-',
+            group: ismsAsset.responsibleUnit || '未分組',
+            sourceSheet: '資訊資產',
+            isMapped: false,
+            mappedIsmsAssetId: ismsAsset.ismsAssetId,
+            mappingRemarks: '',
+            isoScope: '',
+            isoBasis: '',
+            isoJudgedAt: '',
+            usageStatus: ismsAsset.status,
+            businessProcess: ismsAsset.businessProcess
+          });
+        }
+      });
+    }
 
     // 篩選
     let filtered = result;
