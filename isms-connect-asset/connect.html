@@ -1151,9 +1151,9 @@
 
     function renderMappedStatusChips() {
       var stats = computeStats(getStatusFacetAssets());
-      var html = '<div class="chip ' + (filterState.mappedStatus === '' ? 'active' : '') + '" onclick="setMappedStatusFilter(\'\')">總資訊資產數 (' + stats.totalCount + ')</div>';
-      html += '<div class="chip ' + (filterState.mappedStatus === 'mapped' ? 'active border-green-200 bg-green-50 text-green-700' : '') + '" onclick="setMappedStatusFilter(\'mapped\')">已對照 (' + stats.mappedCount + ')</div>';
-      html += '<div class="chip ' + (filterState.mappedStatus === 'unmapped' ? 'active border-amber-200 bg-amber-50 text-amber-700' : '') + '" onclick="setMappedStatusFilter(\'unmapped\')">未對照 (' + stats.unmappedCount + ')</div>';
+      var html = '<div class="chip ' + (filterState.mappedStatus === '' ? 'is-active' : '') + '" onclick="setMappedStatusFilter(\'\')">總資訊資產數 (' + stats.totalCount + ')</div>';
+      html += '<div class="chip ' + (filterState.mappedStatus === 'mapped' ? 'is-active' : '') + '" onclick="setMappedStatusFilter(\'mapped\')">已對照 (' + stats.mappedCount + ')</div>';
+      html += '<div class="chip ' + (filterState.mappedStatus === 'unmapped' ? 'is-active' : '') + '" onclick="setMappedStatusFilter(\'unmapped\')">未對照 (' + stats.unmappedCount + ')</div>';
       
       var container = document.getElementById('mappedStatusChips');
       if (container) container.innerHTML = html;
@@ -1339,11 +1339,11 @@
       });
       
       var sortedStatuses = Object.keys(counts).sort();
-      var html = '<div class="chip ' + (filterState.usageStatus === '' ? 'active' : '') + '" onclick="setUsageStatusFilter(\'\')">全部 (' + total + ')</div>';
+      var html = '<div class="chip ' + (filterState.usageStatus === '' ? 'is-active' : '') + '" onclick="setUsageStatusFilter(\'\')">全部 (' + total + ')</div>';
       
       sortedStatuses.forEach(function(status) {
         var displayStr = status === '' ? '未填寫' : status;
-        var activeClass = filterState.usageStatus === status ? 'active' : '';
+        var activeClass = filterState.usageStatus === status ? 'is-active' : '';
         html += '<div class="chip ' + activeClass + '" onclick="setUsageStatusFilter(\'' + status + '\')">' + displayStr + ' (' + counts[status] + ')</div>';
       });
       

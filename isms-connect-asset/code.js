@@ -584,7 +584,7 @@ function getAssetsWithMappingStatus(options = {}) {
       ismsRes.assets.forEach(ismsAsset => {
         if (!mappedIsmsAssetIds.has(ismsAsset.ismsAssetId)) {
           result.push({
-            assetId: '無實體資產',
+            assetId: '無對應資產/消耗品',
             assetName: ismsAsset.name,
             modelBrand: '-',
             location: '-',
