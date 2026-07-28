@@ -602,9 +602,6 @@
               <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
                 <i class="fas fa-camera mr-2"></i>掃描條碼
               </button>
-              <select id="ismsFilter" class="select-input" onchange="setIsmsFilter(this.value)">
-                <option value="">全部資訊資產</option>
-              </select>
               <button class="btn-secondary" onclick="loadAssets()">
                 <i class="fas fa-sync-alt mr-2"></i>重新整理
               </button>
@@ -663,11 +660,24 @@
               </div>
             </div>
 
+            <!-- 獨立一列的資訊資產下拉選單 -->
+            <div class="mb-4">
+              <select id="ismsFilter" class="select-input" onchange="setIsmsFilter(this.value)">
+                <option value="">全部資訊資產</option>
+              </select>
+            </div>
+
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
-            <div class="chip-row" id="isoChips"></div>
+            <div class="flex items-center mb-1">
+              <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">ISO範圍：</span>
+              <div class="chip-row flex-1 min-w-0" id="isoChips"></div>
+            </div>
 
             <!-- 組別晶片列：數字排除 group 維度，點選後其他組仍可橫向比較 -->
-            <div class="chip-row" id="groupChips"></div>
+            <div class="flex items-center">
+              <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">組別：</span>
+              <div class="chip-row flex-1 min-w-0" id="groupChips"></div>
+            </div>
       </div>
 
       <div class="card overflow-hidden mb-6">
