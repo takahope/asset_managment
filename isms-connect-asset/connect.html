@@ -642,16 +642,6 @@
                   </div>
                 </div>
               </div>
-              <!-- 地點與駐站快篩綁定在一起 -->
-              <div class="flex items-center gap-3">
-                <select id="locationFilter" class="select-input" onchange="setFilterState('location', this.value)">
-                  <option value="">全部地點(數量)</option>
-                </select>
-                <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
-                  <span class="whitespace-nowrap">所有駐站</span>
-                </label>
-              </div>
             </div>
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
@@ -673,6 +663,16 @@
                 <select id="isoBasisFilter" class="select-input" onchange="setFilterState('isoBasis', this.value)">
                   <option value="">全部認證依據(資產/資訊資產)</option>
                 </select>
+              </div>
+              <!-- 地點與駐站快篩綁定在一起 -->
+              <div class="flex items-center gap-3">
+                <select id="locationFilter" class="select-input" onchange="setFilterState('location', this.value)">
+                  <option value="">全部地點(數量)</option>
+                </select>
+                <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
+                  <span class="whitespace-nowrap">所有駐站</span>
+                </label>
               </div>
             </div>
 
