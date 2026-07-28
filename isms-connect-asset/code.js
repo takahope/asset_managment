@@ -1029,6 +1029,28 @@ function deleteIsmsAsset(ismsAssetId, reason) {
 
     const before = mapRowToIsmsAssetObject_(located.rowData);
     located.sheet.deleteRow(located.rowIndex);
+    
+    // NEW LOGIC: Cascade delete from MAPPING sheet
+    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+    const mappingSheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
+    if (mappingSheet) {
+      const mappingData = mappingSheet.getDataRange().getValues();
+      const rowsToDelete = [];
+      const ismsIdColIndex = MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1; // 0-indexed
+
+      for (let i = 1; i < mappingData.length; i++) {
+        if (mappingData[i][ismsIdColIndex] && mappingData[i][ismsIdColIndex].toString() === targetId) {
+          rowsToDelete.push(i + 1); // 1-indexed row number
+        }
+      }
+
+      // Delete from bottom up to avoid index shifting
+      rowsToDelete.sort((a, b) => b - a);
+      for (const r of rowsToDelete) {
+        mappingSheet.deleteRow(r);
+      }
+    }
+
     SpreadsheetApp.flush();
 
     logIsmsOperation_('刪除', targetId, '', before, null, reason || '');

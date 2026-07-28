@@ -525,6 +525,34 @@
         display: none !important;
       }
     }
+
+    /* Form & Modal overrides from index.html */
+    .modal-box { background: white; border-radius: 18px; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22); width: 480px; max-width: calc(100vw - 32px); padding: 28px 28px 24px; }
+    .modal-box.create-box { width: 580px; max-height: calc(100vh - 48px); overflow-y: auto; }
+    .modal-title { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .modal-sub   { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 12px; margin-bottom: 16px; }
+    .form-field { display: flex; flex-direction: column; }
+    .form-field.full { grid-column: 1 / -1; }
+    .form-label { font-size: 12px; font-weight: 600; color: #334155; margin-bottom: 5px; }
+    .form-label .req { color: #dc2626; margin-left: 2px; }
+    .form-input, .form-select, .form-textarea { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; font-size: 13px; color: #0f172a; background: white; outline: none; transition: border-color 0.15s, box-shadow 0.15s; font-family: inherit; }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    .form-textarea { resize: vertical; min-height: 64px; }
+    .form-hint { font-size: 11px; color: #64748b; margin-top: 3px; }
+    .cia-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .preview-panel { background: linear-gradient(135deg, #f0f9ff, #eff6ff); border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+    .preview-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .preview-row + .preview-row { margin-top: 6px; }
+    .preview-label { color: #334155; font-weight: 500; }
+    .preview-value { font-weight: 700; color: #1d4ed8; font-family: ui-monospace, Menlo, monospace; }
+    .preview-value.muted { color: #94a3b8; font-weight: 500; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-modal-cancel { padding: 10px 20px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; color: #334155; font-weight: 500; font-size: 14px; cursor: pointer; transition: all 0.15s; }
+    .btn-modal-cancel:hover { background: #f8fafc; }
+    .btn-modal-confirm { padding: 10px 24px; border-radius: 8px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; border: none; }
+    .btn-modal-confirm:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(37,99,235,0.3); }
+    .btn-modal-confirm:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
   </style>
 </head>
 <body>
@@ -594,6 +622,10 @@
               </button>
               <button class="btn-secondary" onclick="runIsoScan()">
                 <i class="fas fa-shield-alt mr-2"></i>執行範圍掃描
+              </button>
+              <!-- 新增按鈕 -->
+              <button id="btnCreate" class="btn-secondary text-blue-600 border-blue-200" title="新增資訊資產" onclick="openCreateModal()">
+                <i class="fa-solid fa-plus mr-1"></i><span class="hidden sm:inline">新增分類</span>
               </button>
               
               <!-- 顯示欄位切換 -->
@@ -760,11 +792,18 @@
         已選 <span id="selectedCount">0</span> 筆
       </span>
 
-      <div class="action-bar__field">
+      <div class="action-bar__field flex items-center gap-2">
         <input type="text" id="ismsSearch" class="search-input" placeholder="搜尋資訊資產…" style="width:180px">
         <select id="ismsAssetSelect" class="select-input" style="min-width:240px">
           <option value="">-- 請選擇資訊資產 --</option>
         </select>
+        <!-- 新增的編輯與刪除按鈕 -->
+        <button id="btnEditIsms" class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" onclick="handleEditIsmsClick()" disabled title="編輯所選分類">
+          <i class="fas fa-edit"></i>
+        </button>
+        <button id="btnDeleteIsms" class="btn-danger disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" onclick="handleDeleteIsmsClick()" disabled title="刪除所選分類">
+          <i class="fas fa-trash"></i>
+        </button>
       </div>
 
       <div class="action-bar__field">
@@ -783,6 +822,162 @@
         <i class="fas fa-link mr-2"></i>建立對照
       </button>
     </div>
+
+
+      <!-- Create Asset Modal -->
+  <div class="modal-overlay hidden" id="createModal">
+    <div class="modal-box create-box">
+      <div class="modal-title"><i class="fa-solid fa-plus mr-2 text-blue-600"></i>新增資訊資產</div>
+      <div class="modal-sub">系統將自動依組別 + 類別產生編號,並自動計算資產價值。</div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label" for="createCategory">類別<span class="req">*</span></label>
+          <select id="createCategory" class="form-select"><option value="">請選擇</option></select>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="createGroup">組別<span class="req">*</span></label>
+          <select id="createGroup" class="form-select"><option value="">請選擇</option></select>
+        </div>
+        <div class="form-field full">
+          <label class="form-label" for="createName">資產名稱<span class="req">*</span></label>
+          <input id="createName" class="form-input" type="text" maxlength="100" placeholder="請輸入資訊資產名稱" />
+        </div>
+        <div class="form-field full">
+          <label class="form-label" for="createDesc">說明</label>
+          <textarea id="createDesc" class="form-textarea" rows="3" placeholder="(選填) 資產用途或備註"></textarea>
+        </div>
+        <div class="form-field full">
+          <label class="form-label" for="createStatus">使用狀態<span class="req">*</span></label>
+          <select id="createStatus" class="form-select"><option value="">請選擇</option></select>
+        </div>
+        <div class="form-field full">
+          <label class="form-label" for="createBusinessProcess">業務流程</label>
+          <select id="createBusinessProcess" class="form-select"><option value="">請選擇業務流程</option></select>
+        </div>
+        <div class="form-field full">
+          <label class="form-label">CIA 評估(1 低 ~ 4 高)<span class="req">*</span></label>
+          <div class="cia-group">
+            <div>
+              <div class="form-hint" style="margin-bottom:4px;">機密性 O</div>
+              <select id="createC" class="form-select" style="width:100%;">
+                <option value="1">1</option><option value="2" selected>2</option>
+                <option value="3">3</option><option value="4">4</option>
+              </select>
+            </div>
+            <div>
+              <div class="form-hint" style="margin-bottom:4px;">完整性 P</div>
+              <select id="createI" class="form-select" style="width:100%;">
+                <option value="1">1</option><option value="2" selected>2</option>
+                <option value="3">3</option><option value="4">4</option>
+              </select>
+            </div>
+            <div>
+              <div class="form-hint" style="margin-bottom:4px;">可用性 Q</div>
+              <select id="createA" class="form-select" style="width:100%;">
+                <option value="1">1</option><option value="2" selected>2</option>
+                <option value="3">3</option><option value="4">4</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-panel">
+        <div class="preview-row">
+          <span class="preview-label"><i class="fa-solid fa-hashtag mr-1 text-slate-400"></i>編號預覽</span>
+          <span class="preview-value muted" id="previewId">請先選擇組別與類別</span>
+        </div>
+        <div class="preview-row">
+          <span class="preview-label"><i class="fa-solid fa-gauge-high mr-1 text-slate-400"></i>資產價值 (O+P+Q)</span>
+          <span class="preview-value" id="previewValue">6</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" id="btnCreateCancel">取消</button>
+        <button class="btn-modal-confirm" id="btnCreateConfirm">
+          <i class="fa-solid fa-check"></i>確認新增
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Asset Modal -->
+  <div class="modal-overlay hidden" id="editModal">
+    <div class="modal-box create-box">
+      <div class="modal-title"><i class="fa-solid fa-pen mr-2 text-blue-600"></i>編輯資訊資產</div>
+      <div class="modal-sub">類別、組別與編號不可修改。CIA 調整後資產價值會自動重算。</div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label">編號(不可修改)</label>
+          <input id="editId" class="form-input" type="text" readonly style="background:#f8fafc;color:#64748b;" />
+        </div>
+        <div class="form-field">
+          <label class="form-label">組別(不可修改)</label>
+          <input id="editGroup" class="form-input" type="text" readonly style="background:#f8fafc;color:#64748b;" />
+        </div>
+        <div class="form-field full">
+          <label class="form-label">類別(不可修改)</label>
+          <input id="editCategory" class="form-input" type="text" readonly style="background:#f8fafc;color:#64748b;" />
+        </div>
+        <div class="form-field full">
+          <label class="form-label" for="editName">資產名稱<span class="req">*</span></label>
+          <input id="editName" class="form-input" type="text" maxlength="100" />
+        </div>
+        <div class="form-field full">
+          <label class="form-label" for="editDesc">說明</label>
+          <textarea id="editDesc" class="form-textarea" rows="3"></textarea>
+        </div>
+        <div class="form-field full">
+          <label class="form-label" for="editStatus">使用狀態<span class="req">*</span></label>
+          <select id="editStatus" class="form-select"><option value="">請選擇</option></select>
+        </div>
+        <div class="form-field full">
+          <label class="form-label">CIA 評估(1 低 ~ 4 高)<span class="req">*</span></label>
+          <div class="cia-group">
+            <div>
+              <div class="form-hint" style="margin-bottom:4px;">機密性 O</div>
+              <select id="editC" class="form-select" style="width:100%;">
+                <option value="1">1</option><option value="2">2</option>
+                <option value="3">3</option><option value="4">4</option>
+              </select>
+            </div>
+            <div>
+              <div class="form-hint" style="margin-bottom:4px;">完整性 P</div>
+              <select id="editI" class="form-select" style="width:100%;">
+                <option value="1">1</option><option value="2">2</option>
+                <option value="3">3</option><option value="4">4</option>
+              </select>
+            </div>
+            <div>
+              <div class="form-hint" style="margin-bottom:4px;">可用性 Q</div>
+              <select id="editA" class="form-select" style="width:100%;">
+                <option value="1">1</option><option value="2">2</option>
+                <option value="3">3</option><option value="4">4</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-panel">
+        <div class="preview-row">
+          <span class="preview-label"><i class="fa-solid fa-gauge-high mr-1 text-slate-400"></i>資產價值 (O+P+Q)</span>
+          <span class="preview-value" id="editPreviewValue">6</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-modal-cancel" id="btnEditCancel">取消</button>
+        <button class="btn-modal-confirm" id="btnEditConfirm">
+          <i class="fa-solid fa-check"></i>儲存變更
+        </button>
+      </div>
+    </div>
+  </div>
+
 
 
     <!-- Toast 容器 -->
@@ -903,7 +1098,15 @@
       document.getElementById('ismsSearch').addEventListener('input', debounce(filterIsmsSelect, 300));
 
       // 資訊資產選擇
-      document.getElementById('ismsAssetSelect').addEventListener('change', function() {
+      document.getElementById('ismsAssetSelect').addEventListener('change', function(e) {
+        const val = e.target.value;
+        const btnEdit = document.getElementById('btnEditIsms');
+        const btnDelete = document.getElementById('btnDeleteIsms');
+        if (btnEdit) btnEdit.disabled = !val;
+        if (btnDelete) {
+          btnDelete.disabled = !val || !isCurrentUserAdmin;
+          btnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
+        }
         updateCreateMappingBtn();
         refreshCreateMappingBtnLabel();
       });
@@ -947,6 +1150,13 @@
       sel.disabled = !isCurrentUserAdmin || !businessProcessOptionsAvailable;
       sel.title = hint;
       updateCreateMappingBtn();
+      
+      const ismsSel = document.getElementById('ismsAssetSelect');
+      const btnDelete = document.getElementById('btnDeleteIsms');
+      if (btnDelete && ismsSel) {
+        btnDelete.disabled = !ismsSel.value || !isCurrentUserAdmin;
+        btnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
+      }
     }
 
     /**
@@ -2526,6 +2736,342 @@
         enhanceSearchBox();
       });
     })();
+
+    // --- ISMS Management Modals (Create / Edit / Delete) ---
+    
+    // Globals for dropdown options
+    let ismsDropdowns = null;
+    let ismsDropdownsLoading = false;
+    
+    function fillSelect(selectEl, items, includeCode) {
+      if (!selectEl) return;
+      while (selectEl.options.length > 1) selectEl.remove(1);
+      (items || []).forEach(it => {
+        const opt = document.createElement('option');
+        opt.value = it.display;
+        opt.textContent = it.display;
+        if (includeCode && it.code) opt.dataset.code = it.code;
+        selectEl.appendChild(opt);
+      });
+    }
+
+    function populateCreateForm() {
+      const d = ismsDropdowns || {};
+      fillSelect(document.getElementById('createCategory'), d.categories, true);
+      fillSelect(document.getElementById('createGroup'), d.groups, true);
+      fillSelect(document.getElementById('createStatus'), d.statuses, false);
+      fillSelect(document.getElementById('createBusinessProcess'), d.businessProcesses, false);
+    }
+
+    function preloadDropdowns() {
+      if (ismsDropdowns || ismsDropdownsLoading) return;
+      ismsDropdownsLoading = true;
+      google.script.run
+        .withSuccessHandler(res => {
+          ismsDropdownsLoading = false;
+          if (res && res.success) {
+            ismsDropdowns = {
+              categories: res.categories || [],
+              groups: res.groups || [],
+              statuses: res.statuses || [],
+              businessProcesses: res.businessProcesses || []
+            };
+            if (document.getElementById('createModal').classList.contains('open')) {
+              populateCreateForm();
+              updateCreatePreview();
+            }
+          } else {
+            console.warn('讀取下拉選項失敗:', res && res.error);
+          }
+        })
+        .withFailureHandler(err => {
+          ismsDropdownsLoading = false;
+          console.warn('讀取下拉選項失敗:', err);
+        })
+        .getDropdownOptions();
+    }
+
+    function updateCreatePreview() {
+      const c = Number(document.getElementById('createC').value) || 0;
+      const i = Number(document.getElementById('createI').value) || 0;
+      const a = Number(document.getElementById('createA').value) || 0;
+      document.getElementById('previewValue').textContent = String(c + i + a);
+
+      const gSel = document.getElementById('createGroup');
+      const cSel = document.getElementById('createCategory');
+      const gCode = gSel.selectedOptions[0] ? gSel.selectedOptions[0].dataset.code : '';
+      const cCode = cSel.selectedOptions[0] ? cSel.selectedOptions[0].dataset.code : '';
+      const prev = document.getElementById('previewId');
+      if (gCode && cCode) {
+        prev.textContent = `${gCode}-${cCode}-???`;
+        prev.classList.remove('muted');
+      } else {
+        prev.textContent = '請先選擇組別與類別';
+        prev.classList.add('muted');
+      }
+    }
+
+    function openCreateModal() {
+      document.getElementById('createName').value = '';
+      document.getElementById('createDesc').value = '';
+      document.getElementById('createC').value = '2';
+      document.getElementById('createI').value = '2';
+      document.getElementById('createA').value = '2';
+
+      if (ismsDropdowns) {
+        populateCreateForm();
+        document.getElementById('createCategory').value = '';
+        document.getElementById('createGroup').value = '';
+        document.getElementById('createStatus').value = '';
+        document.getElementById('createBusinessProcess').value = '';
+      } else {
+        [['createCategory', '載入中...'], ['createGroup', '載入中...'], ['createStatus', '載入中...'], ['createBusinessProcess', '載入中...']].forEach(([id, label]) => {
+          const sel = document.getElementById(id);
+          while (sel.options.length > 1) sel.remove(1);
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = label;
+          opt.disabled = true;
+          sel.appendChild(opt);
+        });
+        preloadDropdowns();
+      }
+
+      updateCreatePreview();
+      document.getElementById('createModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('createName').focus(), 100);
+    }
+
+    function closeCreateModal() {
+      document.getElementById('createModal').classList.add('hidden');
+    }
+
+    function submitCreate() {
+      const categorySel = document.getElementById('createCategory');
+      const groupSel = document.getElementById('createGroup');
+      const statusSel = document.getElementById('createStatus');
+      const businessProcessSel = document.getElementById('createBusinessProcess');
+      const categoryDisplay = categorySel.value.trim();
+      const groupDisplay = groupSel.value.trim();
+      const statusDisplay = statusSel.value.trim();
+      const businessProcess = businessProcessSel.value.trim();
+      const categoryCode = categorySel.selectedOptions[0] ? (categorySel.selectedOptions[0].dataset.code || '') : '';
+      const groupCode = groupSel.selectedOptions[0] ? (groupSel.selectedOptions[0].dataset.code || '') : '';
+      const name = document.getElementById('createName').value.trim();
+      const description = document.getElementById('createDesc').value.trim();
+      const c = Number(document.getElementById('createC').value);
+      const i = Number(document.getElementById('createI').value);
+      const a = Number(document.getElementById('createA').value);
+
+      if (!categoryDisplay) return showToast('請選擇類別', 'error');
+      if (!groupDisplay) return showToast('請選擇組別', 'error');
+      if (!categoryCode) return showToast('類別缺少代號', 'error');
+      if (!groupCode) return showToast('組別缺少代號', 'error');
+      if (!name) return showToast('請輸入資產名稱', 'error');
+      if (!statusDisplay) return showToast('請選擇使用狀態', 'error');
+      
+      for (const [label, v] of [['機密性', c], ['完整性', i], ['可用性', a]]) {
+        if (!Number.isInteger(v) || v < 1 || v > 4) return showToast(`${label}必須介於 1~4`, 'error');
+      }
+      
+      const btn = document.getElementById('btnCreateConfirm');
+      const origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>建立中...';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          if (res && res.success) {
+            closeCreateModal();
+            showToast(`已建立 ${res.ismsAssetId}`, 'success');
+            loadAssets(); 
+            loadIsmsAssets();
+          } else {
+            showToast('建立失敗:' + (res && res.error ? res.error : '未知錯誤'), 'error');
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          showToast('建立失敗:' + (err && err.message ? err.message : err), 'error');
+        })
+        .createIsmsAsset({
+          categoryDisplay, categoryCode,
+          groupDisplay, groupCode,
+          name, description,
+          statusDisplay,
+          businessProcess,
+          confidentiality: c, integrity: i, availability: a
+        });
+    }
+
+    function handleEditIsmsClick() {
+      const select = document.getElementById('ismsAssetSelect');
+      const ismsId = select.value;
+      if (!ismsId) return;
+      openEditModal(ismsId);
+    }
+
+    function openEditModal(ismsAssetId) {
+      const asset = allIsmsAssets.find(a => (a.ismsAssetId || '') === ismsAssetId);
+      if (!asset) { showToast('找不到資產:' + ismsAssetId, 'error'); return; }
+
+      document.getElementById('editId').value = asset.ismsAssetId || '';
+      document.getElementById('editCategory').value = asset.category || '';
+      document.getElementById('editGroup').value = asset.group || '';
+      document.getElementById('editName').value = asset.name || '';
+      document.getElementById('editDesc').value = asset.description || '';
+
+      const statusSel = document.getElementById('editStatus');
+      while (statusSel.options.length > 1) statusSel.remove(1);
+      const statuses = (ismsDropdowns && ismsDropdowns.statuses) || [];
+      statuses.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.display;
+        opt.textContent = s.display;
+        statusSel.appendChild(opt);
+      });
+      statusSel.value = asset.status || '';
+
+      const c = Math.max(1, Math.min(4, Number(asset.confidentiality) || 2));
+      const i = Math.max(1, Math.min(4, Number(asset.integrity) || 2));
+      const a = Math.max(1, Math.min(4, Number(asset.availability) || 2));
+      document.getElementById('editC').value = String(c);
+      document.getElementById('editI').value = String(i);
+      document.getElementById('editA').value = String(a);
+      document.getElementById('editPreviewValue').textContent = String(c + i + a);
+
+      document.getElementById('editModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('editName').focus(), 100);
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.add('hidden');
+    }
+
+    function updateEditPreview() {
+      const c = Number(document.getElementById('editC').value) || 0;
+      const i = Number(document.getElementById('editI').value) || 0;
+      const a = Number(document.getElementById('editA').value) || 0;
+      document.getElementById('editPreviewValue').textContent = String(c + i + a);
+    }
+
+    function submitEdit() {
+      const ismsAssetId = document.getElementById('editId').value.trim();
+      const name = document.getElementById('editName').value.trim();
+      const description = document.getElementById('editDesc').value.trim();
+      const statusDisplay = document.getElementById('editStatus').value.trim();
+      const c = Number(document.getElementById('editC').value);
+      const i = Number(document.getElementById('editI').value);
+      const a = Number(document.getElementById('editA').value);
+
+      if (!name) return showToast('請輸入資產名稱', 'error');
+      if (!statusDisplay) return showToast('請選擇使用狀態', 'error');
+
+      for (const [label, v] of [['機密性', c], ['完整性', i], ['可用性', a]]) {
+        if (!Number.isInteger(v) || v < 1 || v > 4) return showToast(`${label}必須介於 1~4`, 'error');
+      }
+
+      const btn = document.getElementById('btnEditConfirm');
+      const origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>儲存中...';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          if (res && res.success) {
+            closeEditModal();
+            showToast(res.noChange ? '沒有變更' : `已更新 ${res.ismsAssetId}`, 'success');
+            if (!res.noChange) {
+              loadAssets(); 
+              loadIsmsAssets();
+            }
+          } else {
+            showToast('更新失敗:' + (res && res.error ? res.error : '未知錯誤'), 'error');
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          showToast('更新失敗:' + (err && err.message ? err.message : err), 'error');
+        })
+        .updateIsmsAsset({
+          ismsAssetId, name, description, statusDisplay,
+          confidentiality: c, integrity: i, availability: a
+        });
+    }
+
+    function handleDeleteIsmsClick() {
+      const select = document.getElementById('ismsAssetSelect');
+      const ismsId = select.value;
+      if (!ismsId) return;
+
+      const assetName = select.options[select.selectedIndex].text;
+      
+      if (!confirm(`確認要刪除「${assetName}」嗎？\n\n警告：這將會同步解除所有對照此分類的實體資產綁定狀態，且無法復原！`)) {
+        return;
+      }
+
+      showToast('正在刪除資訊資產...', 'info');
+      const btn = document.getElementById('btnDeleteIsms');
+      btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.disabled = false;
+          if (res.success) {
+            showToast('刪除成功！對照關係已更新。', 'success');
+            document.getElementById('ismsAssetSelect').value = '';
+            document.getElementById('btnEditIsms').disabled = true;
+            document.getElementById('btnDeleteIsms').disabled = true;
+            loadAssets();
+            loadIsmsAssets();
+          } else {
+            showToast('刪除失敗: ' + res.error, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          showToast('伺服器錯誤: ' + err.message, 'error');
+        })
+        .deleteIsmsAsset(ismsId, '從對照作業頁面刪除');
+    }
+
+    // Attach Event Listeners on load
+    window.addEventListener('load', function() {
+      // Create Listeners
+      const btnCreateCancel = document.getElementById('btnCreateCancel');
+      if (btnCreateCancel) btnCreateCancel.addEventListener('click', closeCreateModal);
+      const btnCreateConfirm = document.getElementById('btnCreateConfirm');
+      if (btnCreateConfirm) btnCreateConfirm.addEventListener('click', submitCreate);
+      const createModal = document.getElementById('createModal');
+      if (createModal) createModal.addEventListener('click', e => { if (e.target === createModal) closeCreateModal(); });
+      
+      ['createC', 'createI', 'createA', 'createGroup', 'createCategory'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', updateCreatePreview);
+      });
+
+      // Edit Listeners
+      const btnEditCancel = document.getElementById('btnEditCancel');
+      if (btnEditCancel) btnEditCancel.addEventListener('click', closeEditModal);
+      const btnEditConfirm = document.getElementById('btnEditConfirm');
+      if (btnEditConfirm) btnEditConfirm.addEventListener('click', submitEdit);
+      const editModal = document.getElementById('editModal');
+      if (editModal) editModal.addEventListener('click', e => { if (e.target === editModal) closeEditModal(); });
+      
+      ['editC', 'editI', 'editA'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', updateEditPreview);
+      });
+
+      preloadDropdowns();
+    });
+
   </script>
 </body>
 </html>
