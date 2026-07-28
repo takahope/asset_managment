@@ -660,10 +660,25 @@
               </div>
             </div>
 
-            <!-- 獨立一列的資訊資產下拉選單 -->
-            <div class="mb-4">
+            <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
+            <div class="flex flex-wrap items-center gap-4 mb-4">
               <select id="ismsFilter" class="select-input" onchange="setIsmsFilter(this.value)">
                 <option value="">全部資訊資產</option>
+              </select>
+              <select id="assetNameFilter" class="select-input">
+                <option value="">全部資產名稱(數量)</option>
+              </select>
+              <select id="leaderFilter" class="select-input">
+                <option value="">全部保管人</option>
+              </select>
+              <select id="userFilter" class="select-input">
+                <option value="">全部使用人</option>
+              </select>
+              <select id="locationFilter" class="select-input">
+                <option value="">全部地點(數量)</option>
+              </select>
+              <select id="isoBasisFilter" class="select-input">
+                <option value="">全部認證依據(資產數量/資訊資產數量)</option>
               </select>
             </div>
 
