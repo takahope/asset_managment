@@ -649,6 +649,9 @@
               <select id="ismsFilter" class="select-input" style="max-width: 200px; text-overflow: ellipsis;" onchange="setIsmsFilter(this.value)">
                 <option value="">全部資訊資產</option>
               </select>
+              <select id="categoryFilter" class="select-input" style="width: 120px;" onchange="setFilterState('category', this.value)">
+                <option value="">全部類別</option>
+              </select>
               <select id="assetNameFilter" class="select-input" style="max-width: 200px; text-overflow: ellipsis;" onchange="setFilterState('assetName', this.value)">
                 <option value="">全部資產名稱(數量)</option>
               </select>
@@ -1168,6 +1171,7 @@
       mappedStatus: '',   // '' = 全部 | 'mapped' | 'unmapped'
       usageStatus: '',    // '' = 全部使用狀態
       ismsAssetId: '',    // '' = 全部資訊資產
+      category: '',       // '' = 全部類別
       isoScope: '',       // '' = 全部 | 'V' 在範圍 | '?' 待判定 | 'out' 不在範圍 | 'unmapped' 未對照
       assetName: '',
       leaderName: '',
@@ -1227,6 +1231,9 @@
       }
       if (excludeDim !== 'ismsAssetId' && filterState.ismsAssetId) {
         if (asset.mappedIsmsAssetId !== filterState.ismsAssetId) return false;
+      }
+      if (excludeDim !== 'category' && filterState.category) {
+        if ((asset.category || '') !== filterState.category) return false;
       }
       if (excludeDim !== 'usageStatus' && filterState.usageStatus) {
         if (String(asset.usageStatus || '').trim() !== filterState.usageStatus) return false;
@@ -1470,11 +1477,14 @@
     }
 
     function renderOtherFilterOptions() {
-      var nameCounts = {}, leaderCounts = {}, userCounts = {}, locCounts = {};
+      var nameCounts = {}, leaderCounts = {}, userCounts = {}, locCounts = {}, catCounts = {};
       var isoBasisMap = {};
       
       for (var i = 0; i < allAssets.length; i++) {
         var a = allAssets[i];
+        
+        var cat = String(a.category || '').trim();
+        if (cat) catCounts[cat] = (catCounts[cat] || 0) + 1;
         
         var aName = String(a.assetName || '').trim();
         if (aName) nameCounts[aName] = (nameCounts[aName] || 0) + 1;
@@ -1521,6 +1531,12 @@
           html += '<option value="' + escapeHtml(val) + '">' + escapeHtml(display) + '</option>';
         }
         return html;
+      }
+
+      var selCat = document.getElementById('categoryFilter');
+      if (selCat) {
+        selCat.innerHTML = buildOptions(catCounts, '全部類別', false);
+        selCat.value = filterState.category;
       }
 
       var selName = document.getElementById('assetNameFilter');
