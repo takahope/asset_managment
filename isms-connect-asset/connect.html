@@ -665,19 +665,19 @@
               <select id="ismsFilter" class="select-input" onchange="setIsmsFilter(this.value)">
                 <option value="">全部資訊資產</option>
               </select>
-              <select id="assetNameFilter" class="select-input">
+              <select id="assetNameFilter" class="select-input" onchange="setFilterState('assetName', this.value)">
                 <option value="">全部資產名稱(數量)</option>
               </select>
-              <select id="leaderFilter" class="select-input">
+              <select id="leaderFilter" class="select-input" onchange="setFilterState('leaderName', this.value)">
                 <option value="">全部保管人</option>
               </select>
-              <select id="userFilter" class="select-input">
+              <select id="userFilter" class="select-input" onchange="setFilterState('userName', this.value)">
                 <option value="">全部使用人</option>
               </select>
-              <select id="locationFilter" class="select-input">
+              <select id="locationFilter" class="select-input" onchange="setFilterState('location', this.value)">
                 <option value="">全部地點(數量)</option>
               </select>
-              <select id="isoBasisFilter" class="select-input">
+              <select id="isoBasisFilter" class="select-input" onchange="setFilterState('isoBasis', this.value)">
                 <option value="">全部認證依據(資產數量/資訊資產數量)</option>
               </select>
             </div>
@@ -1045,6 +1045,7 @@
             allAssets = result.assets;
             applyFilters();            // 表格 + 統計卡 + 晶片列，並保留使用者當前的篩選條件
             renderIsmsFilterOptions(); // 選項來自 allAssets 的對照結果，兩支載入誰先到都要重繪
+            renderOtherFilterOptions(); // 其他 5 個佔位篩選器
             if (onDone) onDone();      // 渲染完才回呼：呼叫端要讀更新後的 allAssets
           } else {
             renderTableError('載入資產失敗：' + (result.error || '未知錯誤'));
@@ -1063,6 +1064,7 @@
             allIsmsAssets = result.assets;
             populateIsmsSelect();      // 對照用選單
             renderIsmsFilterOptions(); // 主清單的資訊資產篩選器
+            renderOtherFilterOptions(); // 其他 5 個佔位篩選器
           } else {
             disableIsmsSelectors('資訊資產載入失敗：' + (result.error || '未知錯誤'));
           }
@@ -1158,7 +1160,12 @@
       group: '',          // '' = 全部組別
       mappedStatus: '',   // '' = 全部 | 'mapped' | 'unmapped'
       ismsAssetId: '',    // '' = 全部資訊資產
-      isoScope: ''        // '' = 全部 | 'V' 在範圍 | '?' 待判定 | 'out' 不在範圍 | 'unmapped' 未對照
+      isoScope: '',       // '' = 全部 | 'V' 在範圍 | '?' 待判定 | 'out' 不在範圍 | 'unmapped' 未對照
+      assetName: '',
+      leaderName: '',
+      userName: '',
+      location: '',
+      isoBasis: ''
     };
 
     /**
@@ -1216,6 +1223,21 @@
       // 排除自己那一維 —— 否則點下去其他選項全部歸零就再也點不回來。
       if (excludeDim !== 'isoScope' && filterState.isoScope) {
         if (isoStateOf(asset) !== filterState.isoScope) return false;
+      }
+      if (excludeDim !== 'assetName' && filterState.assetName) {
+        if (asset.assetName !== filterState.assetName) return false;
+      }
+      if (excludeDim !== 'leaderName' && filterState.leaderName) {
+        if (asset.leaderName !== filterState.leaderName) return false;
+      }
+      if (excludeDim !== 'userName' && filterState.userName) {
+        if (asset.userName !== filterState.userName) return false;
+      }
+      if (excludeDim !== 'location' && filterState.location) {
+        if (asset.location !== filterState.location) return false;
+      }
+      if (excludeDim !== 'isoBasis' && filterState.isoBasis) {
+        if (asset.isoBasis !== filterState.isoBasis) return false;
       }
       return true;
     }
@@ -1390,6 +1412,96 @@
     function setIsmsFilter(ismsAssetId) {
       filterState.ismsAssetId = ismsAssetId || '';
       applyFilters();
+    }
+
+    function setFilterState(key, value) {
+      filterState[key] = value || '';
+      applyFilters();
+    }
+
+    function renderOtherFilterOptions() {
+      var nameCounts = {}, leaderCounts = {}, userCounts = {}, locCounts = {};
+      var isoBasisMap = {};
+      
+      for (var i = 0; i < allAssets.length; i++) {
+        var a = allAssets[i];
+        
+        var aName = String(a.assetName || '').trim();
+        if (aName) nameCounts[aName] = (nameCounts[aName] || 0) + 1;
+        
+        var leader = String(a.leaderName || '').trim();
+        if (leader) leaderCounts[leader] = (leaderCounts[leader] || 0) + 1;
+        
+        var user = String(a.userName || '').trim();
+        if (user) userCounts[user] = (userCounts[user] || 0) + 1;
+        
+        var loc = String(a.location || '').trim();
+        if (loc) locCounts[loc] = (locCounts[loc] || 0) + 1;
+        
+        var basis = String(a.isoBasis || '').trim();
+        if (basis) {
+          if (!isoBasisMap[basis]) {
+            isoBasisMap[basis] = { count: 0, ismsSet: new Set() };
+          }
+          isoBasisMap[basis].count++;
+          if (a.mappedIsmsAssetId) {
+            isoBasisMap[basis].ismsSet.add(a.mappedIsmsAssetId);
+          }
+        }
+      }
+
+      function buildOptions(counts, defaultText, useCount) {
+        var keys = Object.keys(counts).sort(function(x, y) { return x.localeCompare(y, 'zh-TW'); });
+        var html = '<option value="">' + defaultText + '</option>';
+        for (var k = 0; k < keys.length; k++) {
+          var val = keys[k];
+          var display = val;
+          if (useCount) display += ' (' + counts[val] + ')';
+          html += '<option value="' + escapeHtml(val) + '">' + escapeHtml(display) + '</option>';
+        }
+        return html;
+      }
+      
+      function buildIsoBasisOptions(map, defaultText) {
+        var keys = Object.keys(map).sort(function(x, y) { return x.localeCompare(y, 'zh-TW'); });
+        var html = '<option value="">' + defaultText + '</option>';
+        for (var k = 0; k < keys.length; k++) {
+          var val = keys[k];
+          var display = val + ' (' + map[val].count + '/' + map[val].ismsSet.size + ')';
+          html += '<option value="' + escapeHtml(val) + '">' + escapeHtml(display) + '</option>';
+        }
+        return html;
+      }
+
+      var selName = document.getElementById('assetNameFilter');
+      if (selName) {
+        selName.innerHTML = buildOptions(nameCounts, '全部資產名稱(數量)', true);
+        selName.value = filterState.assetName;
+      }
+      
+      var selLeader = document.getElementById('leaderFilter');
+      if (selLeader) {
+        selLeader.innerHTML = buildOptions(leaderCounts, '全部保管人', false);
+        selLeader.value = filterState.leaderName;
+      }
+      
+      var selUser = document.getElementById('userFilter');
+      if (selUser) {
+        selUser.innerHTML = buildOptions(userCounts, '全部使用人', false);
+        selUser.value = filterState.userName;
+      }
+      
+      var selLoc = document.getElementById('locationFilter');
+      if (selLoc) {
+        selLoc.innerHTML = buildOptions(locCounts, '全部地點(數量)', true);
+        selLoc.value = filterState.location;
+      }
+      
+      var selBasis = document.getElementById('isoBasisFilter');
+      if (selBasis) {
+        selBasis.innerHTML = buildIsoBasisOptions(isoBasisMap, '全部認證依據(資產數量/資訊資產數量)');
+        selBasis.value = filterState.isoBasis;
+      }
     }
 
     // ==========================================
