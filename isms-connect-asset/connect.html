@@ -710,6 +710,11 @@
                   <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
                   <span class="whitespace-nowrap">駐站</span>
                 </label>
+                <select id="filterLabel" class="select-input" style="min-width: 0; width: 70px;" onchange="setFilterState('label', this.value)">
+                  <option value="">標</option>
+                  <option value="blue" class="text-blue-700">藍</option>
+                  <option value="green" class="text-green-700">綠</option>
+                </select>
               </div>
             </div>
 
@@ -1465,7 +1470,8 @@
       userName: '',
       location: '',
       stationOnly: false,
-      isoBasis: ''
+      isoBasis: '',
+      label: ''
     };
 
     /**
@@ -1552,6 +1558,16 @@
 
       if (excludeDim !== 'isoBasis' && filterState.isoBasis) {
         if (asset.isoBasis !== filterState.isoBasis) return false;
+      }
+      
+      if (excludeDim !== 'label' && filterState.label) {
+        var loc = String(asset.location || '').trim();
+        if (loc !== 'B219' && loc !== '園區B219') return false;
+        if (String(asset.category || '').trim() !== 'HW') return false;
+        
+        var conf = String(asset.confidentiality || '').trim();
+        if (filterState.label === 'blue' && conf !== '4') return false;
+        if (filterState.label === 'green' && conf !== '3') return false;
       }
       return true;
     }

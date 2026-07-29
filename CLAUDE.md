@@ -133,3 +133,11 @@ return {
 - 根因(overflow 軸向連動裁切)：`.hero-action-row`(`alpine_views.html:667`)為讓按鈕列在小螢幕可水平捲動而設 `overflow-x: auto`；CSS 規範規定 overflow-x 為非 `visible` 值時，原本 `visible` 的 `overflow-y` 會被強制計算成 `auto` → 該列同時變垂直裁切框。徽章 `.sidebar-badge`(`userstate_alpine.html:328`)`top: -6px` 浮出按鈕上緣，該列無 padding-top → 那 6px 落在 padding box 外被裁切。裁切不受堆疊順序影響，故 `z-index` 無效；桌機版 `@media (min-width:768px)` 改回 `overflow-x: visible`(`alpine_views.html:696`)故正常。
 - 修法：`.hero-action-row` 加 `padding-top: 8px`(容納徽章 6px 溢出 + 餘裕)，桌機媒體查詢一併 `padding-top: 0` 維持零位移；保留水平捲動與角落浮出視覺。`z-index: 50` 保留(對徽章向右探入相鄰按鈕的水平方向仍有防護、且無害)。
 - 通則已沉澱：`gas-fullstack` CSS/佈局節「overflow-x:auto 逼 overflow-y 變 auto → 浮出元素被裁」。檔案：`alpine_views.html`。
+
+### 2026-07-29 新增 B219 硬體標籤篩選功能 (connect.html)
+- 症狀：使用者希望在盤點系統 (`connect.html`) 也能像首頁一樣，快速篩選出 B219 且需要貼機密標籤的硬體資產。
+- 根因：`connect.html` 的過濾邏輯與首頁獨立，且 `getAssetsWithMappingStatus` 未回傳 `confidentiality` 屬性。
+- 修法：
+  1. `code.js`：在回傳的資產與虛擬資產物件中加入 `confidentiality: ismsAsset ? ismsAsset.confidentiality : ''`。
+  2. `connect.html`：於駐站篩選框後方新增 `<select id="filterLabel">`。
+  3. `connect.html`：將 `label` 加入 `filterState`，並在 `matchesFilters` 中實作「地點 B219/園區B219 且 category 為 HW 且 confidentiality 為 4(藍) 或 3(綠)」的過濾邏輯。

@@ -575,7 +575,8 @@ function getAssetsWithMappingStatus(options = {}) {
         isoJudgedAt: mapping ? mapping.isoJudgedAt : '',
         usageStatus: ismsAsset ? ismsAsset.status : '',
         businessProcess: ismsAsset ? ismsAsset.businessProcess : '',
-        category: ismsAsset ? ismsAsset.category : ''
+        category: ismsAsset ? ismsAsset.category : '',
+        confidentiality: ismsAsset ? ismsAsset.confidentiality : ''
       };
     });
 
@@ -606,7 +607,8 @@ function getAssetsWithMappingStatus(options = {}) {
             isoJudgedAt: '',
             usageStatus: ismsAsset.status,
             businessProcess: ismsAsset.businessProcess,
-            category: ismsAsset.category
+            category: ismsAsset.category,
+            confidentiality: ismsAsset.confidentiality
           });
         }
       });
