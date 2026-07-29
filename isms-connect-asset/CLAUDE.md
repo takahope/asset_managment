@@ -223,6 +223,12 @@ clearIsoScopeCache()      // 改完 HR 組織架構樹 I 欄（認證駐站）�
 
 ## 事件紀錄
 
+### 2026-07-29 修復 ISO 範圍掃描「進入範圍」明細遺漏顯示問題
+- 背景：測試執行範圍掃描時，畫面數量統計顯示「有 1 台進入範圍的資產」，下方卻沒有列出是哪一台。
+- 原因：在 `connect.html` 的 `renderIsoScanReport` 渲染邏輯中，當初開發時實作了 `r.diff.leaving.length`（離開範圍）的清單顯示，卻忘記對應實作 `r.diff.entering.length`（進入範圍）的顯示區塊。
+- 做法：比照「離開範圍」的樣板，補上針對 `r.diff.entering.length` 的 `<ul><li>` 清單生成邏輯，並同樣套用最多顯示 20 台及 `escapeHtml` 處理。
+
+
 ### 2026-07-28 connect.html 批次指定業務流程
 - 動機：ISO 判定的 `PENDING`（非駐站 + 業務流程未填）在系統內無解——`createIsmsAsset` 會寫 V 欄，但 `updateIsmsAsset` 完全不碰它，業務流程建立後只能手動改試算表。
 - **關鍵發現：「建立對照時順帶填」與「批次修改既有」是同一件事。** 動作條的 `ismsAssetSelect` 從 `allIsmsAssets` 填充，永遠只能選既有資訊資產，`createMappings` 不會建立新的——所以兩條路的寫入對象與波及範圍相同，共用同一支端點與同一個確認流程。設計初期以為前者比較安全，是錯的。

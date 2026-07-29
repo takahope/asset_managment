@@ -46,6 +46,7 @@ PRs should include:
 - Web app access is domain-restricted in `appsscript.json`; confirm this matches deployment needs.
 
 ## Event Log
+- 2026-07-29: Fixed missing "entering scope" (進入範圍) asset list display in isoScanModal of `connect.html`.
 - 2026-07-23: Added "Tag Error" (`tag`) type alongside "Location Error" and "Keeper Error", with dedicated sky-colored action button, distinct notification email copy, modal sky badge, and updated Sheet export mapping.
 - 2026-07-23: Added "Keeper Error" type alongside "Location Error", with dedicated action buttons, distinct notification email copy, and expanded CSV export header schema.
 - 2026-07-20: Replaced single-select Font Awesome chevrons in `alpine_views.html` with CSS-drawn chevrons to avoid missing icon rendering.

@@ -1937,6 +1937,16 @@
         '↗ 進入範圍 ' + r.diff.entering.length + ' 台　' +
         '↙ 離開範圍 ' + r.diff.leaving.length + ' 台</div>');
 
+      if (r.diff.entering.length) {
+        rows.push('<div class="mb-3">進入範圍：<ul class="list-disc ml-6">' +
+          r.diff.entering.slice(0, 20).map(function(x) {
+            return '<li>' + escapeHtml(x.assetId) + ' ' + escapeHtml(x.assetName) +
+                   '（' + escapeHtml(x.location) + '）→ ' + escapeHtml(x.basis) + '</li>';
+          }).join('') + '</ul>' +
+          (r.diff.entering.length > 20 ? '<em>僅顯示前 20 台，完整清單請按「匯出核對」</em>' : '') +
+          '</div>');
+      }
+
       if (r.diff.leaving.length) {
         rows.push('<div class="mb-3">離開範圍：<ul class="list-disc ml-6">' +
           r.diff.leaving.slice(0, 20).map(function(x) {
