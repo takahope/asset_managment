@@ -553,6 +553,61 @@
     .btn-modal-confirm { padding: 10px 24px; border-radius: 8px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; border: none; }
     .btn-modal-confirm:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(37,99,235,0.3); }
     .btn-modal-confirm:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Filter Drawer Styles */
+    .filter-drawer-wrapper {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      z-index: 40;
+    }
+    .filter-drawer-wrapper.is-open {
+      grid-template-rows: 1fr;
+    }
+    .filter-drawer-inner {
+      overflow: hidden;
+    }
+    .filter-drawer-tab {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60px;
+      height: 24px;
+      background-color: white;
+      border-radius: 0 0 50px 50px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 41;
+      transition: background-color 0.2s;
+    }
+    .filter-drawer-tab:hover {
+      background-color: #f8fafc;
+    }
+    .filter-drawer-tab i {
+      color: #64748b;
+      font-size: 14px;
+      transition: transform 0.4s;
+    }
+    .filter-drawer-wrapper.is-open .filter-drawer-tab i {
+      transform: rotate(180deg);
+    }
+
+    /* Breathing Animation */
+    @keyframes breatheTab {
+      0%, 100% { transform: translate(-50%, 0); }
+      50% { transform: translate(-50%, 3px); }
+    }
+    .filter-drawer-wrapper:not(.is-open) .filter-drawer-tab {
+      animation: breatheTab 2s infinite ease-in-out;
+    }
+    .filter-drawer-wrapper:not(.is-open) .filter-drawer-tab:hover {
+      animation: none;
+    }
   </style>
 </head>
 <body>
@@ -608,8 +663,11 @@
         </div>
       </div>
 
-      <div class="card mb-6 p-6">
-        <div class="flex flex-wrap items-center gap-4 mb-6">
+      <!-- 新增抽屜外層 -->
+      <div class="filter-drawer-wrapper" id="filterDrawerWrapper">
+        <div class="filter-drawer-inner">
+          <div class="card mb-6 p-6" style="border-top-left-radius: 0; border-top-right-radius: 0; border-top: none;">
+            <div class="flex flex-wrap items-center gap-4 mb-6">
           <input type="text" id="assetSearch" class="search-input" style="max-width: 200px;" placeholder="搜尋所有欄位...">
               <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
                 <i class="fas fa-camera mr-2"></i>掃描條碼
@@ -748,7 +806,13 @@
               <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">組別：</span>
               <div class="chip-row flex-1 min-w-0" id="groupChips"></div>
             </div>
-      </div>
+          </div> <!-- closing card -->
+        </div> <!-- closing filter-drawer-inner -->
+        <!-- 下拉環 -->
+        <div class="filter-drawer-tab" id="filterDrawerTab" title="展開/收合篩選器">
+          <i class="fa-solid fa-chevron-down"></i>
+        </div>
+      </div> <!-- closing filter-drawer-wrapper -->
 
       <div class="card overflow-hidden mb-6">
         <div class="overflow-x-auto">
@@ -3364,6 +3428,77 @@
         .saveBusinessProcessSettings(sheetId, config);
     }
 
+    // --- Filter Drawer Logic ---
+    let drawerTimeout = null;
+    let isFilterDrawerFocused = false;
+
+    function toggleFilterDrawer(forceOpen) {
+      const wrapper = document.getElementById('filterDrawerWrapper');
+      if (!wrapper) return;
+      
+      if (typeof forceOpen === 'boolean') {
+        wrapper.classList.toggle('is-open', forceOpen);
+      } else {
+        wrapper.classList.toggle('is-open');
+      }
+    }
+
+    function handleDrawerMouseLeave() {
+      // 如果內部有焦點，暫停自動收合
+      if (isFilterDrawerFocused) return;
+      
+      drawerTimeout = setTimeout(() => {
+        toggleFilterDrawer(false);
+      }, 300);
+    }
+
+    function handleDrawerMouseEnter() {
+      clearTimeout(drawerTimeout);
+      toggleFilterDrawer(true);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const wrapper = document.getElementById('filterDrawerWrapper');
+      const tab = document.getElementById('filterDrawerTab');
+      
+      if (wrapper && tab) {
+        // 拉環點擊切換
+        tab.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFilterDrawer();
+        });
+        
+        // 移入與移出
+        wrapper.addEventListener('mouseenter', handleDrawerMouseEnter);
+        wrapper.addEventListener('mouseleave', handleDrawerMouseLeave);
+        
+        // 監聽焦點進入與離開 (防呆機制)
+        wrapper.addEventListener('focusin', () => {
+          isFilterDrawerFocused = true;
+          clearTimeout(drawerTimeout); // 確保不會收合
+        });
+        
+        // 點選 select 或 checkbox 造成 change 時，保持開啟狀態
+        wrapper.addEventListener('change', () => {
+          isFilterDrawerFocused = true; 
+        });
+
+        // 點擊外部強制收合
+        document.addEventListener('click', (e) => {
+          if (!wrapper.contains(e.target)) {
+            isFilterDrawerFocused = false; // 解除防呆
+            toggleFilterDrawer(false); // 收合
+          }
+        });
+      }
+    });
+
+    // 全域滑鼠 Y 座標偵測 (靠近上方邊緣時自動展開)
+    document.addEventListener('mousemove', (e) => {
+      if (e.clientY < 30) {
+        handleDrawerMouseEnter();
+      }
+    });
   </script>
 </body>
 </html>
