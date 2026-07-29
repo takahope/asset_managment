@@ -1561,7 +1561,7 @@
       }
       
       if (excludeDim !== 'label' && filterState.label) {
-        var loc = String(asset.location || '').trim();
+        var loc = String(asset.ismsLocation || '').trim();
         if (loc !== 'B219' && loc !== '園區B219') return false;
         if (String(asset.category || '').trim() !== 'HW') return false;
         

@@ -135,9 +135,9 @@ return {
 - 通則已沉澱：`gas-fullstack` CSS/佈局節「overflow-x:auto 逼 overflow-y 變 auto → 浮出元素被裁」。檔案：`alpine_views.html`。
 
 ### 2026-07-29 新增 B219 硬體標籤篩選功能 (connect.html)
-- 症狀：使用者希望在盤點系統 (`connect.html`) 也能像首頁一樣，快速篩選出 B219 且需要貼機密標籤的硬體資產。
-- 根因：`connect.html` 的過濾邏輯與首頁獨立，且 `getAssetsWithMappingStatus` 未回傳 `confidentiality` 屬性。
+- 症狀：使用者希望在盤點系統 (`connect.html`) 也能像首頁一樣，快速篩選出 B219 且需要貼機密標籤的硬體資產。但實作後發現無法篩選出任何項目。
+- 根因：`connect.html` 的過濾邏輯原先比對的是實體資產的 `location`，但對於未對照的虛擬 ISMS 資產，其 `location` 被寫死為 `'-'`，導致 `loc === 'B219'` 永遠不成立；另外 `getAssetsWithMappingStatus` 也未回傳 `confidentiality` 屬性。
 - 修法：
-  1. `code.js`：在回傳的資產與虛擬資產物件中加入 `confidentiality: ismsAsset ? ismsAsset.confidentiality : ''`。
+  1. `code.js`：在回傳的資產與虛擬資產物件中加入 `confidentiality` 與 `ismsLocation`。
   2. `connect.html`：於駐站篩選框後方新增 `<select id="filterLabel">`。
-  3. `connect.html`：將 `label` 加入 `filterState`，並在 `matchesFilters` 中實作「地點 B219/園區B219 且 category 為 HW 且 confidentiality 為 4(藍) 或 3(綠)」的過濾邏輯。
+  3. `connect.html`：將 `label` 加入 `filterState`，並在 `matchesFilters` 中改為比對 `ismsLocation`，確認其為 B219/園區B219 且 category 為 HW 且 confidentiality 為 4(藍) 或 3(綠)。
