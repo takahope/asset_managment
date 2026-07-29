@@ -2187,6 +2187,24 @@
       document.getElementById('selectedCount').textContent = selectedAssetIds.size;
       renderSelectedList();
       renderActionBar();
+      
+      // 根據第一次選擇的項目自動帶入資訊資產編號
+      var sel = document.getElementById('ismsAssetSelect');
+      if (sel) {
+        var newValue = '';
+        if (selectedAssetIds.size > 0) {
+          var firstId = Array.from(selectedAssetIds)[0];
+          var firstAsset = allAssets.find(function(a) { return a.assetId === firstId; });
+          if (firstAsset) {
+            newValue = firstAsset.mappedIsmsAssetId || '';
+          }
+        }
+        if (sel.value !== newValue) {
+          sel.value = newValue;
+          sel.dispatchEvent(new Event('change'));
+        }
+      }
+
       updateApplyBusinessProcessBtn();
       refreshCreateMappingBtnLabel();
     }
