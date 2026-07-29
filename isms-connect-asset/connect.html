@@ -680,6 +680,9 @@
                   </div>
                 </div>
               </div>
+              <button class="btn-secondary text-gray-600 hover:text-red-500" title="清除所有篩選條件" onclick="clearAllFilters()">
+                <i class="fas fa-eraser mr-1"></i>清除篩選
+              </button>
             </div>
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
@@ -1642,6 +1645,40 @@
       renderUsageStatusChips();
       renderGroupChips();
       renderIsoChips();
+    }
+
+    function clearAllFilters() {
+      // 1. 重置單一真相狀態
+      filterState = {
+        keyword: '', group: '', mappedStatus: '', usageStatus: '',
+        ismsAssetId: '', category: '', isoScope: '', assetName: '',
+        leaderName: '', userName: '', location: '', stationOnly: false,
+        isoBasis: '', label: ''
+      };
+
+      // 2. 清空前端所有的 select 與 input
+      var textInputs = ['assetSearch'];
+      var selects = [
+        'ismsFilter', 'categoryFilter', 'assetNameFilter', 'leaderFilter',
+        'userFilter', 'isoBasisFilter', 'locationFilter', 'filterLabel'
+      ];
+      var checkboxes = ['stationOnlyCb'];
+
+      textInputs.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      selects.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      checkboxes.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.checked = false;
+      });
+
+      // 3. 觸發總重繪 (會呼叫 renderAssetTable 與所有 Chips 的 render)
+      applyFilters();
     }
 
     function setUsageStatusFilter(status) {
