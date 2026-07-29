@@ -1225,6 +1225,15 @@
         btnDelete.disabled = !ismsSel.value || !isCurrentUserAdmin;
         btnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
       }
+
+      var btnSettings = document.getElementById('btnSettings');
+      if (btnSettings) {
+        if (isCurrentUserAdmin) {
+          btnSettings.classList.remove('hidden');
+        } else {
+          btnSettings.classList.add('hidden');
+        }
+      }
     }
 
     /**
@@ -3137,8 +3146,129 @@
         if (el) el.addEventListener('change', updateEditPreview);
       });
 
+      const settingsModal = document.getElementById('settingsModal');
+      if (settingsModal) settingsModal.addEventListener('click', e => { if (e.target === settingsModal) closeSettingsModal(); });
+
       preloadDropdowns();
     });
+
+    // --- Settings Modal Logic ---
+    let currentRawDynamicList = [];
+
+    function openSettingsModal() {
+      document.getElementById('settingsModal').classList.remove('hidden');
+      const btn = document.getElementById('btnSaveSettings');
+      btn.disabled = true;
+      btn.textContent = '載入中...';
+      
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.textContent = '儲存設定';
+          if (res.error) showToast(res.error, 'error');
+          renderSettings(res);
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = '儲存設定';
+          showToast('讀取設定失敗: ' + err.message, 'error');
+        })
+        .getBusinessProcessSettings();
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').classList.add('hidden');
+    }
+
+    function renderSettings(data) {
+      document.getElementById('settingSheetId').value = data.sheetId || '';
+      currentRawDynamicList = data.rawDynamicList || [];
+      const settings = data.settings || { staticProcesses: [], dynamicMap: {} };
+      const dMap = settings.dynamicMap || {};
+      
+      const dynTbody = document.getElementById('settingsDynamicList');
+      dynTbody.innerHTML = '';
+      if (currentRawDynamicList.length === 0) {
+        dynTbody.innerHTML = '<tr><td colspan="3" class="px-3 py-4 text-center text-gray-500">無動態清單資料 (請確認系統清冊 ID 是否正確)</td></tr>';
+      } else {
+        currentRawDynamicList.forEach(rawName => {
+          const mapInfo = dMap[rawName] || { mappedName: '', isIso: false };
+          const tr = document.createElement('tr');
+          tr.className = 'dyn-row hover:bg-gray-50';
+          tr.innerHTML = `
+            <td class="px-3 py-2 align-middle text-gray-700 font-medium dyn-raw-name">${escapeHtml(rawName)}</td>
+            <td class="px-3 py-2 align-middle"><input type="text" class="dyn-map-name w-full px-2 py-1 border border-gray-300 rounded text-sm focus:border-blue-500 focus:outline-none" value="${escapeHtml(mapInfo.mappedName || '')}" placeholder="對照名稱"></td>
+            <td class="px-3 py-2 align-middle text-center"><input type="checkbox" class="dyn-iso-chk w-4 h-4 text-blue-600 border-gray-300 rounded" ${mapInfo.isIso ? 'checked' : ''}></td>
+          `;
+          dynTbody.appendChild(tr);
+        });
+      }
+
+      const statTbody = document.getElementById('settingsStaticList');
+      statTbody.innerHTML = '';
+      const staticProcs = settings.staticProcesses || [];
+      staticProcs.forEach(p => {
+        addStaticProcessRow(p.name, p.isIso);
+      });
+    }
+
+    function addStaticProcessRow(name = '', isIso = false) {
+      const tbody = document.getElementById('settingsStaticList');
+      const tr = document.createElement('tr');
+      tr.className = 'stat-row hover:bg-gray-50';
+      tr.innerHTML = `
+        <td class="px-3 py-2 align-middle"><input type="text" class="stat-name w-full px-2 py-1 border border-gray-300 rounded text-sm focus:border-blue-500 focus:outline-none" value="${escapeHtml(name)}" placeholder="靜態流程名稱"></td>
+        <td class="px-3 py-2 align-middle text-center"><input type="checkbox" class="stat-iso-chk w-4 h-4 text-blue-600 border-gray-300 rounded" ${isIso ? 'checked' : ''}></td>
+        <td class="px-3 py-2 align-middle text-center"><button class="text-red-500 hover:text-red-700 p-1" onclick="this.closest('tr').remove()"><i class="fas fa-trash"></i></button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    function saveSettings() {
+      const sheetId = document.getElementById('settingSheetId').value.trim();
+      
+      const config = { staticProcesses: [], dynamicMap: {} };
+      
+      document.querySelectorAll('.stat-row').forEach(tr => {
+        const name = tr.querySelector('.stat-name').value.trim();
+        const isIso = tr.querySelector('.stat-iso-chk').checked;
+        if (name) {
+          config.staticProcesses.push({ name, isIso });
+        }
+      });
+      
+      const dynRows = document.querySelectorAll('.dyn-row');
+      dynRows.forEach(tr => {
+        const rawName = tr.querySelector('.dyn-raw-name').textContent;
+        const mappedName = tr.querySelector('.dyn-map-name').value.trim();
+        const isIso = tr.querySelector('.dyn-iso-chk').checked;
+        if (mappedName || isIso) {
+          config.dynamicMap[rawName] = { mappedName, isIso };
+        }
+      });
+
+      const btn = document.getElementById('btnSaveSettings');
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '儲存中...';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.textContent = origText;
+          if (res.success) {
+            showToast('設定已儲存', 'success');
+            closeSettingsModal();
+            preloadDropdowns();
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = origText;
+          showToast('儲存失敗: ' + err.message, 'error');
+        })
+        .saveBusinessProcessSettings(sheetId, config);
+    }
 
   </script>
 </body>
