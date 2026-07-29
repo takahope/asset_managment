@@ -610,7 +610,7 @@
 
       <div class="card mb-6 p-6">
         <div class="flex flex-wrap items-center gap-4 mb-6">
-          <input type="text" id="assetSearch" class="search-input" style="max-width: 200px;" placeholder="搜尋資產編號、名稱、保管人...">
+          <input type="text" id="assetSearch" class="search-input" style="max-width: 200px;" placeholder="搜尋所有欄位...">
               <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
                 <i class="fas fa-camera mr-2"></i>掃描條碼
               </button>
@@ -1515,10 +1515,17 @@
     function matchesFilters(asset, excludeDim) {
       if (excludeDim !== 'keyword' && filterState.keyword) {
         var k = filterState.keyword.toLowerCase();
-        var hit = asset.assetId.toLowerCase().indexOf(k) >= 0 ||
-                  asset.assetName.toLowerCase().indexOf(k) >= 0 ||
-                  asset.leaderName.toLowerCase().indexOf(k) >= 0 ||
-                  asset.location.toLowerCase().indexOf(k) >= 0;
+        var hit = Object.keys(asset).some(function(key) {
+          var val = asset[key];
+          return val != null && String(val).toLowerCase().indexOf(k) >= 0;
+        });
+        
+        // 追加檢查前端自訂的顯示狀態
+        if (!hit) {
+          var mappedText = asset.isMapped ? '已對照' : '未對照';
+          hit = mappedText.indexOf(k) >= 0 || isoLabelOf(asset).toLowerCase().indexOf(k) >= 0;
+        }
+        
         if (!hit) return false;
       }
       if (excludeDim !== 'group' && filterState.group) {
