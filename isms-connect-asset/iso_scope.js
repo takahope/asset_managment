@@ -366,7 +366,8 @@ function computeIsoScopePlan_() {
 
   const assetResult = getAssetsWithMappingStatus();
   if (!assetResult.success) throw new Error('讀取資產清單失敗:' + assetResult.error);
-  const assets = assetResult.assets;
+  // 排除為了前端顯示而動態產生的「無對應資產/消耗品」虛擬紀錄，避免其被當成需要自動補號的實體資產
+  const assets = assetResult.assets.filter(a => a.assetId !== '無對應資產/消耗品');
 
   const ismsResult = getIsmsAssets();
   if (!ismsResult.success) throw new Error('讀取資訊資產失敗:' + ismsResult.error);

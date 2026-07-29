@@ -223,6 +223,11 @@ clearIsoScopeCache()      // 改完 HR 組織架構樹 I 欄（認證駐站）�
 
 ## 事件紀錄
 
+### 2026-07-29 修正 ISO 範圍掃描將「空殼資訊資產」誤判為「未比對的實體資產」並排入自動補號的問題
+- 背景：當一筆資訊資產有分類編號，但底下尚未綁定任何實體資產時，系統在執行 ISO 範圍掃描，會錯誤地將其放入「將自動補號」清單。
+- 原因：為了讓前端能顯示空殼資訊資產，`getAssetsWithMappingStatus()` 會動態塞入 `assetId: '無對應資產/消耗品'` 且 `isMapped: false` 的虛擬紀錄。而 `computeIsoScopePlan_` 取得資產清單後未過濾虛擬紀錄，直接因 `isMapped: false` 將其視為未對照的實體資產，觸發了自動補號邏輯。
+- 做法：在 `iso_scope.js` 中的 `computeIsoScopePlan_` 取得資產清單後，透過 `filter(a => a.assetId !== '無對應資產/消耗品')` 直接將虛擬紀錄排除，使其不再參與自動補號與範圍判定。
+
 ### 2026-07-29 修復 ISO 範圍掃描「進入範圍」明細遺漏顯示問題
 - 背景：測試執行範圍掃描時，畫面數量統計顯示「有 1 台進入範圍的資產」，下方卻沒有列出是哪一台。
 - 原因：在 `connect.html` 的 `renderIsoScanReport` 渲染邏輯中，當初開發時實作了 `r.diff.leaving.length`（離開範圍）的清單顯示，卻忘記對應實作 `r.diff.entering.length`（進入範圍）的顯示區塊。
