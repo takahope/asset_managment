@@ -46,6 +46,7 @@ PRs should include:
 - Web app access is domain-restricted in `appsscript.json`; confirm this matches deployment needs.
 
 ## Event Log
+- 2026-07-29: Added a dedicated "Hardware Label" filter dropdown to `index.html` for identifying B219 HW assets requiring specific confidentiality labels (Blue=Level 4, Green=Level 3).
 - 2026-07-29: Fixed issue in `iso_scope.js` where virtual records (`assetId: '無對應資產/消耗品'`) representing empty ISMS assets were incorrectly treated as unmapped physical assets and queued for auto-creation.
 - 2026-07-29: Fixed missing "entering scope" (進入範圍) asset list display in isoScanModal of `connect.html`.
 - 2026-07-23: Added "Tag Error" (`tag`) type alongside "Location Error" and "Keeper Error", with dedicated sky-colored action button, distinct notification email copy, modal sky badge, and updated Sheet export mapping.

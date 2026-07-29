@@ -726,7 +726,7 @@
 
     <!-- Filters -->
     <section class="card p-4 md:p-5 mb-5">
-      <div class="grid grid-cols-1 md:grid-cols-7 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-8 gap-3">
         <div class="md:col-span-2 relative">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
           <input id="searchInput" class="field pl-9" placeholder="搜尋編號 / 名稱 / 說明 / 地點…" />
@@ -735,6 +735,11 @@
         <select id="filterUnit" class="field"><option value="">全部權責單位</option></select>
         <select id="filterStatus" class="field"><option value="">全部狀態</option></select>
         <select id="filterProcess" class="field"><option value="">全部業務流程</option></select>
+        <select id="filterLabel" class="field">
+          <option value="">全部標籤</option>
+          <option value="blue" class="text-blue-700">藍色標籤 (機密)</option>
+          <option value="green" class="text-green-700">綠色標籤 (密)</option>
+        </select>
         <div class="range-wrap" title="篩選資產價值範圍（數字）">
           <label><i class="fa-solid fa-chart-simple text-slate-400 mr-1"></i>價值</label>
           <input id="filterValueMin" class="range-input" type="number" min="1" max="12" placeholder="1" />
@@ -1324,6 +1329,7 @@
       const unit = $('filterUnit').value;
       const statusVal = $('filterStatus').value;
       const processVal = $('filterProcess').value;
+      const labelVal = $('filterLabel').value;
       const rawMin = $('filterValueMin').value.trim();
       const rawMax = $('filterValueMax').value.trim();
       const valMin = rawMin !== '' ? Number(rawMin) : null;
@@ -1334,6 +1340,13 @@
         if (unit && (a.responsibleUnit || '').trim() !== unit) return false;
         if (statusVal && (a.status || '').trim() !== statusVal) return false;
         if (processVal && (a.businessProcess || '').trim() !== processVal) return false;
+        if (labelVal) {
+          const loc = (a.location || '').trim();
+          if (loc !== 'B219' && loc !== '園區B219') return false;
+          if ((a.category || '').trim() !== 'HW') return false;
+          if (labelVal === 'blue' && String(a.confidentiality).trim() !== '4') return false;
+          if (labelVal === 'green' && String(a.confidentiality).trim() !== '3') return false;
+        }
         if (valMin !== null || valMax !== null) {
           const n = parseAssetValue(a.assetValue);
           if (n === null) return false;
@@ -1410,6 +1423,7 @@
       $('filterUnit').value = '';
       $('filterStatus').value = '';
       $('filterProcess').value = '';
+      $('filterLabel').value = '';
       $('filterValueMin').value = '';
       $('filterValueMax').value = '';
       applyFilters();
@@ -2029,6 +2043,7 @@
       $('filterUnit').addEventListener('change', applyFilters);
       $('filterStatus').addEventListener('change', applyFilters);
       $('filterProcess').addEventListener('change', applyFilters);
+      $('filterLabel').addEventListener('change', applyFilters);
       $('filterValueMin').addEventListener('input', applyFilters);
       $('filterValueMax').addEventListener('input', applyFilters);
       $('btnClear').addEventListener('click', clearFilters);
