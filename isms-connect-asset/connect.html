@@ -642,6 +642,10 @@
                       <span>資產名稱</span>
                     </label>
                     <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="assetAliasOrSerial" checked onchange="updateColumnVisibility()">
+                      <span>資產別名/序號</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
                       <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="brand" checked onchange="updateColumnVisibility()">
                       <span>廠牌型號</span>
                     </label>
@@ -753,6 +757,7 @@
                     </th>
                     <th class="col-asset-id" data-col="assetId">資產編號</th>
                     <th class="col-asset-name" data-col="assetName">資產名稱</th>
+                    <th class="col-asset-alias-serial" data-col="assetAliasOrSerial">資產別名/序號</th>
                     <th class="col-brand" data-col="brand">廠牌型號</th>
                     <th class="col-person" data-col="leaderName">保管人</th>
                     <th class="col-person" data-col="userName">使用人</th>
@@ -768,7 +773,7 @@
                 </thead>
                 <tbody id="assetTableBody">
                   <tr>
-                    <td colspan="12" class="text-center py-8 text-gray-500">
+                    <td colspan="15" class="text-center py-8 text-gray-500">
                       <div class="loading-spinner mx-auto mb-2"></div>
                       載入中...
                     </td>
@@ -1318,7 +1323,7 @@
     /** 失敗時把 loading spinner 收斂成錯誤列，附重試入口（PLAYBOOK §4-9） */
     function renderTableError(message) {
       document.getElementById('assetTableBody').innerHTML =
-        '<tr><td colspan="12" class="text-center py-8">' +
+        '<tr><td colspan="15" class="text-center py-8">' +
         '<div class="text-red-600 mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>' +
         escapeHtml(message) + '</div>' +
         '<button class="btn-secondary" onclick="loadAssets()">' +
@@ -1332,7 +1337,7 @@
      */
     function loadAssets(onDone) {
       document.getElementById('assetTableBody').innerHTML = `
-        <tr><td colspan="12" class="text-center py-8 text-gray-500">
+        <tr><td colspan="15" class="text-center py-8 text-gray-500">
           <div class="loading-spinner mx-auto mb-2"></div>載入中...
         </td></tr>`;
 
@@ -1394,7 +1399,7 @@
       const tbody = document.getElementById('assetTableBody');
 
       if (assets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="15" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
         return;
       }
 
@@ -1407,6 +1412,7 @@
             </td>
             <td class="font-mono text-sm" data-col="assetId">${escapeHtml(asset.assetId)}</td>
             <td data-col="assetName"><div class="cell-name">${escapeHtml(asset.assetName)}</div></td>
+            <td data-col="assetAliasOrSerial"><div class="cell-name">${escapeHtml(asset.assetAliasOrSerial || '-')}</div></td>
             <td data-col="brand"><div class="cell-brand">${escapeHtml(asset.modelBrand || '-')}</div></td>
             <td data-col="leaderName">${escapeHtml(asset.leaderName)}</td>
             <td data-col="userName">${escapeHtml(asset.userName)}</td>

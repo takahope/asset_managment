@@ -457,6 +457,8 @@ function mapRowToAssetObject_(row, indices, sourceSheet) {
   return {
     assetId: row[indices.ASSET_ID - 1] ? row[indices.ASSET_ID - 1].toString() : '',
     assetName: row[indices.ASSET_NAME - 1] ? row[indices.ASSET_NAME - 1].toString() : '',
+    assetAliasOrSerial: (indices.ASSET_ALIAS && row[indices.ASSET_ALIAS - 1]) ? row[indices.ASSET_ALIAS - 1].toString() : 
+                        (indices.PRODUCT_SERIAL && row[indices.PRODUCT_SERIAL - 1]) ? row[indices.PRODUCT_SERIAL - 1].toString() : '',
     modelBrand: row[indices.MODEL_BRAND - 1] ? row[indices.MODEL_BRAND - 1].toString() : '',
     location: row[indices.LOCATION - 1] ? row[indices.LOCATION - 1].toString() : '',
     leaderName: row[indices.LEADER_NAME - 1] ? row[indices.LEADER_NAME - 1].toString() : '',
