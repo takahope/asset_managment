@@ -627,7 +627,9 @@
               <button id="btnCreate" class="btn-secondary text-blue-600 border-blue-200" title="新增資訊資產" onclick="openCreateModal()">
                 <i class="fa-solid fa-plus mr-1"></i><span class="hidden sm:inline">新增分類</span>
               </button>
-              
+              <button id="btnSettings" class="btn-secondary hidden" title="系統設定" onclick="openSettingsModal()">
+                <i class="fas fa-cog text-gray-600"></i>
+              </button>
               <!-- 顯示欄位切換 -->
               <div class="relative inline-block text-left">
                 <button class="btn-secondary" onclick="document.getElementById('colDropdown').classList.toggle('hidden')">
@@ -825,6 +827,72 @@
 
 
       <!-- Create Asset Modal -->
+  <!-- 系統設定 Modal -->
+  <div class="modal-overlay hidden" id="settingsModal">
+    <div class="modal-box" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto;">
+      <h3 class="text-xl font-bold text-gray-900 border-b pb-3 mb-4">
+        <i class="fas fa-cog text-gray-500 mr-2"></i>系統設定
+      </h3>
+      
+      <div class="space-y-6">
+        <!-- 系統清冊設定 -->
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <label class="block mb-2">
+            <span class="text-sm font-bold text-gray-700">系統清冊 Spreadsheet ID</span>
+            <input type="text" id="settingSheetId" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="輸入 Google Sheet ID">
+          </label>
+          <p class="text-xs text-gray-500">動態業務流程將從此試算表的「系統清冊」工作表 C 欄自動匯入。</p>
+        </div>
+
+        <!-- 動態業務流程 -->
+        <div>
+          <h4 class="text-md font-bold text-gray-800 mb-2">動態業務流程 (來自系統清冊)</h4>
+          <div class="bg-white border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-gray-100 text-gray-600 sticky top-0">
+                <tr>
+                  <th class="px-3 py-2">原始名稱 (系統清冊)</th>
+                  <th class="px-3 py-2">對照顯示名稱 (留白則用原名)</th>
+                  <th class="px-3 py-2 w-24 text-center">ISO 範圍</th>
+                </tr>
+              </thead>
+              <tbody id="settingsDynamicList" class="divide-y divide-gray-100">
+                <!-- 動態載入 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 靜態業務流程 -->
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <h4 class="text-md font-bold text-gray-800">靜態業務流程 (自訂新增)</h4>
+            <button class="btn-secondary text-xs" onclick="addStaticProcessRow()">+ 新增項目</button>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-gray-100 text-gray-600 sticky top-0">
+                <tr>
+                  <th class="px-3 py-2">業務流程名稱</th>
+                  <th class="px-3 py-2 w-24 text-center">ISO 範圍</th>
+                  <th class="px-3 py-2 w-16 text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody id="settingsStaticList" class="divide-y divide-gray-100">
+                <!-- 動態載入 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+        <button class="btn-secondary" onclick="closeSettingsModal()">取消</button>
+        <button id="btnSaveSettings" class="btn-primary" onclick="saveSettings()">儲存設定</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay hidden" id="createModal">
     <div class="modal-box create-box">
       <div class="modal-title"><i class="fa-solid fa-plus mr-2 text-blue-600"></i>新增資訊資產</div>
