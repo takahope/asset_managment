@@ -623,50 +623,11 @@
       </div>
     </nav>
 
-    <!-- 主內容區 -->
-    <main class="max-w-[1500px] mx-auto px-4 md:px-8 py-8">
-      <!-- 統計卡片（已移除，改用晶片列） -->
-
-      <!-- 移動裝置掃描大卡片 -->
-      <div class="mobile-scan-card">
-        <button
-          class="mobile-scan-card__button"
-          onclick="toggleScanner()"
-          aria-label="開啟相機掃描"
-        >
-          <span class="mobile-scan-card__icon" aria-hidden="true">
-            <i class="fas fa-camera"></i>
-          </span>
-          <span class="mobile-scan-card__title">Tap to Scan Item</span>
-          <span class="mobile-scan-card__subtitle">開啟相機掃描資產條碼</span>
-        </button>
-      </div>
-
-      <!-- 掃描器背景遮罩 -->
-      <div id="scannerBackdrop" class="scanner-backdrop" onclick="toggleScanner()"></div>
-
-      <!-- 條碼掃描區（彈出窗口） -->
-      <div id="scannerZone" class="scanner-zone">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-semibold text-gray-900">
-            <i class="fas fa-camera mr-2 text-blue-600"></i>條碼掃描器
-          </h3>
-          <button class="text-gray-500 hover:text-gray-700" onclick="toggleScanner()">
-            <i class="fas fa-times text-xl"></i>
-          </button>
-        </div>
-        <div id="scanner-reader">
-          <div class="scanner-overlay"></div>
-        </div>
-        <div id="scannerStatus" class="scanner-status scanning">
-          <i class="fas fa-spinner fa-spin mr-2"></i>準備掃描器...
-        </div>
-      </div>
-
       <!-- 新增抽屜外層 -->
       <div class="filter-drawer-wrapper" id="filterDrawerWrapper">
-        <div class="filter-drawer-inner">
-          <div class="card mb-6 p-6" style="border-top-left-radius: 0; border-top-right-radius: 0; border-top: none;">
+      <div class="filter-drawer-inner bg-slate-50 border-b border-slate-200 shadow-inner">
+        <div class="max-w-[1500px] mx-auto px-4 md:px-8 pt-6 pb-2">
+          <div class="card p-6" style="border-top-left-radius: 0; border-top-right-radius: 0; border-top: none;">
             <div class="flex flex-wrap items-center gap-4 mb-6">
           <input type="text" id="assetSearch" class="search-input" style="max-width: 200px;" placeholder="搜尋所有欄位...">
               <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
@@ -807,12 +768,55 @@
               <div class="chip-row flex-1 min-w-0" id="groupChips"></div>
             </div>
           </div> <!-- closing card -->
+        </div>
         </div> <!-- closing filter-drawer-inner -->
         <!-- 下拉環 -->
         <div class="filter-drawer-tab" id="filterDrawerTab" title="展開/收合篩選器">
           <i class="fa-solid fa-chevron-down"></i>
         </div>
       </div> <!-- closing filter-drawer-wrapper -->
+
+
+    <!-- 主內容區 -->
+    <main class="max-w-[1500px] mx-auto px-4 md:px-8 py-8">
+      <!-- 統計卡片（已移除，改用晶片列） -->
+
+      <!-- 移動裝置掃描大卡片 -->
+      <div class="mobile-scan-card">
+        <button
+          class="mobile-scan-card__button"
+          onclick="toggleScanner()"
+          aria-label="開啟相機掃描"
+        >
+          <span class="mobile-scan-card__icon" aria-hidden="true">
+            <i class="fas fa-camera"></i>
+          </span>
+          <span class="mobile-scan-card__title">Tap to Scan Item</span>
+          <span class="mobile-scan-card__subtitle">開啟相機掃描資產條碼</span>
+        </button>
+      </div>
+
+      <!-- 掃描器背景遮罩 -->
+      <div id="scannerBackdrop" class="scanner-backdrop" onclick="toggleScanner()"></div>
+
+      <!-- 條碼掃描區（彈出窗口） -->
+      <div id="scannerZone" class="scanner-zone">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-gray-900">
+            <i class="fas fa-camera mr-2 text-blue-600"></i>條碼掃描器
+          </h3>
+          <button class="text-gray-500 hover:text-gray-700" onclick="toggleScanner()">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div id="scanner-reader">
+          <div class="scanner-overlay"></div>
+        </div>
+        <div id="scannerStatus" class="scanner-status scanning">
+          <i class="fas fa-spinner fa-spin mr-2"></i>準備掃描器...
+        </div>
+      </div>
+
 
       <div class="card overflow-hidden mb-6">
         <div class="overflow-x-auto">
