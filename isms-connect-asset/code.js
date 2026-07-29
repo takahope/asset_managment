@@ -661,6 +661,56 @@ function getAssetsWithMappingStatus(options = {}) {
 // ==========================================
 
 /**
+ * 取得業務流程設定與系統清冊的動態清單
+ */
+function getBusinessProcessSettings() {
+  const props = PropertiesService.getScriptProperties();
+  const sheetId = props.getProperty('SYSTEM_INVENTORY_SPREADSHEET_ID') || '';
+  const settingsStr = props.getProperty('BUSINESS_PROCESS_SETTINGS');
+  const settings = settingsStr ? JSON.parse(settingsStr) : { staticProcesses: [], dynamicMap: {} };
+
+  let rawDynamicList = [];
+  let errorMsg = null;
+
+  if (sheetId) {
+    try {
+      const ss = SpreadsheetApp.openById(sheetId);
+      const sheet = ss.getSheetByName('系統清冊');
+      if (sheet) {
+        const lastRow = sheet.getLastRow();
+        if (lastRow > 1) {
+          const vals = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+          const set = new Set();
+          for (let i = 0; i < vals.length; i++) {
+            const v = String(vals[i][0]).trim();
+            if (v) set.add(v);
+          }
+          rawDynamicList = Array.from(set);
+        }
+      } else {
+        errorMsg = '找不到「系統清冊」工作表';
+      }
+    } catch (e) {
+      console.warn("Cannot read system inventory sheet: " + e.message);
+      errorMsg = '無法讀取系統清冊，請檢查 ID 與權限: ' + e.message;
+    }
+  }
+
+  return { sheetId, rawDynamicList, settings, error: errorMsg };
+}
+
+/**
+ * 儲存業務流程設定
+ */
+function saveBusinessProcessSettings(sheetId, settingsConfig) {
+  assertWriteAccess_(true); // admin only
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('SYSTEM_INVENTORY_SPREADSHEET_ID', (sheetId || '').trim());
+  props.setProperty('BUSINESS_PROCESS_SETTINGS', JSON.stringify(settingsConfig));
+  return { success: true };
+}
+
+/**
  * 讀取「下拉選單」工作表，一次批次回傳類別 / 組別 / 狀態三組
  * B 欄 = 定位 key、C 欄 = 顯示文字、D 欄 = 代號
  */
@@ -700,15 +750,59 @@ function getDropdownOptions() {
         if (key === '資訊資產類別' || key === '類別') categories.push({ display, code });
         else if (key === '組別') groups.push({ display, code });
         else if (key === '資訊資產狀態' || key === '資產狀態' || key === '狀態') statuses.push({ display, code });
-        else if (key === '業務流程') {
-          businessProcesses.push({ display, isCertified: isCertifiedFlagValue_(certFlag) });
-        }
       }
     }
 
-    // 診斷:讓三種失敗模式在執行記錄裡可分辨——
-    // 這行沒出現=線上是舊版 code.js;業務流程 0 筆=B 欄 key 不符;
-    // 有筆數但已認證 0 筆=E 欄旗標值不被接受。
+    // --- 讀取業務流程 (靜態 + 動態) ---
+    const props = PropertiesService.getScriptProperties();
+    const invSheetId = props.getProperty('SYSTEM_INVENTORY_SPREADSHEET_ID') || '';
+    const settingsStr = props.getProperty('BUSINESS_PROCESS_SETTINGS');
+    const bpSettings = settingsStr ? JSON.parse(settingsStr) : { staticProcesses: [], dynamicMap: {} };
+
+    if (bpSettings.staticProcesses) {
+      bpSettings.staticProcesses.forEach(p => {
+        businessProcesses.push({ display: p.name, isCertified: !!p.isIso });
+      });
+    }
+
+    if (invSheetId) {
+      try {
+        const invSs = SpreadsheetApp.openById(invSheetId);
+        const invSheet = invSs.getSheetByName('系統清冊');
+        if (invSheet && invSheet.getLastRow() > 1) {
+          const vals = invSheet.getRange(2, 3, invSheet.getLastRow() - 1, 1).getValues();
+          const rawSet = new Set();
+          vals.forEach(r => {
+            const v = String(r[0]).trim();
+            if (v) rawSet.add(v);
+          });
+          
+          rawSet.forEach(rawName => {
+            const mapInfo = bpSettings.dynamicMap && bpSettings.dynamicMap[rawName];
+            const display = (mapInfo && mapInfo.mappedName) ? mapInfo.mappedName : rawName;
+            const isCertified = mapInfo ? !!mapInfo.isIso : false;
+            businessProcesses.push({ display, isCertified });
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to read system inventory in getDropdownOptions: " + e.message);
+      }
+    }
+
+    // 去重複 (以 display 為 key)
+    const uniqueBpMap = new Map();
+    businessProcesses.forEach(bp => {
+      if (!uniqueBpMap.has(bp.display)) {
+        uniqueBpMap.set(bp.display, bp);
+      } else {
+        if (bp.isCertified) uniqueBpMap.get(bp.display).isCertified = true;
+      }
+    });
+    const finalBusinessProcesses = Array.from(uniqueBpMap.values());
+    businessProcesses.length = 0;
+    businessProcesses.push(...finalBusinessProcesses);
+
+    // 診斷:讓失敗模式在執行記錄裡可分辨
     const certifiedCount = businessProcesses.filter(p => p.isCertified).length;
     console.log(
       `下拉選單解析:業務流程 ${businessProcesses.length} 筆、已認證 ${certifiedCount} 筆` +
