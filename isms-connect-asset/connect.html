@@ -1188,13 +1188,13 @@
     const DEFAULT_COL_PREFS = [
       { id: 'checkbox', label: '', visible: true, unmovable: true },
       { id: 'assetId', label: '資產編號', visible: true, unmovable: true },
-      { id: 'assetName', label: '資產名稱', visible: true },
+      { id: 'assetName', label: '資產名稱', visible: false },
       { id: 'assetAliasOrSerial', label: '資產別名/序號', visible: true },
       { id: 'brand', label: '廠牌型號', visible: true },
-      { id: 'leaderName', label: '保管人', visible: true },
-      { id: 'userName', label: '使用人', visible: true },
-      { id: 'location', label: '地點', visible: true },
-      { id: 'group', label: '組別', visible: true },
+      { id: 'leaderName', label: '保管人', visible: false },
+      { id: 'userName', label: '使用人', visible: false },
+      { id: 'location', label: '地點', visible: false },
+      { id: 'group', label: '組別', visible: false },
       { id: 'mappedStatus', label: '連動狀態', visible: true },
       { id: 'usageStatus', label: '使用狀態', visible: true },
       { id: 'ismsAssetId', label: '資訊資產編號', visible: true },
@@ -1205,7 +1205,7 @@
     let currentColPrefs = [];
 
     function loadColSettings() {
-      const saved = localStorage.getItem('isms_connect_col_prefs_v1');
+      const saved = localStorage.getItem('isms_connect_col_prefs_v2');
       if (saved) {
         try {
           currentColPrefs = JSON.parse(saved);
@@ -1342,14 +1342,14 @@
       });
       
       currentColPrefs = newPrefs;
-      localStorage.setItem('isms_connect_col_prefs_v1', JSON.stringify(currentColPrefs));
+      localStorage.setItem('isms_connect_col_prefs_v2', JSON.stringify(currentColPrefs));
       
       applyColumnPreferences();
       closeColSettingsModal();
     }
 
     function resetColSettings() {
-      localStorage.removeItem('isms_connect_col_prefs_v1');
+      localStorage.removeItem('isms_connect_col_prefs_v2');
       loadColSettings();
       applyColumnPreferences();
       closeColSettingsModal();
