@@ -3224,8 +3224,21 @@
       // 暫停掃描但保持相機畫面
       function pauseScanner() {
         if (isScanning) {
-          Quagga.stop();      // Quagga.stop() 停止偵測但不釋放 video track
+          try {
+            Quagga.stop();      // Quagga.stop() 停止偵測但不釋放 video track
+          } catch(e) {
+            console.error('Error stopping Quagga:', e);
+          }
           isScanning = false;
+        }
+        
+        try {
+          var videoElement = document.querySelector('#scanner-reader video');
+          if (videoElement) {
+            videoElement.pause();
+          }
+        } catch (e) {
+          console.error('Error pausing video:', e);
         }
       }
 
@@ -3234,6 +3247,12 @@
         if (!isScanning && typeof Quagga !== 'undefined') {
           var videoElement = document.querySelector('#scanner-reader video');
           if (videoElement && videoElement.srcObject) {
+            try {
+              videoElement.play();
+            } catch (e) {
+              console.error('Error playing video:', e);
+            }
+            
             // 相機串流仍在，重新初始化 Quagga 偵測
             Quagga.init({
               inputStream: {
@@ -3289,7 +3308,11 @@
       // 完全停止掃描器並關閉相機
       function stopScanner() {
         if (isScanning) {
-          Quagga.stop();
+          try {
+            Quagga.stop();
+          } catch(e) {
+            console.error('Error stopping Quagga:', e);
+          }
           isScanning = false;
         }
 
