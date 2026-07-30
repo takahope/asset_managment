@@ -621,19 +621,61 @@
       animation: none;
     }
 
-    /* 掃描決策面板專用樣式 */
-    .scan-panel-overlay {
-      position: fixed; inset: 0; background: rgba(71,85,105,0.7); display: none; z-index: 3000; align-items: flex-start; justify-content: center; padding-top: 8vh;
+    /* 內嵌式動作決策面板（相機視窗下方） */
+    .embedded-action-panel {
+      margin-top: 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    .scan-panel-overlay.is-active { display: flex; }
-    .scan-panel-container {
-      background: #fff; width: 100%; max-width: 640px; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); max-height: 84vh; margin: 0 3vw;
+    .embedded-action-panel__header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .embedded-action-panel__body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+    }
+    .embedded-action-panel__footer {
+      padding: 12px 16px;
+      border-top: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .embedded-status-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+    .embedded-status-card--waiting {
+      background: #f0f9ff;
+      border: 1px solid #bfdbfe;
+    }
+    .embedded-status-card--success {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+    }
+    .embedded-status-icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+    }
+    .embedded-status-icon--waiting {
+      background: #dbeafe; color: #2563eb;
+    }
+    .embedded-status-icon--success {
+      background: #22c55e; color: #ffffff;
     }
     .scan-panel-meta-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; color: #475569; margin-bottom: 16px;
-    }
-    .scan-panel-form-section {
-      display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; flex: 1;
     }
   </style>
 </head>
@@ -797,6 +839,44 @@
         <div id="scannerStatus" class="scanner-status scanning">
           <i class="fas fa-spinner fa-spin mr-2"></i>準備掃描器...
         </div>
+
+        <!-- 下方：內嵌式動作決策面板（開啟相機時立即顯示） -->
+        <div id="embeddedActionPanel" class="embedded-action-panel">
+          <div class="embedded-action-panel__header">
+            <h5 class="font-bold text-gray-800">
+              <i class="fas fa-clipboard-check mr-2 text-blue-600"></i>動作決策面板
+            </h5>
+          </div>
+          <div class="embedded-action-panel__body">
+            <!-- 掃描結果狀態卡 -->
+            <div id="embeddedPanelStatusCard" class="embedded-status-card embedded-status-card--waiting">
+              <div>
+                <small id="embeddedPanelStatusLabel" class="text-xs">等待掃描</small>
+                <div id="embeddedPanelAssetId" class="font-bold text-lg mt-1">請對準條碼掃描</div>
+              </div>
+              <div id="embeddedPanelStatusIcon" class="embedded-status-icon embedded-status-icon--waiting">
+                <i class="fas fa-barcode"></i>
+              </div>
+            </div>
+            <!-- 動態 Meta 區塊 -->
+            <div id="embeddedPanelMetaContainer" class="scan-panel-meta-grid" style="display:none"></div>
+            <!-- 連動設定表單 -->
+            <div class="text-xs text-gray-500 mb-1 tracking-wider uppercase font-semibold">連動與業務流程設定</div>
+            <input type="text" id="scan-ismsSearch" class="search-input" placeholder="搜尋資訊資產...">
+            <div class="flex gap-2">
+              <select id="scan-ismsAssetSelect" class="select-input flex-1 bg-gray-50"><option value="">-- 請選擇資訊資產 --</option></select>
+              <button id="scan-btnEditIsms" class="btn-secondary px-3" disabled><i class="fas fa-edit"></i></button>
+              <button id="scan-btnDeleteIsms" class="btn-danger px-3" disabled><i class="fas fa-trash"></i></button>
+            </div>
+            <input type="text" id="scan-mappingRemarks" class="search-input" placeholder="備註（選填）">
+            <select id="scan-businessProcessSelect" class="select-input bg-gray-50"><option value="">-- 業務流程：不變更 --</option></select>
+          </div>
+          <div class="embedded-action-panel__footer">
+            <button id="scan-createMappingBtn" type="button" class="btn-primary w-full py-2 disabled:opacity-50" disabled onclick="handleUnifiedAction('scan')">
+              請先選擇資產與分類
+            </button>
+          </div>
+        </div>
       </div>
 
 
@@ -891,47 +971,7 @@
 
       <!-- Create Asset Modal -->
       
-  <!-- 掃描動作決策面板 -->
-  <div id="scanActionPanelOverlay" class="scan-panel-overlay" onclick="if(event.target===this) closeScanActionPanel()">
-    <div class="scan-panel-container action-panel-modal action-panel">
-      <!-- Header -->
-      <div class="action-panel__header p-4 border-b border-gray-200 flex justify-between items-center">
-        <h5 class="font-bold text-gray-800">動作決策面板</h5>
-        <button type="button" class="action-panel__secondary" onclick="closeScanActionPanel()">關閉</button>
-      </div>
-      <!-- Body -->
-      <div class="scan-panel-form-section">
-        <!-- 狀態卡片 -->
-        <div class="action-panel__status-card flex justify-between items-center bg-yellow-50 p-3 border border-yellow-200 rounded-lg mb-3">
-          <div>
-            <small class="text-yellow-800 text-xs">掃描結果</small>
-            <div id="scanPanelAssetId" class="font-bold text-lg mt-1">-</div>
-          </div>
-          <div class="bg-green-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs"><i class="fas fa-check"></i></div>
-        </div>
-        <!-- 動態 Meta 區塊 -->
-        <div id="scanPanelMetaContainer" class="scan-panel-meta-grid">
-          <!-- JS 將動態填入勾選的欄位 -->
-        </div>
-        <!-- 連動設定表單 -->
-        <div class="text-xs text-gray-500 mb-1 tracking-wider uppercase font-semibold">連動與業務流程設定</div>
-        <input type="text" id="scan-ismsSearch" class="search-input" placeholder="搜尋資訊資產...">
-        <div class="flex gap-2">
-          <select id="scan-ismsAssetSelect" class="select-input flex-1 bg-gray-50"><option value="">-- 請選擇資訊資產 --</option></select>
-          <button id="scan-btnEditIsms" class="btn-secondary px-3" disabled><i class="fas fa-edit"></i></button>
-          <button id="scan-btnDeleteIsms" class="btn-danger px-3" disabled><i class="fas fa-trash"></i></button>
-        </div>
-        <input type="text" id="scan-mappingRemarks" class="search-input" placeholder="備註（選填）">
-        <select id="scan-businessProcessSelect" class="select-input bg-gray-50"><option value="">-- 業務流程：不變更 --</option></select>
-      </div>
-      <!-- Footer -->
-      <div class="action-panel__footer p-4 border-t border-gray-200 bg-gray-50">
-        <button id="scan-createMappingBtn" type="button" class="btn-primary w-full py-2 disabled:opacity-50" disabled onclick="handleUnifiedAction('scan')">
-          請先選擇資產與分類
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- 舊的獨立 scanActionPanelOverlay 已移入 scannerZone 內嵌面板 -->
 
   <!-- 欄位設定 Modal -->
   <div id="colSettingsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
@@ -2632,8 +2672,8 @@
     // 對照操作
     // ==========================================
     function getActivePrefix() {
-      const scanPanel = document.getElementById('scanActionPanelOverlay');
-      return (scanPanel && scanPanel.classList.contains('is-active')) ? 'scan-' : '';
+      var scannerZone = document.getElementById('scannerZone');
+      return (scannerZone && scannerZone.classList.contains('active')) ? 'scan-' : '';
     }
 
     function syncScanFormFromMainBar() {
@@ -2650,42 +2690,66 @@
     }
 
     function openScanActionPanel(assetId) {
-      const asset = allAssets.find(a => a.assetId === assetId);
+      var asset = allAssets.find(function(a) { return a.assetId === assetId; });
       if (!asset) return;
-      
       selectedAssetIds.add(assetId);
       updateSelectionUI();
-      
-      document.getElementById('scanPanelAssetId').textContent = assetId;
-      const metaContainer = document.getElementById('scanPanelMetaContainer');
+      updateEmbeddedPanel(asset);
+    }
+
+    function closeScanActionPanel() {
+      // 如果相機視窗仍開著，重置面板並恢復掃描（供建立連動後繼續使用）
+      var zone = document.getElementById('scannerZone');
+      if (zone && zone.classList.contains('active')) {
+        selectedAssetIds.clear();
+        updateSelectionUI();
+        resetEmbeddedPanelStatus();
+        if (typeof window.resumeScanner === 'function') window.resumeScanner();
+      }
+    }
+
+    // 更新內嵌面板的掃描結果
+    function updateEmbeddedPanel(asset) {
+      var card = document.getElementById('embeddedPanelStatusCard');
+      card.className = 'embedded-status-card embedded-status-card--success';
+      document.getElementById('embeddedPanelStatusLabel').textContent = '掃描結果';
+      document.getElementById('embeddedPanelAssetId').textContent = asset.assetId;
+      var icon = document.getElementById('embeddedPanelStatusIcon');
+      icon.className = 'embedded-status-icon embedded-status-icon--success';
+      icon.innerHTML = '<i class="fas fa-check"></i>';
+
+      var metaContainer = document.getElementById('embeddedPanelMetaContainer');
+      metaContainer.style.display = '';
       metaContainer.innerHTML = '';
-      
-      currentColPrefs.forEach(col => {
-        const defCol = DEFAULT_COL_PREFS.find(d => d.id === col.id) || {};
-        const isScanVisible = col.scanVisible !== undefined ? col.scanVisible : (defCol.scanVisible || false);
+      currentColPrefs.forEach(function(col) {
+        var defCol = DEFAULT_COL_PREFS.find(function(d) { return d.id === col.id; }) || {};
+        var isScanVisible = col.scanVisible !== undefined ? col.scanVisible : (defCol.scanVisible || false);
         if (isScanVisible && col.id !== 'assetId' && col.id !== 'checkbox') {
-          const val = asset[col.id] || '-';
-          metaContainer.innerHTML += `
-            <div>
-              <span class="text-gray-400">${col.label}：</span><br>
-              <span class="text-gray-700 font-medium">${val}</span>
-            </div>
-          `;
+          var val = asset[col.id] || '-';
+          metaContainer.innerHTML += '<div>' +
+            '<span class="text-gray-400">' + escapeHtml(col.label) + '：</span><br>' +
+            '<span class="text-gray-700 font-medium">' + escapeHtml(String(val)) + '</span>' +
+            '</div>';
         }
       });
-      
-      document.getElementById('scanActionPanelOverlay').classList.add('is-active');
+
       syncScanFormFromMainBar();
       updateCreateMappingBtn();
       refreshCreateMappingBtnLabel();
     }
 
-    function closeScanActionPanel() {
-      document.getElementById('scanActionPanelOverlay').classList.remove('is-active');
-      
-      // Sync back to main if needed, or just let main re-evaluate state
-      updateCreateMappingBtn();
-      refreshCreateMappingBtnLabel();
+    // 重置內嵌面板為等待掃描狀態
+    function resetEmbeddedPanelStatus() {
+      var card = document.getElementById('embeddedPanelStatusCard');
+      if (!card) return;
+      card.className = 'embedded-status-card embedded-status-card--waiting';
+      document.getElementById('embeddedPanelStatusLabel').textContent = '等待掃描';
+      document.getElementById('embeddedPanelAssetId').textContent = '請對準條碼掃描';
+      var icon = document.getElementById('embeddedPanelStatusIcon');
+      icon.className = 'embedded-status-icon embedded-status-icon--waiting';
+      icon.innerHTML = '<i class="fas fa-barcode"></i>';
+      document.getElementById('embeddedPanelMetaContainer').style.display = 'none';
+      document.getElementById('embeddedPanelMetaContainer').innerHTML = '';
     }
 
     function createMapping(source = 'main') {
@@ -3089,6 +3153,8 @@
         } else {
           zone.classList.add('active');
           backdrop.classList.add('active');
+          syncScanFormFromMainBar();      // 開啟時同步表單資料
+          resetEmbeddedPanelStatus();     // 重置面板為等待掃描狀態
           startScanner();
         }
       };
@@ -3155,6 +3221,72 @@
       }
 
       // 停止掃描器
+      // 暫停掃描但保持相機畫面
+      function pauseScanner() {
+        if (isScanning) {
+          Quagga.stop();      // Quagga.stop() 停止偵測但不釋放 video track
+          isScanning = false;
+        }
+      }
+
+      // 恢復掃描（從暫停狀態，相機畫面仍在）
+      function resumeScanner() {
+        if (!isScanning && typeof Quagga !== 'undefined') {
+          var videoElement = document.querySelector('#scanner-reader video');
+          if (videoElement && videoElement.srcObject) {
+            // 相機串流仍在，重新初始化 Quagga 偵測
+            Quagga.init({
+              inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector('#scanner-reader'),
+                constraints: {
+                  width: 640,
+                  height: 480,
+                  facingMode: "environment"
+                }
+              },
+              decoder: {
+                readers: [
+                  "code_128_reader",
+                  "ean_reader",
+                  "ean_8_reader",
+                  "code_39_reader",
+                  "code_39_vin_reader",
+                  "codabar_reader",
+                  "upc_reader",
+                  "upc_e_reader",
+                  "i2of5_reader"
+                ]
+              },
+              locate: true,
+              locator: {
+                patchSize: "medium",
+                halfSample: true
+              }
+            }, function(err) {
+              if (err) {
+                console.error('Quagga 恢復失敗:', err);
+                return;
+              }
+              Quagga.start();
+              isScanning = true;
+              lastScannedCode = null;   // 清除冷卻，允許重新掃描
+              updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
+            });
+            Quagga.onDetected(onBarcodeDetected);
+          } else {
+            // 畫面已消失，完整重新啟動
+            startScanner();
+          }
+        }
+      }
+
+      // 暴露到 window（供 IIFE 外的回調使用）
+      window.pauseScanner = pauseScanner;
+      window.resumeScanner = resumeScanner;
+
+      // 完全停止掃描器並關閉相機
       function stopScanner() {
         if (isScanning) {
           Quagga.stop();
@@ -3176,6 +3308,7 @@
         // 關閉彈出窗口和背景遮罩
         document.getElementById('scannerZone').classList.remove('active');
         document.getElementById('scannerBackdrop').classList.remove('active');
+        resetEmbeddedPanelStatus();
       }
 
       // 條碼檢測回調
@@ -3230,8 +3363,8 @@
           updateScannerStatus('success', `✓ 已掃描資產: ${asset.assetName}`);
           showToast(`已掃描資產: ${asset.assetName}`, 'success');
 
-          openScanActionPanel(asset.assetId);
-          stopScanner();
+          pauseScanner();                   // 暫停掃描但保持相機畫面
+          updateEmbeddedPanel(asset);       // 更新內嵌面板
         } else {
           updateScannerStatus('error', `✗ 未找到資產編號: ${formattedCode}`);
           console.log('無法匹配的條碼:', { raw: rawCode, formatted: formattedCode });
