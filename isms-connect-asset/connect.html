@@ -650,55 +650,9 @@
                 <i class="fas fa-cog text-gray-600"></i>
               </button>
               <!-- 顯示欄位切換 -->
-              <div class="relative inline-block text-left">
-                <button class="btn-secondary" onclick="document.getElementById('colDropdown').classList.toggle('hidden')">
-                  <i class="fas fa-columns mr-2"></i>顯示欄位
-                </button>
-                <div id="colDropdown" class="absolute z-10 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden" style="right: 0;">
-                  <div class="p-3 flex flex-col gap-2 max-h-64 overflow-y-auto">
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="assetName" checked onchange="updateColumnVisibility()">
-                      <span>資產名稱</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="assetAliasOrSerial" checked onchange="updateColumnVisibility()">
-                      <span>資產別名/序號</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="brand" checked onchange="updateColumnVisibility()">
-                      <span>廠牌型號</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="leaderName" checked onchange="updateColumnVisibility()">
-                      <span>保管人</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="userName" checked onchange="updateColumnVisibility()">
-                      <span>使用人</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="location" checked onchange="updateColumnVisibility()">
-                      <span>地點</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="group" checked onchange="updateColumnVisibility()">
-                      <span>組別</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="mappedStatus" checked onchange="updateColumnVisibility()">
-                      <span>連動狀態</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="isoScope" checked onchange="updateColumnVisibility()">
-                      <span>ISO 範圍</span>
-                    </label>
-                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                      <input type="checkbox" class="col-toggle-cb rounded border-gray-300" value="isoBasis" checked onchange="updateColumnVisibility()">
-                      <span>認證依據</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
+              <button class="btn-secondary" onclick="openColSettingsModal()" title="欄位設定">
+                <i class="fas fa-columns mr-2"></i>顯示欄位
+              </button>
               <button class="btn-secondary text-gray-600 hover:text-red-500" title="清除所有篩選條件" onclick="clearAllFilters()">
                 <i class="fas fa-eraser mr-1"></i>清除篩選
               </button>
@@ -908,6 +862,32 @@
 
 
       <!-- Create Asset Modal -->
+  <!-- 欄位設定 Modal -->
+  <div id="colSettingsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">欄位設定</h3>
+        <button onclick="closeColSettingsModal()" class="text-gray-400 hover:text-gray-500">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      <p class="text-sm text-gray-500 mb-4">拖曳 <i class="fas fa-grip-vertical"></i> 來調整順序，勾選方塊來顯示或隱藏。</p>
+      
+      <!-- 拖曳清單容器 -->
+      <div id="colSettingsList" class="border border-gray-200 rounded-md overflow-hidden bg-white max-h-[50vh] overflow-y-auto">
+        <!-- JS 動態生成 -->
+      </div>
+      
+      <div class="mt-5 flex justify-between items-center">
+        <button onclick="resetColSettings()" class="px-4 py-2 bg-white text-gray-700 text-sm border border-gray-300 rounded hover:bg-gray-50">還原預設</button>
+        <div>
+          <button onclick="closeColSettingsModal()" class="px-4 py-2 bg-white text-gray-700 text-sm border border-gray-300 rounded hover:bg-gray-50 mr-2">取消</button>
+          <button onclick="saveColSettings()" class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">儲存設定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 系統設定 Modal -->
   <div class="modal-overlay hidden" id="settingsModal">
     <div class="modal-box" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto;">
@@ -1190,31 +1170,214 @@
     let pendingBusinessProcessData = null;
 
     // ==========================================
-    // 欄位顯示隱藏邏輯
+    // 欄位拖曳設定邏輯 (Column Reordering)
     // ==========================================
-    function updateColumnVisibility() {
-      let styleHtml = '';
-      document.querySelectorAll('.col-toggle-cb').forEach(cb => {
-        if (!cb.checked) {
-          styleHtml += `#assetTable [data-col="${cb.value}"] { display: none !important; }\n`;
+    const DEFAULT_COL_PREFS = [
+      { id: 'checkbox', label: '', visible: true, unmovable: true },
+      { id: 'assetId', label: '資產編號', visible: true, unmovable: true },
+      { id: 'assetName', label: '資產名稱', visible: true },
+      { id: 'assetAliasOrSerial', label: '資產別名/序號', visible: true },
+      { id: 'brand', label: '廠牌型號', visible: true },
+      { id: 'leaderName', label: '保管人', visible: true },
+      { id: 'userName', label: '使用人', visible: true },
+      { id: 'location', label: '地點', visible: true },
+      { id: 'group', label: '組別', visible: true },
+      { id: 'mappedStatus', label: '連動狀態', visible: true },
+      { id: 'usageStatus', label: '使用狀態', visible: true },
+      { id: 'ismsAssetId', label: '資訊資產編號', visible: true },
+      { id: 'businessProcess', label: '業務流程', visible: true },
+      { id: 'isoScope', label: 'ISO 範圍', visible: true },
+      { id: 'isoBasis', label: '認證依據', visible: true }
+    ];
+    let currentColPrefs = [];
+
+    function loadColSettings() {
+      const saved = localStorage.getItem('isms_connect_col_prefs_v1');
+      if (saved) {
+        try {
+          currentColPrefs = JSON.parse(saved);
+          const savedIds = new Set(currentColPrefs.map(c => c.id));
+          DEFAULT_COL_PREFS.forEach(defCol => {
+            if (!savedIds.has(defCol.id)) {
+              currentColPrefs.push({...defCol});
+            }
+          });
+        } catch(e) {
+          currentColPrefs = JSON.parse(JSON.stringify(DEFAULT_COL_PREFS));
         }
-      });
-      document.getElementById('dynamic-col-styles').innerHTML = styleHtml;
+      } else {
+        currentColPrefs = JSON.parse(JSON.stringify(DEFAULT_COL_PREFS));
+      }
     }
 
-    document.addEventListener('click', function(e) {
-      const dropdown = document.getElementById('colDropdown');
-      if (!dropdown) return;
-      const button = dropdown.previousElementSibling;
-      if (!dropdown.contains(e.target) && !button.contains(e.target)) {
-        dropdown.classList.add('hidden');
+    function openColSettingsModal() {
+      renderColSettingsList();
+      document.getElementById('colSettingsModal').classList.remove('hidden');
+    }
+
+    function closeColSettingsModal() {
+      document.getElementById('colSettingsModal').classList.add('hidden');
+    }
+
+    let draggedItem = null;
+
+    function renderColSettingsList() {
+      const listContainer = document.getElementById('colSettingsList');
+      listContainer.innerHTML = '';
+      
+      currentColPrefs.forEach((col, index) => {
+        if (col.id === 'checkbox') return; // 不要讓 checkbox 列入設定清單
+        
+        const item = document.createElement('div');
+        item.className = 'flex items-center p-3 border-b border-gray-200 bg-white';
+        if (col.unmovable) {
+           item.classList.add('bg-gray-50', 'text-gray-500');
+        } else {
+           item.draggable = true;
+           item.classList.add('cursor-grab', 'hover:bg-gray-50');
+        }
+        item.dataset.id = col.id;
+        
+        item.innerHTML = `
+          <i class="fas fa-grip-vertical text-gray-400 mr-3 ${col.unmovable ? 'opacity-30' : ''}"></i>
+          <input type="checkbox" class="col-visibility-cb mr-3 h-4 w-4 text-blue-600 rounded border-gray-300" ${col.visible ? 'checked' : ''} ${col.unmovable ? 'disabled' : ''}>
+          <span class="flex-grow text-sm ${!col.visible ? 'text-gray-400 line-through' : ''}">${col.label}</span>
+        `;
+
+        if (!col.unmovable) {
+          item.addEventListener('dragstart', function(e) {
+            draggedItem = item;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', item.innerHTML);
+            setTimeout(() => item.classList.add('opacity-50', 'bg-blue-50'), 0);
+          });
+          
+          item.addEventListener('dragend', function() {
+            item.classList.remove('opacity-50', 'bg-blue-50', 'border-t-2', 'border-b-2', 'border-blue-400');
+            draggedItem = null;
+            document.querySelectorAll('#colSettingsList > div').forEach(el => {
+              el.classList.remove('border-t-2', 'border-b-2', 'border-blue-400');
+            });
+          });
+          
+          item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (draggedItem === item) return;
+            const bounding = item.getBoundingClientRect();
+            const offset = bounding.y + (bounding.height / 2);
+            if (e.clientY - offset > 0) {
+              item.classList.add('border-b-2', 'border-blue-400');
+              item.classList.remove('border-t-2');
+            } else {
+              item.classList.add('border-t-2', 'border-blue-400');
+              item.classList.remove('border-b-2');
+            }
+          });
+          
+          item.addEventListener('dragleave', function() {
+            item.classList.remove('border-t-2', 'border-b-2', 'border-blue-400');
+          });
+          
+          item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            item.classList.remove('border-t-2', 'border-b-2', 'border-blue-400');
+            if (draggedItem === item) return;
+            
+            const bounding = item.getBoundingClientRect();
+            const offset = bounding.y + (bounding.height / 2);
+            if (e.clientY - offset > 0) {
+              item.after(draggedItem);
+            } else {
+              item.before(draggedItem);
+            }
+          });
+        }
+        
+        const cb = item.querySelector('input[type="checkbox"]');
+        if (cb && !col.unmovable) {
+          cb.addEventListener('change', function() {
+            const span = item.querySelector('span');
+            if (cb.checked) {
+              span.classList.remove('text-gray-400', 'line-through');
+            } else {
+              span.classList.add('text-gray-400', 'line-through');
+            }
+          });
+        }
+        
+        listContainer.appendChild(item);
+      });
+    }
+
+    function saveColSettings() {
+      const listContainer = document.getElementById('colSettingsList');
+      const items = listContainer.querySelectorAll('div[data-id]');
+      
+      const newPrefs = [{ id: 'checkbox', label: '', visible: true, unmovable: true }];
+      
+      items.forEach(item => {
+        const id = item.dataset.id;
+        const cb = item.querySelector('input[type="checkbox"]');
+        const def = DEFAULT_COL_PREFS.find(d => d.id === id);
+        newPrefs.push({
+          id: id,
+          label: def.label,
+          visible: cb.checked,
+          unmovable: !!def.unmovable
+        });
+      });
+      
+      currentColPrefs = newPrefs;
+      localStorage.setItem('isms_connect_col_prefs_v1', JSON.stringify(currentColPrefs));
+      
+      applyColumnPreferences();
+      closeColSettingsModal();
+    }
+
+    function resetColSettings() {
+      localStorage.removeItem('isms_connect_col_prefs_v1');
+      loadColSettings();
+      applyColumnPreferences();
+      closeColSettingsModal();
+    }
+
+    function applyColumnPreferences() {
+      let styleHtml = '';
+      const order = [];
+      
+      currentColPrefs.forEach(col => {
+        order.push(col.id);
+        if (!col.visible) {
+           styleHtml += `#assetTable [data-col="${col.id}"] { display: none !important; }\n`;
+        }
+      });
+      
+      document.getElementById('dynamic-col-styles').innerHTML = styleHtml;
+      
+      const theadTr = document.querySelector('#assetTable thead tr');
+      if (theadTr) {
+        order.forEach(colId => {
+          const th = theadTr.querySelector(`th[data-col="${colId}"]`);
+          if (th) theadTr.appendChild(th);
+        });
       }
-    });
+      
+      const tbodyTrs = document.querySelectorAll('#assetTableBody tr[data-asset-id]');
+      tbodyTrs.forEach(tr => {
+        order.forEach(colId => {
+          const td = tr.querySelector(`td[data-col="${colId}"]`);
+          if (td) tr.appendChild(td);
+        });
+      });
+    }
 
     // ==========================================
     // 初始化
     // ==========================================
     document.addEventListener('DOMContentLoaded', function() {
+      loadColSettings();
+      applyColumnPreferences();
       loadUserInfo();
       loadAssets();
       loadIsmsAssets();
@@ -1502,6 +1665,8 @@
           </tr>
         `;
       }).join('');
+      
+      applyColumnPreferences();
     }
 
 
@@ -3310,6 +3475,9 @@
 
       const settingsModal = document.getElementById('settingsModal');
       if (settingsModal) settingsModal.addEventListener('click', e => { if (e.target === settingsModal) closeSettingsModal(); });
+
+      const colSettingsModal = document.getElementById('colSettingsModal');
+      if (colSettingsModal) colSettingsModal.addEventListener('click', e => { if (e.target === colSettingsModal) closeColSettingsModal(); });
 
       preloadDropdowns();
     });
