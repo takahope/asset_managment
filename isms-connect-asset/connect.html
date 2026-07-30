@@ -573,7 +573,7 @@
       top: 100%;
       left: 50%;
       transform: translateX(-50%);
-      width: 60px;
+      width: 80px;
       height: 24px;
       background-color: white;
       border-radius: 0 0 50px 50px;
@@ -581,6 +581,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 12px;
       cursor: pointer;
       z-index: 41;
       transition: background-color 0.2s;
@@ -595,6 +596,17 @@
     }
     .filter-drawer-wrapper.is-open .filter-drawer-tab i {
       transform: rotate(180deg);
+    }
+    .filter-drawer-tab i#filterPinBtn {
+      transition: transform 0.2s, color 0.2s;
+      color: #64748b;
+    }
+    .filter-drawer-wrapper.is-open .filter-drawer-tab i#filterPinBtn {
+      transform: none;
+    }
+    .filter-drawer-tab i#filterPinBtn.is-pinned {
+      color: #3b82f6 !important;
+      transform: rotate(-45deg) !important;
     }
 
     /* Breathing Animation */
@@ -727,6 +739,7 @@
         <!-- 下拉環 -->
         <div class="filter-drawer-tab" id="filterDrawerTab" title="展開/收合篩選器">
           <i class="fa-solid fa-chevron-down"></i>
+          <i class="fa-solid fa-thumbtack" id="filterPinBtn" title="釘選/解除釘選"></i>
         </div>
       </div> <!-- closing filter-drawer-wrapper -->
 
@@ -3603,6 +3616,7 @@
     // --- Filter Drawer Logic ---
     let drawerTimeout = null;
     let isFilterDrawerFocused = false;
+    let isFilterDrawerPinned = false;
 
     function toggleFilterDrawer(forceOpen) {
       const wrapper = document.getElementById('filterDrawerWrapper');
@@ -3616,8 +3630,8 @@
     }
 
     function handleDrawerMouseLeave() {
-      // 如果內部有焦點，暫停自動收合
-      if (isFilterDrawerFocused) return;
+      // 如果內部有焦點或已釘選，暫停自動收合
+      if (isFilterDrawerFocused || isFilterDrawerPinned) return;
       
       drawerTimeout = setTimeout(() => {
         toggleFilterDrawer(false);
@@ -3632,11 +3646,26 @@
     document.addEventListener('DOMContentLoaded', () => {
       const wrapper = document.getElementById('filterDrawerWrapper');
       const tab = document.getElementById('filterDrawerTab');
+      const pinBtn = document.getElementById('filterPinBtn');
       
       if (wrapper && tab) {
+        // 圖釘點擊事件
+        if (pinBtn) {
+          pinBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isFilterDrawerPinned = !isFilterDrawerPinned;
+            pinBtn.classList.toggle('is-pinned', isFilterDrawerPinned);
+          });
+        }
+
         // 拉環點擊切換
         tab.addEventListener('click', (e) => {
           e.stopPropagation();
+          // 如果卡片目前是開啟狀態，準備關閉它，則重置釘選狀態
+          if (wrapper.classList.contains('is-open')) {
+            isFilterDrawerPinned = false;
+            if (pinBtn) pinBtn.classList.remove('is-pinned');
+          }
           toggleFilterDrawer();
         });
         
@@ -3658,6 +3687,7 @@
         // 點擊外部強制收合
         document.addEventListener('click', (e) => {
           if (!wrapper.contains(e.target)) {
+            if (isFilterDrawerPinned) return; // 釘選時阻擋外部點擊收合
             isFilterDrawerFocused = false; // 解除防呆
             toggleFilterDrawer(false); // 收合
           }
