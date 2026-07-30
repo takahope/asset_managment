@@ -620,6 +620,21 @@
     .filter-drawer-wrapper:not(.is-open) .filter-drawer-tab:hover {
       animation: none;
     }
+
+    /* 掃描決策面板專用樣式 */
+    .scan-panel-overlay {
+      position: fixed; inset: 0; background: rgba(71,85,105,0.7); display: none; z-index: 3000; align-items: flex-start; justify-content: center; padding-top: 8vh;
+    }
+    .scan-panel-overlay.is-active { display: flex; }
+    .scan-panel-container {
+      background: #fff; width: 100%; max-width: 640px; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); max-height: 84vh; margin: 0 3vw;
+    }
+    .scan-panel-meta-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; color: #475569; margin-bottom: 16px;
+    }
+    .scan-panel-form-section {
+      display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; flex: 1;
+    }
   </style>
 </head>
 <body>
@@ -875,6 +890,49 @@
 
 
       <!-- Create Asset Modal -->
+      
+  <!-- 掃描動作決策面板 -->
+  <div id="scanActionPanelOverlay" class="scan-panel-overlay" onclick="if(event.target===this) closeScanActionPanel()">
+    <div class="scan-panel-container action-panel-modal action-panel">
+      <!-- Header -->
+      <div class="action-panel__header p-4 border-b border-gray-200 flex justify-between items-center">
+        <h5 class="font-bold text-gray-800">動作決策面板</h5>
+        <button type="button" class="action-panel__secondary" onclick="closeScanActionPanel()">關閉</button>
+      </div>
+      <!-- Body -->
+      <div class="scan-panel-form-section">
+        <!-- 狀態卡片 -->
+        <div class="action-panel__status-card flex justify-between items-center bg-yellow-50 p-3 border border-yellow-200 rounded-lg mb-3">
+          <div>
+            <small class="text-yellow-800 text-xs">掃描結果</small>
+            <div id="scanPanelAssetId" class="font-bold text-lg mt-1">-</div>
+          </div>
+          <div class="bg-green-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs"><i class="fas fa-check"></i></div>
+        </div>
+        <!-- 動態 Meta 區塊 -->
+        <div id="scanPanelMetaContainer" class="scan-panel-meta-grid">
+          <!-- JS 將動態填入勾選的欄位 -->
+        </div>
+        <!-- 連動設定表單 -->
+        <div class="text-xs text-gray-500 mb-1 tracking-wider uppercase font-semibold">連動與業務流程設定</div>
+        <input type="text" id="scan-ismsSearch" class="search-input" placeholder="搜尋資訊資產...">
+        <div class="flex gap-2">
+          <select id="scan-ismsAssetSelect" class="select-input flex-1 bg-gray-50"><option value="">-- 請選擇資訊資產 --</option></select>
+          <button id="scan-btnEditIsms" class="btn-secondary px-3" disabled><i class="fas fa-edit"></i></button>
+          <button id="scan-btnDeleteIsms" class="btn-danger px-3" disabled><i class="fas fa-trash"></i></button>
+        </div>
+        <input type="text" id="scan-mappingRemarks" class="search-input" placeholder="備註（選填）">
+        <select id="scan-businessProcessSelect" class="select-input bg-gray-50"><option value="">-- 業務流程：不變更 --</option></select>
+      </div>
+      <!-- Footer -->
+      <div class="action-panel__footer p-4 border-t border-gray-200 bg-gray-50">
+        <button id="scan-createMappingBtn" type="button" class="btn-primary w-full py-2 disabled:opacity-50" disabled onclick="handleUnifiedAction('scan')">
+          請先選擇資產與分類
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- 欄位設定 Modal -->
   <div id="colSettingsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
@@ -1186,21 +1244,21 @@
     // 欄位拖曳設定邏輯 (Column Reordering)
     // ==========================================
     const DEFAULT_COL_PREFS = [
-      { id: 'checkbox', label: '', visible: true, unmovable: true },
-      { id: 'assetId', label: '資產編號', visible: true, unmovable: true },
-      { id: 'assetName', label: '資產名稱', visible: false },
-      { id: 'assetAliasOrSerial', label: '資產別名/序號', visible: true },
-      { id: 'brand', label: '廠牌型號', visible: true },
-      { id: 'leaderName', label: '保管人', visible: false },
-      { id: 'userName', label: '使用人', visible: false },
-      { id: 'location', label: '地點', visible: false },
-      { id: 'group', label: '組別', visible: false },
-      { id: 'mappedStatus', label: '連動狀態', visible: true },
-      { id: 'usageStatus', label: '使用狀態', visible: true },
-      { id: 'ismsAssetId', label: '資訊資產編號', visible: true },
-      { id: 'businessProcess', label: '業務流程', visible: true },
-      { id: 'isoScope', label: 'ISO 範圍', visible: true },
-      { id: 'isoBasis', label: '認證依據', visible: true }
+      { id: 'checkbox', label: '', visible: true, unmovable: true, scanVisible: false },
+      { id: 'assetId', label: '資產編號', visible: true, unmovable: true, scanVisible: true },
+      { id: 'assetName', label: '資產名稱', visible: false, scanVisible: false },
+      { id: 'assetAliasOrSerial', label: '資產別名/序號', visible: true, scanVisible: true },
+      { id: 'brand', label: '廠牌型號', visible: true, scanVisible: false },
+      { id: 'leaderName', label: '保管人', visible: false, scanVisible: false },
+      { id: 'userName', label: '使用人', visible: false, scanVisible: false },
+      { id: 'location', label: '地點', visible: false, scanVisible: false },
+      { id: 'group', label: '組別', visible: false, scanVisible: false },
+      { id: 'mappedStatus', label: '連動狀態', visible: true, scanVisible: true },
+      { id: 'usageStatus', label: '使用狀態', visible: true, scanVisible: true },
+      { id: 'ismsAssetId', label: '資訊資產編號', visible: true, scanVisible: true },
+      { id: 'businessProcess', label: '業務流程', visible: true, scanVisible: true },
+      { id: 'isoScope', label: 'ISO 範圍', visible: true, scanVisible: true },
+      { id: 'isoBasis', label: '認證依據', visible: true, scanVisible: false }
     ];
     let currentColPrefs = [];
 
@@ -1236,7 +1294,14 @@
 
     function renderColSettingsList() {
       const listContainer = document.getElementById('colSettingsList');
-      listContainer.innerHTML = '';
+      listContainer.innerHTML = `
+        <div class="flex items-center p-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500">
+          <div style="width: 28px;"></div>
+          <div style="width: 40px; text-align: center;">主表</div>
+          <div style="width: 40px; text-align: center;">掃描</div>
+          <div class="flex-grow pl-3">欄位名稱</div>
+        </div>
+      `;
       
       currentColPrefs.forEach((col, index) => {
         if (col.id === 'checkbox') return; // 不要讓 checkbox 列入設定清單
@@ -1251,10 +1316,18 @@
         }
         item.dataset.id = col.id;
         
+        const defCol = DEFAULT_COL_PREFS.find(d => d.id === col.id) || {};
+        const isScanVisible = col.scanVisible !== undefined ? col.scanVisible : (defCol.scanVisible || false);
+        
         item.innerHTML = `
-          <i class="fas fa-grip-vertical text-gray-400 mr-3 ${col.unmovable ? 'opacity-30' : ''}"></i>
-          <input type="checkbox" class="col-visibility-cb mr-3 h-4 w-4 text-blue-600 rounded border-gray-300" ${col.visible ? 'checked' : ''} ${col.unmovable ? 'disabled' : ''}>
-          <span class="flex-grow text-sm ${!col.visible ? 'text-gray-400 line-through' : ''}">${col.label}</span>
+          <i class="fas fa-grip-vertical text-gray-400 mr-2 ${col.unmovable ? 'opacity-30' : ''}" style="width: 20px;"></i>
+          <div style="width: 40px; text-align: center;">
+            <input type="checkbox" class="col-visibility-cb h-4 w-4 text-blue-600 rounded border-gray-300" ${col.visible ? 'checked' : ''} ${col.unmovable ? 'disabled' : ''}>
+          </div>
+          <div style="width: 40px; text-align: center;">
+            <input type="checkbox" class="col-scan-visibility-cb h-4 w-4 text-blue-600 rounded border-gray-300" ${isScanVisible ? 'checked' : ''}>
+          </div>
+          <span class="flex-grow text-sm pl-3 ${!col.visible && !isScanVisible ? 'text-gray-400 line-through' : ''}">${col.label}</span>
         `;
 
         if (!col.unmovable) {
@@ -1327,16 +1400,18 @@
       const listContainer = document.getElementById('colSettingsList');
       const items = listContainer.querySelectorAll('div[data-id]');
       
-      const newPrefs = [{ id: 'checkbox', label: '', visible: true, unmovable: true }];
+      const newPrefs = [{ id: 'checkbox', label: '', visible: true, unmovable: true, scanVisible: false }];
       
       items.forEach(item => {
         const id = item.dataset.id;
-        const cb = item.querySelector('input[type="checkbox"]');
+        const cbVisible = item.querySelector('.col-visibility-cb');
+        const cbScanVisible = item.querySelector('.col-scan-visibility-cb');
         const def = DEFAULT_COL_PREFS.find(d => d.id === id);
         newPrefs.push({
           id: id,
           label: def.label,
-          visible: cb.checked,
+          visible: cbVisible ? cbVisible.checked : false,
+          scanVisible: cbScanVisible ? cbScanVisible.checked : !!def.scanVisible,
           unmovable: !!def.unmovable
         });
       });
@@ -1547,8 +1622,9 @@
      * 一個下拉配兩顆按鈕會使作用對象無法從畫面判斷，所以用按鈕文案在點擊前揭露。
      */
     function createMappingBtnLabel() {
-      var ismsAssetId = document.getElementById('ismsAssetSelect').value;
-      var bpValue = document.getElementById('businessProcessSelect').value;
+      const prefix = getActivePrefix();
+      var ismsAssetId = document.getElementById(prefix + 'ismsAssetSelect').value;
+      var bpValue = document.getElementById(prefix + 'businessProcessSelect').value;
       var hasIsms = ismsAssetId !== '';
       var hasBp = isCurrentUserAdmin && businessProcessOptionsAvailable && bpValue !== '';
 
@@ -1564,7 +1640,13 @@
     function refreshCreateMappingBtnLabel() {
       var btn = document.getElementById('createMappingBtn');
       if (btn.dataset.busy === '1') return;   // 處理中不要蓋掉 spinner
-      btn.innerHTML = createMappingBtnLabel();
+      const newLabel = createMappingBtnLabel();
+      btn.innerHTML = newLabel;
+      
+      const scanBtn = document.getElementById('scan-createMappingBtn');
+      if (scanBtn && scanBtn.dataset.busy !== '1') {
+        scanBtn.innerHTML = newLabel;
+      }
     }
 
     /** 失敗時把 loading spinner 收斂成錯誤列，附重試入口（PLAYBOOK §4-9） */
@@ -2514,37 +2596,103 @@
     }
 
     function updateCreateMappingBtn() {
-      var ismsAssetId = document.getElementById('ismsAssetSelect').value;
-      var bpValue = document.getElementById('businessProcessSelect').value;
+      const prefix = getActivePrefix();
+      var ismsAssetId = document.getElementById(prefix + 'ismsAssetSelect').value;
+      var bpValue = document.getElementById(prefix + 'businessProcessSelect').value;
       var hasIsms = ismsAssetId !== '';
       var hasBp = isCurrentUserAdmin && businessProcessOptionsAvailable && bpValue !== '';
 
       var canCreateMapping = selectedAssetIds.size > 0 && hasIsms;
       var canApplyBp = selectedAssetIds.size > 0 && hasBp;
 
-      document.getElementById('createMappingBtn').disabled = !(canCreateMapping || canApplyBp);
+      const mainBtn = document.getElementById('createMappingBtn');
+      mainBtn.disabled = !(canCreateMapping || canApplyBp);
+      
+      const scanBtn = document.getElementById('scan-createMappingBtn');
+      if (scanBtn) {
+        scanBtn.disabled = mainBtn.disabled;
+      }
     }
 
-    function handleUnifiedAction() {
-      var ismsAssetId = document.getElementById('ismsAssetSelect').value;
-      var bpValue = document.getElementById('businessProcessSelect').value;
+    function handleUnifiedAction(source = 'main') {
+      const prefix = source === 'scan' ? 'scan-' : '';
+      var ismsAssetId = document.getElementById(prefix + 'ismsAssetSelect').value;
+      var bpValue = document.getElementById(prefix + 'businessProcessSelect').value;
       var hasIsms = ismsAssetId !== '';
       var hasBp = isCurrentUserAdmin && businessProcessOptionsAvailable && bpValue !== '';
 
       if (hasIsms) {
-        createMapping();
+        createMapping(source);
       } else if (hasBp) {
-        applyBusinessProcess();
+        applyBusinessProcess(source);
       }
     }
 
     // ==========================================
     // 對照操作
     // ==========================================
-    function createMapping() {
+    function getActivePrefix() {
+      const scanPanel = document.getElementById('scanActionPanelOverlay');
+      return (scanPanel && scanPanel.classList.contains('is-active')) ? 'scan-' : '';
+    }
+
+    function syncScanFormFromMainBar() {
+      document.getElementById('scan-ismsSearch').value = document.getElementById('ismsSearch').value;
+      
+      const scanSelect = document.getElementById('scan-ismsAssetSelect');
+      scanSelect.innerHTML = document.getElementById('ismsAssetSelect').innerHTML;
+      scanSelect.value = document.getElementById('ismsAssetSelect').value;
+      
+      document.getElementById('scan-businessProcessSelect').innerHTML = document.getElementById('businessProcessSelect').innerHTML;
+      document.getElementById('scan-businessProcessSelect').value = document.getElementById('businessProcessSelect').value;
+      
+      document.getElementById('scan-mappingRemarks').value = document.getElementById('mappingRemarks').value;
+    }
+
+    function openScanActionPanel(assetId) {
+      const asset = allAssets.find(a => a.assetId === assetId);
+      if (!asset) return;
+      
+      selectedAssetIds.add(assetId);
+      updateSelectionUI();
+      
+      document.getElementById('scanPanelAssetId').textContent = assetId;
+      const metaContainer = document.getElementById('scanPanelMetaContainer');
+      metaContainer.innerHTML = '';
+      
+      currentColPrefs.forEach(col => {
+        const defCol = DEFAULT_COL_PREFS.find(d => d.id === col.id) || {};
+        const isScanVisible = col.scanVisible !== undefined ? col.scanVisible : (defCol.scanVisible || false);
+        if (isScanVisible && col.id !== 'assetId' && col.id !== 'checkbox') {
+          const val = asset[col.id] || '-';
+          metaContainer.innerHTML += `
+            <div>
+              <span class="text-gray-400">${col.label}：</span><br>
+              <span class="text-gray-700 font-medium">${val}</span>
+            </div>
+          `;
+        }
+      });
+      
+      document.getElementById('scanActionPanelOverlay').classList.add('is-active');
+      syncScanFormFromMainBar();
+      updateCreateMappingBtn();
+      refreshCreateMappingBtnLabel();
+    }
+
+    function closeScanActionPanel() {
+      document.getElementById('scanActionPanelOverlay').classList.remove('is-active');
+      
+      // Sync back to main if needed, or just let main re-evaluate state
+      updateCreateMappingBtn();
+      refreshCreateMappingBtnLabel();
+    }
+
+    function createMapping(source = 'main') {
+      const prefix = source === 'scan' ? 'scan-' : '';
       const assetIds = Array.from(selectedAssetIds);
-      const ismsAssetId = document.getElementById('ismsAssetSelect').value;
-      const remarks = document.getElementById('mappingRemarks').value;
+      const ismsAssetId = document.getElementById(prefix + 'ismsAssetSelect').value;
+      const remarks = document.getElementById(prefix + 'mappingRemarks').value;
 
       if (assetIds.length === 0 || !ismsAssetId) {
         showToast('請選擇資產和資訊資產', 'error');
@@ -2589,6 +2737,7 @@
             updateSelectionUI();
             document.getElementById('mappingRemarks').value = '';
             document.getElementById('ismsAssetSelect').value = '';
+            closeScanActionPanel();
             resetCreateMappingBtn();
             if (processValue !== null) {
               applyBusinessProcessAfterMapping(ismsAssetId, processValue);
@@ -2680,8 +2829,9 @@
     }
 
     /** 下拉的 __CLEAR__ 哨兵值轉成後端認得的空字串 */
-    function businessProcessSelectValue() {
-      var raw = document.getElementById('businessProcessSelect').value;
+    function businessProcessSelectValue(source = 'main') {
+      const prefix = source === 'scan' ? 'scan-' : '';
+      var raw = document.getElementById(prefix + 'businessProcessSelect').value;
       return raw === '__CLEAR__' ? '' : raw;
     }
 
@@ -2711,8 +2861,8 @@
      * 只有在偵測到未勾選的關聯資產時才跳確認——沒有隱形波及就直接套用，
      * 不打斷順暢的情況。
      */
-    function applyBusinessProcess() {
-      var value = businessProcessSelectValue();
+    function applyBusinessProcess(source = 'main') {
+      var value = businessProcessSelectValue(source);
       var info = resolveBusinessProcessTargets();
 
       if (info.targets.length === 0) {
@@ -2808,6 +2958,7 @@
             selectedAssetIds.clear();
             document.getElementById('businessProcessSelect').value = '';
             updateSelectionUI();
+            closeScanActionPanel();
             loadAssets();
             loadIsmsAssets();   // 業務流程改了，前端快取的 allIsmsAssets 要跟著更新
           } else {
