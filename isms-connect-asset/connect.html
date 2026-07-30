@@ -3227,15 +3227,11 @@
           selectedAssetIds.add(asset.assetId);
           updateSelectionUI();
 
-          updateScannerStatus('success', `✓ 已加入資產: ${asset.assetName}`);
-          showToast(`已加入資產: ${asset.assetName}`, 'success');
+          updateScannerStatus('success', `✓ 已掃描資產: ${asset.assetName}`);
+          showToast(`已掃描資產: ${asset.assetName}`, 'success');
 
-          // 2 秒後恢復掃描狀態
-          setTimeout(() => {
-            if (isScanning) {
-              updateScannerStatus('scanning', '掃描器運作中，請對準條碼...');
-            }
-          }, 2000);
+          openScanActionPanel(asset.assetId);
+          stopScanner();
         } else {
           updateScannerStatus('error', `✗ 未找到資產編號: ${formattedCode}`);
           console.log('無法匹配的條碼:', { raw: rawCode, formatted: formattedCode });
