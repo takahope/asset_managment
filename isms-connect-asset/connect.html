@@ -2725,7 +2725,13 @@
         var defCol = DEFAULT_COL_PREFS.find(function(d) { return d.id === col.id; }) || {};
         var isScanVisible = col.scanVisible !== undefined ? col.scanVisible : (defCol.scanVisible || false);
         if (isScanVisible && col.id !== 'assetId' && col.id !== 'checkbox') {
-          var val = asset[col.id] || '-';
+          var val = '-';
+          if (col.id === 'brand') val = asset.modelBrand || '-';
+          else if (col.id === 'mappedStatus') val = asset.isMapped ? '已連動' : '未連動';
+          else if (col.id === 'ismsAssetId') val = asset.mappedIsmsAssetId || '-';
+          else if (col.id === 'isoScope') val = isoLabelOf(asset);
+          else val = asset[col.id] || '-';
+          
           metaContainer.innerHTML += '<div>' +
             '<span class="text-gray-400">' + escapeHtml(col.label) + '：</span><br>' +
             '<span class="text-gray-700 font-medium">' + escapeHtml(String(val)) + '</span>' +
