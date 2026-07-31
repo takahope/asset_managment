@@ -867,6 +867,456 @@
       font-size: 0.8125rem;
     }
     .import-modal-show-more:hover { text-decoration: underline; }
+
+    /* ========================================================================= */
+    /* 移動端響應式設計 (Mobile Responsive Design)                              */
+    /* ========================================================================= */
+
+    /* CSS 變數 - 移動端專用 */
+    @media (max-width: 639px) {
+      :root {
+        --mobile-card-padding: 12px;
+        --mobile-font-base: 0.875rem;
+        --mobile-font-small: 0.75rem;
+        --mobile-spacing: 8px;
+        --mobile-border-radius: 10px;
+      }
+    }
+
+    /* Utility Classes */
+    @media (max-width: 639px) {
+      .mobile-only { display: block !important; }
+      .desktop-only { display: none !important; }
+    }
+
+    @media (min-width: 640px) {
+      .mobile-only { display: none !important; }
+      .desktop-only { display: block !important; }
+    }
+
+    /* 移動端卡片容器 */
+    .asset-cards-container {
+      padding: var(--mobile-spacing, 8px);
+      display: none;
+    }
+
+    @media (max-width: 639px) {
+      .asset-cards-container {
+        display: block;
+      }
+    }
+
+    /* 移動端卡片樣式 */
+    .asset-card-mobile {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: var(--mobile-border-radius, 10px);
+      padding: var(--mobile-card-padding, 12px);
+      margin-bottom: 10px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s;
+    }
+
+    .asset-card-mobile.selected {
+      border-color: #3b82f6;
+      background: #eff6ff;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .card-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .card-core-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .card-core-field .field-label {
+      font-size: 0.7rem;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .card-core-field .field-value {
+      font-size: 0.95rem;
+      color: #0f172a;
+      font-weight: 600;
+      font-family: ui-monospace, monospace;
+      word-break: break-all;
+    }
+
+    .card-main {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 0.8rem;
+    }
+
+    .card-priority-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .card-priority-field .field-label {
+      font-size: 0.65rem;
+      color: #64748b;
+    }
+
+    .card-priority-field .field-value {
+      font-size: 0.8rem;
+      color: #334155;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .field-separator {
+      color: #cbd5e1;
+      font-weight: 300;
+      margin: 0 4px;
+      flex-shrink: 0;
+    }
+
+    .card-expand-btn {
+      width: 100%;
+      padding: 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      color: #475569;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+      min-height: 36px;
+    }
+
+    .card-expand-btn:active {
+      background: #e2e8f0;
+    }
+
+    .card-expand-btn i {
+      font-size: 0.7rem;
+      transition: transform 0.2s;
+    }
+
+    .card-expandable {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #f1f5f9;
+      display: none;
+    }
+
+    .card-expandable.open {
+      display: block;
+      animation: slideDown 0.2s ease;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .expandable-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 6px 0;
+      font-size: 0.8rem;
+      border-bottom: 1px solid #f8fafc;
+      gap: 12px;
+    }
+
+    .expandable-row:last-child {
+      border-bottom: none;
+    }
+
+    .expandable-row .field-label {
+      color: #64748b;
+      font-weight: 500;
+      flex-shrink: 0;
+      min-width: 80px;
+    }
+
+    .expandable-row .field-value {
+      color: #334155;
+      text-align: right;
+      word-break: break-word;
+      flex: 1;
+    }
+
+    /* ========================================================================= */
+    /* 篩選器響應式優化                                                          */
+    /* ========================================================================= */
+
+    @media (max-width: 639px) {
+      /* 篩選器第一列 - 搜尋框與按鈕組 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .search-input {
+        max-width: 100%;
+        font-size: 0.875rem;
+        padding: 8px 12px;
+      }
+
+      .btn-secondary {
+        padding: 8px 12px;
+        font-size: 0.875rem;
+        justify-content: center;
+      }
+
+      /* 隱藏桌面版掃描按鈕（移動端已有大卡片） */
+      .btn-scan-barcode {
+        display: none !important;
+      }
+
+      /* 按鈕組垂直排列 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button,
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > .btn-secondary {
+        width: 100%;
+      }
+
+      /* 下拉選單列 - 垂直堆疊 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-4 {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .select-input {
+        min-width: unset;
+        width: 100%;
+        font-size: 0.875rem;
+        padding: 8px 12px;
+        text-align: left;
+        text-align-last: left;
+      }
+
+      /* 保管人/使用人/認證依據同列的容器也要垂直 */
+      .card .flex.items-center.gap-4 {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      /* 駐站 checkbox 列 */
+      .card .flex.items-center.gap-3 {
+        flex-direction: row;
+        justify-content: flex-start;
+      }
+
+      /* label 保持橫向 */
+      label.flex.items-center.space-x-2 {
+        flex-direction: row;
+      }
+
+      /* 晶片列容器 */
+      .chip-row {
+        gap: 6px;
+        padding: 4px 0 8px;
+        position: relative;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+
+      .chip-row::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* 左右漸層提示 */
+      .chip-row::before,
+      .chip-row::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 8px;
+        width: 20px;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .chip-row::before {
+        left: 0;
+        background: linear-gradient(to right, rgba(248, 250, 252, 0.95), transparent);
+      }
+
+      .chip-row::after {
+        right: 0;
+        background: linear-gradient(to left, rgba(248, 250, 252, 0.95), transparent);
+      }
+
+      /* 晶片樣式 */
+      .chip {
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        min-height: 32px;
+        touch-action: pan-x;
+      }
+
+      .chip__count {
+        font-size: 0.7rem;
+        padding: 0 4px;
+        min-width: 18px;
+      }
+
+      /* 狀態晶片列標籤 */
+      .flex.items-center.shrink-0 > span.text-sm {
+        font-size: 0.75rem;
+        min-width: 70px;
+      }
+
+      /* 狀態晶片列容器調整 */
+      .flex.flex-col.lg\\:flex-row.items-start.lg\\:items-center {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      /* ISO 範圍與組別晶片列 - 繼承 Task 4 的樣式 */
+      #isoChips,
+      #groupChips {
+        gap: 6px;
+        padding: 4px 0 8px;
+        position: relative;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        touch-action: pan-x;
+      }
+
+      #isoChips::-webkit-scrollbar,
+      #groupChips::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* 確保點擊區域足夠大 */
+      #isoChips .chip,
+      #groupChips .chip {
+        min-height: 32px;
+        padding: 6px 10px;
+      }
+
+      /* 晶片列標籤 */
+      .flex.items-center.mb-1 > span,
+      .flex.items-center > span {
+        font-size: 0.75rem;
+        min-width: 70px;
+      }
+
+      /* ===================================================================== */
+      /* 動作條（Action Bar）移動端優化                                        */
+      /* ===================================================================== */
+      
+      .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px 16px;
+      }
+      
+      .action-bar__count {
+        width: 100%;
+        justify-content: center;
+        padding: 8px;
+        background: #eff6ff;
+        border-radius: 6px;
+        font-size: 0.85rem;
+      }
+      
+      .action-bar__field {
+        width: 100%;
+        flex-direction: column;
+        gap: 6px;
+      }
+      
+      .action-bar__field input,
+      .action-bar__field select,
+      .action-bar__field .search-input,
+      .action-bar__field .select-input {
+        width: 100%;
+        font-size: 0.85rem;
+      }
+      
+      .action-bar__spacer {
+        display: none;
+      }
+      
+      #createMappingBtn,
+      #scan-createMappingBtn {
+        width: 100%;
+        justify-content: center;
+        font-size: 0.9rem;
+        padding: 12px;
+      }
+
+      /* 動作條的按鈕組 */
+      .action-bar__field button {
+        flex-shrink: 0;
+      }
+
+      /* ===================================================================== */
+      /* 已選資產浮層（Selected Popover）移動端優化                             */
+      /* ===================================================================== */
+      
+      .selected-popover {
+        left: 8px;
+        right: 8px;
+        bottom: auto;
+        top: 50%;
+        transform: translateY(-50%);
+        width: auto;
+        max-width: calc(100vw - 16px);
+        max-height: 60vh;
+      }
+
+      /* 簡化移動端列表項目 */
+      .selected-popover .bg-gray-50.rounded {
+        font-size: 0.875rem;
+      }
+
+      .selected-popover .font-mono {
+        font-size: 0.8125rem;
+      }
+
+      .selected-popover .text-gray-500 {
+        display: none;
+      }
+
+      .selected-popover .badge {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1185,7 +1635,7 @@
           <i class="fas fa-times text-xl"></i>
         </button>
       </div>
-      <p class="text-sm text-gray-500 mb-4">拖曳 <i class="fas fa-grip-vertical"></i> 來調整順序，勾選方塊來顯示或隱藏。</p>
+      <p class="text-sm text-gray-500 mb-4">拖曳 <i class="fas fa-grip-vertical"></i> 來調整順序。<strong>主表</strong>：桌面版顯示，<strong>優先</strong>：掃描面板 + 移動端卡片主區（取前2個）。</p>
       
       <!-- 拖曳清單容器 -->
       <div id="colSettingsList" class="border border-gray-200 rounded-md overflow-hidden bg-white max-h-[50vh] overflow-y-auto">
@@ -1777,6 +2227,34 @@
 
     function openColSettingsModal() {
       renderColSettingsList();
+      
+      // 檢查是否已有提示（避免重複新增）
+      const existingHint = document.getElementById('mobileCardHint');
+      if (existingHint) {
+        existingHint.remove();
+      }
+      
+      // 新增移動端提示
+      const hint = document.createElement('div');
+      hint.id = 'mobileCardHint';
+      hint.className = 'text-xs bg-blue-50 border border-blue-200 p-3 rounded mt-2 mb-4';
+      hint.innerHTML = `
+        <div class="flex items-start gap-2">
+          <i class="fas fa-mobile-alt text-blue-600 mt-0.5"></i>
+          <div>
+            <strong class="text-blue-700">移動端顯示邏輯：</strong>
+            <ul class="mt-1 space-y-1 text-gray-700" style="list-style-type: disc; margin-left: 1.2rem;">
+              <li><strong>資產編號</strong>永遠顯示在卡片頂部</li>
+              <li><strong>「優先」勾選的前 2 個欄位</strong>顯示在卡片主區（推薦：資訊資產編號、業務流程）</li>
+              <li><strong>其他「主表」勾選的欄位</strong>依排序顯示在展開區</li>
+            </ul>
+          </div>
+        </div>
+      `;
+      
+      const listContainer = document.getElementById('colSettingsList');
+      listContainer.insertAdjacentElement('beforebegin', hint);
+      
       document.getElementById('colSettingsModal').classList.remove('hidden');
     }
 
@@ -1791,8 +2269,8 @@
       listContainer.innerHTML = `
         <div class="flex items-center p-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500">
           <div style="width: 28px;"></div>
-          <div style="width: 40px; text-align: center;">主表</div>
-          <div style="width: 40px; text-align: center;">掃描</div>
+          <div style="width: 40px; text-align: center;" title="在桌面版表格顯示">主表</div>
+          <div style="width: 40px; text-align: center;" title="在掃描面板和移動端卡片主區顯示">優先</div>
           <div class="flex-grow pl-3">欄位名稱</div>
         </div>
       `;
@@ -2293,14 +2771,172 @@
     // ==========================================
     // 渲染函式
     // ==========================================
-    function renderAssetTable(assets) {
-      const tbody = document.getElementById('assetTableBody');
 
+    /**
+     * 方案 D: 取得移動端卡片顯示欄位
+     * - 核心欄位：assetId (強制第一位)
+     * - 優先欄位：從 scanVisible: true 中依排序取前 2 個
+     * - 展開欄位：其他 visible: true，按排序
+     */
+    function getMobileCardFields() {
+      // 1. 核心欄位（資產編號強制第一位）
+      const coreField = currentColPrefs.find(col => col.id === 'assetId');
+      
+      // 2. 優先欄位（從 scanVisible: true 中取前2個）
+      const priorityFields = currentColPrefs
+        .filter(col => 
+          col.scanVisible && 
+          col.id !== 'assetId' && 
+          col.id !== 'checkbox'
+        )
+        .slice(0, 2);
+      
+      // 3. 展開區欄位（其他 visible: true，按排序）
+      const expandableFields = currentColPrefs.filter(col => 
+        col.visible && 
+        col.id !== 'checkbox' &&
+        col.id !== 'assetId' &&
+        !priorityFields.some(p => p.id === col.id)
+      );
+      
+      return { coreField, priorityFields, expandableFields };
+    }
+
+    /**
+     * 取得資產欄位值（處理特殊欄位）
+     */
+    function getAssetFieldValue(asset, fieldId) {
+      // 特殊欄位處理
+      if (fieldId === 'mappedStatus') {
+        return asset.isMapped ? '✓ 已連動' : '✗ 未連動';
+      }
+      if (fieldId === 'isoScope') {
+        return isoLabelOf(asset);
+      }
+      if (fieldId === 'brand') {
+        return asset.modelBrand || '-';
+      }
+      if (fieldId === 'assetAliasOrSerial') {
+        return asset.assetAliasOrSerial || '-';
+      }
+      
+      // 一般欄位
+      return asset[fieldId] || '-';
+    }
+
+    /**
+     * 渲染單一移動端卡片
+     */
+    function renderSingleCard(asset, isSelected, coreField, priorityFields, expandableFields) {
+      const cardId = 'card-' + asset.assetId.replace(/[^a-zA-Z0-9]/g, '-');
+      
+      return `
+        <div class="asset-card-mobile ${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtml(asset.assetId)}" data-card-id="${cardId}">
+          <!-- 卡片頭部：核心欄位（資產編號） -->
+          <div class="card-header">
+            <input type="checkbox" 
+                   class="card-checkbox" 
+                   ${isSelected ? 'checked' : ''} 
+                   onchange="toggleAssetSelection('${escapeHtml(asset.assetId)}')">
+            <span class="card-core-field">
+              <span class="field-label">${escapeHtml(coreField.label)}:</span>
+              <span class="field-value">${escapeHtml(asset.assetId)}</span>
+            </span>
+          </div>
+          
+          <!-- 卡片主區：優先欄位（前2個 scanVisible） -->
+          <div class="card-main">
+            ${priorityFields.map((field, idx) => {
+              const value = getAssetFieldValue(asset, field.id);
+              return `
+                ${idx > 0 ? '<span class="field-separator">|</span>' : ''}
+                <span class="card-priority-field">
+                  <span class="field-label">${escapeHtml(field.label)}:</span>
+                  <span class="field-value">${escapeHtml(value)}</span>
+                </span>
+              `;
+            }).join('')}
+          </div>
+          
+          <!-- 展開按鈕 -->
+          <button class="card-expand-btn" onclick="toggleCardExpand('${cardId}')">
+            <i class="fas fa-chevron-down"></i>
+            <span class="expand-text">展開更多資訊</span>
+            <span class="collapse-text" style="display:none">收起資訊</span>
+          </button>
+          
+          <!-- 展開區：其他欄位 -->
+          <div class="card-expandable" id="${cardId}-expandable">
+            ${expandableFields.map(field => {
+              const value = getAssetFieldValue(asset, field.id);
+              return `
+                <div class="expandable-row">
+                  <span class="field-label">${escapeHtml(field.label)}</span>
+                  <span class="field-value">${escapeHtml(value)}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * 渲染移動端卡片列表
+     */
+    function renderAssetCardsMobile(assets) {
+      const { coreField, priorityFields, expandableFields } = getMobileCardFields();
+      
+      // 隱藏桌面版 table
+      const table = document.querySelector('.data-table');
+      if (table) table.style.display = 'none';
+      
+      // 建立或取得移動版容器
+      let mobileContainer = document.getElementById('assetCardsMobile');
+      if (!mobileContainer) {
+        mobileContainer = document.createElement('div');
+        mobileContainer.id = 'assetCardsMobile';
+        mobileContainer.className = 'asset-cards-container';
+        const cardWrapper = document.querySelector('.card.overflow-hidden.mb-6');
+        if (cardWrapper) cardWrapper.appendChild(mobileContainer);
+      }
+      
+      // 渲染卡片
+      if (assets.length === 0) {
+        mobileContainer.innerHTML = '<div class="text-center py-8 text-gray-500">無符合條件的資產</div>';
+        return;
+      }
+      
+      mobileContainer.innerHTML = assets.map(asset => {
+        const isSelected = selectedAssetIds.has(asset.assetId);
+        return renderSingleCard(asset, isSelected, coreField, priorityFields, expandableFields);
+      }).join('');
+      
+      mobileContainer.style.display = 'block';
+    }
+
+    /**
+     * 渲染桌面版表格
+     */
+    function renderAssetTableDesktop(assets) {
+      // 確保桌面版 table 顯示
+      const table = document.querySelector('.data-table');
+      if (table) table.style.display = 'table';
+      
+      // 隱藏移動版容器
+      const mobileContainer = document.getElementById('assetCardsMobile');
+      if (mobileContainer) {
+        mobileContainer.style.display = 'none';
+      }
+      
+      // 原有的桌面版渲染邏輯
+      const tbody = document.getElementById('assetTableBody');
+      
       if (assets.length === 0) {
         tbody.innerHTML = '<tr><td colspan="15" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
         return;
       }
-
+      
       tbody.innerHTML = assets.map(function(asset) {
         const isSelected = selectedAssetIds.has(asset.assetId);
         return `
@@ -2331,6 +2967,18 @@
       }).join('');
       
       applyColumnPreferences();
+    }
+
+    /**
+     * 主渲染函式 - 根據螢幕寬度選擇渲染方式
+     */
+    function renderAssetTable(assets) {
+      // 檢測螢幕寬度
+      if (window.innerWidth < 640) {
+        renderAssetCardsMobile(assets);
+      } else {
+        renderAssetTableDesktop(assets);
+      }
     }
 
     /**
@@ -3159,6 +3807,58 @@
       select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
     }
 
+    // ==========================================
+    // 卡片展開/收合與響應式更新功能
+    // ==========================================
+    
+    /**
+     * 切換卡片展開/收合狀態
+     */
+    function toggleCardExpand(cardId) {
+      const expandable = document.getElementById(cardId + '-expandable');
+      const card = document.querySelector(`[data-card-id="${cardId}"]`);
+      if (!expandable || !card) return;
+      
+      const btn = card.querySelector('.card-expand-btn');
+      const icon = btn.querySelector('i');
+      const expandText = btn.querySelector('.expand-text');
+      const collapseText = btn.querySelector('.collapse-text');
+      
+      if (expandable.classList.contains('open')) {
+        // 收合
+        expandable.classList.remove('open');
+        expandable.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+        expandText.style.display = 'inline';
+        collapseText.style.display = 'none';
+      } else {
+        // 展開
+        expandable.style.display = 'block';
+        // 強制重繪以觸發動畫
+        void expandable.offsetWidth;
+        expandable.classList.add('open');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+        expandText.style.display = 'none';
+        collapseText.style.display = 'inline';
+      }
+    }
+    
+    // 暴露到 window（供 onclick 使用）
+    window.toggleCardExpand = toggleCardExpand;
+    
+    /**
+     * 監聽視窗大小變化，自動切換桌面版/移動版
+     */
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(function() {
+        // 重新渲染當前篩選結果
+        renderAssetTable(getFilteredAssets());
+      }, 300);  // 防抖 300ms
+    });
 
     // ==========================================
     // 選擇功能
