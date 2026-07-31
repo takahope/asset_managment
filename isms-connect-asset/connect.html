@@ -1841,6 +1841,7 @@
 
     function populateIsmsSelect() {
       const select = document.getElementById('ismsAssetSelect');
+      const scanSelect = document.getElementById('scan-ismsAssetSelect');
 
       // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
       const filteredAssets = allIsmsAssets.filter(function(asset) {
@@ -1848,10 +1849,16 @@
       });
 
       const options = filteredAssets.map(function(asset) {
-        return `<option value="${escapeHtml(asset.ismsAssetId)}">${escapeHtml(asset.ismsAssetId)} - ${escapeHtml(asset.name)}</option>`;
+        var bp = asset.businessProcess ? asset.businessProcess : '未設定';
+        var iso = formatIsoScopeLabel(asset.isoScope);
+        var label = asset.ismsAssetId + ' - ' + asset.name + ' · ' + bp + ' · ' + iso;
+        return '<option value="' + escapeHtml(asset.ismsAssetId) + '">' + escapeHtml(label) + '</option>';
       }).join('');
 
       select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
+      if (scanSelect) {
+        scanSelect.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
+      }
     }
 
 
@@ -1904,6 +1911,18 @@
       if (state === '?') return '❓ 待判定';
       if (state === 'out') return '⬜ 不在範圍';
       return '— 未連動';
+    }
+
+    /**
+     * 格式化 ISO 範圍標籤（用於下拉選單）
+     * @param {string} isoScope - ISO 範圍值 ('V' / '?' / '' / null / undefined)
+     * @returns {string} 格式化的 ISO 範圍文字
+     */
+    function formatIsoScopeLabel(isoScope) {
+      var scope = String(isoScope || '').trim();
+      if (scope === 'V') return '✅在範圍';
+      if (scope === '?') return '❓待判定';
+      return '⬜不在範圍';
     }
 
     /** 點已選中的狀態＝取消，回到全部（與 setGroupFilter 同慣例） */
@@ -2548,16 +2567,25 @@
 
       // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
       const filtered = allIsmsAssets.filter(function(a) {
-        return (a.category === 'HW' || a.category === 'EV') && (
-          a.ismsAssetId.toLowerCase().includes(keyword) ||
-          a.name.toLowerCase().includes(keyword)
-        );
+        if (a.category !== 'HW' && a.category !== 'EV') return false;
+        
+        var bp = a.businessProcess ? a.businessProcess.toLowerCase() : '未設定';
+        var iso = formatIsoScopeLabel(a.isoScope).toLowerCase();
+        
+        return a.ismsAssetId.toLowerCase().includes(keyword) ||
+               a.name.toLowerCase().includes(keyword) ||
+               bp.includes(keyword) ||
+               iso.includes(keyword);
       });
 
-      select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' +
-        filtered.map(function(asset) {
-          return `<option value="${escapeHtml(asset.ismsAssetId)}">${escapeHtml(asset.ismsAssetId)} - ${escapeHtml(asset.name)}</option>`;
-        }).join('');
+      const options = filtered.map(function(asset) {
+        var bp = asset.businessProcess ? asset.businessProcess : '未設定';
+        var iso = formatIsoScopeLabel(asset.isoScope);
+        var label = asset.ismsAssetId + ' - ' + asset.name + ' · ' + bp + ' · ' + iso;
+        return '<option value="' + escapeHtml(asset.ismsAssetId) + '">' + escapeHtml(label) + '</option>';
+      }).join('');
+
+      select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
     }
 
 

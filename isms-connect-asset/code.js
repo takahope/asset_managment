@@ -1188,6 +1188,59 @@ function getIsmsAssets(options = {}) {
       }
     }
 
+    // 從對照表統計每個資訊資產的 ISO 範圍狀態
+    try {
+      const mappingSheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
+      if (mappingSheet) {
+        const mappingData = mappingSheet.getDataRange().getValues();
+        const isoScopeMap = new Map(); // ismsAssetId -> Set of isoScope values
+        
+        // 遍歷對照表（跳過標題列）
+        for (let i = 1; i < mappingData.length; i++) {
+          const row = mappingData[i];
+          const ismsAssetId = row[MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1] ? 
+                              row[MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1].toString().trim() : '';
+          const isoScope = row[MAPPING_COLUMN_INDICES.ISO_SCOPE - 1] ? 
+                           row[MAPPING_COLUMN_INDICES.ISO_SCOPE - 1].toString().trim() : '';
+          
+          if (ismsAssetId) {
+            if (!isoScopeMap.has(ismsAssetId)) {
+              isoScopeMap.set(ismsAssetId, new Set());
+            }
+            isoScopeMap.get(ismsAssetId).add(isoScope);
+          }
+        }
+        
+        // 為每個資訊資產決定整體 ISO 範圍狀態
+        for (const asset of assets) {
+          const scopeSet = isoScopeMap.get(asset.ismsAssetId);
+          
+          if (!scopeSet || scopeSet.size === 0) {
+            // 未對照 -> 待判定
+            asset.isoScope = '?';
+          } else if (scopeSet.size === 1) {
+            // 只有一種狀態
+            const onlyValue = Array.from(scopeSet)[0];
+            asset.isoScope = onlyValue || ''; // 空字串代表不在範圍
+          } else {
+            // 混合狀態 -> 待判定
+            asset.isoScope = '?';
+          }
+        }
+      } else {
+        // 對照表不存在，所有資訊資產都標記為待判定
+        for (const asset of assets) {
+          asset.isoScope = '?';
+        }
+      }
+    } catch (mappingError) {
+      console.warn('讀取對照表失敗，ISO 範圍將預設為待判定:', mappingError);
+      // 發生錯誤時，所有資訊資產都標記為待判定
+      for (const asset of assets) {
+        asset.isoScope = '?';
+      }
+    }
+
     // 篩選
     let filtered = assets;
 
