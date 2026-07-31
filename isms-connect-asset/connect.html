@@ -789,6 +789,15 @@
               </div>
             </div>
 
+            <!-- 無對應資產編號篩選 -->
+            <div class="flex items-center mb-1">
+              <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">對照狀態：</span>
+              <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" id="noAssetMappingCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMapping', this.checked)">
+                <span class="whitespace-nowrap">無對應資產編號</span>
+              </label>
+            </div>
+
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
             <div class="flex items-center mb-1">
               <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">ISO範圍：</span>
@@ -1873,7 +1882,8 @@
       location: '',
       stationOnly: false,
       isoBasis: '',
-      label: ''
+      label: '',
+      noAssetMapping: false
     };
 
     /**
@@ -1978,6 +1988,12 @@
         if (filterState.label === 'blue' && conf !== '4') return false;
         if (filterState.label === 'green' && conf !== '3') return false;
       }
+      
+      // 無對應資產編號篩選（虛擬記錄：assetId === '無對應資產/消耗品' 且 isMapped === false）
+      if (filterState.noAssetMapping && excludeDim !== 'noAssetMapping') {
+        if (asset.assetId !== '無對應資產/消耗品' || asset.isMapped) return false;
+      }
+
       return true;
     }
 
@@ -2046,7 +2062,7 @@
         keyword: '', group: '', mappedStatus: '', usageStatus: '',
         ismsAssetId: '', category: '', isoScope: '', assetName: '',
         leaderName: '', userName: '', location: '', stationOnly: false,
-        isoBasis: '', label: ''
+        isoBasis: '', label: '', noAssetMapping: false
       };
 
       // 2. 清空前端所有的 select 與 input
@@ -2055,7 +2071,7 @@
         'ismsFilter', 'categoryFilter', 'assetNameFilter', 'leaderFilter',
         'userFilter', 'isoBasisFilter', 'locationFilter', 'filterLabel'
       ];
-      var checkboxes = ['stationOnlyCb'];
+      var checkboxes = ['stationOnlyCb', 'noAssetMappingCb'];
 
       textInputs.forEach(function(id) {
         var el = document.getElementById(id);
