@@ -1214,12 +1214,35 @@
       .flex.items-center.shrink-0 > span.text-sm {
         font-size: 0.75rem;
         min-width: 70px;
+        flex-shrink: 0; /* 標籤不縮小 */
       }
 
       /* 狀態晶片列容器調整 */
       .flex.flex-col.lg\\:flex-row.items-start.lg\\:items-center {
         flex-direction: column;
         gap: 12px;
+      }
+
+      /* 連動狀態和使用狀態晶片列 - 與 ISO 範圍和組別保持一致 */
+      .flex.items-center.shrink-0 {
+        width: 100%; /* 佔滿整列 */
+      }
+
+      #mappedStatusChips,
+      #usageStatusChips {
+        flex: 1; /* 自適應寬度 */
+        min-width: 0; /* 允許縮小 */
+        gap: 6px;
+        padding: 4px 0 8px;
+        position: relative;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        touch-action: pan-x;
+      }
+
+      #mappedStatusChips::-webkit-scrollbar,
+      #usageStatusChips::-webkit-scrollbar {
+        display: none;
       }
 
       /* ISO 範圍與組別晶片列 - 繼承 Task 4 的樣式 */
