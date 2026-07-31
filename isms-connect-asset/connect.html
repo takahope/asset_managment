@@ -787,20 +787,19 @@
                 <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">使用狀態：</span>
                 <div class="chip-row min-w-0" id="usageStatusChips"></div>
               </div>
+              <!-- 無對應資產編號篩選 -->
+              <div class="flex items-center shrink-0">
+                <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" id="noAssetMappingCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMapping', this.checked)">
+                  <span class="whitespace-nowrap">無對應資產編號</span>
+                </label>
+              </div>
             </div>
 
             <!-- ISO 範圍晶片列：數字排除 isoScope 維度，點選後其他狀態仍可橫向比較 -->
             <div class="flex items-center mb-1">
               <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">ISO範圍：</span>
               <div class="chip-row flex-1 min-w-0" id="isoChips"></div>
-            </div>
-
-            <!-- 無對應資產編號篩選 -->
-            <div class="flex items-center mb-1">
-              <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                <input type="checkbox" id="noAssetMappingCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMapping', this.checked)">
-                <span class="whitespace-nowrap">無對應資產編號</span>
-              </label>
             </div>
 
             <!-- 組別晶片列：數字排除 group 維度，點選後其他組仍可橫向比較 -->
