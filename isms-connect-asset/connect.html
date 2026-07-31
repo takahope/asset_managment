@@ -764,6 +764,13 @@
     .embedded-status-icon--success {
       background: #22c55e; color: #ffffff;
     }
+    /* 狀態卡移出面板後的間距 */
+    .scanner-zone > .embedded-status-card {
+      margin-top: 12px;
+    }
+    .scanner-zone > .scan-panel-meta-grid {
+      margin-top: 8px;
+    }
     .scan-panel-meta-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; color: #475569; margin-bottom: 16px;
     }
@@ -1097,8 +1104,8 @@
         gap: 8px;
       }
 
-      /* 搜尋框獨立一列，與螢幕等寬 */
-      .search-input {
+      /* 搜尋框獨立一列，與螢幕等寬（限篩選器工具列，避免影響掃描面板） */
+      .card .flex.flex-wrap .search-input {
         max-width: 100%;
         width: 100%;
         font-size: 0.875rem;
@@ -1535,6 +1542,19 @@
           <i class="fas fa-spinner fa-spin mr-2"></i>準備掃描器...
         </div>
 
+        <!-- 掃描結果狀態卡（獨立於動作決策面板外） -->
+        <div id="embeddedPanelStatusCard" class="embedded-status-card embedded-status-card--waiting">
+          <div>
+            <small id="embeddedPanelStatusLabel" class="text-xs">等待掃描</small>
+            <div id="embeddedPanelAssetId" class="font-bold text-lg mt-1">請對準條碼掃描</div>
+          </div>
+          <div id="embeddedPanelStatusIcon" class="embedded-status-icon embedded-status-icon--waiting">
+            <i class="fas fa-barcode"></i>
+          </div>
+        </div>
+        <!-- 動態 Meta 區塊 -->
+        <div id="embeddedPanelMetaContainer" class="scan-panel-meta-grid" style="display:none"></div>
+
         <!-- 下方：內嵌式動作決策面板（開啟相機時立即顯示） -->
         <div id="embeddedActionPanel" class="embedded-action-panel">
           <div class="embedded-action-panel__header">
@@ -1546,18 +1566,6 @@
             </button>
           </div>
           <div class="embedded-action-panel__body">
-            <!-- 掃描結果狀態卡 -->
-            <div id="embeddedPanelStatusCard" class="embedded-status-card embedded-status-card--waiting">
-              <div>
-                <small id="embeddedPanelStatusLabel" class="text-xs">等待掃描</small>
-                <div id="embeddedPanelAssetId" class="font-bold text-lg mt-1">請對準條碼掃描</div>
-              </div>
-              <div id="embeddedPanelStatusIcon" class="embedded-status-icon embedded-status-icon--waiting">
-                <i class="fas fa-barcode"></i>
-              </div>
-            </div>
-            <!-- 動態 Meta 區塊 -->
-            <div id="embeddedPanelMetaContainer" class="scan-panel-meta-grid" style="display:none"></div>
             <!-- 連動設定表單 -->
             <div class="text-xs text-gray-500 mb-1 tracking-wider uppercase font-semibold">連動與業務流程設定</div>
             <input type="text" id="scan-ismsSearch" class="search-input" placeholder="搜尋資訊資產...">
@@ -1650,13 +1658,13 @@
       </div>
 
       <div class="action-bar__field">
-        <input type="text" id="mappingRemarks" class="search-input" placeholder="備註（選填）" style="width:180px">
-      </div>
-
-      <div class="action-bar__field">
         <select id="businessProcessSelect" class="select-input" style="min-width:200px">
           <option value="">-- 業務流程：不變更 --</option>
         </select>
+      </div>
+
+      <div class="action-bar__field">
+        <input type="text" id="mappingRemarks" class="search-input" placeholder="備註（選填）" style="width:180px">
       </div>
 
       <div class="action-bar__spacer"></div>

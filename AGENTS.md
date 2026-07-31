@@ -46,6 +46,7 @@ PRs should include:
 - Web app access is domain-restricted in `appsscript.json`; confirm this matches deployment needs.
 
 ## Event Log
+- 2026-07-31: Fixed mobile scan panel (`embeddedActionPanel`) layout disorder in `connect.html`: global `.search-input { order: -1 }` was pushing search/remarks inputs above the status card; scoped rule to `.card .flex.flex-wrap .search-input`, moved status card + meta outside panel body to between scannerStatus and panel header, swapped remarks/business-process order in bottom action bar.
 - 2026-07-29: Added B219 HW Label Filter to `connect.html` alongside the station checkbox, enabling filtering by confidentiality level mapping for B219 hardware assets.
 - 2026-07-29: Added a dedicated "Hardware Label" filter dropdown to `index.html` for identifying B219 HW assets requiring specific confidentiality labels (Blue=Level 4, Green=Level 3).
 - 2026-07-29: Fixed issue in `iso_scope.js` where virtual records (`assetId: '無對應資產/消耗品'`) representing empty ISMS assets were incorrectly treated as unmapped physical assets and queued for auto-creation.
