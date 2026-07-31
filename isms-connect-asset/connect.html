@@ -2782,6 +2782,35 @@
       document.getElementById('embeddedPanelMetaContainer').innerHTML = '';
     }
 
+    function setMappingButtonsBusy(isBusy) {
+      var btn = document.getElementById('createMappingBtn');
+      var scanBtn = document.getElementById('scan-createMappingBtn');
+      
+      if (isBusy) {
+        if (btn) {
+          btn.dataset.busy = '1';
+          btn.disabled = true;
+          btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
+        }
+        if (scanBtn) {
+          scanBtn.dataset.busy = '1';
+          scanBtn.disabled = true;
+          scanBtn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
+        }
+      } else {
+        if (btn) {
+          btn.dataset.busy = '';
+          btn.disabled = false;
+        }
+        if (scanBtn) {
+          scanBtn.dataset.busy = '';
+          scanBtn.disabled = false;
+        }
+        refreshCreateMappingBtnLabel();
+        updateCreateMappingBtn();
+      }
+    }
+
     function createMapping(source = 'main') {
       const prefix = source === 'scan' ? 'scan-' : '';
       const assetIds = Array.from(selectedAssetIds);
@@ -2793,12 +2822,15 @@
         return;
       }
 
+      setMappingButtonsBusy(true);
+
       // 檢查是否有既有對照
       google.script.run
         .withSuccessHandler(function(result) {
           if (result.success && result.hasExisting) {
             // 顯示確認對話框
             pendingMappingData = { assetIds, ismsAssetId, remarks };
+            setMappingButtonsBusy(false);
             showConfirmModal(result.existingMappings);
           } else {
             // 直接建立連動
@@ -2807,15 +2839,13 @@
         })
         .withFailureHandler(function(err) {
           showToast('檢查失敗: ' + err.message, 'error');
+          setMappingButtonsBusy(false);
         })
         .checkExistingMappings(assetIds);
     }
 
     function doCreateMapping(assetIds, ismsAssetId, remarks) {
-      var btn = document.getElementById('createMappingBtn');
-      btn.dataset.busy = '1';
-      btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
+      setMappingButtonsBusy(true);
 
       // 先記下來：成功後 selectedAssetIds 會被清空、下拉會被重設
       var processValue = (isCurrentUserAdmin && businessProcessOptionsAvailable &&
@@ -2865,11 +2895,7 @@
     }
 
     function resetCreateMappingBtn() {
-      const btn = document.getElementById('createMappingBtn');
-      btn.dataset.busy = '';
-      btn.disabled = false;
-      btn.innerHTML = createMappingBtnLabel();   // 不可寫死，否則動態文案會被洗掉
-      updateCreateMappingBtn();
+      setMappingButtonsBusy(false);
     }
 
     // ==========================================
@@ -2964,6 +2990,8 @@
         return;
       }
 
+      setMappingButtonsBusy(true);
+
       pendingBusinessProcessData = {
         ismsAssetIds: info.targets.map(function(t) { return t.ismsAssetId; }),
         value: value,
@@ -2972,6 +3000,7 @@
 
       if (info.hiddenCount > 0) {
         renderBusinessProcessConfirm(info, value);
+        setMappingButtonsBusy(false);
         document.getElementById('businessProcessModal').classList.remove('hidden');
         return;
       }
@@ -3029,14 +3058,10 @@
      */
     function doApplyBusinessProcess(ismsAssetIds, value, expectedAffectedCount, onDone) {
       var btn = document.getElementById('businessProcessConfirmBtn');
-      var mainBtn = document.getElementById('createMappingBtn');
-      
       btn.disabled = true;
-      mainBtn.dataset.busy = '1';
-      mainBtn.disabled = true;
-      
       btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
-      mainBtn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>處理中...';
+
+      setMappingButtonsBusy(true);
 
       google.script.run
         .withSuccessHandler(function(result) {
@@ -3078,11 +3103,7 @@
       btn.disabled = false;
       btn.innerHTML = '確認套用';
       
-      var mainBtn = document.getElementById('createMappingBtn');
-      mainBtn.dataset.busy = '';
-      mainBtn.disabled = false;
-      refreshCreateMappingBtnLabel();
-      updateCreateMappingBtn();
+      setMappingButtonsBusy(false);
     }
 
     function showConfirmModal(existingMappings) {
