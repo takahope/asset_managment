@@ -1952,6 +1952,11 @@
             document.getElementById('businessProcessSelect').innerHTML = html;
             businessProcessOptionsAvailable = true;
             applyAdminGating();
+            
+            // 業務流程載入完成後，重新生成資訊資產下拉選單以套用 ISO 標記
+            if (allIsmsAssets && allIsmsAssets.length > 0) {
+              populateIsmsSelect();
+            }
           }
           
           // ✨ 通知 tracker 完成
@@ -2048,6 +2053,12 @@
             applyFilters();            // 表格 + 統計卡 + 晶片列，並保留使用者當前的篩選條件
             renderIsmsFilterOptions(); // 選項來自 allAssets 的對照結果，兩支載入誰先到都要重繪
             renderOtherFilterOptions(); // 其他 5 個佔位篩選器
+            
+            // 實體資產載入完成後，重新生成資訊資產下拉選單以套用 (無) 標記
+            if (allIsmsAssets && allIsmsAssets.length > 0) {
+              populateIsmsSelect();
+            }
+            
             if (onDone) onDone();      // 渲染完才回呼：呼叫端要讀更新後的 allAssets
           } else {
             renderTableError('載入資產失敗：' + (result.error || '未知錯誤'));
@@ -2155,7 +2166,55 @@
       applyColumnPreferences();
     }
 
+    /**
+     * Task 1: 建立業務流程 ISO 查詢輔助函數
+     * 查詢指定業務流程是否屬於 ISO 認證範圍
+     * @param {string} processName - 業務流程名稱
+     * @returns {boolean} true 表示該流程在 ISO 認證範圍內
+     */
+    function getBusinessProcessIsoStatus(processName) {
+      if (!processName) return false;
+      
+      // 使用全域變數 allBusinessProcesses（由 loadBusinessProcessOptions 載入）
+      if (!allBusinessProcesses || allBusinessProcesses.length === 0) {
+        return false;
+      }
+      
+      // 正規化處理：去除前後空格
+      var normalizedName = String(processName).trim();
+      
+      // 查找匹配的業務流程
+      var process = allBusinessProcesses.find(function(p) {
+        return p.display === normalizedName;
+      });
+      
+      return process ? (process.isCertified === true) : false;
+    }
 
+    /**
+     * Task 2: 建立資訊資產實體連動檢查函數
+     * 檢查指定資訊資產編號是否有實體資產（非虛擬記錄）對照
+     * @param {string} ismsAssetId - 資訊資產編號
+     * @returns {boolean} true 表示有實體資產連動
+     */
+    function hasPhysicalAssetMapping(ismsAssetId) {
+      if (!ismsAssetId || !allAssets || allAssets.length === 0) {
+        return false;
+      }
+      
+      // 過濾出對照到此資訊資產的實體資產（排除虛擬記錄）
+      var physicalAssets = allAssets.filter(function(asset) {
+        return asset.mappedIsmsAssetId === ismsAssetId && 
+               asset.assetId !== '無對應資產/消耗品';
+      });
+      
+      return physicalAssets.length > 0;
+    }
+
+    /**
+     * Task 3: 修改 populateIsmsSelect() 函數以組裝新格式
+     * 填充資訊資產下拉選單，包含 ISO 範圍標記和無實體資產標記
+     */
     function populateIsmsSelect() {
       const select = document.getElementById('ismsAssetSelect');
       const scanSelect = document.getElementById('scan-ismsAssetSelect');
@@ -2166,9 +2225,23 @@
       });
 
       const options = filteredAssets.map(function(asset) {
+        // 業務流程顯示名稱
         var bp = asset.businessProcess ? asset.businessProcess : '未設定';
+        
+        // 檢查業務流程是否在 ISO 範圍，並在名稱後加上 (ISO) 標記
+        var isIso = getBusinessProcessIsoStatus(asset.businessProcess);
+        var bpDisplay = bp + (isIso ? '(ISO)' : '');
+        
+        // ISO 範圍標籤
         var iso = formatIsoScopeLabel(asset.isoScope);
-        var label = asset.ismsAssetId + ' - ' + asset.name + ' · ' + bp + ' · ' + iso;
+        
+        // 檢查是否有實體資產連動，無實體資產時在編號後加上 (無)
+        var hasPhysical = hasPhysicalAssetMapping(asset.ismsAssetId);
+        var assetIdDisplay = asset.ismsAssetId + (hasPhysical ? '' : '(無)');
+        
+        // 組裝完整標籤：資訊資產編號(無) - 資產名稱 · 業務流程(ISO) · ISO範圍
+        var label = assetIdDisplay + ' - ' + asset.name + ' · ' + bpDisplay + ' · ' + iso;
+        
         return '<option value="' + escapeHtml(asset.ismsAssetId) + '">' + escapeHtml(label) + '</option>';
       }).join('');
 
@@ -2896,9 +2969,23 @@
       });
 
       const options = filtered.map(function(asset) {
+        // 業務流程顯示名稱
         var bp = asset.businessProcess ? asset.businessProcess : '未設定';
+        
+        // 檢查業務流程是否在 ISO 範圍，並在名稱後加上 (ISO) 標記
+        var isIso = getBusinessProcessIsoStatus(asset.businessProcess);
+        var bpDisplay = bp + (isIso ? '(ISO)' : '');
+        
+        // ISO 範圍標籤
         var iso = formatIsoScopeLabel(asset.isoScope);
-        var label = asset.ismsAssetId + ' - ' + asset.name + ' · ' + bp + ' · ' + iso;
+        
+        // 檢查是否有實體資產連動，無實體資產時在編號後加上 (無)
+        var hasPhysical = hasPhysicalAssetMapping(asset.ismsAssetId);
+        var assetIdDisplay = asset.ismsAssetId + (hasPhysical ? '' : '(無)');
+        
+        // 組裝完整標籤：資訊資產編號(無) - 資產名稱 · 業務流程(ISO) · ISO範圍
+        var label = assetIdDisplay + ' - ' + asset.name + ' · ' + bpDisplay + ' · ' + iso;
+        
         return '<option value="' + escapeHtml(asset.ismsAssetId) + '">' + escapeHtml(label) + '</option>';
       }).join('');
 
