@@ -185,6 +185,11 @@
     .chip-row {
       display: flex; flex-wrap: nowrap; gap: 8px;
       overflow-x: auto; padding: 4px 0 8px;
+      -webkit-overflow-scrolling: touch; /* iOS 平滑滾動 */
+      scrollbar-width: none; /* Firefox 隱藏滾動條 */
+    }
+    .chip-row::-webkit-scrollbar {
+      display: none; /* Chrome/Safari 隱藏滾動條 */
     }
     .chip {
       flex: 0 0 auto;
@@ -193,6 +198,7 @@
       border: 1px solid #e2e8f0; background: #fff;
       color: #334155; font-size: 0.875rem; cursor: pointer;
       white-space: nowrap; transition: all 0.15s;
+      touch-action: manipulation; /* 優化觸控響應 */
     }
     .chip:hover { border-color: #93c5fd; background: #f8fafc; }
     .chip.is-active { border-color: #2563eb; background: #2563eb; color: #fff; }
@@ -645,8 +651,8 @@
       top: 100%;
       left: 50%;
       transform: translateX(-50%);
-      width: 80px;
-      height: 24px;
+      width: 120px; /* 增加寬度以提升點擊範圍 */
+      height: 32px; /* 增加高度 */
       background-color: white;
       border-radius: 0 0 50px 50px;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -657,6 +663,7 @@
       cursor: pointer;
       z-index: 41;
       transition: background-color 0.2s;
+      touch-action: manipulation; /* 優化觸控響應 */
     }
     .filter-drawer-tab:hover {
       background-color: #f8fafc;
@@ -672,6 +679,8 @@
     .filter-drawer-tab i#filterPinBtn {
       transition: transform 0.2s, color 0.2s;
       color: #64748b;
+      padding: 4px 8px; /* 增加點擊範圍 */
+      margin: -4px; /* 保持視覺位置不變 */
     }
     .filter-drawer-wrapper.is-open .filter-drawer-tab i#filterPinBtn {
       transform: none;
@@ -1081,15 +1090,18 @@
     @media (max-width: 639px) {
       /* 篩選器第一列 - 搜尋框與按鈕組 */
       .card .flex.flex-wrap.items-center.gap-4.mb-6 {
-        flex-direction: column;
-        align-items: stretch;
+        display: grid;
         gap: 8px;
       }
 
+      /* 搜尋框獨立一列，與螢幕等寬 */
       .search-input {
         max-width: 100%;
+        width: 100%;
         font-size: 0.875rem;
         padding: 8px 12px;
+        grid-column: 1 / -1; /* 跨越整列 */
+        order: -1; /* 確保搜尋框在最上方 */
       }
 
       .btn-secondary {
@@ -1109,10 +1121,10 @@
         width: 100%;
       }
 
-      /* 下拉選單列 - 垂直堆疊 */
+      /* 下拉選單列 - 兩個一列並排 */
       .card .flex.flex-wrap.items-center.gap-4.mb-4 {
-        flex-direction: column;
-        align-items: stretch;
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* 兩欄並排 */
         gap: 8px;
       }
 
@@ -1125,17 +1137,27 @@
         text-align-last: left;
       }
 
-      /* 保管人/使用人/認證依據同列的容器也要垂直 */
+      /* 保管人/使用人/認證依據同列的容器 - 也保持兩欄並排 */
       .card .flex.items-center.gap-4 {
-        flex-direction: column;
-        align-items: stretch;
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* 兩欄並排 */
         gap: 8px;
+        grid-column: 1 / -1; /* 跨越整列 */
       }
 
-      /* 駐站 checkbox 列 */
+      /* 地點與駐站快篩綁定在一起 - 單獨一列 */
       .card .flex.items-center.gap-3 {
+        display: flex;
         flex-direction: row;
         justify-content: flex-start;
+        gap: 8px;
+        grid-column: 1 / -1; /* 跨越整列 */
+      }
+
+      /* 地點下拉選單不要佔滿整列 */
+      .card .flex.items-center.gap-3 .select-input {
+        width: auto;
+        flex: 1;
       }
 
       /* label 保持橫向 */
@@ -5325,17 +5347,27 @@
       const pinBtn = document.getElementById('filterPinBtn');
       
       if (wrapper && tab) {
-        // 圖釘點擊事件
+        // 圖釘點擊事件（使用事件委派，避免阻擋拉環點擊）
         if (pinBtn) {
-          pinBtn.addEventListener('click', (e) => {
+          const handlePinClick = (e) => {
             e.stopPropagation();
             isFilterDrawerPinned = !isFilterDrawerPinned;
             pinBtn.classList.toggle('is-pinned', isFilterDrawerPinned);
+          };
+          pinBtn.addEventListener('click', handlePinClick);
+          pinBtn.addEventListener('touchend', (e) => {
+            e.preventDefault(); // 避免觸發 click
+            handlePinClick(e);
           });
         }
 
-        // 拉環點擊切換
-        tab.addEventListener('click', (e) => {
+        // 拉環點擊切換（支援觸控和滑鼠）
+        const handleTabToggle = (e) => {
+          // 只有當點擊的不是圖釘按鈕時才處理
+          if (e.target === pinBtn || pinBtn.contains(e.target)) {
+            return;
+          }
+          
           e.stopPropagation();
           // 如果卡片目前是開啟狀態，準備關閉它，則重置釘選狀態
           if (wrapper.classList.contains('is-open')) {
@@ -5343,6 +5375,16 @@
             if (pinBtn) pinBtn.classList.remove('is-pinned');
           }
           toggleFilterDrawer();
+        };
+        
+        tab.addEventListener('click', handleTabToggle);
+        tab.addEventListener('touchend', (e) => {
+          // 只有當點擊的不是圖釘時才處理
+          if (e.target === pinBtn || pinBtn.contains(e.target)) {
+            return;
+          }
+          e.preventDefault(); // 避免觸發 click
+          handleTabToggle(e);
         });
         
         // 移入與移出
