@@ -638,6 +638,12 @@
     .embedded-action-panel__header {
       padding: 12px 16px;
       border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .embedded-action-panel__header h5 {
+      margin: 0;
     }
     .embedded-action-panel__body {
       display: flex;
@@ -850,6 +856,9 @@
             <h5 class="font-bold text-gray-800">
               <i class="fas fa-clipboard-check mr-2 text-blue-600"></i>動作決策面板
             </h5>
+            <button class="btn-secondary" onclick="handleRescan()" style="padding: 4px 12px; font-size: 0.875rem;" title="繼續掃描下一個資產">
+              <i class="fas fa-redo mr-1"></i>重掃
+            </button>
           </div>
           <div class="embedded-action-panel__body">
             <!-- 掃描結果狀態卡 -->
@@ -3325,6 +3334,13 @@
       // 暴露到 window（供 IIFE 外的回調使用）
       window.pauseScanner = pauseScanner;
       window.resumeScanner = resumeScanner;
+
+      window.handleRescan = function() {
+        if (typeof window.resumeScanner === 'function') {
+          window.resumeScanner();
+        }
+        resetEmbeddedPanelStatus();
+      };
 
       // 完全停止掃描器並關閉相機
       function stopScanner() {
