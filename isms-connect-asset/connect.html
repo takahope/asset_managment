@@ -303,6 +303,73 @@
       to { transform: rotate(360deg); }
     }
 
+    /* ========================================================================= */
+    /* 載入遮罩與滾動方框動畫                                                    */
+    /* ========================================================================= */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      opacity: 1;
+      transition: opacity 0.5s ease-out;
+    }
+
+    .loading-overlay.fade-out {
+      opacity: 0;
+    }
+
+    .loading-track {
+      position: relative;
+      width: 80%;
+      max-width: 600px;
+      height: 4px;
+      background: linear-gradient(
+        to right,
+        rgba(37, 99, 235, 0.2) 0%,
+        rgba(37, 99, 235, 0.6) 50%,
+        rgba(37, 99, 235, 0.2) 100%
+      );
+      border-radius: 2px;
+      margin-bottom: 40px;
+      box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+    }
+
+    .loading-box {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 48px;
+      height: 48px;
+      margin-top: -24px;
+      margin-left: -24px;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+      border-radius: 8px;
+      box-shadow: 
+        0 0 30px rgba(59, 130, 246, 0.6),
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        inset 0 -2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 2px 8px rgba(255, 255, 255, 0.3);
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    .loading-text {
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      margin-top: 20px;
+    }
+
     .checkbox-wrapper input[type="checkbox"] {
       width: 18px;
       height: 18px;
@@ -1299,6 +1366,206 @@
     let allBusinessProcesses = [];
     let businessProcessOptionsAvailable = false;
     let pendingBusinessProcessData = null;
+    let globalLoadingTracker = null;
+
+    /* ========================================================================= */
+    /* LoadingTracker 類別 - 追蹤多個 API 載入進度                               */
+    /* ========================================================================= */
+
+    class LoadingTracker {
+      constructor(apiNames) {
+        this.apis = {};
+        apiNames.forEach(name => {
+          this.apis[name] = false;
+        });
+        this.totalApis = apiNames.length;
+        this.completedCount = 0;
+        this.progressCallbacks = [];
+      }
+      
+      markComplete(apiName) {
+        if (!this.apis.hasOwnProperty(apiName)) {
+          console.warn(`Unknown API name: ${apiName}`);
+          return;
+        }
+        if (this.apis[apiName]) return;
+        
+        this.apis[apiName] = true;
+        this.completedCount++;
+        
+        const progress = this.getProgress();
+        this.progressCallbacks.forEach(callback => {
+          try {
+            callback(progress, apiName);
+          } catch (err) {
+            console.error('Progress callback error:', err);
+          }
+        });
+      }
+      
+      getProgress() {
+        return this.completedCount / this.totalApis;
+      }
+      
+      getProgressPercent() {
+        return Math.round(this.getProgress() * 100);
+      }
+      
+      onProgressChange(callback) {
+        if (typeof callback === 'function') {
+          this.progressCallbacks.push(callback);
+        }
+      }
+      
+      isComplete() {
+        return this.completedCount === this.totalApis;
+      }
+      
+      reset() {
+        Object.keys(this.apis).forEach(name => {
+          this.apis[name] = false;
+        });
+        this.completedCount = 0;
+      }
+      
+      getStatus() {
+        return {
+          total: this.totalApis,
+          completed: this.completedCount,
+          progress: this.getProgress(),
+          percent: this.getProgressPercent(),
+          apis: { ...this.apis }
+        };
+      }
+    }
+
+    /* ========================================================================= */
+    /* 滾動方框動畫引擎 - 根據進度更新方框位置與旋轉                              */
+    /* ========================================================================= */
+
+    function easeInOut(t) {
+      return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    }
+
+    const loadingAnimation = {
+      targetProgress: 0,
+      currentProgress: 0,
+      animationFrameId: null,
+      isAnimating: false,
+      
+      setTargetProgress(progress) {
+        this.targetProgress = Math.max(0, Math.min(1, progress));
+        if (!this.isAnimating) {
+          this.startAnimation();
+        }
+      },
+      
+      startAnimation() {
+        this.isAnimating = true;
+        this.animate();
+      },
+      
+      animate() {
+        const loadingBox = document.getElementById('loadingBox');
+        const loadingText = document.getElementById('loadingText');
+        
+        if (!loadingBox || !loadingText) {
+          this.isAnimating = false;
+          return;
+        }
+        
+        const interpolationSpeed = 0.05;
+        this.currentProgress += (this.targetProgress - this.currentProgress) * interpolationSpeed;
+        
+        const easedProgress = easeInOut(this.currentProgress);
+        
+        const track = document.querySelector('.loading-track');
+        const trackWidth = track ? track.offsetWidth : 600;
+        const boxSize = 48;
+        const maxTranslate = trackWidth - boxSize;
+        
+        const translateX = easedProgress * maxTranslate;
+        const rotation = easedProgress * 360;
+        
+        loadingBox.style.transform = `translateX(${translateX}px) rotate(${rotation}deg)`;
+        
+        const percent = Math.round(this.currentProgress * 100);
+        loadingText.textContent = `載入中... ${percent}%`;
+        
+        if (Math.abs(this.targetProgress - this.currentProgress) > 0.01) {
+          this.animationFrameId = requestAnimationFrame(() => this.animate());
+        } else {
+          this.currentProgress = this.targetProgress;
+          this.isAnimating = false;
+          
+          if (this.targetProgress >= 1) {
+            this.onComplete();
+          }
+        }
+      },
+      
+      onComplete() {
+        console.log('Loading complete!');
+      },
+      
+      stop() {
+        if (this.animationFrameId) {
+          cancelAnimationFrame(this.animationFrameId);
+          this.animationFrameId = null;
+        }
+        this.isAnimating = false;
+      }
+    };
+
+    function initLoadingAnimation() {
+      const overlay = document.createElement('div');
+      overlay.id = 'loadingOverlay';
+      overlay.className = 'loading-overlay';
+      overlay.innerHTML = `
+        <div class="loading-track">
+          <div id="loadingBox" class="loading-box"></div>
+        </div>
+        <div id="loadingText" class="loading-text">載入中... 0%</div>
+      `;
+      
+      document.body.insertBefore(overlay, document.body.firstChild);
+      
+      loadingAnimation.setTargetProgress(0);
+    }
+
+    /* ========================================================================= */
+    /* 淡出與移除邏輯 - 完成時優雅退場                                          */
+    /* ========================================================================= */
+
+    function completeLoadingAnimation() {
+      const overlay = document.getElementById('loadingOverlay');
+      if (!overlay) return;
+      
+      loadingAnimation.stop();
+      
+      const loadingText = document.getElementById('loadingText');
+      if (loadingText) {
+        loadingText.textContent = '載入完成 ✓';
+      }
+      
+      setTimeout(() => {
+        overlay.classList.add('fade-out');
+        
+        setTimeout(() => {
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+          console.log('✓ Loading overlay removed');
+        }, 500);
+      }, 300);
+    }
+
+    // 修改 loadingAnimation.onComplete
+    loadingAnimation.onComplete = function() {
+      console.log('Loading complete!');
+      completeLoadingAnimation();
+    };
+
 
     // ==========================================
     // 欄位拖曳設定邏輯 (Column Reordering)
@@ -1523,7 +1790,29 @@
     // ==========================================
     // 初始化
     // ==========================================
+    // 初始化
+    // ==========================================
     document.addEventListener('DOMContentLoaded', function() {
+      // ✨ 初始化載入動畫
+      initLoadingAnimation();
+      
+      // ✨ 建立 tracker
+      globalLoadingTracker = new LoadingTracker(['assets', 'ismsAssets', 'businessProcesses']);
+      
+      // ✨ 註冊進度更新回呼
+      globalLoadingTracker.onProgressChange((progress, apiName) => {
+        console.log(`✓ ${apiName} 已完成 (${globalLoadingTracker.getProgressPercent()}%)`);
+        loadingAnimation.setTargetProgress(progress);
+      });
+      
+      // ✨ 超時保護
+      setTimeout(() => {
+        if (document.getElementById('loadingOverlay')) {
+          console.warn('⚠ Loading timeout - force removing overlay');
+          completeLoadingAnimation();
+        }
+      }, 10000);
+      
       loadColSettings();
       applyColumnPreferences();
       loadUserInfo();
@@ -1652,22 +1941,32 @@
           if (!result || !result.success) {
             disableBusinessProcessSelector(
               '業務流程選項載入失敗：' + ((result && result.error) || '未知錯誤'));
-            return;
+          } else {
+            allBusinessProcesses = result.businessProcesses || [];
+            var html = '<option value="">-- 業務流程：不變更 --</option>' +
+                       '<option value="__CLEAR__">— 清除業務流程 —</option>';
+            allBusinessProcesses.forEach(function(p) {
+              html += '<option value="' + escapeHtml(p.display) + '">' +
+                      escapeHtml(p.display) + '</option>';
+            });
+            document.getElementById('businessProcessSelect').innerHTML = html;
+            businessProcessOptionsAvailable = true;
+            applyAdminGating();
           }
-          allBusinessProcesses = result.businessProcesses || [];
-          var html = '<option value="">-- 業務流程：不變更 --</option>' +
-                     '<option value="__CLEAR__">— 清除業務流程 —</option>';
-          allBusinessProcesses.forEach(function(p) {
-            html += '<option value="' + escapeHtml(p.display) + '">' +
-                    escapeHtml(p.display) + '</option>';
-          });
-          document.getElementById('businessProcessSelect').innerHTML = html;
-          businessProcessOptionsAvailable = true;
-          applyAdminGating();
+          
+          // ✨ 通知 tracker 完成
+          if (globalLoadingTracker) {
+            globalLoadingTracker.markComplete('businessProcesses');
+          }
         })
         .withFailureHandler(function(err) {
           disableBusinessProcessSelector(
             '業務流程選項載入失敗：' + (err && err.message ? err.message : err));
+          
+          // ✨ 失敗也標記完成
+          if (globalLoadingTracker) {
+            globalLoadingTracker.markComplete('businessProcesses');
+          }
         })
         .getDropdownOptions();
     }
@@ -1753,9 +2052,19 @@
           } else {
             renderTableError('載入資產失敗：' + (result.error || '未知錯誤'));
           }
+          
+          // ✨ 通知 tracker 完成
+          if (globalLoadingTracker) {
+            globalLoadingTracker.markComplete('assets');
+          }
         })
         .withFailureHandler(function(err) {
           renderTableError('載入資產失敗：' + (err && err.message ? err.message : err));
+          
+          // ✨ 失敗也標記完成
+          if (globalLoadingTracker) {
+            globalLoadingTracker.markComplete('assets');
+          }
         })
         .getAssetsWithMappingStatus({});
     }
@@ -1771,9 +2080,19 @@
           } else {
             disableIsmsSelectors('資訊資產載入失敗：' + (result.error || '未知錯誤'));
           }
+          
+          // ✨ 通知 tracker 完成
+          if (globalLoadingTracker) {
+            globalLoadingTracker.markComplete('ismsAssets');
+          }
         })
         .withFailureHandler(function(err) {
           disableIsmsSelectors('資訊資產載入失敗：' + (err && err.message ? err.message : err));
+          
+          // ✨ 失敗也標記完成
+          if (globalLoadingTracker) {
+            globalLoadingTracker.markComplete('ismsAssets');
+          }
         })
         .getIsmsAssets({});
     }
