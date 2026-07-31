@@ -23,6 +23,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <?!= include('quagga'); ?>
   <style id="dynamic-col-styles"></style>
 
@@ -754,6 +755,118 @@
     .scan-panel-meta-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; color: #475569; margin-bottom: 16px;
     }
+    /* ── 匯入對照 Modal ── */
+    .import-modal-body {
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    .import-modal-dropzone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background-color 0.2s;
+    }
+    .import-modal-dropzone:hover,
+    .import-modal-dropzone.drag-over {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+    }
+    .import-modal-dropzone i {
+      font-size: 2rem;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+    .import-modal-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .import-modal-stat-card {
+      flex: 1;
+      min-width: 100px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      text-align: center;
+      font-weight: 600;
+    }
+    .import-modal-stat-card.stat-new     { background: #dcfce7; color: #166534; }
+    .import-modal-stat-card.stat-update  { background: #fef9c3; color: #854d0e; }
+    .import-modal-stat-card.stat-warning { background: #ffedd5; color: #9a3412; }
+    .import-modal-stat-card.stat-error   { background: #fee2e2; color: #991b1b; }
+    .import-modal-section {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .import-modal-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      user-select: none;
+    }
+    .import-modal-section-header:hover { background: #f8fafc; }
+    .import-modal-section-header .import-modal-chevron {
+      transition: transform 0.2s;
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+    .import-modal-section-header .import-modal-chevron.open {
+      transform: rotate(180deg);
+    }
+    .import-modal-section-body {
+      display: none;
+      padding: 0 14px 12px;
+      font-size: 0.8125rem;
+      color: #475569;
+    }
+    .import-modal-section-body.open { display: block; }
+    .import-modal-diff-row {
+      padding: 6px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .import-modal-diff-row:last-child { border-bottom: none; }
+    .import-modal-old-val { color: #ef4444; text-decoration: line-through; }
+    .import-modal-new-val { color: #22c55e; font-weight: 500; }
+    .import-modal-arrow { color: #94a3b8; margin: 0 4px; }
+    .import-modal-error-msg { color: #dc2626; }
+    .import-modal-warning-msg { color: #ea580c; }
+    .import-modal-file-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      color: #475569;
+      margin-bottom: 12px;
+    }
+    .import-modal-nochange {
+      font-size: 0.8125rem;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+    .import-modal-footer-warning {
+      font-size: 0.8125rem;
+      color: #ea580c;
+      margin-bottom: 8px;
+    }
+    .import-modal-show-more {
+      text-align: center;
+      padding: 8px;
+      color: #3b82f6;
+      cursor: pointer;
+      font-size: 0.8125rem;
+    }
+    .import-modal-show-more:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -784,6 +897,9 @@
               </button>
               <button class="btn-secondary" onclick="exportFiltered()">
                 <i class="fas fa-download mr-2"></i>匯出篩選結果
+              </button>
+              <button class="btn-secondary" onclick="openImportModal()">
+                <i class="fas fa-upload mr-2"></i>匯入對照
               </button>
               <button class="btn-secondary" onclick="runIsoScan()">
                 <i class="fas fa-shield-alt mr-2"></i>執行範圍掃描
@@ -1351,6 +1467,57 @@
         <div class="flex justify-end gap-3 mt-6">
           <button class="btn-secondary" onclick="closeBusinessProcessModal()">取消</button>
           <button id="businessProcessConfirmBtn" class="btn-primary" onclick="confirmBusinessProcess()">確認套用</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 匯入對照 Modal -->
+    <div id="importMappingModal" class="modal-overlay hidden">
+      <div class="modal-content" style="max-width:800px">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+          <h3 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-upload text-blue-500 mr-2"></i>匯入對照
+          </h3>
+          <button onclick="closeImportModal()" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:#94a3b8">&times;</button>
+        </div>
+
+        <!-- 階段 1：選擇檔案 -->
+        <div id="importStage1">
+          <div class="import-modal-dropzone" id="importDropzone"
+               onclick="document.getElementById('importFileInput').click()">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p style="margin:0;color:#64748b">拖放 CSV / Excel 檔案到此處，或點擊選擇檔案</p>
+            <p style="margin:8px 0 0;font-size:0.75rem;color:#94a3b8">支援 .csv, .xlsx, .xls</p>
+          </div>
+          <input type="file" id="importFileInput" accept=".csv,.xlsx,.xls" style="display:none"
+                 onchange="handleImportFile(this)">
+          <div style="margin-top:12px;text-align:center">
+            <a href="#" onclick="downloadImportTemplate();return false"
+               style="font-size:0.8125rem;color:#3b82f6;text-decoration:none">
+              <i class="fas fa-download mr-1"></i>下載範本 CSV
+            </a>
+          </div>
+          <div id="importParseError" style="display:none;margin-top:12px;padding:12px;background:#fee2e2;border-radius:8px;color:#dc2626;font-size:0.875rem"></div>
+        </div>
+
+        <!-- 階段 2：比對預覽 -->
+        <div id="importStage2" style="display:none">
+          <div id="importFileInfo" class="import-modal-file-info"></div>
+          <div id="importStats" class="import-modal-stats"></div>
+          <div id="importNoChange" class="import-modal-nochange" style="display:none"></div>
+          <div id="importSections" class="import-modal-body"></div>
+          <div id="importFooterWarning" class="import-modal-footer-warning" style="display:none"></div>
+          <div class="flex justify-end gap-3 mt-6">
+            <button class="btn-secondary" onclick="resetImportModal()">重新選擇</button>
+            <button class="btn-secondary" onclick="closeImportModal()">取消</button>
+            <button id="importSubmitBtn" class="btn-primary" onclick="submitImport()">確認送出</button>
+          </div>
+        </div>
+
+        <!-- 階段 3：送出中 -->
+        <div id="importStage3" style="display:none;text-align:center;padding:40px 0">
+          <i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#3b82f6;margin-bottom:16px"></i>
+          <p style="color:#64748b">正在寫入資料，請稍候...</p>
         </div>
       </div>
     </div>
@@ -4510,6 +4677,513 @@
         handleDrawerMouseEnter();
       }
     });
+
+    // =============================================
+    // 匯入對照功能
+    // =============================================
+    var importDiffResult = null; // 暫存 diff 結果
+    var importLastLoadTime = Date.now(); // 追蹤上次 loadAssets 時間
+
+    // 攔截 loadAssets 完成以更新時間戳
+    (function() {
+      var origLoadAssets = loadAssets;
+      loadAssets = function(onDone) {
+        origLoadAssets(function() {
+          importLastLoadTime = Date.now();
+          if (onDone) onDone();
+        });
+      };
+    })();
+
+    function openImportModal() {
+      resetImportModal();
+      document.getElementById('importMappingModal').classList.remove('hidden');
+    }
+
+    function closeImportModal() {
+      document.getElementById('importMappingModal').classList.add('hidden');
+    }
+
+    function resetImportModal() {
+      importDiffResult = null;
+      document.getElementById('importStage1').style.display = '';
+      document.getElementById('importStage2').style.display = 'none';
+      document.getElementById('importStage3').style.display = 'none';
+      document.getElementById('importParseError').style.display = 'none';
+      document.getElementById('importFileInput').value = '';
+    }
+
+    function downloadImportTemplate() {
+      downloadCsv('資訊資產分類編號,業務流程,使用狀態,資產編號', '匯入對照範本.csv');
+      showToast('範本已下載', 'success');
+    }
+
+    // ── 欄位別名偵測 ──
+    var IMPORT_COLUMN_ALIASES = {
+      ismsAssetId: ['資訊資產分類編號', '資訊資產編號', 'isms編號', 'isms_asset_id'],
+      businessProcess: ['業務流程', 'business_process'],
+      usageStatus: ['使用狀態', '狀態', 'status'],
+      assetId: ['資產編號', '實體資產編號', 'asset_id']
+    };
+
+    function detectColumns(headers) {
+      var mapping = {};
+      var normalizedHeaders = headers.map(function(h) {
+        return String(h || '').trim().toLowerCase().replace(/\s+/g, '');
+      });
+      for (var field in IMPORT_COLUMN_ALIASES) {
+        var aliases = IMPORT_COLUMN_ALIASES[field];
+        for (var i = 0; i < normalizedHeaders.length; i++) {
+          var nh = normalizedHeaders[i];
+          for (var j = 0; j < aliases.length; j++) {
+            if (nh === aliases[j].toLowerCase().replace(/\s+/g, '')) {
+              mapping[field] = i;
+              break;
+            }
+          }
+          if (mapping[field] !== undefined) break;
+        }
+      }
+      return mapping;
+    }
+
+    // ── 拖放支援 ──
+    (function() {
+      var dz = document.getElementById('importDropzone');
+      if (!dz) return;
+      ['dragenter', 'dragover'].forEach(function(evt) {
+        dz.addEventListener(evt, function(e) {
+          e.preventDefault(); e.stopPropagation();
+          dz.classList.add('drag-over');
+        });
+      });
+      ['dragleave', 'drop'].forEach(function(evt) {
+        dz.addEventListener(evt, function(e) {
+          e.preventDefault(); e.stopPropagation();
+          dz.classList.remove('drag-over');
+        });
+      });
+      dz.addEventListener('drop', function(e) {
+        var files = e.dataTransfer.files;
+        if (files.length > 0) {
+          document.getElementById('importFileInput').files = files;
+          handleImportFile(document.getElementById('importFileInput'));
+        }
+      });
+    })();
+
+    // ── 檔案解析 ──
+    function handleImportFile(input) {
+      var file = input.files[0];
+      if (!file) return;
+
+      var errorDiv = document.getElementById('importParseError');
+      errorDiv.style.display = 'none';
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var data = new Uint8Array(e.target.result);
+          var workbook = XLSX.read(data, { type: 'array' });
+          var sheetName = workbook.SheetNames[0];
+          var sheet = workbook.Sheets[sheetName];
+          var jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+          if (jsonData.length < 2) {
+            showImportError('檔案無有效資料（僅有表頭或空白）。');
+            return;
+          }
+
+          var headers = jsonData[0];
+          var colMap = detectColumns(headers);
+
+          if (colMap.ismsAssetId === undefined) {
+            var detectedHeaders = headers.filter(function(h) { return String(h).trim(); }).join(', ');
+            showImportError(
+              '找不到必要欄位「資訊資產分類編號」。<br>' +
+              '偵測到的表頭：' + detectedHeaders + '<br>' +
+              '請確認檔案包含「資訊資產分類編號」欄位（或別名：資訊資產編號、ISMS編號）。'
+            );
+            return;
+          }
+
+          var rows = [];
+          for (var i = 1; i < jsonData.length; i++) {
+            var row = jsonData[i];
+            var ismsId = String(row[colMap.ismsAssetId] || '').trim();
+            if (!ismsId) continue; // 跳過空行
+            rows.push({
+              rowNum: i + 1,
+              ismsAssetId: ismsId,
+              businessProcess: colMap.businessProcess !== undefined ? String(row[colMap.businessProcess] || '').trim() : null,
+              usageStatus: colMap.usageStatus !== undefined ? String(row[colMap.usageStatus] || '').trim() : null,
+              assetId: colMap.assetId !== undefined ? String(row[colMap.assetId] || '').trim() : null
+            });
+          }
+
+          if (rows.length === 0) {
+            showImportError('檔案中沒有有效的資料列。');
+            return;
+          }
+
+          if (rows.length > 500) {
+            showToast('匯入資料量較大（' + rows.length + ' 列），處理可能需要較長時間。', 'warning');
+          }
+
+          // 執行 diff
+          var result = runImportDiff(rows);
+          result.fileName = file.name;
+          result.sheetName = sheetName;
+          result.totalRows = rows.length;
+          importDiffResult = result;
+
+          renderImportPreview(result);
+        } catch (err) {
+          showImportError('解析檔案失敗：' + (err.message || '未知錯誤'));
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function showImportError(html) {
+      var el = document.getElementById('importParseError');
+      el.innerHTML = html;
+      el.style.display = '';
+    }
+
+    // ── Diff 引擎 ──
+    function runImportDiff(rows) {
+      // 建立索引
+      var ismsLookup = {};
+      for (var i = 0; i < allIsmsAssets.length; i++) {
+        var ia = allIsmsAssets[i];
+        ismsLookup[ia.ismsAssetId] = ia;
+      }
+
+      var assetLookup = {};
+      var mappingLookup = {}; // key: assetId → mappedIsmsAssetId
+      for (var j = 0; j < allAssets.length; j++) {
+        var a = allAssets[j];
+        assetLookup[a.assetId] = a;
+        if (a.isMapped && a.mappedIsmsAssetId) {
+          mappingLookup[a.assetId] = a.mappedIsmsAssetId;
+        }
+      }
+
+      var allowedBP = new Set(allBusinessProcesses || []);
+
+      // 偵測重複
+      var seenIds = {};
+      var duplicates = {};
+      for (var k = 0; k < rows.length; k++) {
+        var id = rows[k].ismsAssetId;
+        if (seenIds[id] !== undefined) {
+          if (!duplicates[id]) duplicates[id] = [seenIds[id]];
+          duplicates[id].push(rows[k].rowNum);
+        } else {
+          seenIds[id] = rows[k].rowNum;
+        }
+      }
+
+      var items = { newMapping: [], update: [], noChange: [], error: [], warning: [] };
+
+      for (var m = 0; m < rows.length; m++) {
+        var row = rows[m];
+        var entry = { row: row, changes: [], message: '' };
+
+        // 重複檢查
+        if (duplicates[row.ismsAssetId]) {
+          entry.message = '資訊資產分類編號重複（第 ' + duplicates[row.ismsAssetId].join(', ') + ' 列）';
+          items.error.push(entry);
+          continue;
+        }
+
+        // ISMS 資產存在檢查
+        var isms = ismsLookup[row.ismsAssetId];
+        if (!isms) {
+          entry.message = '資訊資產「' + row.ismsAssetId + '」不存在';
+          items.error.push(entry);
+          continue;
+        }
+
+        var hasChange = false;
+        var isNewMapping = false;
+        var hasWarning = false;
+        var warningMsg = '';
+
+        // 比較業務流程
+        if (row.businessProcess !== null && row.businessProcess !== '') {
+          var oldBP = isms.businessProcess || '';
+          if (row.businessProcess !== oldBP) {
+            entry.changes.push({ field: '業務流程', oldVal: oldBP, newVal: row.businessProcess });
+            hasChange = true;
+          }
+          if (allowedBP.size > 0 && !allowedBP.has(row.businessProcess)) {
+            hasWarning = true;
+            warningMsg = '業務流程「' + row.businessProcess + '」不在允許清單中';
+          }
+        }
+
+        // 比較使用狀態
+        if (row.usageStatus !== null && row.usageStatus !== '') {
+          var oldStatus = isms.status || '';
+          if (row.usageStatus !== oldStatus) {
+            entry.changes.push({ field: '使用狀態', oldVal: oldStatus, newVal: row.usageStatus });
+            hasChange = true;
+          }
+        }
+
+        // 檢查對照關聯
+        if (row.assetId !== null && row.assetId !== '') {
+          if (!assetLookup[row.assetId]) {
+            entry.message = '實體資產「' + row.assetId + '」不存在';
+            items.error.push(entry);
+            continue;
+          }
+          var existingMapping = mappingLookup[row.assetId];
+          if (!existingMapping || existingMapping !== row.ismsAssetId) {
+            isNewMapping = true;
+            hasChange = true;
+            entry.changes.push({
+              field: '對照關聯',
+              oldVal: existingMapping || '（無）',
+              newVal: row.assetId + ' → ' + row.ismsAssetId
+            });
+          }
+        }
+
+        if (hasWarning) {
+          entry.message = warningMsg;
+          entry.action = isNewMapping ? 'NEW_MAPPING' : 'UPDATE';
+          items.warning.push(entry);
+        } else if (!hasChange) {
+          items.noChange.push(entry);
+        } else if (isNewMapping) {
+          entry.action = 'NEW_MAPPING';
+          items.newMapping.push(entry);
+        } else {
+          entry.action = 'UPDATE';
+          items.update.push(entry);
+        }
+      }
+
+      return items;
+    }
+
+    // ── 預覽渲染 ──
+    function renderImportPreview(result) {
+      document.getElementById('importStage1').style.display = 'none';
+      document.getElementById('importStage2').style.display = '';
+
+      // 檔案資訊
+      document.getElementById('importFileInfo').innerHTML =
+        '<i class="fas fa-file-alt" style="color:#3b82f6"></i> ' +
+        '檔案：' + result.fileName +
+        '（工作表：' + result.sheetName + '，共 ' + result.totalRows + ' 列）';
+
+      // 統計卡片
+      var statsHtml = '';
+      var statItems = [
+        { count: result.newMapping.length, label: '新建', cls: 'stat-new', icon: '🟢' },
+        { count: result.update.length, label: '更新', cls: 'stat-update', icon: '🟡' },
+        { count: result.warning.length, label: '警告', cls: 'stat-warning', icon: '🟠' },
+        { count: result.error.length, label: '錯誤', cls: 'stat-error', icon: '🔴' }
+      ];
+      for (var i = 0; i < statItems.length; i++) {
+        var s = statItems[i];
+        statsHtml += '<div class="import-modal-stat-card ' + s.cls + '">' +
+                     s.icon + ' ' + s.label + '<br><span style="font-size:1.5rem">' + s.count + '</span> 筆</div>';
+      }
+      document.getElementById('importStats').innerHTML = statsHtml;
+
+      // 無變化
+      var noChangeEl = document.getElementById('importNoChange');
+      if (result.noChange.length > 0) {
+        noChangeEl.textContent = '⚪ 無變化：' + result.noChange.length + ' 筆（已隱藏）';
+        noChangeEl.style.display = '';
+      } else {
+        noChangeEl.style.display = 'none';
+      }
+
+      // 明細區塊
+      var sectionsHtml = '';
+      sectionsHtml += renderImportSection('🔴 錯誤', result.error, 'error', true);
+      sectionsHtml += renderImportSection('🟠 警告', result.warning, 'warning', result.error.length === 0);
+      sectionsHtml += renderImportSection('🟢 新建', result.newMapping, 'new', false);
+      sectionsHtml += renderImportSection('🟡 更新', result.update, 'update', false);
+      document.getElementById('importSections').innerHTML = sectionsHtml;
+
+      // 底部警語
+      var warningEl = document.getElementById('importFooterWarning');
+      if (result.error.length > 0) {
+        warningEl.textContent = '⚠ 有 ' + result.error.length + ' 筆錯誤將被略過，不會寫入。';
+        warningEl.style.display = '';
+      } else {
+        warningEl.style.display = 'none';
+      }
+
+      // 確認按鈕
+      var submitBtn = document.getElementById('importSubmitBtn');
+      var actionCount = result.newMapping.length + result.update.length + result.warning.length;
+      if (actionCount === 0) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '無可寫入的變更';
+      } else {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '確認送出 ' + actionCount + ' 筆變更';
+      }
+    }
+
+    function renderImportSection(title, items, type, defaultOpen) {
+      if (items.length === 0) return '';
+      var openCls = defaultOpen ? ' open' : '';
+      var html = '<div class="import-modal-section">';
+      html += '<div class="import-modal-section-header" onclick="toggleImportSection(this)">';
+      html += '<span>' + title + '（' + items.length + ' 筆）</span>';
+      html += '<i class="fas fa-chevron-down import-modal-chevron' + openCls + '"></i>';
+      html += '</div>';
+      html += '<div class="import-modal-section-body' + openCls + '">';
+
+      var showLimit = 20;
+      var visibleCount = Math.min(items.length, showLimit);
+
+      for (var i = 0; i < visibleCount; i++) {
+        html += renderImportDiffRow(items[i], type);
+      }
+
+      if (items.length > showLimit) {
+        html += '<div class="import-modal-show-more" data-type="' + type + '" ' +
+                'onclick="showMoreImportRows(this, ' + showLimit + ')">' +
+                '顯示更多（剩餘 ' + (items.length - showLimit) + ' 筆）</div>';
+      }
+
+      html += '</div></div>';
+      return html;
+    }
+
+    function renderImportDiffRow(item, type) {
+      var html = '<div class="import-modal-diff-row">';
+      html += '<strong>' + item.row.ismsAssetId + '</strong>';
+
+      if (type === 'error') {
+        html += ' <span class="import-modal-error-msg">— ' + item.message + '</span>';
+      } else if (type === 'warning') {
+        html += ' <span class="import-modal-warning-msg">— ' + item.message + '</span>';
+        if (item.changes) {
+          for (var i = 0; i < item.changes.length; i++) {
+            html += renderChangeDetail(item.changes[i]);
+          }
+        }
+      } else {
+        if (item.changes) {
+          for (var j = 0; j < item.changes.length; j++) {
+            html += renderChangeDetail(item.changes[j]);
+          }
+        }
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function renderChangeDetail(change) {
+      return '<div style="margin-left:16px;margin-top:2px">' +
+             '<span style="color:#64748b">' + change.field + '：</span>' +
+             '<span class="import-modal-old-val">' + (change.oldVal || '（空）') + '</span>' +
+             '<span class="import-modal-arrow">→</span>' +
+             '<span class="import-modal-new-val">' + change.newVal + '</span>' +
+             '</div>';
+    }
+
+    function toggleImportSection(headerEl) {
+      var chevron = headerEl.querySelector('.import-modal-chevron');
+      var body = headerEl.nextElementSibling;
+      chevron.classList.toggle('open');
+      body.classList.toggle('open');
+    }
+
+    function showMoreImportRows(el, currentShown) {
+      var type = el.getAttribute('data-type');
+      var allItems;
+      if (type === 'error') allItems = importDiffResult.error;
+      else if (type === 'warning') allItems = importDiffResult.warning;
+      else if (type === 'new') allItems = importDiffResult.newMapping;
+      else allItems = importDiffResult.update;
+
+      var html = '';
+      for (var i = currentShown; i < allItems.length; i++) {
+        html += renderImportDiffRow(allItems[i], type);
+      }
+      el.insertAdjacentHTML('beforebegin', html);
+      el.remove();
+    }
+
+    // ── 送出 ──
+    function submitImport() {
+      if (!importDiffResult) return;
+
+      // 資料新鮮度檢查（5 分鐘）
+      if (Date.now() - importLastLoadTime > 5 * 60 * 1000) {
+        showToast('資料可能已過時，正在重新載入...', 'warning');
+        loadAssets(function() {
+          // 重新 diff
+          showToast('資料已刷新，請重新匯入檔案以確保比對正確。', 'info');
+          resetImportModal();
+        });
+        return;
+      }
+
+      var items = [];
+      var groups = [importDiffResult.newMapping, importDiffResult.update, importDiffResult.warning];
+      for (var g = 0; g < groups.length; g++) {
+        for (var i = 0; i < groups[g].length; i++) {
+          var entry = groups[g][i];
+          items.push({
+            action: entry.action || 'UPDATE',
+            ismsAssetId: entry.row.ismsAssetId,
+            assetId: entry.row.assetId || null,
+            businessProcess: entry.row.businessProcess || null,
+            usageStatus: entry.row.usageStatus || null
+          });
+        }
+      }
+
+      var payload = {
+        expectedCounts: {
+          newMapping: importDiffResult.newMapping.length,
+          update: importDiffResult.update.length + importDiffResult.warning.length
+        },
+        items: items
+      };
+
+      // 切換到 Stage 3
+      document.getElementById('importStage2').style.display = 'none';
+      document.getElementById('importStage3').style.display = '';
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            closeImportModal();
+            var msg = '匯入完成：' + (result.applied || 0) + ' 筆已套用';
+            if (result.newMappings) msg += '，' + result.newMappings + ' 筆新對照';
+            if (result.errors && result.errors.length > 0) {
+              msg += '（' + result.errors.length + ' 筆跳過）';
+            }
+            showToast(msg, 'success');
+            loadAssets(); // 重載資料
+          } else {
+            // 回到 Stage 2 讓使用者重試
+            document.getElementById('importStage3').style.display = 'none';
+            document.getElementById('importStage2').style.display = '';
+            showToast(result.error || '匯入失敗', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('importStage3').style.display = 'none';
+          document.getElementById('importStage2').style.display = '';
+          showToast('匯入失敗：' + (err && err.message ? err.message : '未知錯誤'), 'error');
+        })
+        .applyImportMapping(payload);
+    }
   </script>
 </body>
 </html>

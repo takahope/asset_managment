@@ -1569,3 +1569,208 @@ function initMappingSheet() {
     return { success: false, error: e.message };
   }
 }
+
+/**
+ * 匯入對照批次寫入端點
+ * 前端已做 diff，此處僅負責驗證 + 寫入 + 稽核
+ * @param {Object} payload - { expectedCounts: {newMapping, update}, items: Array }
+ * @returns {{ success: boolean, applied?: number, errors?: string[] }}
+ */
+function applyImportMapping(payload) {
+  // 🛡️ 權限守門
+  const access = assertWriteAccess_(false);
+  if (!access.ok) return { success: false, error: access.error };
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return { success: false, error: '系統忙碌中，請稍後再試。' };
+  }
+
+  try {
+    if (!payload || !Array.isArray(payload.items) || payload.items.length === 0) {
+      return { success: false, error: '無有效匯入資料。' };
+    }
+
+    const email = access.email;
+    const now = new Date().toISOString();
+    const ss = SpreadsheetApp.openById(CONFIG.ISMS_SPREADSHEET_ID);
+
+    // ── 載入三張工作表 ──
+    const ismsSheet = ss.getSheetByName(CONFIG.ISMS_ASSET_SHEET_NAME);
+    if (!ismsSheet) return { success: false, error: '找不到資訊資產清單工作表。' };
+    const ismsData = ismsSheet.getDataRange().getValues();
+
+    const mappingSheet = ss.getSheetByName(CONFIG.MAPPING_SHEET_NAME);
+    const mappingData = mappingSheet ? mappingSheet.getDataRange().getValues() : [];
+
+    const dropdownSheet = ss.getSheetByName(CONFIG.DROPDOWN_SHEET_NAME);
+
+    // ── 建立索引 ──
+    const ismsIdx = ISMS_ASSET_COLUMN_INDICES;
+    const mapIdx = MAPPING_COLUMN_INDICES;
+
+    // ISMS 資產索引 (key: ismsAssetId → row index in ismsData)
+    const ismsMap = new Map();
+    for (let i = 1; i < ismsData.length; i++) {
+      const id = String(ismsData[i][ismsIdx.ISMS_ASSET_ID - 1] || '').trim();
+      if (id) ismsMap.set(id, i);
+    }
+
+    // 對照表索引 (key: assetId → row index in mappingData)
+    const existingMappings = new Map();
+    for (let i = 1; i < mappingData.length; i++) {
+      const aid = String(mappingData[i][mapIdx.ASSET_ID - 1] || '').trim();
+      if (aid) existingMappings.set(aid, i);
+    }
+
+    // 允許的業務流程清單
+    const allowedBP = new Set();
+    if (dropdownSheet) {
+      const ddData = dropdownSheet.getDataRange().getValues();
+      for (let i = 1; i < ddData.length; i++) {
+        const val = String(ddData[i][0] || '').trim();
+        if (val) allowedBP.add(val);
+      }
+    }
+
+    // ── TOCTOU 驗證 ──
+    if (payload.expectedCounts) {
+      let actualNew = 0;
+      let actualUpdate = 0;
+      for (const item of payload.items) {
+        if (!ismsMap.has(item.ismsAssetId)) continue; // 會被略過
+        if (item.action === 'NEW_MAPPING') actualNew++;
+        else if (item.action === 'UPDATE') actualUpdate++;
+      }
+      const ec = payload.expectedCounts;
+      if ((ec.newMapping !== undefined && ec.newMapping !== actualNew) ||
+          (ec.update !== undefined && ec.update !== actualUpdate)) {
+        return {
+          success: false,
+          error: '資料已變動，請重新整理後再試。（預期新建 ' +
+                 (ec.newMapping || 0) + ' / 更新 ' + (ec.update || 0) +
+                 '，實際新建 ' + actualNew + ' / 更新 ' + actualUpdate + '）'
+        };
+      }
+    }
+
+    // ── 遍歷 items 執行寫入 ──
+    const errors = [];
+    let appliedCount = 0;
+    const newMappingRows = []; // 待 append 的新對照列
+    let ismsDataDirty = false;
+
+    for (let idx = 0; idx < payload.items.length; idx++) {
+      const item = payload.items[idx];
+      const ismsAssetId = String(item.ismsAssetId || '').trim();
+
+      if (!ismsAssetId) {
+        errors.push('第 ' + (idx + 1) + ' 筆：缺少資訊資產分類編號');
+        continue;
+      }
+
+      const ismsRowIdx = ismsMap.get(ismsAssetId);
+      if (ismsRowIdx === undefined) {
+        errors.push('第 ' + (idx + 1) + ' 筆：資訊資產「' + ismsAssetId + '」不存在');
+        continue;
+      }
+
+      const beforeObj = {
+        ismsAssetId: ismsAssetId,
+        businessProcess: String(ismsData[ismsRowIdx][ismsIdx.BUSINESS_PROCESS - 1] || ''),
+        usageStatus: String(ismsData[ismsRowIdx][ismsIdx.STATUS - 1] || '')
+      };
+      const changedFields = [];
+
+      // 更新業務流程（V 欄）
+      if (item.businessProcess !== null && item.businessProcess !== undefined) {
+        const newBP = String(item.businessProcess).trim();
+        if (newBP && newBP !== beforeObj.businessProcess) {
+          ismsData[ismsRowIdx][ismsIdx.BUSINESS_PROCESS - 1] = newBP;
+          changedFields.push('業務流程');
+          ismsDataDirty = true;
+        }
+      }
+
+      // 更新使用狀態（M 欄）
+      if (item.usageStatus !== null && item.usageStatus !== undefined) {
+        const newStatus = String(item.usageStatus).trim();
+        if (newStatus && newStatus !== beforeObj.usageStatus) {
+          ismsData[ismsRowIdx][ismsIdx.STATUS - 1] = newStatus;
+          changedFields.push('使用狀態');
+          ismsDataDirty = true;
+        }
+      }
+
+      // 新建對照（NEW_MAPPING）
+      if (item.action === 'NEW_MAPPING' && item.assetId) {
+        const assetId = String(item.assetId).trim();
+        if (!existingMappings.has(assetId)) {
+          newMappingRows.push([
+            assetId,                    // A: 資產編號
+            ismsAssetId,                // B: 資訊資產編號
+            now,                        // C: 建立時間
+            email,                      // D: 建立人
+            '匯入對照',                  // E: 備註
+            '',                         // F: 驗證範圍
+            '',                         // G: 認證依據
+            ''                          // H: 判定時間
+          ]);
+          changedFields.push('新建對照(' + assetId + ')');
+        }
+      }
+
+      // 記錄稽核日誌
+      if (changedFields.length > 0) {
+        const afterObj = {
+          ismsAssetId: ismsAssetId,
+          businessProcess: String(ismsData[ismsRowIdx][ismsIdx.BUSINESS_PROCESS - 1] || ''),
+          usageStatus: String(ismsData[ismsRowIdx][ismsIdx.STATUS - 1] || '')
+        };
+        logIsmsOperation_(
+          'IMPORT_MAPPING',
+          ismsAssetId,
+          changedFields.join(', '),
+          beforeObj,
+          afterObj,
+          '匯入對照批次操作'
+        );
+        appliedCount++;
+      }
+    }
+
+    // ── 批次寫回 ──
+    if (ismsDataDirty) {
+      ismsSheet.getRange(1, 1, ismsData.length, ismsData[0].length).setValues(ismsData);
+    }
+
+    if (newMappingRows.length > 0) {
+      if (!mappingSheet) {
+        // 若對照表不存在則建立
+        const newSheet = ss.insertSheet(CONFIG.MAPPING_SHEET_NAME);
+        newSheet.appendRow(['資產編號', '資訊資產編號', '建立時間', '建立人', '備註', '驗證範圍', '認證依據', '判定時間']);
+        for (const row of newMappingRows) {
+          newSheet.appendRow(row);
+        }
+      } else {
+        const lastRow = mappingSheet.getLastRow();
+        mappingSheet.getRange(lastRow + 1, 1, newMappingRows.length, newMappingRows[0].length)
+          .setValues(newMappingRows);
+      }
+    }
+
+    return {
+      success: true,
+      applied: appliedCount,
+      newMappings: newMappingRows.length,
+      errors: errors
+    };
+  } catch (e) {
+    console.error('applyImportMapping 錯誤:', e);
+    return { success: false, error: '匯入失敗：' + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
