@@ -1639,6 +1639,7 @@
                     <th class="col-status" data-col="mappedStatus">連動狀態</th>
                     <th class="col-status" data-col="usageStatus">使用狀態</th>
                     <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
+                    <th class="col-asset-name" data-col="ismsAssetName">資訊資產名稱</th>
                     <th class="col-business" data-col="businessProcess">業務流程</th>
                     <th class="col-status" data-col="isoScope">ISO 範圍</th>
                     <th class="col-location" data-col="isoBasis">認證依據</th>
@@ -1646,7 +1647,7 @@
                 </thead>
                 <tbody id="assetTableBody">
                   <tr>
-                    <td colspan="15" class="text-center py-8 text-gray-500">
+                    <td colspan="16" class="text-center py-8 text-gray-500">
                       <div class="loading-spinner mx-auto mb-2"></div>
                       載入中...
                     </td>
@@ -2297,6 +2298,7 @@
       { id: 'mappedStatus', label: '連動狀態', visible: true, scanVisible: true },
       { id: 'usageStatus', label: '使用狀態', visible: true, scanVisible: true },
       { id: 'ismsAssetId', label: '資訊資產編號', visible: true, scanVisible: true },
+      { id: 'ismsAssetName', label: '資訊資產名稱', visible: true, scanVisible: true },
       { id: 'businessProcess', label: '業務流程', visible: true, scanVisible: true },
       { id: 'isoScope', label: 'ISO 範圍', visible: true, scanVisible: true },
       { id: 'isoBasis', label: '認證依據', visible: true, scanVisible: false }
@@ -2770,7 +2772,7 @@
     /** 失敗時把 loading spinner 收斂成錯誤列，附重試入口（PLAYBOOK §4-9） */
     function renderTableError(message) {
       document.getElementById('assetTableBody').innerHTML =
-        '<tr><td colspan="15" class="text-center py-8">' +
+        '<tr><td colspan="16" class="text-center py-8">' +
         '<div class="text-red-600 mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>' +
         escapeHtml(message) + '</div>' +
         '<button class="btn-secondary" onclick="loadAssets()">' +
@@ -2784,7 +2786,7 @@
      */
     function loadAssets(onDone) {
       document.getElementById('assetTableBody').innerHTML = `
-        <tr><td colspan="15" class="text-center py-8 text-gray-500">
+        <tr><td colspan="16" class="text-center py-8 text-gray-500">
           <div class="loading-spinner mx-auto mb-2"></div>載入中...
         </td></tr>`;
 
@@ -3030,7 +3032,7 @@
       const tbody = document.getElementById('assetTableBody');
       
       if (assets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="15" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="16" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
         return;
       }
       
@@ -3056,6 +3058,7 @@
             </td>
             <td data-col="usageStatus">${escapeHtml(asset.usageStatus || '')}</td>
             <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
+            <td data-col="ismsAssetName"><div class="cell-name">${escapeHtml(asset.ismsAssetName || '-')}</div></td>
             <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
             <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
             <td data-col="isoBasis"><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
