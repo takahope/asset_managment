@@ -230,6 +230,27 @@
       width: 180px;
     }
 
+    /* 資訊資產說明 textarea——動作條／掃描面板 */
+    .action-bar__desc-input,
+    .embedded-action-panel__body .action-bar__desc-input {
+      width: 220px;
+      min-height: 52px;
+      max-height: 96px;
+      resize: vertical;
+      font-size: 0.85rem;
+      line-height: 1.35;
+      padding: 6px 10px;
+    }
+    .embedded-action-panel__body .action-bar__desc-input {
+      width: 100%;
+      max-width: 100%;
+    }
+    .action-bar__desc-input:disabled {
+      background: #f1f5f9;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+
     /* 動作條業務流程列——桌面端 */
     .action-bar__bp-row {
       flex-direction: row !important;
@@ -1332,6 +1353,7 @@
       
       .action-bar__field input,
       .action-bar__field select,
+      .action-bar__field textarea,
       .action-bar__field .search-input,
       .action-bar__field .select-input {
         width: 100%;
@@ -1355,8 +1377,9 @@
         flex-shrink: 0;
       }
 
-      /* 搜尋框和備註——移動端滿寬 */
-      .action-bar__search-input {
+      /* 搜尋框和說明——移動端滿寬 */
+      .action-bar__search-input,
+      .action-bar__desc-input {
         width: 100% !important;
         max-width: 100% !important;
       }
@@ -1609,7 +1632,7 @@
               <button id="scan-btnEditIsms" class="btn-secondary px-3" onclick="handleEditIsmsClick()" disabled title="編輯所選分類"><i class="fas fa-edit"></i></button>
               <button id="scan-btnDeleteIsms" class="btn-danger px-3" onclick="handleDeleteIsmsClick()" disabled title="刪除所選分類"><i class="fas fa-trash"></i></button>
             </div>
-            <input type="text" id="scan-mappingRemarks" class="search-input" placeholder="備註（選填）">
+            <textarea id="scan-ismsDescription" class="search-input action-bar__desc-input" rows="2" placeholder="資訊資產說明（可編輯）" disabled></textarea>
           </div>
           <div class="embedded-action-panel__footer">
             <button id="scan-createMappingBtn" type="button" class="btn-primary w-full py-2 disabled:opacity-50" disabled onclick="handleUnifiedAction('scan')">
@@ -1702,7 +1725,7 @@
       </div>
 
       <div class="action-bar__field">
-        <input type="text" id="mappingRemarks" class="search-input action-bar__search-input" placeholder="備註（選填）">
+        <textarea id="ismsDescription" class="search-input action-bar__desc-input" rows="2" placeholder="資訊資產說明（可編輯）" disabled></textarea>
       </div>
 
       <div class="action-bar__spacer"></div>
@@ -2082,6 +2105,8 @@
     let businessProcessOptionsAvailable = false;
     let pendingBusinessProcessData = null;
     let globalLoadingTracker = null;
+    /** 目前下拉選定資訊資產的原始說明（用來判斷 dirty） */
+    let originalDescription = '';
 
     /* ========================================================================= */
     /* LoadingTracker 類別 - 追蹤多個 API 載入進度                               */
@@ -2661,11 +2686,23 @@
           scanBtnDelete.disabled = !val || !isCurrentUserAdmin;
           scanBtnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
         }
+        fillIsmsDescriptionFields(val);
         updateCreateMappingBtn();
         refreshCreateMappingBtnLabel();
       }
       document.getElementById('ismsAssetSelect').addEventListener('change', onIsmsAssetSelectChange);
       document.getElementById('scan-ismsAssetSelect').addEventListener('change', onIsmsAssetSelectChange);
+
+      // 說明欄雙向同步（主動作條 ↔ 掃描面板）
+      function onIsmsDescriptionInput(e) {
+        var val = e.target.value;
+        var main = document.getElementById('ismsDescription');
+        var scan = document.getElementById('scan-ismsDescription');
+        if (main && main !== e.target) main.value = val;
+        if (scan && scan !== e.target) scan.value = val;
+      }
+      document.getElementById('ismsDescription').addEventListener('input', onIsmsDescriptionInput);
+      document.getElementById('scan-ismsDescription').addEventListener('input', onIsmsDescriptionInput);
 
       // 業務流程選值變動時，同時更新套用鈕與「建立連動」的動態文案
       document.getElementById('businessProcessSelect')
@@ -2915,10 +2952,16 @@
     function disableIsmsSelectors(msg) {
       var filterSel = document.getElementById('ismsFilter');
       var mapSel = document.getElementById('ismsAssetSelect');
+      var scanSel = document.getElementById('scan-ismsAssetSelect');
       filterSel.innerHTML = '<option value="">（資訊資產載入失敗）</option>';
       filterSel.disabled = true;
       mapSel.innerHTML = '<option value="">（資訊資產載入失敗）</option>';
       mapSel.disabled = true;
+      if (scanSel) {
+        scanSel.innerHTML = '<option value="">（資訊資產載入失敗）</option>';
+        scanSel.disabled = true;
+      }
+      fillIsmsDescriptionFields('');
       showToast(msg, 'error');
       console.error(msg);
     }
@@ -3198,12 +3241,36 @@
     }
 
     /**
+     * 依選定資訊資產編號填入說明欄（動作條 + 掃描面板）。
+     * 未選時清空並 disabled。
+     */
+    function fillIsmsDescriptionFields(ismsAssetId) {
+      var main = document.getElementById('ismsDescription');
+      var scan = document.getElementById('scan-ismsDescription');
+      var id = String(ismsAssetId || '').trim();
+      if (!id) {
+        originalDescription = '';
+        if (main) { main.value = ''; main.disabled = true; }
+        if (scan) { scan.value = ''; scan.disabled = true; }
+        return;
+      }
+      var asset = allIsmsAssets.find(function(a) {
+        return String(a.ismsAssetId || '') === id;
+      });
+      var desc = (asset && asset.description) ? String(asset.description) : '';
+      originalDescription = desc;
+      if (main) { main.value = desc; main.disabled = false; }
+      if (scan) { scan.value = desc; scan.disabled = false; }
+    }
+
+    /**
      * 填充資訊資產下拉選單（動作條 + 掃描面板）
      */
     function populateIsmsSelect() {
       const select = document.getElementById('ismsAssetSelect');
       const scanSelect = document.getElementById('scan-ismsAssetSelect');
       var physicalCounts = getPhysicalMappingCounts();
+      var prevValue = select ? select.value : '';
 
       // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
       const filteredAssets = allIsmsAssets.filter(function(asset) {
@@ -3218,6 +3285,20 @@
       select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
       if (scanSelect) {
         scanSelect.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
+      }
+
+      // 盡量保留先前選值，並刷新說明
+      if (prevValue) {
+        select.value = prevValue;
+        if (scanSelect) scanSelect.value = prevValue;
+        if (select.value !== prevValue) {
+          // 選項已不在清單（例如被刪除）
+          fillIsmsDescriptionFields('');
+        } else {
+          fillIsmsDescriptionFields(prevValue);
+        }
+      } else {
+        fillIsmsDescriptionFields('');
       }
     }
 
@@ -3977,6 +4058,7 @@
         scanBtnDelete.disabled = true;
         scanBtnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
       }
+      fillIsmsDescriptionFields('');
       updateCreateMappingBtn();
       refreshCreateMappingBtnLabel();
     }
@@ -4174,11 +4256,68 @@
       var hasIsms = ismsAssetId !== '';
       var hasBp = isCurrentUserAdmin && businessProcessOptionsAvailable && bpValue !== '';
 
-      if (hasIsms) {
-        createMapping(source);
-      } else if (hasBp) {
-        applyBusinessProcess(source);
+      // 若說明有改，先寫回 D 欄再繼續原流程
+      saveIsmsDescriptionIfDirty(source, function(ok) {
+        if (!ok) return;
+        if (hasIsms) {
+          createMapping(source);
+        } else if (hasBp) {
+          applyBusinessProcess(source);
+        }
+      });
+    }
+
+    /**
+     * 下拉有選資訊資產且說明與 originalDescription 不同時，先寫回 D 欄。
+     * @param {string} source 'main' | 'scan'
+     * @param {function(boolean)} done 成功或無需寫入 → true；失敗 → false
+     */
+    function saveIsmsDescriptionIfDirty(source, done) {
+      const prefix = source === 'scan' ? 'scan-' : '';
+      var ismsAssetId = document.getElementById(prefix + 'ismsAssetSelect').value;
+      if (!ismsAssetId) {
+        done(true);
+        return;
       }
+      var descEl = document.getElementById(prefix + 'ismsDescription') ||
+                   document.getElementById('ismsDescription');
+      var newDesc = descEl ? descEl.value : '';
+      if (newDesc === originalDescription) {
+        done(true);
+        return;
+      }
+
+      setMappingButtonsBusy(true);
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.success) {
+            // 更新前端快取與 baseline，避免後續再誤判 dirty
+            var asset = allIsmsAssets.find(function(a) {
+              return String(a.ismsAssetId || '') === ismsAssetId;
+            });
+            if (asset) asset.description = newDesc;
+            originalDescription = newDesc;
+            var main = document.getElementById('ismsDescription');
+            var scan = document.getElementById('scan-ismsDescription');
+            if (main) main.value = newDesc;
+            if (scan) scan.value = newDesc;
+            if (!result.noChange) {
+              showToast('已更新資訊資產說明', 'success');
+            }
+            setMappingButtonsBusy(false);
+            done(true);
+          } else {
+            showToast((result && result.error) || '更新說明失敗', 'error');
+            setMappingButtonsBusy(false);
+            done(false);
+          }
+        })
+        .withFailureHandler(function(err) {
+          showToast('更新說明失敗: ' + (err && err.message ? err.message : err), 'error');
+          setMappingButtonsBusy(false);
+          done(false);
+        })
+        .updateIsmsDescription(ismsAssetId, newDesc);
     }
 
     // ==========================================
@@ -4199,7 +4338,12 @@
       document.getElementById('scan-businessProcessSelect').innerHTML = document.getElementById('businessProcessSelect').innerHTML;
       document.getElementById('scan-businessProcessSelect').value = document.getElementById('businessProcessSelect').value;
       
-      document.getElementById('scan-mappingRemarks').value = document.getElementById('mappingRemarks').value;
+      var mainDesc = document.getElementById('ismsDescription');
+      var scanDesc = document.getElementById('scan-ismsDescription');
+      if (mainDesc && scanDesc) {
+        scanDesc.value = mainDesc.value;
+        scanDesc.disabled = mainDesc.disabled;
+      }
     }
 
     function openScanActionPanel(assetId) {
@@ -4304,7 +4448,6 @@
       const prefix = source === 'scan' ? 'scan-' : '';
       const assetIds = Array.from(selectedAssetIds);
       const ismsAssetId = document.getElementById(prefix + 'ismsAssetSelect').value;
-      const remarks = document.getElementById(prefix + 'mappingRemarks').value;
 
       if (assetIds.length === 0 || !ismsAssetId) {
         showToast('請選擇資產和資訊資產', 'error');
@@ -4317,13 +4460,13 @@
       google.script.run
         .withSuccessHandler(function(result) {
           if (result.success && result.hasExisting) {
-            // 顯示確認對話框
-            pendingMappingData = { assetIds, ismsAssetId, remarks };
+            // 顯示確認對話框（對照備註已停用，固定傳空）
+            pendingMappingData = { assetIds, ismsAssetId, remarks: '' };
             setMappingButtonsBusy(false);
             showConfirmModal(result.existingMappings);
           } else {
             // 直接建立連動
-            doCreateMapping(assetIds, ismsAssetId, remarks);
+            doCreateMapping(assetIds, ismsAssetId, '');
           }
         })
         .withFailureHandler(function(err) {
@@ -4348,8 +4491,19 @@
             showToast(result.message, 'success');
             selectedAssetIds.clear();
             updateSelectionUI();
-            document.getElementById('mappingRemarks').value = '';
             document.getElementById('ismsAssetSelect').value = '';
+            var scanSel = document.getElementById('scan-ismsAssetSelect');
+            if (scanSel) scanSel.value = '';
+            fillIsmsDescriptionFields('');
+            // 清空後同步編輯／刪除鈕狀態
+            var btnEdit = document.getElementById('btnEditIsms');
+            var btnDelete = document.getElementById('btnDeleteIsms');
+            var scanBtnEdit = document.getElementById('scan-btnEditIsms');
+            var scanBtnDelete = document.getElementById('scan-btnDeleteIsms');
+            if (btnEdit) btnEdit.disabled = true;
+            if (scanBtnEdit) scanBtnEdit.disabled = true;
+            if (btnDelete) btnDelete.disabled = true;
+            if (scanBtnDelete) scanBtnDelete.disabled = true;
             closeScanActionPanel();
             resetCreateMappingBtn();
             if (processValue !== null) {
@@ -4366,7 +4520,7 @@
           showToast('建立失敗: ' + err.message, 'error');
           resetCreateMappingBtn();
         })
-        .createMappings(assetIds, ismsAssetId, remarks);
+        .createMappings(assetIds, ismsAssetId, remarks || '');
     }
 
     /**
