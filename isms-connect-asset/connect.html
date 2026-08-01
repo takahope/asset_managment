@@ -2587,12 +2587,19 @@
         setIsoFilter(chip.dataset.iso || '');
       });
 
-      // 資訊資產搜尋（對照用選單）
-      document.getElementById('ismsSearch').addEventListener('input', debounce(filterIsmsSelect, 300));
+      // 資訊資產搜尋（對照用選單；主動作條與掃描面板共用同一 debounce 函式）
+      var debouncedFilterIsmsSelect = debounce(filterIsmsSelect, 300);
+      document.getElementById('ismsSearch').addEventListener('input', debouncedFilterIsmsSelect);
+      document.getElementById('scan-ismsSearch').addEventListener('input', debouncedFilterIsmsSelect);
 
-      // 資訊資產選擇
-      document.getElementById('ismsAssetSelect').addEventListener('change', function(e) {
+      // 資訊資產選擇（主動作條與掃描面板雙向同步選值）
+      function onIsmsAssetSelectChange(e) {
         const val = e.target.value;
+        var mainSelect = document.getElementById('ismsAssetSelect');
+        var scanSelect = document.getElementById('scan-ismsAssetSelect');
+        if (mainSelect && mainSelect !== e.target) mainSelect.value = val;
+        if (scanSelect && scanSelect !== e.target) scanSelect.value = val;
+
         const btnEdit = document.getElementById('btnEditIsms');
         const btnDelete = document.getElementById('btnDeleteIsms');
         const scanBtnEdit = document.getElementById('scan-btnEditIsms');
@@ -2609,7 +2616,9 @@
         }
         updateCreateMappingBtn();
         refreshCreateMappingBtnLabel();
-      });
+      }
+      document.getElementById('ismsAssetSelect').addEventListener('change', onIsmsAssetSelectChange);
+      document.getElementById('scan-ismsAssetSelect').addEventListener('change', onIsmsAssetSelectChange);
 
       // 業務流程選值變動時，同時更新套用鈕與「建立連動」的動態文案
       document.getElementById('businessProcessSelect')
@@ -3869,9 +3878,21 @@
 
 
 
-    function filterIsmsSelect() {
-      const keyword = document.getElementById('ismsSearch').value.toLowerCase();
-      const select = document.getElementById('ismsAssetSelect');
+    function filterIsmsSelect(e) {
+      // 從觸發來源讀關鍵字；無 event 時預設主動作條搜尋框
+      var sourceId = (e && e.target && e.target.id) ? e.target.id : 'ismsSearch';
+      var sourceInput = document.getElementById(sourceId) || document.getElementById('ismsSearch');
+      var rawKeyword = sourceInput ? sourceInput.value : '';
+
+      // 同步兩邊搜尋框，避免主動作條與掃描面板脫節
+      var mainSearch = document.getElementById('ismsSearch');
+      var scanSearch = document.getElementById('scan-ismsSearch');
+      if (mainSearch) mainSearch.value = rawKeyword;
+      if (scanSearch) scanSearch.value = rawKeyword;
+
+      var keyword = rawKeyword.toLowerCase();
+      var select = document.getElementById('ismsAssetSelect');
+      var scanSelect = document.getElementById('scan-ismsAssetSelect');
 
       // 只顯示 CATEGORY 為 "HW" 或 "EV" 的資訊資產
       const filtered = allIsmsAssets.filter(function(a) {
@@ -3907,7 +3928,28 @@
         return '<option value="' + escapeHtml(asset.ismsAssetId) + '">' + escapeHtml(label) + '</option>';
       }).join('');
 
-      select.innerHTML = '<option value="">-- 請選擇資訊資產 --</option>' + options;
+      var html = '<option value="">-- 請選擇資訊資產 --</option>' + options;
+      // 篩選後不保留舊選值（與既有行為相同，避免漏網選項殘留）
+      if (select) select.innerHTML = html;
+      if (scanSelect) scanSelect.innerHTML = html;
+
+      // 選值已清空，同步停用編輯／刪除並重算建立連動鈕
+      var btnEdit = document.getElementById('btnEditIsms');
+      var btnDelete = document.getElementById('btnDeleteIsms');
+      var scanBtnEdit = document.getElementById('scan-btnEditIsms');
+      var scanBtnDelete = document.getElementById('scan-btnDeleteIsms');
+      if (btnEdit) btnEdit.disabled = true;
+      if (scanBtnEdit) scanBtnEdit.disabled = true;
+      if (btnDelete) {
+        btnDelete.disabled = true;
+        btnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
+      }
+      if (scanBtnDelete) {
+        scanBtnDelete.disabled = true;
+        scanBtnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
+      }
+      updateCreateMappingBtn();
+      refreshCreateMappingBtnLabel();
     }
 
     // ==========================================
