@@ -2918,6 +2918,9 @@
       if (fieldId === 'assetAliasOrSerial') {
         return asset.assetAliasOrSerial || '-';
       }
+      if (fieldId === 'ismsAssetId') {
+        return asset.mappedIsmsAssetId || '-';
+      }
       
       // 一般欄位
       return asset[fieldId] || '-';
