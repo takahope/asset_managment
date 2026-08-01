@@ -1719,14 +1719,14 @@
 
   <!-- 欄位設定 Modal -->
   <div id="colSettingsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+    <div class="relative top-20 mx-auto p-5 border w-[28rem] max-w-[95vw] shadow-lg rounded-md bg-white">
       <div class="flex justify-between items-center mb-4">
         <h3 class="text-lg leading-6 font-medium text-gray-900">欄位設定</h3>
         <button onclick="closeColSettingsModal()" class="text-gray-400 hover:text-gray-500">
           <i class="fas fa-times text-xl"></i>
         </button>
       </div>
-      <p class="text-sm text-gray-500 mb-4">拖曳 <i class="fas fa-grip-vertical"></i> 來調整順序。<strong>主表</strong>：桌面版顯示，<strong>優先</strong>：掃描面板 + 移動端卡片主區（取前2個）。</p>
+      <p class="text-sm text-gray-500 mb-4">拖曳 <i class="fas fa-grip-vertical"></i> 來調整順序。<strong>桌面端</strong>：桌面表格、<strong>手機端</strong>：移動端卡片、<strong>掃描</strong>：掃描結果狀態卡——三端可獨立勾選。</p>
       
       <!-- 拖曳清單容器 -->
       <div id="colSettingsList" class="border border-gray-200 rounded-md overflow-hidden bg-white max-h-[50vh] overflow-y-auto">
@@ -2285,38 +2285,68 @@
     // ==========================================
     // 欄位拖曳設定邏輯 (Column Reordering)
     // ==========================================
+    const COL_PREFS_STORAGE_KEY = 'isms_connect_col_prefs_v3';
+    const COL_PREFS_STORAGE_KEY_V2 = 'isms_connect_col_prefs_v2';
+
     const DEFAULT_COL_PREFS = [
-      { id: 'checkbox', label: '', visible: true, unmovable: true, scanVisible: false },
-      { id: 'assetId', label: '資產編號', visible: true, unmovable: true, scanVisible: true },
-      { id: 'assetAliasOrSerial', label: '資產別名/序號', visible: true, scanVisible: true },
-      { id: 'ismsAssetId', label: '資訊資產編號', visible: true, scanVisible: true },
-      { id: 'ismsAssetName', label: '資訊資產名稱', visible: true, scanVisible: true },
-      { id: 'mappedStatus', label: '連動狀態', visible: true, scanVisible: true },
-      { id: 'usageStatus', label: '使用狀態', visible: true, scanVisible: true },
-      { id: 'businessProcess', label: '業務流程', visible: true, scanVisible: true },
-      { id: 'isoScope', label: 'ISO 範圍', visible: true, scanVisible: true },
-      { id: 'isoBasis', label: '認證依據', visible: true, scanVisible: false },
-      { id: 'assetName', label: '資產名稱', visible: false, scanVisible: false },
-      { id: 'brand', label: '廠牌型號', visible: true, scanVisible: false },
-      { id: 'leaderName', label: '保管人', visible: false, scanVisible: false },
-      { id: 'userName', label: '使用人', visible: false, scanVisible: false },
-      { id: 'location', label: '地點', visible: false, scanVisible: false },
-      { id: 'group', label: '組別', visible: false, scanVisible: false }
+      { id: 'checkbox', label: '', visible: true, unmovable: true, mobileVisible: false, scanVisible: false },
+      { id: 'assetId', label: '資產編號', visible: true, unmovable: true, mobileVisible: true, scanVisible: true },
+      { id: 'assetAliasOrSerial', label: '資產別名/序號', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'ismsAssetId', label: '資訊資產編號', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'ismsAssetName', label: '資訊資產名稱', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'mappedStatus', label: '連動狀態', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'usageStatus', label: '使用狀態', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'businessProcess', label: '業務流程', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'isoScope', label: 'ISO 範圍', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'isoBasis', label: '認證依據', visible: true, mobileVisible: false, scanVisible: false },
+      { id: 'assetName', label: '資產名稱', visible: false, mobileVisible: false, scanVisible: false },
+      { id: 'brand', label: '廠牌型號', visible: true, mobileVisible: false, scanVisible: false },
+      { id: 'leaderName', label: '保管人', visible: false, mobileVisible: false, scanVisible: false },
+      { id: 'userName', label: '使用人', visible: false, mobileVisible: false, scanVisible: false },
+      { id: 'location', label: '地點', visible: false, mobileVisible: false, scanVisible: false },
+      { id: 'group', label: '組別', visible: false, mobileVisible: false, scanVisible: false }
     ];
     let currentColPrefs = [];
 
+    /** 補齊缺欄位與缺旗標（v2 → v3：缺 mobileVisible 時沿用 scanVisible） */
+    function normalizeColPrefs_(prefs) {
+      var list = Array.isArray(prefs) ? prefs.slice() : [];
+      list = list.map(function(col) {
+        var def = DEFAULT_COL_PREFS.find(function(d) { return d.id === col.id; }) || {};
+        var scanVisible = col.scanVisible !== undefined ? !!col.scanVisible : !!def.scanVisible;
+        var mobileVisible = col.mobileVisible !== undefined ? !!col.mobileVisible : scanVisible;
+        return {
+          id: col.id,
+          label: def.label !== undefined ? def.label : (col.label || ''),
+          visible: col.visible !== undefined ? !!col.visible : !!def.visible,
+          mobileVisible: mobileVisible,
+          scanVisible: scanVisible,
+          unmovable: !!(def.unmovable || col.unmovable)
+        };
+      });
+      var savedIds = new Set(list.map(function(c) { return c.id; }));
+      DEFAULT_COL_PREFS.forEach(function(defCol) {
+        if (!savedIds.has(defCol.id)) {
+          list.push(Object.assign({}, defCol));
+        }
+      });
+      return list;
+    }
+
     function loadColSettings() {
-      const saved = localStorage.getItem('isms_connect_col_prefs_v2');
-      if (saved) {
+      var raw = localStorage.getItem(COL_PREFS_STORAGE_KEY);
+      var fromV2 = false;
+      if (!raw) {
+        raw = localStorage.getItem(COL_PREFS_STORAGE_KEY_V2);
+        fromV2 = !!raw;
+      }
+      if (raw) {
         try {
-          currentColPrefs = JSON.parse(saved);
-          const savedIds = new Set(currentColPrefs.map(c => c.id));
-          DEFAULT_COL_PREFS.forEach(defCol => {
-            if (!savedIds.has(defCol.id)) {
-              currentColPrefs.push({...defCol});
-            }
-          });
-        } catch(e) {
+          currentColPrefs = normalizeColPrefs_(JSON.parse(raw));
+          if (fromV2) {
+            localStorage.setItem(COL_PREFS_STORAGE_KEY, JSON.stringify(currentColPrefs));
+          }
+        } catch (e) {
           currentColPrefs = JSON.parse(JSON.stringify(DEFAULT_COL_PREFS));
         }
       } else {
@@ -2333,19 +2363,19 @@
         existingHint.remove();
       }
       
-      // 新增移動端提示
+      // 三端獨立顯示提示
       const hint = document.createElement('div');
       hint.id = 'mobileCardHint';
       hint.className = 'text-xs bg-blue-50 border border-blue-200 p-3 rounded mt-2 mb-4';
       hint.innerHTML = `
         <div class="flex items-start gap-2">
-          <i class="fas fa-mobile-alt text-blue-600 mt-0.5"></i>
+          <i class="fas fa-columns text-blue-600 mt-0.5"></i>
           <div>
-            <strong class="text-blue-700">移動端顯示邏輯：</strong>
+            <strong class="text-blue-700">三端獨立顯示：</strong>
             <ul class="mt-1 space-y-1 text-gray-700" style="list-style-type: disc; margin-left: 1.2rem;">
-              <li><strong>資產編號</strong>永遠顯示在卡片頂部</li>
-              <li><strong>「優先」勾選的前 2 個欄位</strong>顯示在卡片主區（推薦：資訊資產編號、業務流程）</li>
-              <li><strong>其他「主表」勾選的欄位</strong>依排序顯示在展開區</li>
+              <li><strong>桌面端</strong>：控制桌面表格欄位</li>
+              <li><strong>手機端</strong>：移動端卡片；資產編號永遠在頂部，勾選欄位依排序前 2 個在主區、其餘在展開區</li>
+              <li><strong>掃描</strong>：掃描結果狀態卡的 meta 欄位（資產編號固定在標題）</li>
             </ul>
           </div>
         </div>
@@ -2368,8 +2398,9 @@
       listContainer.innerHTML = `
         <div class="flex items-center p-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500">
           <div style="width: 28px;"></div>
-          <div style="width: 40px; text-align: center;" title="在桌面版表格顯示">主表</div>
-          <div style="width: 40px; text-align: center;" title="在掃描面板和移動端卡片主區顯示">優先</div>
+          <div style="width: 40px; text-align: center;" title="在桌面版表格顯示">桌面</div>
+          <div style="width: 40px; text-align: center;" title="在移動端卡片顯示">手機</div>
+          <div style="width: 40px; text-align: center;" title="在掃描結果狀態卡顯示">掃描</div>
           <div class="flex-grow pl-3">欄位名稱</div>
         </div>
       `;
@@ -2388,17 +2419,23 @@
         item.dataset.id = col.id;
         
         const defCol = DEFAULT_COL_PREFS.find(d => d.id === col.id) || {};
-        const isScanVisible = col.scanVisible !== undefined ? col.scanVisible : (defCol.scanVisible || false);
+        const isDesktopVisible = col.visible !== undefined ? !!col.visible : !!defCol.visible;
+        const isMobileVisible = col.mobileVisible !== undefined ? !!col.mobileVisible : !!defCol.mobileVisible;
+        const isScanVisible = col.scanVisible !== undefined ? !!col.scanVisible : !!defCol.scanVisible;
+        const noneChecked = !isDesktopVisible && !isMobileVisible && !isScanVisible;
         
         item.innerHTML = `
           <i class="fas fa-grip-vertical text-gray-400 mr-2 ${col.unmovable ? 'opacity-30' : ''}" style="width: 20px;"></i>
           <div style="width: 40px; text-align: center;">
-            <input type="checkbox" class="col-visibility-cb h-4 w-4 text-blue-600 rounded border-gray-300" ${col.visible ? 'checked' : ''} ${col.unmovable ? 'disabled' : ''}>
+            <input type="checkbox" class="col-visibility-cb h-4 w-4 text-blue-600 rounded border-gray-300" ${isDesktopVisible ? 'checked' : ''} ${col.unmovable ? 'disabled' : ''}>
+          </div>
+          <div style="width: 40px; text-align: center;">
+            <input type="checkbox" class="col-mobile-visibility-cb h-4 w-4 text-blue-600 rounded border-gray-300" ${isMobileVisible ? 'checked' : ''}>
           </div>
           <div style="width: 40px; text-align: center;">
             <input type="checkbox" class="col-scan-visibility-cb h-4 w-4 text-blue-600 rounded border-gray-300" ${isScanVisible ? 'checked' : ''}>
           </div>
-          <span class="flex-grow text-sm pl-3 ${!col.visible && !isScanVisible ? 'text-gray-400 line-through' : ''}">${col.label}</span>
+          <span class="flex-grow text-sm pl-3 ${noneChecked ? 'text-gray-400 line-through' : ''}">${col.label}</span>
         `;
 
         if (!col.unmovable) {
@@ -2451,17 +2488,22 @@
           });
         }
         
-        const cb = item.querySelector('input[type="checkbox"]');
-        if (cb && !col.unmovable) {
-          cb.addEventListener('change', function() {
-            const span = item.querySelector('span');
-            if (cb.checked) {
-              span.classList.remove('text-gray-400', 'line-through');
-            } else {
-              span.classList.add('text-gray-400', 'line-through');
-            }
-          });
+        function refreshStrike() {
+          const span = item.querySelector('span');
+          const d = item.querySelector('.col-visibility-cb');
+          const m = item.querySelector('.col-mobile-visibility-cb');
+          const s = item.querySelector('.col-scan-visibility-cb');
+          const anyOn = (d && d.checked) || (m && m.checked) || (s && s.checked);
+          if (anyOn) {
+            span.classList.remove('text-gray-400', 'line-through');
+          } else {
+            span.classList.add('text-gray-400', 'line-through');
+          }
         }
+        item.querySelectorAll('.col-visibility-cb, .col-mobile-visibility-cb, .col-scan-visibility-cb').forEach(function(cb) {
+          if (cb.disabled) return;
+          cb.addEventListener('change', refreshStrike);
+        });
         
         listContainer.appendChild(item);
       });
@@ -2471,33 +2513,38 @@
       const listContainer = document.getElementById('colSettingsList');
       const items = listContainer.querySelectorAll('div[data-id]');
       
-      const newPrefs = [{ id: 'checkbox', label: '', visible: true, unmovable: true, scanVisible: false }];
+      const newPrefs = [{ id: 'checkbox', label: '', visible: true, unmovable: true, mobileVisible: false, scanVisible: false }];
       
       items.forEach(item => {
         const id = item.dataset.id;
         const cbVisible = item.querySelector('.col-visibility-cb');
+        const cbMobileVisible = item.querySelector('.col-mobile-visibility-cb');
         const cbScanVisible = item.querySelector('.col-scan-visibility-cb');
-        const def = DEFAULT_COL_PREFS.find(d => d.id === id);
+        const def = DEFAULT_COL_PREFS.find(d => d.id === id) || {};
         newPrefs.push({
           id: id,
           label: def.label,
           visible: cbVisible ? cbVisible.checked : false,
+          mobileVisible: cbMobileVisible ? cbMobileVisible.checked : !!def.mobileVisible,
           scanVisible: cbScanVisible ? cbScanVisible.checked : !!def.scanVisible,
           unmovable: !!def.unmovable
         });
       });
       
       currentColPrefs = newPrefs;
-      localStorage.setItem('isms_connect_col_prefs_v2', JSON.stringify(currentColPrefs));
+      localStorage.setItem(COL_PREFS_STORAGE_KEY, JSON.stringify(currentColPrefs));
       
       applyColumnPreferences();
+      if (typeof applyFilters === 'function') applyFilters();
       closeColSettingsModal();
     }
 
     function resetColSettings() {
-      localStorage.removeItem('isms_connect_col_prefs_v2');
+      localStorage.removeItem(COL_PREFS_STORAGE_KEY);
+      localStorage.removeItem(COL_PREFS_STORAGE_KEY_V2);
       loadColSettings();
       applyColumnPreferences();
+      if (typeof applyFilters === 'function') applyFilters();
       closeColSettingsModal();
     }
 
@@ -2881,27 +2928,27 @@
     // ==========================================
 
     /**
-     * 方案 D: 取得移動端卡片顯示欄位
+     * 取得移動端卡片顯示欄位（只讀 mobileVisible，與桌面／掃描獨立）
      * - 核心欄位：assetId (強制第一位)
-     * - 優先欄位：從 scanVisible: true 中依排序取前 2 個
-     * - 展開欄位：其他 visible: true，按排序
+     * - 主區：mobileVisible 依排序取前 2 個（不含 assetId）
+     * - 展開區：其餘 mobileVisible
      */
     function getMobileCardFields() {
       // 1. 核心欄位（資產編號強制第一位）
       const coreField = currentColPrefs.find(col => col.id === 'assetId');
       
-      // 2. 優先欄位（從 scanVisible: true 中取前2個）
+      // 2. 主區（mobileVisible 前 2 個）
       const priorityFields = currentColPrefs
         .filter(col => 
-          col.scanVisible && 
+          col.mobileVisible && 
           col.id !== 'assetId' && 
           col.id !== 'checkbox'
         )
         .slice(0, 2);
       
-      // 3. 展開區欄位（其他 visible: true，按排序）
+      // 3. 展開區（其餘 mobileVisible）
       const expandableFields = currentColPrefs.filter(col => 
-        col.visible && 
+        col.mobileVisible && 
         col.id !== 'checkbox' &&
         col.id !== 'assetId' &&
         !priorityFields.some(p => p.id === col.id)
@@ -2955,7 +3002,7 @@
             </span>
           </div>
           
-          <!-- 卡片主區：優先欄位（前2個 scanVisible） -->
+          <!-- 卡片主區：手機端勾選欄位（前 2 個） -->
           <div class="card-main">
             ${priorityFields.map((field, idx) => {
               const value = getAssetFieldValue(asset, field.id);
