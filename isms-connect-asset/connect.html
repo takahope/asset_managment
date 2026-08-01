@@ -1603,12 +1603,12 @@
             <!-- 連動設定表單 -->
             <div class="text-xs text-gray-500 mb-1 tracking-wider uppercase font-semibold">連動與業務流程設定</div>
             <input type="text" id="scan-ismsSearch" class="search-input" placeholder="搜尋資訊資產...">
+            <select id="scan-ismsAssetSelect" class="select-input bg-gray-50"><option value="">-- 請選擇資訊資產 --</option></select>
             <div class="flex gap-2">
-              <select id="scan-ismsAssetSelect" class="select-input flex-1 bg-gray-50"><option value="">-- 請選擇資訊資產 --</option></select>
-              <button id="scan-btnEditIsms" class="btn-secondary px-3" onclick="handleEditIsmsClick()" disabled><i class="fas fa-edit"></i></button>
-              <button id="scan-btnDeleteIsms" class="btn-danger px-3" onclick="handleDeleteIsmsClick()" disabled><i class="fas fa-trash"></i></button>
+              <select id="scan-businessProcessSelect" class="select-input flex-1 bg-gray-50"><option value="">-- 業務流程：不變更 --</option></select>
+              <button id="scan-btnEditIsms" class="btn-secondary px-3" onclick="handleEditIsmsClick()" disabled title="編輯所選分類"><i class="fas fa-edit"></i></button>
+              <button id="scan-btnDeleteIsms" class="btn-danger px-3" onclick="handleDeleteIsmsClick()" disabled title="刪除所選分類"><i class="fas fa-trash"></i></button>
             </div>
-            <select id="scan-businessProcessSelect" class="select-input bg-gray-50"><option value="">-- 業務流程：不變更 --</option></select>
             <input type="text" id="scan-mappingRemarks" class="search-input" placeholder="備註（選填）">
           </div>
           <div class="embedded-action-panel__footer">
