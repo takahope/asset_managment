@@ -261,6 +261,29 @@
       min-width: 200px;
     }
 
+    /* 動作條資訊資產列（下拉 + 全選連動）——桌面端 */
+    .action-bar__isms-row {
+      flex-direction: row !important;
+      align-items: center;
+      gap: 8px;
+    }
+    .action-bar__isms-row .select-input {
+      min-width: 240px;
+      flex: 1;
+    }
+    .action-bar__isms-row button {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .embedded-action-panel__body .action-bar__isms-row {
+      width: 100%;
+    }
+    .embedded-action-panel__body .action-bar__isms-row .select-input {
+      min-width: 0;
+      flex: 1;
+      max-width: 100%;
+    }
+
     /* 已選清單浮層 */
     .selected-popover {
       position: fixed; left: 24px; bottom: 76px; z-index: 41;
@@ -1397,6 +1420,20 @@
         flex-shrink: 0;
       }
 
+      /* 資訊資產列——移動端：選單滿寬、按鈕不縮 */
+      .action-bar__isms-row {
+        flex-direction: row !important;
+        flex-wrap: nowrap;
+        width: 100%;
+      }
+      .action-bar__isms-row .select-input {
+        flex: 1;
+        min-width: 0;
+      }
+      .action-bar__isms-row button {
+        flex-shrink: 0;
+      }
+
       /* ===================================================================== */
       /* 已選資產浮層（Selected Popover）移動端優化                             */
       /* ===================================================================== */
@@ -1626,7 +1663,11 @@
             <!-- 連動設定表單 -->
             <div class="text-xs text-gray-500 mb-1 tracking-wider uppercase font-semibold">連動與業務流程設定</div>
             <input type="text" id="scan-ismsSearch" class="search-input" placeholder="搜尋資訊資產...">
-            <select id="scan-ismsAssetSelect" class="select-input bg-gray-50"><option value="">-- 請選擇資訊資產 --</option></select>
+            <div class="flex gap-2 action-bar__isms-row">
+              <select id="scan-ismsAssetSelect" class="select-input bg-gray-50 flex-1"><option value="">-- 請選擇資訊資產 --</option></select>
+              <button id="scan-btnSelectMapped" type="button" class="btn-secondary px-3 disabled:opacity-50 disabled:cursor-not-allowed" disabled
+                      onclick="selectAllMappedUnderSelectedIsms()" title="全選此資訊資產底下已連動實體">全選連動</button>
+            </div>
             <div class="flex gap-2">
               <select id="scan-businessProcessSelect" class="select-input flex-1 bg-gray-50"><option value="">-- 業務流程：不變更 --</option></select>
               <button id="scan-btnEditIsms" class="btn-secondary px-3" onclick="handleEditIsmsClick()" disabled title="編輯所選分類"><i class="fas fa-edit"></i></button>
@@ -1705,10 +1746,14 @@
         <input type="text" id="ismsSearch" class="search-input action-bar__search-input" placeholder="搜尋資訊資產…">
       </div>
 
-      <div class="action-bar__field">
+      <div class="action-bar__field action-bar__isms-row">
         <select id="ismsAssetSelect" class="select-input" style="min-width:240px">
           <option value="">-- 請選擇資訊資產 --</option>
         </select>
+        <button id="btnSelectMapped" type="button" class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" disabled
+                onclick="selectAllMappedUnderSelectedIsms()" title="全選此資訊資產底下已連動實體">
+          全選連動
+        </button>
       </div>
 
       <div class="action-bar__field action-bar__bp-row">
@@ -2687,6 +2732,7 @@
           scanBtnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
         }
         fillIsmsDescriptionFields(val);
+        refreshSelectMappedBtn();
         updateCreateMappingBtn();
         refreshCreateMappingBtnLabel();
       }
@@ -3300,6 +3346,7 @@
       } else {
         fillIsmsDescriptionFields('');
       }
+      refreshSelectMappedBtn();
     }
 
 
@@ -4059,6 +4106,7 @@
         scanBtnDelete.title = isCurrentUserAdmin ? '刪除所選分類' : '僅管理員可刪除';
       }
       fillIsmsDescriptionFields('');
+      refreshSelectMappedBtn();
       updateCreateMappingBtn();
       refreshCreateMappingBtnLabel();
     }
@@ -4119,6 +4167,66 @@
     // ==========================================
     // 選擇功能
     // ==========================================
+
+    /**
+     * 依目前選定資訊資產，更新「全選連動」鈕的 disabled 與台數文案。
+     */
+    function refreshSelectMappedBtn() {
+      var sel = document.getElementById('ismsAssetSelect');
+      var id = sel ? String(sel.value || '').trim() : '';
+      var counts = getPhysicalMappingCounts();
+      var n = id ? (counts[id] || 0) : 0;
+      var enabled = !!id && n > 0;
+      var label = enabled ? ('全選連動 (' + n + ')') : '全選連動';
+      var title = enabled
+        ? ('全選此資訊資產底下已連動的 ' + n + ' 台實體')
+        : (id ? '此資訊資產尚無已連動實體' : '請先選擇資訊資產');
+
+      var mainBtn = document.getElementById('btnSelectMapped');
+      var scanBtn = document.getElementById('scan-btnSelectMapped');
+      [mainBtn, scanBtn].forEach(function(btn) {
+        if (!btn) return;
+        btn.disabled = !enabled;
+        btn.textContent = label;
+        btn.title = title;
+      });
+    }
+
+    /**
+     * 一鍵勾選目前下拉選定資訊資產底下所有已連動實體（取代既有勾選）。
+     * 範圍與 getPhysicalMappingCounts 相同，不受表格篩選影響。
+     */
+    function selectAllMappedUnderSelectedIsms() {
+      var prefix = getActivePrefix();
+      var sel = document.getElementById(prefix + 'ismsAssetSelect') ||
+                document.getElementById('ismsAssetSelect');
+      var id = sel ? String(sel.value || '').trim() : '';
+      if (!id) {
+        showToast('請先選擇資訊資產', 'error');
+        return;
+      }
+
+      var matched = [];
+      for (var i = 0; i < allAssets.length; i++) {
+        var a = allAssets[i];
+        if (a.assetId === '無對應資產/消耗品') continue;
+        if (String(a.mappedIsmsAssetId || '').trim() === id) {
+          matched.push(a.assetId);
+        }
+      }
+
+      if (matched.length === 0) {
+        showToast('此資訊資產尚無已連動實體', 'error');
+        refreshSelectMappedBtn();
+        return;
+      }
+
+      selectedAssetIds = new Set(matched);
+      updateSelectionUI();
+      renderAssetTable(getFilteredAssets());
+      showToast('已選 ' + matched.length + ' 筆連動實體', 'success');
+    }
+
     function toggleAssetSelection(assetId) {
       if (selectedAssetIds.has(assetId)) {
         selectedAssetIds.delete(assetId);
@@ -4504,6 +4612,7 @@
             if (scanBtnEdit) scanBtnEdit.disabled = true;
             if (btnDelete) btnDelete.disabled = true;
             if (scanBtnDelete) scanBtnDelete.disabled = true;
+            refreshSelectMappedBtn();
             closeScanActionPanel();
             resetCreateMappingBtn();
             if (processValue !== null) {
