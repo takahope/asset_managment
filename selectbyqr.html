@@ -470,7 +470,8 @@
   // ========== 輔助函數 ==========
   function Scanner_formatBarcode(barcode) {
     if (!barcode) return '';
-    const cleanCode = barcode.toString().trim();
+    // 移除所有 ASCII 控制字元 (如 \x1D, \x0D 等)，再去除首尾空白
+    const cleanCode = barcode.toString().replace(/[\x00-\x1F\x7F]/g, '').trim();
 
     // 20 碼去前 2 位，其他保留
     let processed = cleanCode.length === 20 ? cleanCode.substring(2) : cleanCode;
