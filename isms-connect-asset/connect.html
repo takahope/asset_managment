@@ -215,9 +215,25 @@
       padding: 12px 24px;
       background: #fff; border-top: 1px solid #e2e8f0;
       box-shadow: 0 -4px 20px rgba(15,23,42,0.10);
-      transform: translateY(110%); transition: transform 0.2s ease;
+      transform: translateY(110%); transition: transform 0.3s ease;
     }
     .action-bar.is-open { transform: translateY(0); }
+
+    /* 拖曳手柄區域（桌面版隱藏） */
+    .action-bar__handle {
+      display: none;
+    }
+
+    /* 已選列表區域（桌面版隱藏） */
+    .action-bar__selected-list {
+      display: none;
+    }
+
+    /* 操作欄位容器（桌面版顯示所有內容） */
+    .action-bar__controls {
+      display: contents;
+    }
+
     .action-bar__count {
       display: inline-flex; align-items: center; gap: 6px;
       font-weight: 600; color: #1d4ed8; cursor: pointer; white-space: nowrap;
@@ -1374,25 +1390,245 @@
       }
 
       /* ===================================================================== */
-      /* 動作條（Action Bar）移動端優化                                        */
+      /* 動作條（Action Bar）移動端優化 - 三段式抽屜                           */
       /* ===================================================================== */
       
+      /* 根據操作卡片狀態調整 body padding */
+      body.has-action-bar {
+        padding-bottom: 80px; /* 最小化狀態 */
+      }
+
+      body.has-action-bar.action-bar-list-open {
+        padding-bottom: 340px; /* 列表展開狀態 */
+      }
+
+      body.has-action-bar.action-bar-full-open {
+        padding-bottom: 500px; /* 完整展開狀態 */
+      }
+
       .action-bar {
         flex-direction: column;
         align-items: stretch;
-        gap: 10px;
-        padding: 12px 16px;
+        gap: 0;
+        padding: 0;
+        max-height: 90vh;
+        overflow: hidden;
+        transition: max-height 0.3s ease, transform 0.3s ease;
       }
-      
-      .action-bar__count {
-        width: 100%;
-        justify-content: center;
-        padding: 8px;
-        background: #eff6ff;
+
+      /* 拖曳手柄區域 */
+      .action-bar__handle {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px 16px 12px;
+        cursor: pointer;
+        background: #fff;
+        border-bottom: 1px solid #e2e8f0;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        position: relative;
+      }
+
+      .action-bar__handle:active {
+        background: #f1f5f9;
+      }
+
+      /* 拖曳手柄橫條 */
+      .action-bar__handle-bar {
+        width: 40px;
+        height: 4px;
+        background: #cbd5e1;
+        border-radius: 2px;
+        margin-bottom: 8px;
+        transition: width 0.2s ease, background 0.2s ease;
+      }
+
+      .action-bar__handle:active .action-bar__handle-bar {
+        width: 48px;
+        background: #94a3b8;
+      }
+
+      /* 手柄內容（圖示 + 文字） */
+      .action-bar__handle-content {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #1d4ed8;
+      }
+
+      .action-bar__handle-icon {
+        font-size: 0.875rem;
+        transition: transform 0.3s ease;
+      }
+
+      .action-bar__handle-text {
+        white-space: nowrap;
+      }
+
+      /* 微動畫：首次展開時輕微彈跳 */
+      @keyframes actionBarBounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
+      }
+
+      .action-bar.is-open.first-open .action-bar__handle-bar {
+        animation: actionBarBounce 0.6s ease;
+      }
+
+      /* 已選項目列表區域 */
+      .action-bar__selected-list {
+        display: block;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .action-bar__selected-list-header {
+        padding: 12px 16px 8px;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .action-bar__selected-list-items {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 8px 16px 12px;
+        position: relative;
+      }
+
+      /* 滾動條樣式 */
+      .action-bar__selected-list-items::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .action-bar__selected-list-items::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .action-bar__selected-list-items::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 2px;
+      }
+
+      .action-bar__selected-list-items::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* 底部漸變遮罩（提示可滾動） */
+      .action-bar__selected-list::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 24px;
+        background: linear-gradient(to bottom, transparent, rgba(248, 250, 252, 0.9));
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .action-bar.is-list-expanded .action-bar__selected-list::after {
+        opacity: 1;
+      }
+
+      .action-bar__selected-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
         border-radius: 6px;
         font-size: 0.85rem;
       }
+
+      .action-bar__selected-item-id {
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+        color: #1d4ed8;
+      }
+
+      .action-bar__selected-item-info {
+        flex: 1;
+        margin-left: 8px;
+        color: #64748b;
+        font-size: 0.8rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* 操作欄位區域 */
+      .action-bar__controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 16px;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
       
+      /* 三段式狀態 */
+      
+      /* 狀態 1: 最小化 - 只顯示手柄 */
+      .action-bar.is-minimized {
+        max-height: 60px;
+      }
+
+      .action-bar.is-minimized .action-bar__handle-icon {
+        transform: rotate(0deg);
+      }
+
+      .action-bar.is-minimized .action-bar__selected-list {
+        max-height: 0;
+      }
+
+      .action-bar.is-minimized .action-bar__controls {
+        max-height: 0;
+      }
+
+      /* 狀態 2: 列表展開 - 顯示手柄 + 列表 */
+      .action-bar.is-list-expanded {
+        max-height: 320px;
+      }
+
+      .action-bar.is-list-expanded .action-bar__handle-icon {
+        transform: rotate(180deg);
+      }
+
+      .action-bar.is-list-expanded .action-bar__selected-list {
+        max-height: 240px;
+      }
+
+      .action-bar.is-list-expanded .action-bar__controls {
+        max-height: 0;
+      }
+
+      /* 狀態 3: 完整展開 - 顯示所有內容 */
+      .action-bar.is-fully-expanded {
+        max-height: 90vh;
+      }
+
+      .action-bar.is-fully-expanded .action-bar__handle-icon {
+        transform: rotate(180deg);
+      }
+
+      .action-bar.is-fully-expanded .action-bar__selected-list {
+        max-height: 0;
+      }
+
+      .action-bar.is-fully-expanded .action-bar__controls {
+        max-height: 1000px; /* 足夠大的值讓所有內容顯示 */
+      }
+      
+      /* 操作欄位樣式 */
       .action-bar__field {
         width: 100%;
         flex-direction: column;
@@ -1757,47 +1993,66 @@
 
     <!-- 底部浮出動作條：取代原本的「對照作業」分頁 -->
     <div id="actionBar" class="action-bar">
-      <span class="action-bar__count" onclick="toggleSelectedPopover()">
-        <i class="fas fa-chevron-up"></i>
-        已選 <span id="selectedCount">0</span> 筆
-      </span>
-
-      <div class="action-bar__field">
-        <input type="text" id="ismsSearch" class="search-input action-bar__search-input" placeholder="搜尋資訊資產…">
+      <!-- 拖曳手柄區域 -->
+      <div class="action-bar__handle" id="actionBarHandle">
+        <div class="action-bar__handle-bar"></div>
+        <div class="action-bar__handle-content">
+          <i class="fas fa-chevron-up action-bar__handle-icon" id="actionBarHandleIcon"></i>
+          <span class="action-bar__handle-text">
+            已選 <span id="selectedCount">0</span> 筆
+          </span>
+        </div>
       </div>
 
-      <div class="action-bar__field action-bar__isms-row">
-        <select id="ismsAssetSelect" class="select-input" style="min-width:240px">
-          <option value="">-- 請選擇資訊資產 --</option>
-        </select>
-        <button id="btnSelectMapped" type="button" class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" disabled
-                onclick="selectAllMappedUnderSelectedIsms()" title="全選此資訊資產底下已連動實體">
-          全選連動
+      <!-- 已選項目列表區域 -->
+      <div class="action-bar__selected-list" id="actionBarSelectedList">
+        <div class="action-bar__selected-list-header">
+          <span class="text-sm font-semibold text-gray-700">待連動資產</span>
+        </div>
+        <div class="action-bar__selected-list-items" id="actionBarSelectedItems">
+          <!-- JS 動態生成 -->
+        </div>
+      </div>
+
+      <!-- 操作欄位區域 -->
+      <div class="action-bar__controls" id="actionBarControls">
+        <div class="action-bar__field">
+          <input type="text" id="ismsSearch" class="search-input action-bar__search-input" placeholder="搜尋資訊資產…">
+        </div>
+
+        <div class="action-bar__field action-bar__isms-row">
+          <select id="ismsAssetSelect" class="select-input" style="min-width:240px">
+            <option value="">-- 請選擇資訊資產 --</option>
+          </select>
+          <button id="btnSelectMapped" type="button" class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" disabled
+                  onclick="selectAllMappedUnderSelectedIsms()" title="全選此資訊資產底下已連動實體">
+            全選連動
+          </button>
+        </div>
+
+        <div class="action-bar__field action-bar__bp-row">
+          <select id="businessProcessSelect" class="select-input action-bar__bp-select">
+            <option value="">-- 業務流程：不變更 --</option>
+          </select>
+          <!-- 新增的編輯與刪除按鈕 -->
+          <button id="btnEditIsms" class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" onclick="handleEditIsmsClick()" disabled title="編輯所選分類">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button id="btnDeleteIsms" class="btn-danger disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" onclick="handleDeleteIsmsClick()" disabled title="刪除所選分類">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+
+        <div class="action-bar__field">
+          <textarea id="ismsDescription" class="search-input action-bar__desc-input" rows="2" placeholder="資訊資產說明（可編輯）" disabled></textarea>
+        </div>
+
+        <div class="action-bar__spacer"></div>
+
+        <button id="createMappingBtn" class="btn-primary" onclick="handleUnifiedAction()" disabled>
+          <i class="fas fa-link mr-2"></i>建立連動
         </button>
       </div>
-
-      <div class="action-bar__field action-bar__bp-row">
-        <select id="businessProcessSelect" class="select-input action-bar__bp-select">
-          <option value="">-- 業務流程：不變更 --</option>
-        </select>
-        <!-- 新增的編輯與刪除按鈕 -->
-        <button id="btnEditIsms" class="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" onclick="handleEditIsmsClick()" disabled title="編輯所選分類">
-          <i class="fas fa-edit"></i>
-        </button>
-        <button id="btnDeleteIsms" class="btn-danger disabled:opacity-50 disabled:cursor-not-allowed" style="padding: 8px 12px;" onclick="handleDeleteIsmsClick()" disabled title="刪除所選分類">
-          <i class="fas fa-trash"></i>
-        </button>
-      </div>
-
-      <div class="action-bar__field">
-        <textarea id="ismsDescription" class="search-input action-bar__desc-input" rows="2" placeholder="資訊資產說明（可編輯）" disabled></textarea>
-      </div>
-
-      <div class="action-bar__spacer"></div>
-
-      <button id="createMappingBtn" class="btn-primary" onclick="handleUnifiedAction()" disabled>
-        <i class="fas fa-link mr-2"></i>建立連動
-      </button>
     </div>
 
 
@@ -2704,6 +2959,9 @@
     });
 
     function setupEventListeners() {
+      // 初始化操作卡片手勢偵測
+      initActionBarGestures();
+
       // 資產搜尋／篩選：一律先寫 filterState，再走統一的 applyFilters
       document.getElementById('assetSearch').addEventListener('input', debounce(function() {
         filterState.keyword = document.getElementById('assetSearch').value.toLowerCase().trim();
@@ -4300,12 +4558,168 @@
       refreshCreateMappingBtnLabel();
     }
 
+    /* ========================================================================= */
+    /* 操作卡片三段式狀態管理                                                    */
+    /* ========================================================================= */
+
+    let actionBarState = 'minimized'; // 'minimized', 'list', 'full'
+    let actionBarTouchStart = null;
+    let actionBarDragging = false;
+
+    /**
+     * 設定操作卡片的狀態
+     * @param {string} state - 'minimized', 'list', 'full'
+     */
+    function setActionBarState(state) {
+      const actionBar = document.getElementById('actionBar');
+      const icon = document.getElementById('actionBarHandleIcon');
+      
+      if (!actionBar) return;
+
+      // 移除所有狀態類別
+      actionBar.classList.remove('is-minimized', 'is-list-expanded', 'is-fully-expanded');
+      document.body.classList.remove('action-bar-list-open', 'action-bar-full-open');
+      
+      // 添加新狀態類別
+      if (state === 'minimized') {
+        actionBar.classList.add('is-minimized');
+      } else if (state === 'list') {
+        actionBar.classList.add('is-list-expanded');
+        document.body.classList.add('action-bar-list-open');
+        updateActionBarSelectedList(); // 更新列表內容
+      } else if (state === 'full') {
+        actionBar.classList.add('is-fully-expanded');
+        document.body.classList.add('action-bar-full-open');
+      }
+      
+      actionBarState = state;
+    }
+
+    /**
+     * 切換到下一個狀態
+     */
+    function toggleActionBarState() {
+      if (actionBarState === 'minimized') {
+        setActionBarState('list');
+      } else if (actionBarState === 'list') {
+        setActionBarState('full');
+      } else {
+        setActionBarState('minimized');
+      }
+    }
+
+    /**
+     * 更新已選項目列表（在操作卡片內部）
+     */
+    function updateActionBarSelectedList() {
+      const container = document.getElementById('actionBarSelectedItems');
+      if (!container) return;
+
+      if (selectedAssetIds.size === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-sm text-center">請先在上方清單勾選資產</p>';
+        return;
+      }
+
+      const selectedAssets = allAssets.filter(function(a) { return selectedAssetIds.has(a.assetId); });
+
+      container.innerHTML = selectedAssets.map(function(asset) {
+        return `
+          <div class="action-bar__selected-item">
+            <span class="action-bar__selected-item-id">${escapeHtml(asset.assetId)}</span>
+            <span class="action-bar__selected-item-info">${escapeHtml(asset.assetName || '')}</span>
+            ${asset.isMapped ? '<span class="badge badge-success text-xs">已連動</span>' : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    /**
+     * 初始化操作卡片手勢偵測
+     */
+    function initActionBarGestures() {
+      const handle = document.getElementById('actionBarHandle');
+      if (!handle) return;
+
+      // 點擊手柄切換狀態
+      handle.addEventListener('click', function(e) {
+        if (!actionBarDragging) {
+          toggleActionBarState();
+        }
+      });
+
+      // Touch 事件（下一個 Task 實作）
+      handle.addEventListener('touchstart', handleActionBarTouchStart, { passive: false });
+      handle.addEventListener('touchmove', handleActionBarTouchMove, { passive: false });
+      handle.addEventListener('touchend', handleActionBarTouchEnd, { passive: false });
+    }
+
+    function handleActionBarTouchStart(e) {
+      actionBarTouchStart = {
+        y: e.touches[0].clientY,
+        time: Date.now()
+      };
+      actionBarDragging = false;
+    }
+
+    function handleActionBarTouchMove(e) {
+      if (!actionBarTouchStart) return;
+      
+      const deltaY = e.touches[0].clientY - actionBarTouchStart.y;
+      
+      // 如果移動距離超過 5px，視為拖曳
+      if (Math.abs(deltaY) > 5) {
+        actionBarDragging = true;
+      }
+    }
+
+    function handleActionBarTouchEnd(e) {
+      if (!actionBarTouchStart) return;
+      
+      const deltaY = e.changedTouches[0].clientY - actionBarTouchStart.y;
+      const deltaTime = Date.now() - actionBarTouchStart.time;
+      const velocity = Math.abs(deltaY) / deltaTime;
+      
+      // 向上滑動（deltaY < 0）且超過閾值
+      if (deltaY < -30 || (deltaY < 0 && velocity > 0.5)) {
+        // 向上滑動：展開到下一狀態
+        if (actionBarState === 'minimized') {
+          setActionBarState('list');
+        } else if (actionBarState === 'list') {
+          setActionBarState('full');
+        }
+      }
+      // 向下滑動（deltaY > 0）且超過閾值
+      else if (deltaY > 30 || (deltaY > 0 && velocity > 0.5)) {
+        // 向下滑動：收合到上一狀態
+        if (actionBarState === 'full') {
+          setActionBarState('list');
+        } else if (actionBarState === 'list') {
+          setActionBarState('minimized');
+        }
+      }
+      
+      actionBarTouchStart = null;
+      
+      // 延遲重置 dragging 標記，避免點擊事件觸發
+      setTimeout(() => {
+        actionBarDragging = false;
+      }, 100);
+    }
+
     /** 勾選 >=1 才滑出動作條；歸零時一併收起浮層，避免留下孤兒浮層 */
     function renderActionBar() {
       var hasSelection = selectedAssetIds.size > 0;
       document.getElementById('actionBar').classList.toggle('is-open', hasSelection);
       document.body.classList.toggle('has-action-bar', hasSelection);
-      if (!hasSelection) {
+      
+      if (hasSelection) {
+        // 手機版：初始狀態設為最小化
+        if (window.innerWidth < 640) {
+          setActionBarState('minimized');
+        }
+      } else {
+        // 無選擇時重置狀態
+        actionBarState = 'minimized';
         document.getElementById('selectedPopover').classList.remove('is-open');
       }
     }
