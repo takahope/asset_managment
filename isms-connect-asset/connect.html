@@ -572,6 +572,36 @@
       }
     }
 
+    /* 手機快捷搜尋（掃描鈕與資產卡片之間） */
+    .mobile-quick-search {
+      display: none;
+      margin: 0 0 16px;
+    }
+
+    .mobile-quick-search__input {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 10px 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #fff;
+      font-size: 0.875rem;
+      color: #0f172a;
+    }
+
+    .mobile-quick-search__input:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    @media (max-width: 768px) {
+      .mobile-quick-search {
+        display: block;
+      }
+    }
+
     /* 掃描器背景遮罩 */
     .scanner-backdrop {
       position: fixed;
@@ -1949,6 +1979,12 @@
         </button>
       </div>
 
+      <!-- 手機快捷搜尋（與篩選抽屜內搜尋雙向同步） -->
+      <div class="mobile-quick-search" id="mobileQuickSearch">
+        <input type="search" id="mobileAssetSearch" class="mobile-quick-search__input"
+               placeholder="搜尋所有欄位…" autocomplete="off">
+      </div>
+
       <!-- 掃描器背景遮罩 -->
       <div id="scannerBackdrop" class="scanner-backdrop" onclick="toggleScanner()"></div>
 
@@ -3050,10 +3086,24 @@
       initActionBarGestures();
 
       // 資產搜尋／篩選：一律先寫 filterState，再走統一的 applyFilters
-      document.getElementById('assetSearch').addEventListener('input', debounce(function() {
+      var debouncedAssetKeywordFilter = debounce(function() {
         filterState.keyword = document.getElementById('assetSearch').value.toLowerCase().trim();
         applyFilters();
-      }, 300));
+      }, 300);
+
+      document.getElementById('assetSearch').addEventListener('input', function() {
+        var mobileSearch = document.getElementById('mobileAssetSearch');
+        if (mobileSearch) mobileSearch.value = this.value;
+        debouncedAssetKeywordFilter();
+      });
+
+      var mobileAssetSearchEl = document.getElementById('mobileAssetSearch');
+      if (mobileAssetSearchEl) {
+        mobileAssetSearchEl.addEventListener('input', function() {
+          document.getElementById('assetSearch').value = this.value;
+          debouncedAssetKeywordFilter();
+        });
+      }
 
       // 組別晶片用事件委派（晶片每次重繪，不能逐顆綁）
       document.getElementById('groupChips').addEventListener('click', function(e) {
@@ -3938,7 +3988,7 @@
       };
 
       // 2. 清空前端所有的 select 與 input
-      var textInputs = ['assetSearch'];
+      var textInputs = ['assetSearch', 'mobileAssetSearch'];
       var selects = [
         'ismsFilter', 'categoryFilter', 'assetNameFilter', 'leaderFilter',
         'userFilter', 'isoBasisFilter', 'locationFilter', 'filterLabel'
