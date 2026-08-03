@@ -1270,11 +1270,22 @@
         order: 8;
       }
 
-      /* 下拉選單列 - 兩個一列並排 */
-      .card .flex.flex-wrap.items-center.gap-4.mb-4 {
+      /* 下拉選單列 - 兩個一列等寬並排（覆寫各 select 的 inline width） */
+      #filterSelectRow {
         display: grid;
-        grid-template-columns: 1fr 1fr; /* 兩欄並排 */
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
+      }
+
+      #filterSelectRow > .select-input {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        box-sizing: border-box;
+        font-size: 0.875rem;
+        padding: 8px 12px;
+        text-align: left;
+        text-align-last: left;
       }
 
       .select-input {
@@ -1841,7 +1852,7 @@
             </div>
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
-            <div class="flex flex-wrap items-center gap-4 mb-4">
+            <div id="filterSelectRow" class="flex flex-wrap items-center gap-4 mb-4">
               <select id="ismsFilter" class="select-input" style="min-width: 0; max-width: 150px; text-overflow: ellipsis;" onchange="setIsmsFilter(this.value)">
                 <option value="">全部資訊資產</option>
               </select>
