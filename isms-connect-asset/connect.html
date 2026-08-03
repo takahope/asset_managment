@@ -1160,17 +1160,18 @@
       /* 篩選器第一列 - 搜尋框與按鈕組 */
       .card .flex.flex-wrap.items-center.gap-4.mb-6 {
         display: grid;
+        grid-template-columns: 1fr 1fr; /* 兩欄配置 */
         gap: 8px;
       }
 
-      /* 搜尋框獨立一列，與螢幕等寬（限篩選器工具列，避免影響掃描面板） */
+      /* 搜尋框與顯示欄位同列（第一列：搜尋框佔 75%，顯示欄位佔 25%） */
       .card .flex.flex-wrap .search-input {
         max-width: 100%;
         width: 100%;
         font-size: 0.875rem;
         padding: 8px 12px;
-        grid-column: 1 / -1; /* 跨越整列 */
-        order: -1; /* 確保搜尋框在最上方 */
+        grid-column: 1 / 2; /* 佔第一欄 */
+        order: 1; /* 搜尋框排序為 1 */
       }
 
       .btn-secondary {
@@ -1184,10 +1185,46 @@
         display: none !important;
       }
 
-      /* 按鈕組垂直排列 */
-      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button,
-      .card .flex.flex-wrap.items-center.gap-4.mb-6 > .btn-secondary {
-        width: 100%;
+      /* 按鈕使用 Grid 自動排列，移除固定寬度 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button {
+        width: auto;
+      }
+
+      /* 特定按鈕的排序 */
+      /* 顯示欄位按鈕 - 與搜尋框同列 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button[onclick="openColSettingsModal()"] {
+        order: 2;
+        grid-column: 2 / 3; /* 佔第二欄 */
+      }
+
+      /* 重新整理按鈕 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button[onclick="loadAssets()"] {
+        order: 3;
+      }
+
+      /* 清除篩選按鈕 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button[onclick="clearAllFilters()"] {
+        order: 4;
+      }
+
+      /* 匯出篩選結果按鈕 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button[onclick="exportFiltered()"] {
+        order: 5;
+      }
+
+      /* 匯入對照按鈕 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button[onclick="openImportModal()"] {
+        order: 6;
+      }
+
+      /* 新增分類按鈕 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button#btnCreate {
+        order: 7;
+      }
+
+      /* 設定按鈕 */
+      .card .flex.flex-wrap.items-center.gap-4.mb-6 > button#btnSettings {
+        order: 8;
       }
 
       /* 下拉選單列 - 兩個一列並排 */
@@ -1489,30 +1526,30 @@
             <div class="flex flex-wrap items-center gap-4 mb-6">
           <input type="text" id="assetSearch" class="search-input" style="max-width: 200px;" placeholder="搜尋所有欄位...">
               <button class="btn-secondary btn-scan-barcode" onclick="toggleScanner()">
-                <i class="fas fa-camera mr-2"></i>掃描條碼
+                <i class="fas fa-camera sm:mr-2"></i><span class="hidden sm:inline">掃描條碼</span>
               </button>
               <button class="btn-secondary" onclick="loadAssets()">
-                <i class="fas fa-sync-alt mr-2"></i>重新整理
+                <i class="fas fa-sync-alt sm:mr-2"></i><span class="hidden sm:inline">重新整理</span>
               </button>
               <button class="btn-secondary" onclick="exportFiltered()">
-                <i class="fas fa-download mr-2"></i>匯出篩選結果
+                <i class="fas fa-download sm:mr-2"></i><span class="hidden sm:inline">匯出篩選結果</span>
               </button>
               <button class="btn-secondary" onclick="openImportModal()">
-                <i class="fas fa-upload mr-2"></i>匯入對照
+                <i class="fas fa-upload sm:mr-2"></i><span class="hidden sm:inline">匯入對照</span>
               </button>
               <!-- 新增按鈕 -->
               <button id="btnCreate" class="btn-secondary text-blue-600 border-blue-200" title="新增資訊資產" onclick="openCreateModal()">
-                <i class="fa-solid fa-plus mr-1"></i><span class="hidden sm:inline">新增分類</span>
+                <i class="fa-solid fa-plus sm:mr-1"></i><span class="hidden sm:inline">新增分類</span>
               </button>
               <button id="btnSettings" class="btn-secondary hidden" title="系統設定" onclick="openSettingsModal()">
                 <i class="fas fa-cog text-gray-600"></i>
               </button>
               <!-- 顯示欄位切換 -->
               <button class="btn-secondary" onclick="openColSettingsModal()" title="欄位設定">
-                <i class="fas fa-columns mr-2"></i>顯示欄位
+                <i class="fas fa-columns sm:mr-2"></i><span class="hidden sm:inline">顯示欄位</span>
               </button>
               <button class="btn-secondary text-gray-600 hover:text-red-500" title="清除所有篩選條件" onclick="clearAllFilters()">
-                <i class="fas fa-eraser mr-1"></i>清除篩選
+                <i class="fas fa-eraser sm:mr-1"></i><span class="hidden sm:inline">清除篩選</span>
               </button>
             </div>
 
