@@ -1416,6 +1416,11 @@
         transition: max-height 0.3s ease, transform 0.3s ease;
       }
 
+      /* 桌面「已選 N 筆」入口改由 handle 取代 */
+      .action-bar__count {
+        display: none;
+      }
+
       /* 拖曳手柄區域 */
       .action-bar__handle {
         display: flex;
@@ -1993,13 +1998,19 @@
 
     <!-- 底部浮出動作條：取代原本的「對照作業」分頁 -->
     <div id="actionBar" class="action-bar">
-      <!-- 拖曳手柄區域 -->
+      <!-- 桌面：可點擊開啟已選浮層（手機隱藏） -->
+      <span class="action-bar__count" onclick="toggleSelectedPopover()">
+        <i class="fas fa-chevron-up"></i>
+        已選 <span id="selectedCount">0</span> 筆
+      </span>
+
+      <!-- 拖曳手柄區域（桌面隱藏，手機三段式抽屜用） -->
       <div class="action-bar__handle" id="actionBarHandle">
         <div class="action-bar__handle-bar"></div>
         <div class="action-bar__handle-content">
           <i class="fas fa-chevron-up action-bar__handle-icon" id="actionBarHandleIcon"></i>
           <span class="action-bar__handle-text">
-            已選 <span id="selectedCount">0</span> 筆
+            已選 <span id="selectedCountHandle">0</span> 筆
           </span>
         </div>
       </div>
@@ -4534,7 +4545,10 @@
     }
 
     function updateSelectionUI() {
-      document.getElementById('selectedCount').textContent = selectedAssetIds.size;
+      var count = selectedAssetIds.size;
+      document.getElementById('selectedCount').textContent = count;
+      var handleCount = document.getElementById('selectedCountHandle');
+      if (handleCount) handleCount.textContent = count;
       renderSelectedList();
       renderActionBar();
       
