@@ -1447,6 +1447,7 @@
       .action-bar {
         flex-direction: column;
         align-items: stretch;
+        flex-wrap: nowrap; /* 避免最小化 max-height 時 column+wrap 把 handle 擠到左側 */
         gap: 0;
         padding: 0;
         max-height: 90vh;
@@ -1464,6 +1465,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        width: 100%;
+        box-sizing: border-box;
         padding: 8px 16px 12px;
         cursor: pointer;
         background: #fff;
