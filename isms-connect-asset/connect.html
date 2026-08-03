@@ -1544,7 +1544,8 @@
       .action-bar__selected-item {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        flex-wrap: nowrap;
+        gap: 6px;
         padding: 8px 12px;
         margin-bottom: 6px;
         background: #fff;
@@ -1554,6 +1555,7 @@
       }
 
       .action-bar__selected-item-id {
+        flex-shrink: 0;
         font-family: 'Courier New', monospace;
         font-weight: 600;
         color: #1d4ed8;
@@ -1561,12 +1563,37 @@
 
       .action-bar__selected-item-info {
         flex: 1;
-        margin-left: 8px;
+        min-width: 0;
+        margin-left: 0;
         color: #64748b;
         font-size: 0.8rem;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      .action-bar__selected-item .badge {
+        flex-shrink: 0;
+      }
+
+      .action-bar__selected-item-remove {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 6px;
+        margin: 0;
+        border: none;
+        background: transparent;
+        color: #ef4444;
+        font-size: 0.85rem;
+        line-height: 1;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .action-bar__selected-item-remove:active {
+        color: #b91c1c;
       }
 
       /* 操作欄位區域 */
@@ -4642,6 +4669,10 @@
             <span class="action-bar__selected-item-id">${escapeHtml(asset.assetId)}</span>
             <span class="action-bar__selected-item-info">${escapeHtml(asset.assetName || '')}</span>
             ${asset.isMapped ? '<span class="badge badge-success text-xs">已連動</span>' : ''}
+            <button type="button" class="action-bar__selected-item-remove"
+                    onclick="removeFromSelection('${escapeHtml(asset.assetId)}')" aria-label="移出選取">
+              <i class="fas fa-times"></i>
+            </button>
           </div>
         `;
       }).join('');
@@ -4723,13 +4754,19 @@
     /** 勾選 >=1 才滑出動作條；歸零時一併收起浮層，避免留下孤兒浮層 */
     function renderActionBar() {
       var hasSelection = selectedAssetIds.size > 0;
-      document.getElementById('actionBar').classList.toggle('is-open', hasSelection);
+      var actionBar = document.getElementById('actionBar');
+      var wasOpen = actionBar.classList.contains('is-open');
+      actionBar.classList.toggle('is-open', hasSelection);
       document.body.classList.toggle('has-action-bar', hasSelection);
       
       if (hasSelection) {
-        // 手機版：初始狀態設為最小化
+        // 手機版：僅首次滑出時設最小化；已展開 list 則刷新列表內容
         if (window.innerWidth < 640) {
-          setActionBarState('minimized');
+          if (!wasOpen) {
+            setActionBarState('minimized');
+          } else if (actionBarState === 'list') {
+            updateActionBarSelectedList();
+          }
         }
       } else {
         // 無選擇時重置狀態
@@ -4783,6 +4820,14 @@
         row.classList.remove('selected');
         const checkbox = row.querySelector('input[type="checkbox"]');
         if (checkbox) checkbox.checked = false;
+      }
+
+      // 同步手機卡片勾選狀態
+      const card = document.querySelector(`.asset-card-mobile[data-asset-id="${assetId}"]`);
+      if (card) {
+        card.classList.remove('selected');
+        const cardCheckbox = card.querySelector('.card-checkbox');
+        if (cardCheckbox) cardCheckbox.checked = false;
       }
     }
 
