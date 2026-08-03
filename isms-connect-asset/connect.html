@@ -1243,27 +1243,15 @@
         text-align-last: left;
       }
 
-      /* 保管人/使用人/認證依據同列的容器 - 也保持兩欄並排 */
-      .card .flex.items-center.gap-4 {
+      /* 核取方塊列 - 駐站與無對應資產編號並列 */
+      #checkboxRow {
         display: grid;
         grid-template-columns: 1fr 1fr; /* 兩欄並排 */
         gap: 8px;
-        grid-column: 1 / -1; /* 跨越整列 */
       }
 
-      /* 地點與駐站快篩綁定在一起 - 單獨一列 */
-      .card .flex.items-center.gap-3 {
-        display: flex;
-        flex-direction: row;
-        justify-content: flex-start;
-        gap: 8px;
-        grid-column: 1 / -1; /* 跨越整列 */
-      }
-
-      /* 地點下拉選單不要佔滿整列 */
-      .card .flex.items-center.gap-3 .select-input {
-        width: auto;
-        flex: 1;
+      #checkboxRow label {
+        font-size: 0.875rem;
       }
 
       /* label 保持橫向 */
@@ -1567,30 +1555,32 @@
               <select id="leaderFilter" class="select-input" style="min-width: 0; width: 120px;" onchange="setFilterState('leaderName', this.value)">
                 <option value="">全部保管人</option>
               </select>
-              <!-- 強制將使用人與認證依據綁在同一行 -->
-              <div class="flex items-center gap-4">
-                <select id="userFilter" class="select-input" style="min-width: 0; width: 120px;" onchange="setFilterState('userName', this.value)">
-                  <option value="">全部使用人</option>
-                </select>
-                <select id="isoBasisFilter" class="select-input" style="min-width: 0;" onchange="setFilterState('isoBasis', this.value)">
-                  <option value="">全部認證依據(資產/資訊資產)</option>
-                </select>
-              </div>
-              <!-- 地點與駐站快篩綁定在一起 -->
-              <div class="flex items-center gap-3">
-                <select id="locationFilter" class="select-input" style="min-width: 0; width: 150px;" onchange="setFilterState('location', this.value)">
-                  <option value="">全部地點(數量)</option>
-                </select>
-                <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
-                  <span class="whitespace-nowrap">駐站</span>
-                </label>
-                <select id="filterLabel" class="select-input" style="min-width: 0; width: 70px;" onchange="setFilterState('label', this.value)">
-                  <option value="">標</option>
-                  <option value="blue" class="text-blue-700">藍</option>
-                  <option value="green" class="text-green-700">綠</option>
-                </select>
-              </div>
+              <select id="userFilter" class="select-input" style="min-width: 0; width: 120px;" onchange="setFilterState('userName', this.value)">
+                <option value="">全部使用人</option>
+              </select>
+              <select id="isoBasisFilter" class="select-input" style="min-width: 0;" onchange="setFilterState('isoBasis', this.value)">
+                <option value="">全部認證依據(資產/資訊資產)</option>
+              </select>
+              <select id="locationFilter" class="select-input" style="min-width: 0; width: 150px;" onchange="setFilterState('location', this.value)">
+                <option value="">全部地點(數量)</option>
+              </select>
+              <select id="filterLabel" class="select-input" style="min-width: 0; width: 70px;" onchange="setFilterState('label', this.value)">
+                <option value="">標</option>
+                <option value="blue" class="text-blue-700">藍</option>
+                <option value="green" class="text-green-700">綠</option>
+              </select>
+            </div>
+
+            <!-- 核取方塊列 - 駐站與無對應資產編號 -->
+            <div class="flex items-center gap-4 mb-3" id="checkboxRow">
+              <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
+                <span class="whitespace-nowrap">駐站</span>
+              </label>
+              <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" id="noAssetMappingCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMapping', this.checked)">
+                <span class="whitespace-nowrap">無對應資產編號</span>
+              </label>
             </div>
 
             <!-- 對照與使用狀態晶片列 -->
@@ -1602,13 +1592,6 @@
               <div class="flex items-center shrink-0">
                 <span class="text-sm font-semibold text-slate-700 whitespace-nowrap mr-3">使用狀態：</span>
                 <div class="chip-row min-w-0" id="usageStatusChips"></div>
-              </div>
-              <!-- 無對應資產編號篩選 -->
-              <div class="flex items-center shrink-0">
-                <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="checkbox" id="noAssetMappingCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMapping', this.checked)">
-                  <span class="whitespace-nowrap">無對應資產編號</span>
-                </label>
               </div>
             </div>
 
