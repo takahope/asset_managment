@@ -300,6 +300,27 @@
       max-width: 100%;
     }
 
+    /* 已選清單「全部移除」——桌面浮層與手機列表共用 */
+    .selected-clear-all-btn {
+      flex-shrink: 0;
+      padding: 2px 6px;
+      border: none;
+      background: transparent;
+      color: #ef4444;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.2;
+      white-space: nowrap;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .selected-clear-all-btn:hover {
+      color: #b91c1c;
+    }
+    .selected-clear-all-btn:active {
+      color: #991b1b;
+    }
+
     /* 已選清單浮層 */
     .selected-popover {
       position: fixed; left: 24px; bottom: 76px; z-index: 41;
@@ -1494,6 +1515,10 @@
       }
 
       .action-bar__selected-list-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
         padding: 12px 16px 8px;
         border-bottom: 1px solid #e2e8f0;
       }
@@ -2013,10 +2038,13 @@
     <!-- 已選資產浮層（點動作條的「已選 N 筆」展開） -->
     <div id="selectedPopover" class="selected-popover">
       <div class="flex items-center justify-between mb-2">
-        <span class="font-semibold text-gray-900 text-sm">
-          待連動資產 <span id="mappingAssetCount" class="text-gray-500">(0 筆)</span>
-        </span>
-        <button class="text-gray-400 hover:text-gray-600" onclick="toggleSelectedPopover()">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="font-semibold text-gray-900 text-sm">
+            待連動資產 <span id="mappingAssetCount" class="text-gray-500">(0 筆)</span>
+          </span>
+          <button type="button" class="selected-clear-all-btn" onclick="clearAllSelection()">全部移除</button>
+        </div>
+        <button class="text-gray-400 hover:text-gray-600 flex-shrink-0" onclick="toggleSelectedPopover()">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -2046,6 +2074,7 @@
       <div class="action-bar__selected-list" id="actionBarSelectedList">
         <div class="action-bar__selected-list-header">
           <span class="text-sm font-semibold text-gray-700">待連動資產</span>
+          <button type="button" class="selected-clear-all-btn" onclick="clearAllSelection()">全部移除</button>
         </div>
         <div class="action-bar__selected-list-items" id="actionBarSelectedItems">
           <!-- JS 動態生成 -->
@@ -4829,6 +4858,28 @@
         const cardCheckbox = card.querySelector('.card-checkbox');
         if (cardCheckbox) cardCheckbox.checked = false;
       }
+    }
+
+    /** 清空所有已選資產（桌面浮層／手機列表「全部移除」） */
+    function clearAllSelection() {
+      selectedAssetIds.clear();
+
+      document.querySelectorAll('#assetTableBody tr[data-asset-id]').forEach(function(row) {
+        row.classList.remove('selected');
+        var checkbox = row.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = false;
+      });
+
+      document.querySelectorAll('.asset-card-mobile').forEach(function(card) {
+        card.classList.remove('selected');
+        var cardCheckbox = card.querySelector('.card-checkbox');
+        if (cardCheckbox) cardCheckbox.checked = false;
+      });
+
+      var selectAll = document.getElementById('selectAllAssets');
+      if (selectAll) selectAll.checked = false;
+
+      updateSelectionUI();
     }
 
     function updateCreateMappingBtn() {
