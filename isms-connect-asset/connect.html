@@ -3576,10 +3576,12 @@
         return asset.mappedIsmsAssetId || '-';
       }
       if (fieldId === 'ismsAssetDesc') {
-        return formatDescHtml(asset.ismsAssetDescription);
+        return asset.ismsAssetDescription || '-';
       }
       if (fieldId === 'assetLabel') {
-        return renderAssetLabelBadge(asset.confidentiality);
+        if (asset.confidentiality === '4') return '藍色(機密)';
+        if (asset.confidentiality === '3') return '綠色(密)';
+        return '-';
       }
       
       // 一般欄位
@@ -3609,12 +3611,15 @@
           <!-- 卡片主區：手機端勾選欄位（前 2 個） -->
           <div class="card-main">
             ${priorityFields.map((field, idx) => {
-              const value = getAssetFieldValue(asset, field.id);
+              let value = getAssetFieldValue(asset, field.id);
+              let displayHtml = escapeHtml(value);
+              if (field.id === 'ismsAssetDesc') displayHtml = formatDescHtml(asset.ismsAssetDescription);
+              if (field.id === 'assetLabel') displayHtml = renderAssetLabelBadge(asset.confidentiality);
               return `
                 ${idx > 0 ? '<span class="field-separator">|</span>' : ''}
                 <span class="card-priority-field">
                   <span class="field-label">${escapeHtml(field.label)}:</span>
-                  <span class="field-value">${escapeHtml(value)}</span>
+                  <span class="field-value">${displayHtml}</span>
                 </span>
               `;
             }).join('')}
@@ -3630,11 +3635,14 @@
           <!-- 展開區：其他欄位 -->
           <div class="card-expandable" id="${cardId}-expandable">
             ${expandableFields.map(field => {
-              const value = getAssetFieldValue(asset, field.id);
+              let value = getAssetFieldValue(asset, field.id);
+              let displayHtml = escapeHtml(value);
+              if (field.id === 'ismsAssetDesc') displayHtml = formatDescHtml(asset.ismsAssetDescription);
+              if (field.id === 'assetLabel') displayHtml = renderAssetLabelBadge(asset.confidentiality);
               return `
                 <div class="expandable-row">
                   <span class="field-label">${escapeHtml(field.label)}</span>
-                  <span class="field-value">${(field.id === 'ismsAssetDesc' || field.id === 'assetLabel') ? value : escapeHtml(value)}</span>
+                  <span class="field-value">${displayHtml}</span>
                 </div>
               `;
             }).join('')}
