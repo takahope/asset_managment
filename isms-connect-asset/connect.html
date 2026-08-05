@@ -4344,12 +4344,6 @@
           var valA = getAssetFieldValue(a, currentSort.colId);
           var valB = getAssetFieldValue(b, currentSort.colId);
           
-          if (currentSort.colId === 'ismsAssetQty') {
-            valA = parseFloat(valA) || 0;
-            valB = parseFloat(valB) || 0;
-            return currentSort.direction === 'asc' ? valA - valB : valB - valA;
-          }
-          
           valA = String(valA || '');
           valB = String(valB || '');
           return currentSort.direction === 'asc' 
