@@ -2146,28 +2146,28 @@
                       <input type="checkbox" id="selectAllAssets" onchange="toggleSelectAll()">
                     </th>
                     <th class="col-asset-id" data-col="assetId">資產編號</th>
-                    <th class="col-asset-name" data-col="assetName">資產名稱</th>
                     <th class="col-asset-alias-serial" data-col="assetAliasOrSerial">資產別名/序號</th>
-                    <th class="col-brand" data-col="brand">廠牌型號</th>
-                    <th class="col-person" data-col="leaderName">保管人</th>
-                    <th class="col-person" data-col="userName">使用人</th>
-                    <th class="col-location" data-col="location">地點</th>
-                    <th class="col-group" data-col="group">組別</th>
-                    <th class="col-status" data-col="mappedStatus">連動狀態</th>
-                    <th class="col-status" data-col="usageStatus">使用狀態</th>
                     <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
                     <th class="col-asset-name" data-col="ismsAssetName">資訊資產名稱</th>
                     <th class="col-desc" data-col="ismsAssetDesc">資訊資產說明</th>
                     <th class="col-qty" data-col="ismsAssetQty">資產數量</th>
-                    <th class="col-status" data-col="assetLabel">標籤</th>
+                    <th class="col-location" data-col="location">地點</th>
                     <th class="col-business" data-col="businessProcess">業務流程</th>
+                    <th class="col-status" data-col="usageStatus">使用狀態</th>
+                    <th class="col-status" data-col="assetLabel">標籤</th>
+                    <th class="col-status" data-col="mappedStatus">連動狀態</th>
                     <th class="col-status" data-col="isoScope">ISO 範圍</th>
                     <th class="col-location" data-col="isoBasis">認證依據</th>
+                    <th class="col-brand" data-col="brand">廠牌型號</th>
+                    <th class="col-asset-name" data-col="assetName">資產名稱</th>
+                    <th class="col-person" data-col="leaderName">保管人</th>
+                    <th class="col-person" data-col="userName">使用人</th>
+                    <th class="col-group" data-col="group">組別</th>
                   </tr>
                 </thead>
                 <tbody id="assetTableBody">
                   <tr>
-                    <td colspan="18" class="text-center py-8 text-gray-500">
+                    <td colspan="19" class="text-center py-8 text-gray-500">
                       <div class="loading-spinner mx-auto mb-2"></div>
                       載入中...
                     </td>
@@ -2864,17 +2864,17 @@
       { id: 'ismsAssetName', label: '資訊資產名稱', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'ismsAssetDesc', label: '資訊資產說明', visible: true, mobileVisible: true, scanVisible: false },
       { id: 'ismsAssetQty', label: '資產數量', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'location', label: '地點', visible: true, mobileVisible: false, scanVisible: false },
+      { id: 'businessProcess', label: '業務流程', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'usageStatus', label: '使用狀態', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'assetLabel', label: '標籤', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'mappedStatus', label: '連動狀態', visible: true, mobileVisible: true, scanVisible: true },
-      { id: 'usageStatus', label: '使用狀態', visible: true, mobileVisible: true, scanVisible: true },
-      { id: 'businessProcess', label: '業務流程', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'isoScope', label: 'ISO 範圍', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'isoBasis', label: '認證依據', visible: true, mobileVisible: false, scanVisible: false },
-      { id: 'assetName', label: '資產名稱', visible: false, mobileVisible: false, scanVisible: false },
       { id: 'brand', label: '廠牌型號', visible: true, mobileVisible: false, scanVisible: false },
+      { id: 'assetName', label: '資產名稱', visible: true, mobileVisible: false, scanVisible: false },
       { id: 'leaderName', label: '保管人', visible: false, mobileVisible: false, scanVisible: false },
       { id: 'userName', label: '使用人', visible: false, mobileVisible: false, scanVisible: false },
-      { id: 'location', label: '地點', visible: false, mobileVisible: false, scanVisible: false },
       { id: 'group', label: '組別', visible: false, mobileVisible: false, scanVisible: false }
     ];
     let currentColPrefs = [];
@@ -3742,7 +3742,7 @@
       const tbody = document.getElementById('assetTableBody');
       
       if (assets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="18" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="19" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
         return;
       }
       
@@ -3754,27 +3754,27 @@
               <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleAssetSelection('${escapeHtml(asset.assetId)}')">
             </td>
             <td class="font-mono text-sm" data-col="assetId">${escapeHtml(asset.assetId)}</td>
-            <td data-col="assetName"><div class="cell-name">${escapeHtml(asset.assetName)}</div></td>
             <td data-col="assetAliasOrSerial"><div class="cell-name">${escapeHtml(asset.assetAliasOrSerial || '-')}</div></td>
-            <td data-col="brand"><div class="cell-brand">${escapeHtml(asset.modelBrand || '-')}</div></td>
-            <td data-col="leaderName">${escapeHtml(asset.leaderName)}</td>
-            <td data-col="userName">${escapeHtml(asset.userName)}</td>
+            <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
+            <td data-col="ismsAssetName"><div class="cell-name">${escapeHtml(asset.ismsAssetName || '-')}</div></td>
+            <td data-col="ismsAssetDesc">${formatDescHtml(asset.ismsAssetDescription)}</td>
+            <td data-col="ismsAssetQty">${escapeHtml(getAssetFieldValue(asset, 'ismsAssetQty'))}</td>
             <td data-col="location">${escapeHtml(asset.location)}</td>
-            <td data-col="group">${escapeHtml(asset.group)}</td>
+            <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
+            <td data-col="usageStatus">${escapeHtml(asset.usageStatus || '')}</td>
+            <td data-col="assetLabel">${renderAssetLabelBadge(asset.confidentiality)}</td>
             <td data-col="mappedStatus">
               ${asset.isMapped
                 ? '<span class="badge badge-success"><i class="fas fa-check mr-1"></i>已連動</span>'
                 : '<span class="badge badge-warning"><i class="fas fa-times mr-1"></i>未連動</span>'}
             </td>
-            <td data-col="usageStatus">${escapeHtml(asset.usageStatus || '')}</td>
-            <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
-            <td data-col="ismsAssetName"><div class="cell-name">${escapeHtml(asset.ismsAssetName || '-')}</div></td>
-            <td data-col="ismsAssetDesc">${formatDescHtml(asset.ismsAssetDescription)}</td>
-            <td data-col="ismsAssetQty">${escapeHtml(getAssetFieldValue(asset, 'ismsAssetQty'))}</td>
-            <td data-col="assetLabel">${renderAssetLabelBadge(asset.confidentiality)}</td>
-            <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
             <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
             <td data-col="isoBasis"><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
+            <td data-col="brand"><div class="cell-brand">${escapeHtml(asset.modelBrand || '-')}</div></td>
+            <td data-col="assetName"><div class="cell-name">${escapeHtml(asset.assetName)}</div></td>
+            <td data-col="leaderName">${escapeHtml(asset.leaderName)}</td>
+            <td data-col="userName">${escapeHtml(asset.userName)}</td>
+            <td data-col="group">${escapeHtml(asset.group)}</td>
           </tr>
         `;
       }).join('');
