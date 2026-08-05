@@ -427,10 +427,15 @@ function getMappingMap_() {
   const map = new Map();
   if (!sheet) return map;
 
-  const data = sheet.getDataRange().getValues();
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  const startRow = range.getRow();
   const indices = MAPPING_COLUMN_INDICES;
 
-  for (let i = 1; i < data.length; i++) {
+  const hasHeader = data.length > 0 && String(data[0][indices.ASSET_ID - 1] || '').trim() === '資產編號';
+  const startIndex = hasHeader ? 1 : 0;
+
+  for (let i = startIndex; i < data.length; i++) {
     const row = data[i];
     const assetId = row[indices.ASSET_ID - 1];
     if (assetId) {
@@ -443,7 +448,7 @@ function getMappingMap_() {
         isoScope: row[indices.ISO_SCOPE - 1] ? row[indices.ISO_SCOPE - 1].toString().trim() : '',
         isoBasis: row[indices.ISO_BASIS - 1] ? row[indices.ISO_BASIS - 1].toString() : '',
         isoJudgedAt: row[indices.ISO_JUDGED_AT - 1] ? row[indices.ISO_JUDGED_AT - 1].toString() : '',
-        rowIndex: i + 1
+        rowIndex: startRow + i
       });
     }
   }
@@ -582,7 +587,7 @@ function getAssetsWithMappingStatus(options = {}) {
         ismsLocation: ismsAsset ? ismsAsset.location : '',
         ismsAssetName: ismsAsset ? ismsAsset.name : '',
         ismsAssetDescription: ismsAsset ? ismsAsset.description : '',
-        ismsAssetQty: ismsAsset ? ismsAsset.quantity : ''
+        ismsAssetQty: ismsAsset ? (ismsAsset.quantityOriginal || ismsAsset.quantity) : ''
       };
     });
 
@@ -1203,8 +1208,11 @@ function getIsmsAssets(options = {}) {
         const mappingData = mappingSheet.getDataRange().getValues();
         const isoScopeMap = new Map(); // ismsAssetId -> Set of isoScope values
         
-        // 遍歷對照表（跳過標題列）
-        for (let i = 1; i < mappingData.length; i++) {
+        const hasMappingHeader = mappingData.length > 0 && String(mappingData[0][MAPPING_COLUMN_INDICES.ASSET_ID - 1] || '').trim() === '資產編號';
+        const startMappingIndex = hasMappingHeader ? 1 : 0;
+
+        // 遍歷對照表（跳過標題列，如果有的話）
+        for (let i = startMappingIndex; i < mappingData.length; i++) {
           const row = mappingData[i];
           const ismsAssetId = row[MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1] ? 
                               row[MAPPING_COLUMN_INDICES.ISMS_ASSET_ID - 1].toString().trim() : '';
