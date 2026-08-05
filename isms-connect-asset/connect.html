@@ -2308,6 +2308,19 @@
           <p class="text-xs text-gray-500">動態業務流程將從此試算表的「系統清冊」工作表 C 欄自動匯入。</p>
         </div>
 
+        <!-- 資訊資產數量顯示格式設定 -->
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <label class="block mb-2">
+            <span class="text-sm font-bold text-gray-700">資訊資產數量顯示格式</span>
+            <select id="settingQuantityDisplayMode" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+              <option value="both">兩者皆顯示 (虛擬數量/連動數量)</option>
+              <option value="virtual">僅顯示虛擬數量</option>
+              <option value="mapped">僅顯示實際連動數量</option>
+            </select>
+          </label>
+          <p class="text-xs text-gray-500">此設定為全域設定，變更後所有使用者的表格「資產數量」欄位都會統一改變顯示格式。</p>
+        </div>
+
         <!-- 動態業務流程 -->
         <div>
           <h4 class="text-md font-bold text-gray-800 mb-2">動態業務流程 (來自系統清冊)</h4>
@@ -2845,6 +2858,7 @@
       { id: 'ismsAssetId', label: '資訊資產編號', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'ismsAssetName', label: '資訊資產名稱', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'ismsAssetDesc', label: '資訊資產說明', visible: true, mobileVisible: true, scanVisible: false },
+      { id: 'ismsAssetQty', label: '資產數量', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'assetLabel', label: '標籤', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'mappedStatus', label: '連動狀態', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'usageStatus', label: '使用狀態', visible: true, mobileVisible: true, scanVisible: true },
@@ -3442,6 +3456,11 @@
         .withSuccessHandler(function(result) {
           if (result.success) {
             allAssets = result.assets;
+            
+            if (result.quantityDisplayMode) {
+              globalQuantityDisplayMode = result.quantityDisplayMode;
+            }
+
             applyFilters();            // 表格 + 統計卡 + 晶片列，並保留使用者當前的篩選條件
             renderIsmsFilterOptions(); // 選項來自 allAssets 的對照結果，兩支載入誰先到都要重繪
             renderOtherFilterOptions(); // 其他 5 個佔位篩選器
@@ -3582,6 +3601,21 @@
         if (asset.confidentiality === '4') return '藍色(機密)';
         if (asset.confidentiality === '3') return '綠色(密)';
         return '-';
+      }
+      if (fieldId === 'ismsAssetQty') {
+        if (!asset.mappedIsmsAssetId) return '-';
+        
+        const vQty = asset.ismsAssetQty || '0';
+        const mappingCounts = getPhysicalMappingCounts();
+        const mQty = mappingCounts[asset.mappedIsmsAssetId] || 0;
+        
+        if (globalQuantityDisplayMode === 'virtual') {
+          return String(vQty);
+        } else if (globalQuantityDisplayMode === 'mapped') {
+          return String(mQty);
+        } else {
+          return `(${vQty}/${mQty})`;
+        }
       }
       
       // 一般欄位
@@ -6587,6 +6621,7 @@
 
     // --- Settings Modal Logic ---
     let currentRawDynamicList = [];
+    let globalQuantityDisplayMode = 'both';
 
     function openSettingsModal() {
       document.getElementById('settingsModal').classList.remove('hidden');
@@ -6618,6 +6653,8 @@
       currentRawDynamicList = data.rawDynamicList || [];
       const settings = data.settings || { staticProcesses: [], dynamicMap: {} };
       const dMap = settings.dynamicMap || {};
+      
+      document.getElementById('settingQuantityDisplayMode').value = data.quantityDisplayMode || globalQuantityDisplayMode || 'both';
       
       const dynTbody = document.getElementById('settingsDynamicList');
       dynTbody.innerHTML = '';
@@ -6660,7 +6697,11 @@
     function saveSettings() {
       const sheetId = document.getElementById('settingSheetId').value.trim();
       
-      const config = { staticProcesses: [], dynamicMap: {} };
+      const config = { 
+        staticProcesses: [], 
+        dynamicMap: {},
+        quantityDisplayMode: document.getElementById('settingQuantityDisplayMode').value
+      };
       
       document.querySelectorAll('.stat-row').forEach(tr => {
         const name = tr.querySelector('.stat-name').value.trim();
@@ -6691,6 +6732,8 @@
           btn.textContent = origText;
           if (res.success) {
             showToast('設定已儲存', 'success');
+            globalQuantityDisplayMode = config.quantityDisplayMode;
+            if (typeof applyFilters === 'function') applyFilters();
             closeSettingsModal();
             preloadDropdowns();
           }
