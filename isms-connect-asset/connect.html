@@ -227,6 +227,48 @@
     .col-group { min-width: 100px; }
     .col-status { min-width: 100px; }
     .col-info-id { min-width: 140px; }
+    .col-desc { min-width: 200px; max-width: 320px; }
+
+    /* 說明欄展開 */
+    .desc-cell { max-width: 320px; }
+    .desc-short {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.5;
+      color: var(--ink-700);
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .desc-full {
+      display: none;
+      line-height: 1.6;
+      color: var(--ink-700);
+      font-size: 13px;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+    .desc-cell.expanded .desc-short { display: none; }
+    .desc-cell.expanded .desc-full  { display: block; }
+    .btn-desc-toggle {
+      margin-top: 5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #2563eb;
+      cursor: pointer;
+      border: none;
+      background: none;
+      padding: 0;
+      letter-spacing: 0.2px;
+      transition: color 0.15s;
+    }
+    .btn-desc-toggle:hover { color: #1d4ed8; }
+    .btn-desc-toggle i { font-size: 10px; transition: transform 0.2s; }
+    .desc-cell.expanded .btn-desc-toggle i { transform: rotate(180deg); }
 
     /* 可點擊統計卡 */
     .stat-card.is-clickable { cursor: pointer; transition: all 0.15s; }
@@ -2101,6 +2143,7 @@
                     <th class="col-status" data-col="usageStatus">使用狀態</th>
                     <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
                     <th class="col-asset-name" data-col="ismsAssetName">資訊資產名稱</th>
+                    <th class="col-desc" data-col="ismsAssetDesc">資訊資產說明</th>
                     <th class="col-business" data-col="businessProcess">業務流程</th>
                     <th class="col-status" data-col="isoScope">ISO 範圍</th>
                     <th class="col-location" data-col="isoBasis">認證依據</th>
@@ -2108,7 +2151,7 @@
                 </thead>
                 <tbody id="assetTableBody">
                   <tr>
-                    <td colspan="16" class="text-center py-8 text-gray-500">
+                    <td colspan="17" class="text-center py-8 text-gray-500">
                       <div class="loading-spinner mx-auto mb-2"></div>
                       載入中...
                     </td>
@@ -2790,6 +2833,7 @@
       { id: 'assetAliasOrSerial', label: '資產別名/序號', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'ismsAssetId', label: '資訊資產編號', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'ismsAssetName', label: '資訊資產名稱', visible: true, mobileVisible: true, scanVisible: true },
+      { id: 'ismsAssetDesc', label: '資訊資產說明', visible: true, mobileVisible: true, scanVisible: false },
       { id: 'mappedStatus', label: '連動狀態', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'usageStatus', label: '使用狀態', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'businessProcess', label: '業務流程', visible: true, mobileVisible: true, scanVisible: true },
@@ -3510,6 +3554,9 @@
       if (fieldId === 'ismsAssetId') {
         return asset.mappedIsmsAssetId || '-';
       }
+      if (fieldId === 'ismsAssetDesc') {
+        return formatDescHtml(asset.ismsAssetDescription);
+      }
       
       // 一般欄位
       return asset[fieldId] || '-';
@@ -3563,7 +3610,7 @@
               return `
                 <div class="expandable-row">
                   <span class="field-label">${escapeHtml(field.label)}</span>
-                  <span class="field-value">${escapeHtml(value)}</span>
+                  <span class="field-value">${field.id === 'ismsAssetDesc' ? value : escapeHtml(value)}</span>
                 </div>
               `;
             }).join('')}
@@ -3624,7 +3671,7 @@
       const tbody = document.getElementById('assetTableBody');
       
       if (assets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="16" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="17" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
         return;
       }
       
@@ -3651,6 +3698,7 @@
             <td data-col="usageStatus">${escapeHtml(asset.usageStatus || '')}</td>
             <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
             <td data-col="ismsAssetName"><div class="cell-name">${escapeHtml(asset.ismsAssetName || '-')}</div></td>
+            <td data-col="ismsAssetDesc">${formatDescHtml(asset.ismsAssetDescription)}</td>
             <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
             <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
             <td data-col="isoBasis"><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
@@ -5710,6 +5758,39 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+    }
+
+    // --- 資訊資產說明截斷與展開 ---
+    function toggleDesc(btn) {
+      if (btn.stopPropagation) btn.stopPropagation();
+      var wrap = btn.closest('.desc-cell');
+      if (wrap) {
+        var expanded = wrap.classList.toggle('expanded');
+        var textSpan = btn.querySelector('span');
+        if (textSpan) {
+          textSpan.textContent = expanded ? '收起' : '查看更多';
+        }
+      }
+    }
+
+    function formatDescHtml(text) {
+      var s = String(text || '').trim();
+      if (!s || s === '-') return '-';
+      
+      var safeText = escapeHtml(s);
+      
+      // 超過 40 字才啟用截斷
+      if (s.length <= 40) {
+        return '<div style="max-width:320px; font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-all;">' + safeText + '</div>';
+      }
+      
+      return '<div class="desc-cell">' +
+               '<div class="desc-short">' + safeText + '</div>' +
+               '<div class="desc-full">' + safeText + '</div>' +
+               '<button type="button" class="btn-desc-toggle" onclick="toggleDesc(this)">' +
+                 '<span>查看更多</span> <i class="fa-solid fa-chevron-down"></i>' +
+               '</button>' +
+             '</div>';
     }
 
     function debounce(func, wait) {

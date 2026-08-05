@@ -580,7 +580,8 @@ function getAssetsWithMappingStatus(options = {}) {
         category: ismsAsset ? ismsAsset.category : '',
         confidentiality: ismsAsset ? ismsAsset.confidentiality : '',
         ismsLocation: ismsAsset ? ismsAsset.location : '',
-        ismsAssetName: ismsAsset ? ismsAsset.name : ''
+        ismsAssetName: ismsAsset ? ismsAsset.name : '',
+        ismsAssetDescription: ismsAsset ? ismsAsset.description : ''
       };
     });
 
@@ -614,7 +615,8 @@ function getAssetsWithMappingStatus(options = {}) {
             category: ismsAsset.category,
             confidentiality: ismsAsset.confidentiality,
             ismsLocation: ismsAsset.location,
-            ismsAssetName: ismsAsset.name
+            ismsAssetName: ismsAsset.name,
+            ismsAssetDescription: ismsAsset.description
           });
         }
       });
