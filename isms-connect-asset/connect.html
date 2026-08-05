@@ -2145,24 +2145,24 @@
                     <th class="col-checkbox" data-col="checkbox">
                       <input type="checkbox" id="selectAllAssets" onchange="toggleSelectAll()">
                     </th>
-                    <th class="col-asset-id" data-col="assetId">資產編號</th>
-                    <th class="col-asset-alias-serial" data-col="assetAliasOrSerial">資產別名/序號</th>
-                    <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
-                    <th class="col-asset-name" data-col="ismsAssetName">資訊資產名稱</th>
-                    <th class="col-desc" data-col="ismsAssetDesc">資訊資產說明</th>
-                    <th class="col-qty" data-col="ismsAssetQty">資產數量</th>
-                    <th class="col-location" data-col="location">地點</th>
-                    <th class="col-business" data-col="businessProcess">業務流程</th>
-                    <th class="col-status" data-col="usageStatus">使用狀態</th>
-                    <th class="col-status" data-col="assetLabel">標籤</th>
-                    <th class="col-status" data-col="mappedStatus">連動狀態</th>
-                    <th class="col-status" data-col="isoScope">ISO 範圍</th>
-                    <th class="col-location" data-col="isoBasis">認證依據</th>
-                    <th class="col-brand" data-col="brand">廠牌型號</th>
-                    <th class="col-asset-name" data-col="assetName">資產名稱</th>
-                    <th class="col-person" data-col="leaderName">保管人</th>
-                    <th class="col-person" data-col="userName">使用人</th>
-                    <th class="col-group" data-col="group">組別</th>
+                    <th class="col-asset-id cursor-pointer hover:bg-gray-50" data-col="assetId" onclick="toggleSort('assetId')">資產編號 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-asset-alias-serial cursor-pointer hover:bg-gray-50" data-col="assetAliasOrSerial" onclick="toggleSort('assetAliasOrSerial')">資產別名/序號 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-info-id cursor-pointer hover:bg-gray-50" data-col="ismsAssetId" onclick="toggleSort('ismsAssetId')">資訊資產編號 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-asset-name cursor-pointer hover:bg-gray-50" data-col="ismsAssetName" onclick="toggleSort('ismsAssetName')">資訊資產名稱 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-desc cursor-pointer hover:bg-gray-50" data-col="ismsAssetDesc" onclick="toggleSort('ismsAssetDesc')">資訊資產說明 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-qty cursor-pointer hover:bg-gray-50" data-col="ismsAssetQty" onclick="toggleSort('ismsAssetQty')">資產數量 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-location cursor-pointer hover:bg-gray-50" data-col="location" onclick="toggleSort('location')">地點 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-business cursor-pointer hover:bg-gray-50" data-col="businessProcess" onclick="toggleSort('businessProcess')">業務流程 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-status cursor-pointer hover:bg-gray-50" data-col="usageStatus" onclick="toggleSort('usageStatus')">使用狀態 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-status cursor-pointer hover:bg-gray-50" data-col="assetLabel" onclick="toggleSort('assetLabel')">標籤 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-status cursor-pointer hover:bg-gray-50" data-col="mappedStatus" onclick="toggleSort('mappedStatus')">連動狀態 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-status cursor-pointer hover:bg-gray-50" data-col="isoScope" onclick="toggleSort('isoScope')">ISO 範圍 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-location cursor-pointer hover:bg-gray-50" data-col="isoBasis" onclick="toggleSort('isoBasis')">認證依據 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-brand cursor-pointer hover:bg-gray-50" data-col="brand" onclick="toggleSort('brand')">廠牌型號 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-asset-name cursor-pointer hover:bg-gray-50" data-col="assetName" onclick="toggleSort('assetName')">資產名稱 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-person cursor-pointer hover:bg-gray-50" data-col="leaderName" onclick="toggleSort('leaderName')">保管人 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-person cursor-pointer hover:bg-gray-50" data-col="userName" onclick="toggleSort('userName')">使用人 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
+                    <th class="col-group cursor-pointer hover:bg-gray-50" data-col="group" onclick="toggleSort('group')">組別 <i class="fas fa-sort sort-icon text-gray-300 ml-1"></i></th>
                   </tr>
                 </thead>
                 <tbody id="assetTableBody">
@@ -3928,6 +3928,48 @@
     // ==========================================
     // 篩選狀態（單一真相）與衍生計算
     // ==========================================
+    var currentSort = { colId: null, direction: null };
+
+    function toggleSort(colId) {
+      if (colId === 'checkbox') return;
+      
+      if (currentSort.colId === colId) {
+        if (currentSort.direction === 'asc') {
+          currentSort.direction = 'desc';
+        } else if (currentSort.direction === 'desc') {
+          currentSort.direction = null;
+          currentSort.colId = null;
+        }
+      } else {
+        currentSort.colId = colId;
+        currentSort.direction = 'asc';
+      }
+      
+      applyFilters(); // 觸發重繪
+      updateSortUI(); // 更新表頭圖示
+    }
+
+    function updateSortUI() {
+      document.querySelectorAll('#assetTable thead th').forEach(function(th) {
+        var icon = th.querySelector('i.sort-icon');
+        if (icon) {
+          icon.className = 'fas fa-sort sort-icon text-gray-300 ml-1';
+        }
+      });
+
+      if (currentSort.colId && currentSort.direction) {
+        var activeTh = document.querySelector('#assetTable thead th[data-col="' + currentSort.colId + '"]');
+        if (activeTh) {
+          var activeIcon = activeTh.querySelector('i.sort-icon');
+          if (activeIcon) {
+            activeIcon.className = currentSort.direction === 'asc' 
+              ? 'fas fa-sort-up sort-icon text-blue-600 ml-1' 
+              : 'fas fa-sort-down sort-icon text-blue-600 ml-1';
+          }
+        }
+      }
+    }
+
     var filterState = {
       keyword: '',        // 搜尋關鍵字（已 toLowerCase）
       group: '',          // '' = 全部組別
@@ -4295,7 +4337,28 @@
     // ==========================================
     /** 唯一的「重算並重繪」入口：任何篩選變動都呼叫這支 */
     function applyFilters() {
-      renderAssetTable(getFilteredAssets());
+      var filtered = getFilteredAssets();
+
+      if (currentSort.colId && currentSort.direction) {
+        filtered.sort(function(a, b) {
+          var valA = getAssetFieldValue(a, currentSort.colId);
+          var valB = getAssetFieldValue(b, currentSort.colId);
+          
+          if (currentSort.colId === 'ismsAssetQty') {
+            valA = parseFloat(valA) || 0;
+            valB = parseFloat(valB) || 0;
+            return currentSort.direction === 'asc' ? valA - valB : valB - valA;
+          }
+          
+          valA = String(valA || '');
+          valB = String(valB || '');
+          return currentSort.direction === 'asc' 
+            ? valA.localeCompare(valB, 'zh-TW') 
+            : valB.localeCompare(valA, 'zh-TW');
+        });
+      }
+
+      renderAssetTable(filtered);
       renderMappedStatusChips();
       renderUsageStatusChips();
       renderGroupChips();
