@@ -581,7 +581,8 @@ function getAssetsWithMappingStatus(options = {}) {
         confidentiality: ismsAsset ? ismsAsset.confidentiality : '',
         ismsLocation: ismsAsset ? ismsAsset.location : '',
         ismsAssetName: ismsAsset ? ismsAsset.name : '',
-        ismsAssetDescription: ismsAsset ? ismsAsset.description : ''
+        ismsAssetDescription: ismsAsset ? ismsAsset.description : '',
+        ismsAssetQty: ismsAsset ? ismsAsset.quantity : ''
       };
     });
 
@@ -616,7 +617,8 @@ function getAssetsWithMappingStatus(options = {}) {
             confidentiality: ismsAsset.confidentiality,
             ismsLocation: ismsAsset.location,
             ismsAssetName: ismsAsset.name,
-            ismsAssetDescription: ismsAsset.description
+            ismsAssetDescription: ismsAsset.description,
+            ismsAssetQty: ismsAsset.quantity
           });
         }
       });
@@ -657,7 +659,9 @@ function getAssetsWithMappingStatus(options = {}) {
         mappedCount,
         unmappedCount,
         mappingRate
-      }
+      },
+      quantityDisplayMode: PropertiesService.getScriptProperties().getProperty('BUSINESS_PROCESS_SETTINGS') ? 
+        (JSON.parse(PropertiesService.getScriptProperties().getProperty('BUSINESS_PROCESS_SETTINGS')).quantityDisplayMode || 'both') : 'both'
     };
   } catch (e) {
     console.error('getAssetsWithMappingStatus 錯誤:', e);
