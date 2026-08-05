@@ -2004,6 +2004,10 @@
                 <input type="checkbox" id="noAssetMappingCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMapping', this.checked)">
                 <span class="whitespace-nowrap">無對應資產編號</span>
               </label>
+              <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" id="noAssetMappingHWCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMappingHW', this.checked)">
+                <span class="whitespace-nowrap">顯示未連動 HW</span>
+              </label>
             </div>
 
             <!-- 對照與使用狀態晶片列 -->
@@ -4296,12 +4300,12 @@
         keyword: '', group: '', mappedStatus: '', usageStatus: '',
         ismsAssetId: new Set(), category: new Set(), isoScope: '', assetName: new Set(),
         leaderName: new Set(), userName: new Set(), location: new Set(), stationOnly: false,
-        isoBasis: new Set(), label: new Set(), noAssetMapping: false
+        isoBasis: new Set(), label: new Set(), noAssetMapping: false, noAssetMappingHW: false
       };
 
       // 2. 清空前端所有的 select 與 input
       var textInputs = ['assetSearch', 'mobileAssetSearch'];
-      var checkboxes = ['stationOnlyCb', 'noAssetMappingCb'];
+      var checkboxes = ['stationOnlyCb', 'noAssetMappingCb', 'noAssetMappingHWCb'];
 
       textInputs.forEach(function(id) {
         var el = document.getElementById(id);
