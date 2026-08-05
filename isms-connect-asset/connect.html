@@ -2154,6 +2154,7 @@
                     <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
                     <th class="col-asset-name" data-col="ismsAssetName">資訊資產名稱</th>
                     <th class="col-desc" data-col="ismsAssetDesc">資訊資產說明</th>
+                    <th class="col-status" data-col="assetLabel">標籤</th>
                     <th class="col-business" data-col="businessProcess">業務流程</th>
                     <th class="col-status" data-col="isoScope">ISO 範圍</th>
                     <th class="col-location" data-col="isoBasis">認證依據</th>
@@ -2161,7 +2162,7 @@
                 </thead>
                 <tbody id="assetTableBody">
                   <tr>
-                    <td colspan="17" class="text-center py-8 text-gray-500">
+                    <td colspan="18" class="text-center py-8 text-gray-500">
                       <div class="loading-spinner mx-auto mb-2"></div>
                       載入中...
                     </td>
@@ -2844,6 +2845,7 @@
       { id: 'ismsAssetId', label: '資訊資產編號', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'ismsAssetName', label: '資訊資產名稱', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'ismsAssetDesc', label: '資訊資產說明', visible: true, mobileVisible: true, scanVisible: false },
+      { id: 'assetLabel', label: '標籤', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'mappedStatus', label: '連動狀態', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'usageStatus', label: '使用狀態', visible: true, mobileVisible: true, scanVisible: true },
       { id: 'businessProcess', label: '業務流程', visible: true, mobileVisible: true, scanVisible: true },
@@ -3576,6 +3578,9 @@
       if (fieldId === 'ismsAssetDesc') {
         return formatDescHtml(asset.ismsAssetDescription);
       }
+      if (fieldId === 'assetLabel') {
+        return renderAssetLabelBadge(asset.confidentiality);
+      }
       
       // 一般欄位
       return asset[fieldId] || '-';
@@ -3629,7 +3634,7 @@
               return `
                 <div class="expandable-row">
                   <span class="field-label">${escapeHtml(field.label)}</span>
-                  <span class="field-value">${field.id === 'ismsAssetDesc' ? value : escapeHtml(value)}</span>
+                  <span class="field-value">${(field.id === 'ismsAssetDesc' || field.id === 'assetLabel') ? value : escapeHtml(value)}</span>
                 </div>
               `;
             }).join('')}
@@ -3690,7 +3695,7 @@
       const tbody = document.getElementById('assetTableBody');
       
       if (assets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="17" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="18" class="text-center py-8 text-gray-500">無符合條件的資產</td></tr>';
         return;
       }
       
@@ -3718,6 +3723,7 @@
             <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
             <td data-col="ismsAssetName"><div class="cell-name">${escapeHtml(asset.ismsAssetName || '-')}</div></td>
             <td data-col="ismsAssetDesc">${formatDescHtml(asset.ismsAssetDescription)}</td>
+            <td data-col="assetLabel">${renderAssetLabelBadge(asset.confidentiality)}</td>
             <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
             <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
             <td data-col="isoBasis"><div class="cell-name">${escapeHtml(asset.isoBasis || '-')}</div></td>
@@ -5827,6 +5833,15 @@
           textSpan.textContent = expanded ? '收起' : '查看更多';
         }
       }
+    }
+
+    function renderAssetLabelBadge(conf) {
+      if (conf === '4') {
+        return '<span class="badge" style="background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe;">藍色(機密)</span>';
+      } else if (conf === '3') {
+        return '<span class="badge" style="background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0;">綠色(密)</span>';
+      }
+      return '-';
     }
 
     function formatDescHtml(text) {
