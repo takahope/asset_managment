@@ -2304,14 +2304,6 @@
       </h3>
       
       <div class="space-y-6">
-        <!-- 系統清冊設定 -->
-        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <label class="block mb-2">
-            <span class="text-sm font-bold text-gray-700">系統清冊 Spreadsheet ID</span>
-            <input type="text" id="settingSheetId" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="輸入 Google Sheet ID">
-          </label>
-          <p class="text-xs text-gray-500">動態業務流程將從此試算表的「系統清冊」工作表 C 欄自動匯入。</p>
-        </div>
 
         <!-- 資訊資產數量顯示格式設定 -->
         <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -6720,7 +6712,6 @@
     }
 
     function renderSettings(data) {
-      document.getElementById('settingSheetId').value = data.sheetId || '';
       currentRawDynamicList = data.rawDynamicList || [];
       const settings = data.settings || { staticProcesses: [], dynamicMap: {} };
       const dMap = settings.dynamicMap || {};
@@ -6766,8 +6757,6 @@
     }
 
     function saveSettings() {
-      const sheetId = document.getElementById('settingSheetId').value.trim();
-      
       const config = { 
         staticProcesses: [], 
         dynamicMap: {},
@@ -6814,7 +6803,7 @@
           btn.textContent = origText;
           showToast('儲存失敗: ' + err.message, 'error');
         })
-        .saveBusinessProcessSettings(sheetId, config);
+        .saveBusinessProcessSettings(config);
     }
 
     // --- Filter Drawer Logic ---

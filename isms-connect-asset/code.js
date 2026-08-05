@@ -715,16 +715,15 @@ function getBusinessProcessSettings() {
     }
   }
 
-  return { sheetId, rawDynamicList, settings, error: errorMsg };
+  return { rawDynamicList, settings, error: errorMsg };
 }
 
 /**
  * 儲存業務流程設定
  */
-function saveBusinessProcessSettings(sheetId, settingsConfig) {
+function saveBusinessProcessSettings(settingsConfig) {
   assertWriteAccess_(true); // admin only
   const props = PropertiesService.getScriptProperties();
-  props.setProperty('SYSTEM_INVENTORY_SPREADSHEET_ID', (sheetId || '').trim());
   props.setProperty('BUSINESS_PROCESS_SETTINGS', JSON.stringify(settingsConfig));
   return { success: true };
 }
