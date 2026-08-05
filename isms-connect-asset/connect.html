@@ -2154,6 +2154,7 @@
                     <th class="col-info-id" data-col="ismsAssetId">資訊資產編號</th>
                     <th class="col-asset-name" data-col="ismsAssetName">資訊資產名稱</th>
                     <th class="col-desc" data-col="ismsAssetDesc">資訊資產說明</th>
+                    <th class="col-qty" data-col="ismsAssetQty">資產數量</th>
                     <th class="col-status" data-col="assetLabel">標籤</th>
                     <th class="col-business" data-col="businessProcess">業務流程</th>
                     <th class="col-status" data-col="isoScope">ISO 範圍</th>
@@ -3765,6 +3766,7 @@
             <td class="font-mono text-sm" data-col="ismsAssetId">${escapeHtml(asset.mappedIsmsAssetId || '-')}</td>
             <td data-col="ismsAssetName"><div class="cell-name">${escapeHtml(asset.ismsAssetName || '-')}</div></td>
             <td data-col="ismsAssetDesc">${formatDescHtml(asset.ismsAssetDescription)}</td>
+            <td data-col="ismsAssetQty">${escapeHtml(getAssetFieldValue(asset, 'ismsAssetQty'))}</td>
             <td data-col="assetLabel">${renderAssetLabelBadge(asset.confidentiality)}</td>
             <td data-col="businessProcess">${escapeHtml(asset.businessProcess || '')}</td>
             <td data-col="isoScope">${escapeHtml(isoLabelOf(asset))}</td>
