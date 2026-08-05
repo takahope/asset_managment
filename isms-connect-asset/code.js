@@ -593,7 +593,7 @@ function getAssetsWithMappingStatus(options = {}) {
             assetId: '無對應資產/消耗品',
             assetName: ismsAsset.name,
             modelBrand: '-',
-            location: '-',
+            location: (ismsAsset.location && ismsAsset.location.trim() !== '') ? (ismsAsset.location.trim() + ' (ISMS)') : '-',
             leaderName: '-',
             userName: '-',
             assetCategory: '-',
