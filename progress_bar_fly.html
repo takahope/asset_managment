@@ -232,7 +232,7 @@
       _startFlyMessages();
     }
 
-    // 模擬進度增長：每 200ms +1%，到 90% 約需 18 秒
+    // 模擬進度增長：每 89ms +1%，到 90% 約需 8 秒
     _flyProgressInterval = setInterval(() => {
       if (progress < 90) {
         progress++;
@@ -240,7 +240,7 @@
         runner.style.left = progress + '%';
         percent.textContent = progress + '%';
       }
-    }, 100);
+    }, 60);
   }
 
   function hideFlyProgressBar(completionText = '載入完成！', delay = 300) {

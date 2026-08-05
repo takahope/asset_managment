@@ -28,6 +28,58 @@
   <style id="dynamic-col-styles"></style>
 
   <style>
+    /* Multiselect Lite CSS */
+    .filter-card { overflow: visible !important; position: relative; z-index: 5; }
+    .filter-selects { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
+    .ms-filter { position: relative; display: inline-block; }
+    .ms-trigger { 
+      display: flex; align-items: center; gap: 8px; 
+      padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 8px; 
+      background: white; min-width: 140px; cursor: pointer; color: #334155; 
+    }
+    .ms-trigger:hover { border-color: #cbd5e1; }
+    .ms-label { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ms-badge { 
+      background: #2563eb; color: white; font-size: 0.75rem; font-weight: 600; 
+      padding: 2px 6px; border-radius: 999px; min-width: 20px; text-align: center; 
+    }
+    .ms-caret { font-size: 0.8rem; color: #94a3b8; transition: transform 0.2s; }
+    .ms-filter.is-open .ms-caret { transform: rotate(180deg); }
+    .ms-panel { 
+      position: absolute; top: calc(100% + 6px); left: 0; min-width: 240px; 
+      z-index: 40; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; 
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1); animation: ms-pop 0.14s ease-out; 
+      max-height: 300px; display: flex; flex-direction: column;
+    }
+    @keyframes ms-pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .ms-search { padding: 8px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 8px; color: #64748b; }
+    .ms-search input { border: none; outline: none; width: 100%; font-size: 0.875rem; }
+    .ms-actions { display: flex; padding: 4px 8px; border-bottom: 1px solid #f1f5f9; gap: 8px; }
+    .ms-action { font-size: 0.75rem; color: #2563eb; cursor: pointer; background: transparent; border: none; padding: 4px; }
+    .ms-action:hover { text-decoration: underline; }
+    .ms-options { overflow-y: auto; padding: 4px 0; flex: 1; }
+    .ms-option { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background 0.15s; }
+    .ms-option:hover { background: #f8fafc; }
+    .ms-option input { display: none; }
+    .ms-check { 
+      width: 16px; height: 16px; border: 1.5px solid #cbd5e1; border-radius: 4px; 
+      display: flex; align-items: center; justify-content: center; color: transparent; font-size: 10px; 
+    }
+    .ms-option.is-checked .ms-check { background: #2563eb; border-color: #2563eb; color: white; }
+    .ms-text { font-size: 0.875rem; color: #334155; }
+    .ms-empty { padding: 12px; text-align: center; color: #94a3b8; font-size: 0.875rem; }
+    
+    /* Active Chips */
+    .active-filters { margin-bottom: 16px; }
+    .af-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; 
+      border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; 
+      color: #1d4ed8; font-size: 0.8rem; cursor: pointer; margin-right: 8px; margin-bottom: 8px;
+    }
+    .af-chip:hover { background: #dbeafe; }
+    .af-cat { font-weight: 600; }
+    .af-val { color: #3b82f6; }
+
     :root {
       --ink-900: #0f172a;
       --ink-700: #334155;
@@ -1885,34 +1937,10 @@
             </div>
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
-            <div id="filterSelectRow" class="flex flex-wrap items-center gap-4 mb-4">
-              <select id="ismsFilter" class="select-input" style="min-width: 0; max-width: 150px; text-overflow: ellipsis;" onchange="setIsmsFilter(this.value)">
-                <option value="">全部資訊資產</option>
-              </select>
-              <select id="categoryFilter" class="select-input" style="min-width: 0; width: 120px; text-overflow: ellipsis;" onchange="setFilterState('category', this.value)">
-                <option value="">全部類別</option>
-              </select>
-              <select id="assetNameFilter" class="select-input" style="min-width: 0; max-width: 200px; text-overflow: ellipsis;" onchange="setFilterState('assetName', this.value)">
-                <option value="">全部資產名稱(數量)</option>
-              </select>
-              <select id="leaderFilter" class="select-input" style="min-width: 0; width: 120px;" onchange="setFilterState('leaderName', this.value)">
-                <option value="">全部保管人</option>
-              </select>
-              <select id="userFilter" class="select-input" style="min-width: 0; width: 120px;" onchange="setFilterState('userName', this.value)">
-                <option value="">全部使用人</option>
-              </select>
-              <select id="isoBasisFilter" class="select-input" style="min-width: 0;" onchange="setFilterState('isoBasis', this.value)">
-                <option value="">全部認證依據(資產/資訊資產)</option>
-              </select>
-              <select id="locationFilter" class="select-input" style="min-width: 0; width: 150px;" onchange="setFilterState('location', this.value)">
-                <option value="">全部地點(數量)</option>
-              </select>
-              <select id="filterLabel" class="select-input" style="min-width: 0; width: 70px;" onchange="setFilterState('label', this.value)">
-                <option value="">標</option>
-                <option value="blue" class="text-blue-700">藍</option>
-                <option value="green" class="text-green-700">綠</option>
-              </select>
-            </div>
+            <!-- 多選篩選器掛載點 -->
+            <div id="filterSelects" class="filter-selects"></div>
+            <!-- 已選條件標籤列 -->
+            <div id="activeFiltersBar" class="active-filters chip-row" hidden></div>
 
             <!-- 核取方塊列 - 駐站與無對應資產編號 -->
             <div class="flex items-center gap-4 mb-3" id="checkboxRow">
@@ -3075,6 +3103,7 @@
       loadColSettings();
       applyColumnPreferences();
       loadUserInfo();
+      initMultiSelects();
       loadAssets();
       loadIsmsAssets();
       loadBusinessProcessOptions();
@@ -3783,18 +3812,181 @@
       group: '',          // '' = 全部組別
       mappedStatus: '',   // '' = 全部 | 'mapped' | 'unmapped'
       usageStatus: '',    // '' = 全部使用狀態
-      ismsAssetId: '',    // '' = 全部資訊資產
-      category: '',       // '' = 全部類別
+      ismsAssetId: new Set(),
+      category: new Set(),
       isoScope: '',       // '' = 全部 | 'V' 在範圍 | '?' 待判定 | 'out' 不在範圍 | 'unmapped' 未連動
-      assetName: '',
-      leaderName: '',
-      userName: '',
-      location: '',
+      assetName: new Set(),
+      leaderName: new Set(),
+      userName: new Set(),
+      location: new Set(),
       stationOnly: false,
-      isoBasis: '',
-      label: '',
+      isoBasis: new Set(),
+      label: new Set(),
       noAssetMapping: false
     };
+
+    var MS_CONFIGS = [
+      { field: 'ismsAssetId', label: '資訊資產', icon: 'fa-server' },
+      { field: 'category', label: '類別', icon: 'fa-tags' },
+      { field: 'assetName', label: '資產名稱', icon: 'fa-laptop' },
+      { field: 'leaderName', label: '保管人', icon: 'fa-user-tie' },
+      { field: 'userName', label: '使用人', icon: 'fa-user' },
+      { field: 'isoBasis', label: '認證依據', icon: 'fa-file-signature' },
+      { field: 'location', label: '地點', icon: 'fa-location-dot' },
+      { field: 'label', label: '標籤', icon: 'fa-bookmark' }
+    ];
+    var multiSelects = {};
+
+    function initMultiSelects() {
+      var parent = document.getElementById('filterSelects');
+      if (!parent) return;
+      MS_CONFIGS.forEach(function(c) {
+        multiSelects[c.field] = createMultiSelect(c, parent);
+      });
+      document.addEventListener('click', function(e) {
+        Object.values(multiSelects).forEach(function(ms) {
+          if (!ms.host.contains(e.target)) ms.close();
+        });
+      });
+    }
+
+    function createMultiSelect(config, parentEl) {
+      var host = document.createElement('div');
+      host.className = 'ms-filter';
+      host.dataset.field = config.field;
+      host.innerHTML = `
+        <button type="button" class="ms-trigger">
+            <i class="fa-solid ${config.icon}"></i>
+            <span class="ms-label">${config.label}</span>
+            <span class="ms-badge" hidden>0</span>
+            <i class="fa-solid fa-chevron-down ms-caret"></i>
+        </button>
+        <div class="ms-panel" hidden>
+            <div class="ms-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" placeholder="搜尋選項..." autocomplete="off">
+            </div>
+            <div class="ms-actions">
+                <button type="button" class="ms-action" data-act="all">全選</button>
+                <button type="button" class="ms-action" data-act="clear">清除</button>
+            </div>
+            <div class="ms-options"></div>
+            <div class="ms-empty" hidden>無符合選項</div>
+        </div>
+      `;
+      parentEl.appendChild(host);
+
+      var trigger = host.querySelector('.ms-trigger');
+      var panel = host.querySelector('.ms-panel');
+      var searchInput = host.querySelector('.ms-search input');
+      var optionsContainer = host.querySelector('.ms-options');
+      var badge = host.querySelector('.ms-badge');
+      var emptyMsg = host.querySelector('.ms-empty');
+      var allOpts = [];
+
+      trigger.addEventListener('click', function() {
+        var isOpen = !panel.hidden;
+        Object.values(multiSelects).forEach(function(ms) { ms.close(); });
+        if (!isOpen) {
+          panel.hidden = false;
+          host.classList.add('is-open');
+          searchInput.focus();
+        }
+      });
+
+      searchInput.addEventListener('input', function(e) {
+        var term = e.target.value.toLowerCase();
+        var hasVisible = false;
+        optionsContainer.querySelectorAll('.ms-option').forEach(function(el) {
+          var txt = el.querySelector('.ms-text').textContent.toLowerCase();
+          var match = txt.indexOf(term) !== -1;
+          el.style.display = match ? 'flex' : 'none';
+          if (match) hasVisible = true;
+        });
+        emptyMsg.hidden = !hasVisible;
+      });
+
+      host.querySelector('[data-act="all"]').addEventListener('click', function() {
+        var currentSet = filterState[config.field];
+        allOpts.forEach(function(o) { currentSet.add(o.value); });
+        refresh();
+        renderActiveFilters();
+        applyFilters();
+      });
+
+      host.querySelector('[data-act="clear"]').addEventListener('click', function() {
+        filterState[config.field].clear();
+        refresh();
+        renderActiveFilters();
+        applyFilters();
+      });
+
+      optionsContainer.addEventListener('click', function(e) {
+        var optEl = e.target.closest('.ms-option');
+        if (!optEl) return;
+        var val = optEl.dataset.value;
+        var currentSet = filterState[config.field];
+        if (currentSet.has(val)) {
+          currentSet.delete(val);
+        } else {
+          currentSet.add(val);
+        }
+        refresh();
+        renderActiveFilters();
+        applyFilters();
+      });
+
+      function refresh() {
+        var currentSet = filterState[config.field];
+        badge.textContent = currentSet.size;
+        badge.hidden = currentSet.size === 0;
+        
+        optionsContainer.querySelectorAll('.ms-option').forEach(function(el) {
+          if (currentSet.has(el.dataset.value)) {
+            el.classList.add('is-checked');
+          } else {
+            el.classList.remove('is-checked');
+          }
+        });
+      }
+
+      function setOptions(opts) {
+        allOpts = opts;
+        optionsContainer.innerHTML = '';
+        var currentSet = filterState[config.field];
+        
+        // 清除已經不存在於新選項中的舊選擇
+        var validValues = new Set(opts.map(function(o) { return o.value; }));
+        var toDelete = [];
+        currentSet.forEach(function(v) {
+          if (!validValues.has(v)) toDelete.push(v);
+        });
+        toDelete.forEach(function(v) { currentSet.delete(v); });
+
+        opts.forEach(function(o) {
+          var el = document.createElement('label');
+          el.className = 'ms-option ' + (currentSet.has(o.value) ? 'is-checked' : '');
+          el.dataset.value = o.value;
+          el.innerHTML = `
+            <span class="ms-check"><i class="fa-solid fa-check"></i></span>
+            <span class="ms-text">${o.text}</span>
+          `;
+          optionsContainer.appendChild(el);
+        });
+        refresh();
+      }
+
+      return {
+        host: host,
+        config: config,
+        setOptions: setOptions,
+        refresh: refresh,
+        close: function() {
+          panel.hidden = true;
+          host.classList.remove('is-open');
+        }
+      };
+    }
 
     /**
      * 對照表 F 欄的值 → 前端顯示用狀態。
@@ -3863,11 +4055,11 @@
         if (filterState.mappedStatus === 'mapped' && !asset.isMapped) return false;
         if (filterState.mappedStatus === 'unmapped' && asset.isMapped) return false;
       }
-      if (excludeDim !== 'ismsAssetId' && filterState.ismsAssetId) {
-        if (asset.mappedIsmsAssetId !== filterState.ismsAssetId) return false;
+      if (excludeDim !== 'ismsAssetId' && filterState.ismsAssetId.size > 0 && !filterState.ismsAssetId.has(asset.mappedIsmsAssetId)) {
+        return false;
       }
-      if (excludeDim !== 'category' && filterState.category) {
-        if ((asset.category || '') !== filterState.category) return false;
+      if (excludeDim !== 'category' && filterState.category.size > 0 && !filterState.category.has(asset.category)) {
+        return false;
       }
       if (excludeDim !== 'usageStatus' && filterState.usageStatus) {
         if (String(asset.usageStatus || '').trim() !== filterState.usageStatus) return false;
@@ -3877,17 +4069,17 @@
       if (excludeDim !== 'isoScope' && filterState.isoScope) {
         if (isoStateOf(asset) !== filterState.isoScope) return false;
       }
-      if (excludeDim !== 'assetName' && filterState.assetName) {
-        if (asset.assetName !== filterState.assetName) return false;
+      if (excludeDim !== 'assetName' && filterState.assetName.size > 0 && !filterState.assetName.has(asset.assetName)) {
+        return false;
       }
-      if (excludeDim !== 'leaderName' && filterState.leaderName) {
-        if (asset.leaderName !== filterState.leaderName) return false;
+      if (excludeDim !== 'leaderName' && filterState.leaderName.size > 0 && !filterState.leaderName.has(asset.leaderName)) {
+        return false;
       }
-      if (excludeDim !== 'userName' && filterState.userName) {
-        if (asset.userName !== filterState.userName) return false;
+      if (excludeDim !== 'userName' && filterState.userName.size > 0 && !filterState.userName.has(asset.userName)) {
+        return false;
       }
-      if (excludeDim !== 'location' && filterState.location) {
-        if (asset.location !== filterState.location) return false;
+      if (excludeDim !== 'location' && filterState.location.size > 0 && !filterState.location.has(asset.location)) {
+        return false;
       }
       
       // 如果勾選了「所有駐站」，地點文字必須包含「駐站」
@@ -3897,18 +4089,21 @@
         }
       }
 
-      if (excludeDim !== 'isoBasis' && filterState.isoBasis) {
-        if (asset.isoBasis !== filterState.isoBasis) return false;
+      if (excludeDim !== 'isoBasis' && filterState.isoBasis.size > 0 && !filterState.isoBasis.has(asset.isoBasis)) {
+        return false;
       }
       
-      if (excludeDim !== 'label' && filterState.label) {
+      if (excludeDim !== 'label' && filterState.label.size > 0) {
         var loc = String(asset.ismsLocation || '').trim();
-        if (loc !== 'B219' && loc !== '園區B219') return false;
-        if (String(asset.category || '').trim() !== 'HW') return false;
+        var isB219 = (loc === 'B219' || loc === '園區B219');
+        var isHW = (String(asset.category || '').trim() === 'HW');
+        if (!isB219 || !isHW) return false;
         
         var conf = String(asset.confidentiality || '').trim();
-        if (filterState.label === 'blue' && conf !== '4') return false;
-        if (filterState.label === 'green' && conf !== '3') return false;
+        var labelMatch = false;
+        if (filterState.label.has('blue') && conf === '4') labelMatch = true;
+        if (filterState.label.has('green') && conf === '3') labelMatch = true;
+        if (!labelMatch) return false;
       }
       
       // 無對應資產編號篩選（虛擬記錄：assetId === '無對應資產/消耗品' 且 isMapped === false）
@@ -3982,24 +4177,16 @@
       // 1. 重置單一真相狀態
       filterState = {
         keyword: '', group: '', mappedStatus: '', usageStatus: '',
-        ismsAssetId: '', category: '', isoScope: '', assetName: '',
-        leaderName: '', userName: '', location: '', stationOnly: false,
-        isoBasis: '', label: '', noAssetMapping: false
+        ismsAssetId: new Set(), category: new Set(), isoScope: '', assetName: new Set(),
+        leaderName: new Set(), userName: new Set(), location: new Set(), stationOnly: false,
+        isoBasis: new Set(), label: new Set(), noAssetMapping: false
       };
 
       // 2. 清空前端所有的 select 與 input
       var textInputs = ['assetSearch', 'mobileAssetSearch'];
-      var selects = [
-        'ismsFilter', 'categoryFilter', 'assetNameFilter', 'leaderFilter',
-        'userFilter', 'isoBasisFilter', 'locationFilter', 'filterLabel'
-      ];
       var checkboxes = ['stationOnlyCb', 'noAssetMappingCb'];
 
       textInputs.forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      selects.forEach(function(id) {
         var el = document.getElementById(id);
         if (el) el.value = '';
       });
@@ -4008,7 +4195,13 @@
         if (el) el.checked = false;
       });
 
-      // 3. 觸發總重繪 (會呼叫 renderAssetTable 與所有 Chips 的 render)
+      // 3. 刷新所有多選元件 UI 與已選標籤
+      Object.values(multiSelects).forEach(function(ms) {
+        ms.refresh();
+      });
+      renderActiveFilters();
+
+      // 4. 觸發總重繪 (會呼叫 renderAssetTable 與所有 Chips 的 render)
       applyFilters();
     }
 
@@ -4141,14 +4334,14 @@
         return a.localeCompare(b, 'zh-TW');
       });
 
-      var options = ids.map(function(id) {
-        var label = id + (nameById[id] ? ' · ' + nameById[id] : '') + '（' + counts[id] + '）';
-        return '<option value="' + escapeHtml(id) + '">' + escapeHtml(label) + '</option>';
-      }).join('');
+      var opts = ids.map(function(id) {
+        var label = id + (nameById[id] ? ' · ' + nameById[id] : '') + ' (' + counts[id] + ')';
+        return { value: id, text: label };
+      });
 
-      var sel = document.getElementById('ismsFilter');
-      sel.innerHTML = '<option value="">全部資訊資產</option>' + options;
-      sel.value = filterState.ismsAssetId;   // 重繪後保留使用者的選擇
+      if (multiSelects['ismsAssetId']) {
+        multiSelects['ismsAssetId'].setOptions(opts);
+      }
     }
 
     function setIsmsFilter(ismsAssetId) {
@@ -4159,6 +4352,48 @@
     function setFilterState(key, value) {
       filterState[key] = value || '';
       applyFilters();
+    }
+
+    function renderActiveFilters() {
+      var bar = document.getElementById('activeFiltersBar');
+      if (!bar) return;
+      var parts = [];
+      
+      MS_CONFIGS.forEach(function(c) {
+        var sel = filterState[c.field];
+        if (sel) {
+          sel.forEach(function(v) {
+            var textVal = v;
+            if (c.field === 'label') textVal = (v === 'blue') ? '藍' : '綠';
+            parts.push({ field: c.field, label: c.label, value: v, text: textVal });
+          });
+        }
+      });
+      
+      if (parts.length === 0) {
+        bar.hidden = true;
+        return;
+      }
+      
+      bar.hidden = false;
+      bar.innerHTML = parts.map(function(p) {
+        return '<button type="button" class="af-chip" data-field="' + escapeHtml(p.field) + '" data-value="' + escapeHtml(p.value) + '">' +
+                 '<span class="af-cat">' + escapeHtml(p.label) + ':</span> ' +
+                 '<span class="af-val">' + escapeHtml(p.text) + '</span> ' +
+                 '<i class="fa-solid fa-xmark ml-1"></i>' +
+               '</button>';
+      }).join('');
+      
+      bar.querySelectorAll('.af-chip').forEach(function(c) {
+        c.addEventListener('click', function() {
+          var field = c.dataset.field;
+          var value = c.dataset.value;
+          filterState[field].delete(value);
+          multiSelects[field].refresh();
+          renderActiveFilters();
+          applyFilters();
+        });
+      });
     }
 
     function renderOtherFilterOptions() {
@@ -4195,63 +4430,30 @@
         }
       }
 
-      function buildOptions(counts, defaultText, useCount) {
-        var keys = Object.keys(counts).sort(function(x, y) { return x.localeCompare(y, 'zh-TW'); });
-        var html = '<option value="">' + defaultText + '</option>';
-        for (var k = 0; k < keys.length; k++) {
-          var val = keys[k];
-          var display = val;
-          if (useCount) display += ' (' + counts[val] + ')';
-          html += '<option value="' + escapeHtml(val) + '">' + escapeHtml(display) + '</option>';
-        }
-        return html;
+      function buildOpts(counts) {
+        return Object.keys(counts).sort(function(x, y) { return x.localeCompare(y, 'zh-TW'); }).map(function(k) {
+          return { value: k, text: k + ' (' + counts[k] + ')' };
+        });
       }
       
-      function buildIsoBasisOptions(map, defaultText) {
-        var keys = Object.keys(map).sort(function(x, y) { return x.localeCompare(y, 'zh-TW'); });
-        var html = '<option value="">' + defaultText + '</option>';
-        for (var k = 0; k < keys.length; k++) {
-          var val = keys[k];
-          var display = val + ' (' + map[val].count + '/' + map[val].ismsSet.size + ')';
-          html += '<option value="' + escapeHtml(val) + '">' + escapeHtml(display) + '</option>';
-        }
-        return html;
+      function buildIsoBasisOpts(map) {
+        return Object.keys(map).sort(function(x, y) { return x.localeCompare(y, 'zh-TW'); }).map(function(k) {
+          return { value: k, text: k + ' (' + map[k].count + '/' + map[k].ismsSet.size + ')' };
+        });
       }
 
-      var selCat = document.getElementById('categoryFilter');
-      if (selCat) {
-        selCat.innerHTML = buildOptions(catCounts, '全部類別', false);
-        selCat.value = filterState.category;
-      }
+      if (multiSelects['category']) multiSelects['category'].setOptions(buildOpts(catCounts));
+      if (multiSelects['assetName']) multiSelects['assetName'].setOptions(buildOpts(nameCounts));
+      if (multiSelects['leaderName']) multiSelects['leaderName'].setOptions(buildOpts(leaderCounts));
+      if (multiSelects['userName']) multiSelects['userName'].setOptions(buildOpts(userCounts));
+      if (multiSelects['location']) multiSelects['location'].setOptions(buildOpts(locCounts));
+      if (multiSelects['isoBasis']) multiSelects['isoBasis'].setOptions(buildIsoBasisOpts(isoBasisMap));
 
-      var selName = document.getElementById('assetNameFilter');
-      if (selName) {
-        selName.innerHTML = buildOptions(nameCounts, '全部資產名稱(數量)', true);
-        selName.value = filterState.assetName;
-      }
-      
-      var selLeader = document.getElementById('leaderFilter');
-      if (selLeader) {
-        selLeader.innerHTML = buildOptions(leaderCounts, '全部保管人', false);
-        selLeader.value = filterState.leaderName;
-      }
-      
-      var selUser = document.getElementById('userFilter');
-      if (selUser) {
-        selUser.innerHTML = buildOptions(userCounts, '全部使用人', false);
-        selUser.value = filterState.userName;
-      }
-      
-      var selLoc = document.getElementById('locationFilter');
-      if (selLoc) {
-        selLoc.innerHTML = buildOptions(locCounts, '全部地點(數量)', true);
-        selLoc.value = filterState.location;
-      }
-      
-      var selBasis = document.getElementById('isoBasisFilter');
-      if (selBasis) {
-        selBasis.innerHTML = buildIsoBasisOptions(isoBasisMap, '全部認證依據(資產/資訊資產)');
-        selBasis.value = filterState.isoBasis;
+      if (multiSelects['label']) {
+        multiSelects['label'].setOptions([
+          { value: 'blue', text: '藍' },
+          { value: 'green', text: '綠' }
+        ]);
       }
     }
 
