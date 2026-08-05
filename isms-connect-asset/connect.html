@@ -4227,6 +4227,14 @@
         if (!labelMatch) return false;
       }
       
+      // 顯示未連動 HW 篩選：只過濾掉「未連動」且「非 HW」的資訊資產，其餘正常檢查
+      if (filterState.noAssetMappingHW && excludeDim !== 'noAssetMappingHW') {
+        var isUnmappedISMS = (asset.assetId === '無對應資產/消耗品');
+        if (isUnmappedISMS && asset.category !== 'HW') {
+          return false;
+        }
+      }
+
       // 無對應資產編號篩選（虛擬記錄：assetId === '無對應資產/消耗品' 且 isMapped === false）
       if (filterState.noAssetMapping && excludeDim !== 'noAssetMapping') {
         if (asset.assetId !== '無對應資產/消耗品' || asset.isMapped) return false;
