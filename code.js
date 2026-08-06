@@ -5806,6 +5806,8 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
 function getTransferDocHistory(assetCategory) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
   const isAdmin = checkAdminPermissions();
+  const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+  const groupEmailSet = groupProxyEnabled ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e).toLowerCase().trim())) : null;
 
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -5828,11 +5830,13 @@ function getTransferDocHistory(assetCategory) {
 
       // 權限檢查（非管理員只能看到與自己相關的記錄）
       if (!isAdmin) {
-        const isRelevant = (newKeeperEmail && newKeeperEmail.toLowerCase() === currentUserEmail) ||
-                           (newUserEmail && newUserEmail.toLowerCase() === currentUserEmail);
-        if (!isRelevant) {
-          return;
-        }
+        const isAllowed = isUserAllowedToAccessDocument(
+          currentUserEmail,
+          [newKeeperEmail, newUserEmail],
+          groupProxyEnabled,
+          groupEmailSet
+        );
+        if (!isAllowed) return;
       }
 
       // 取得資產類別（需要從資產表查詢）
