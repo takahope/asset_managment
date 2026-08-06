@@ -5267,6 +5267,7 @@ function getTransferDataForPrint(assetCategory) {
           assetToLatestTransfer.set(assetId, {
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
             newKeeperEmail: row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1], // ✨ 用於權限判斷
+            newUserEmail: row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1],
             reviewTime: reviewTime
           });
         }
@@ -5281,6 +5282,9 @@ function getTransferDataForPrint(assetCategory) {
     // 按新保管人分組計數（同時篩選類別）
     const keeperCount = {};
 
+    const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e).toLowerCase().trim())) : null;
+
     assetToLatestTransfer.forEach((transfer, assetId) => {
       const category = assetCategoryMap.get(assetId);
       const isUploaded = assetIsUploadedMap.get(assetId);
@@ -5290,9 +5294,12 @@ function getTransferDataForPrint(assetCategory) {
         
         // 2. 🛡️ 權限篩選
         if (!isAdmin) {
-          // 一般使用者只能看到自己是新保管人的記錄
-          // (假設列印轉移記錄主要是為了「接收確認」或「保管證明」)
-          const isMyRecord = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail);
+          const isMyRecord = isUserAllowedToAccessDocument(
+            currentUserEmail,
+            [transfer.newKeeperEmail, transfer.newUserEmail],
+            groupProxyEnabled,
+            groupEmailSet
+          );
           if (!isMyRecord) return;
         }
 
@@ -5489,6 +5496,9 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
     const allAssets = getAllAssets();
     const assetsToTransfer = [];
 
+    const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e).toLowerCase().trim())) : null;
+
     if (assetIds && assetIds.length > 0) {
       // 詳細模式：根據指定的ID陣列篩選
       const assetIdSet = new Set(assetIds);
@@ -5498,8 +5508,12 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
           
           // 🛡️ 權限檢查
           if (!isAdmin) {
-             const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
-                                (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
+             const isRelevant = isUserAllowedToAccessDocument(
+               currentUserEmail,
+               [transfer.newKeeperEmail, transfer.newUserEmail],
+               groupProxyEnabled,
+               groupEmailSet
+             );
              if (!isRelevant) return; // 跳過不相關的
           }
           
@@ -5519,8 +5533,12 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
             
             // 🛡️ 權限檢查
             if (!isAdmin) {
-                const isRelevant = (transfer.newKeeperEmail && transfer.newKeeperEmail.toLowerCase() === currentUserEmail) ||
-                                   (transfer.newUserEmail && transfer.newUserEmail.toLowerCase() === currentUserEmail);
+                const isRelevant = isUserAllowedToAccessDocument(
+                  currentUserEmail,
+                  [transfer.newKeeperEmail, transfer.newUserEmail],
+                  groupProxyEnabled,
+                  groupEmailSet
+                );
                 if (!isRelevant) return; 
             }
 
