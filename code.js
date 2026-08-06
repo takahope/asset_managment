@@ -3240,6 +3240,10 @@ function getExternalLendingPrintGroups(forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
     const useAdminScope = isAdmin && !forceUserScope;
+    const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+      : null;
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
     if (!lendingLogSheet || lendingLogSheet.getLastRow() < 2) {
@@ -3274,7 +3278,13 @@ function getExternalLendingPrintGroups(forceUserScope) {
       const leaderEmail = String(assetInfo.leaderEmail || '').toLowerCase();
       const userEmail = String(assetInfo.userEmail || '').toLowerCase();
       if (!useAdminScope) {
-        if (lenderEmail !== currentUserEmail && leaderEmail !== currentUserEmail && userEmail !== currentUserEmail) return;
+        const isAllowed = isUserAllowedToAccessDocument(
+          currentUserEmail,
+          [lenderEmail, leaderEmail, userEmail],
+          groupProxyEnabled,
+          groupEmailSet
+        );
+        if (!isAllowed) return;
       }
 
       const borrowerName = row[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '';
@@ -3332,6 +3342,10 @@ function createLendingDoc(lendIds) {
     }
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
+    const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+    const groupEmailSet = groupProxyEnabled
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+      : null;
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
     const dataColumnCount = Math.max(LL_PRINT_TIME_COLUMN_INDEX, lendingLogSheet.getLastColumn());
@@ -3368,9 +3382,17 @@ function createLendingDoc(lendIds) {
       const assetInfo = assetMap.get(assetId) || {};
       const leaderEmail = String(assetInfo.leaderEmail || '').toLowerCase();
       const userEmail = String(assetInfo.userEmail || '').toLowerCase();
-      if (!isAdmin && lenderEmail !== currentUserEmail && leaderEmail !== currentUserEmail && userEmail !== currentUserEmail) {
-        unauthorized.push(lendId);
-        return;
+      if (!isAdmin) {
+        const isAllowed = isUserAllowedToAccessDocument(
+          currentUserEmail,
+          [lenderEmail, leaderEmail, userEmail],
+          groupProxyEnabled,
+          groupEmailSet
+        );
+        if (!isAllowed) {
+          unauthorized.push(lendId);
+          return;
+        }
       }
 
       const borrowerName = String(row[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '').trim();
@@ -3405,7 +3427,7 @@ function createLendingDoc(lendIds) {
     });
 
     if (unauthorized.length > 0 && selected.length === 0) {
-      throw new Error('權限不足：您不是這些借用記錄的出借人，無法列印。');
+      throw new Error('權限不足：您不是這些借用記錄的出借人，或同組權限未涵蓋，無法列印。');
     }
     if (!groupMeta || selected.length === 0) {
       throw new Error('找不到可列印的借用記錄。');
@@ -3509,6 +3531,10 @@ function getLendingDocHistory(forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
   const isAdmin = checkAdminPermissions();
   const useAdminScope = isAdmin && !forceUserScope;
+  const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+  const groupEmailSet = groupProxyEnabled
+    ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+    : null;
 
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -3541,7 +3567,13 @@ function getLendingDocHistory(forceUserScope) {
       const leaderEmail = String(assetInfo.leaderEmail || '').toLowerCase();
       const userEmail = String(assetInfo.userEmail || '').toLowerCase();
       if (!useAdminScope) {
-        if (lenderEmail !== currentUserEmail && leaderEmail !== currentUserEmail && userEmail !== currentUserEmail) return;
+        const isAllowed = isUserAllowedToAccessDocument(
+          currentUserEmail,
+          [lenderEmail, leaderEmail, userEmail],
+          groupProxyEnabled,
+          groupEmailSet
+        );
+        if (!isAllowed) return;
       }
 
       const borrowerName = row[LL_BORROWER_NAME_COLUMN_INDEX - 1] || '';
