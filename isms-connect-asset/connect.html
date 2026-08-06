@@ -1395,6 +1395,12 @@
         order: 8;
       }
 
+      /* 匯出與設定按鈕的容器（滿寬並置於最後） */
+      #exportSettingsGroup {
+        order: 9;
+        grid-column: 1 / -1;
+      }
+
       /* 下拉選單列 - 兩個一列等寬並排（覆寫各 select 的 inline width） */
       #filterSelectRow {
         display: grid;
@@ -1420,13 +1426,6 @@
         padding: 8px 12px;
         text-align: left;
         text-align-last: left;
-      }
-
-      /* 核取方塊列 - 駐站與無對應資產編號並列 */
-      #checkboxRow {
-        display: grid;
-        grid-template-columns: 1fr 1fr; /* 兩欄並排 */
-        gap: 8px;
       }
 
       #checkboxRow label {
@@ -1830,6 +1829,17 @@
         max-height: 1000px; /* 足夠大的值讓所有內容顯示 */
       }
       
+      /* 手機版下拉選單排版 (2x4) */
+      .filter-selects {
+        display: grid !important; /* 蓋過原本的 display: flex */
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px !important;
+      }
+      .filter-selects .ms-filter {
+        width: 100% !important;
+        margin-bottom: 0 !important;
+      }
+
       /* 操作欄位樣式 */
       .action-bar__field {
         width: 100%;
@@ -1957,27 +1967,12 @@
               <button class="btn-secondary" onclick="loadAssets()">
                 <i class="fas fa-sync-alt sm:mr-2"></i><span class="hidden sm:inline">重新整理</span>
               </button>
-              <!-- 匯出按鈕下拉選單 -->
-              <div class="relative inline-block text-left" id="exportDropdownContainer">
-                <button type="button" class="btn-secondary" onclick="document.getElementById('exportDropdownMenu').classList.toggle('hidden')">
-                  <i class="fas fa-download sm:mr-2"></i><span class="hidden sm:inline">匯出</span> <i class="fas fa-chevron-down text-xs ml-1"></i>
-                </button>
-                <div id="exportDropdownMenu" class="hidden absolute right-0 z-50 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
-                  <div class="py-1">
-                    <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="exportDynamic(); document.getElementById('exportDropdownMenu').classList.add('hidden')">匯出 (目前顯示)</button>
-                    <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="exportFiltered(); document.getElementById('exportDropdownMenu').classList.add('hidden')">匯出 (相容格式)</button>
-                  </div>
-                </div>
-              </div>
               <button class="btn-secondary" onclick="openImportModal()">
                 <i class="fas fa-upload sm:mr-2"></i><span class="hidden sm:inline">匯入對照</span>
               </button>
               <!-- 新增按鈕 -->
               <button id="btnCreate" class="btn-secondary text-blue-600 border-blue-200" title="新增資訊資產" onclick="openCreateModal()">
                 <i class="fa-solid fa-plus sm:mr-1"></i><span class="hidden sm:inline">新增分類</span>
-              </button>
-              <button id="btnSettings" class="btn-secondary hidden" title="系統設定" onclick="openSettingsModal()">
-                <i class="fas fa-cog text-gray-600"></i>
               </button>
               <!-- 顯示欄位切換 -->
               <button class="btn-secondary" onclick="openColSettingsModal()" title="欄位設定">
@@ -1986,6 +1981,27 @@
               <button class="btn-secondary text-gray-600 hover:text-red-500" title="清除所有篩選條件" onclick="clearAllFilters()">
                 <i class="fas fa-eraser sm:mr-1"></i><span class="hidden sm:inline">清除篩選</span>
               </button>
+
+              <!-- 移到最後，手機版滿寬獨立一列，電腦版 (lg) 恢復自然並排 -->
+              <div id="exportSettingsGroup" class="flex items-center gap-4 w-full lg:w-auto mt-2 lg:mt-0">
+                <!-- 匯出按鈕下拉選單 (手機版 flex-1 均分寬度，電腦版 flex-none) -->
+                <div class="relative inline-block text-left flex-1 lg:flex-none" id="exportDropdownContainer">
+                  <button type="button" class="btn-secondary w-full justify-center" onclick="document.getElementById('exportDropdownMenu').classList.toggle('hidden')">
+                    <i class="fas fa-download sm:mr-2"></i><span class="hidden sm:inline">匯出</span> <i class="fas fa-chevron-down text-xs ml-1"></i>
+                  </button>
+                  <!-- 下拉選單：手機版 left-0 right-0 滿寬，電腦版 lg:left-auto lg:right-0 lg:w-48 -->
+                  <div id="exportDropdownMenu" class="hidden absolute left-0 right-0 lg:left-auto lg:right-0 lg:w-48 z-50 mt-2 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                    <div class="py-1">
+                      <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="exportDynamic(); document.getElementById('exportDropdownMenu').classList.add('hidden')">匯出 (目前顯示)</button>
+                      <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onclick="exportFiltered(); document.getElementById('exportDropdownMenu').classList.add('hidden')">匯出 (相容格式)</button>
+                    </div>
+                  </div>
+                </div>
+                <!-- 設定按鈕 (手機版 flex-1 均分寬度，電腦版 flex-none) -->
+                <button id="btnSettings" class="btn-secondary flex-1 lg:flex-none justify-center hidden" title="系統設定" onclick="openSettingsModal()">
+                  <i class="fas fa-cog text-gray-600"></i>
+                </button>
+              </div>
             </div>
 
             <!-- 獨立一列的資訊資產下拉選單與其他篩選器 -->
@@ -1994,8 +2010,8 @@
             <!-- 已選條件標籤列 -->
             <div id="activeFiltersBar" class="active-filters chip-row" hidden></div>
 
-            <!-- 核取方塊列 - 駐站與無對應資產編號 -->
-            <div class="flex items-center gap-4 mb-3" id="checkboxRow">
+            <!-- 核取方塊列 - 加上 flex-wrap 允許折行 -->
+            <div class="flex flex-wrap items-center gap-4 mb-3" id="checkboxRow">
               <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" id="stationOnlyCb" class="rounded border-gray-300" onchange="setFilterState('stationOnly', this.checked)">
                 <span class="whitespace-nowrap">駐站</span>
@@ -2004,7 +2020,7 @@
                 <input type="checkbox" id="noAssetMappingCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMapping', this.checked)">
                 <span class="whitespace-nowrap">無對應資產編號</span>
               </label>
-              <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+              <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer w-full md:w-auto">
                 <input type="checkbox" id="noAssetMappingHWCb" class="rounded border-gray-300" onchange="setFilterState('noAssetMappingHW', this.checked)">
                 <span class="whitespace-nowrap">同時顯示無對應資產HW類與其他篩選條件</span>
               </label>
