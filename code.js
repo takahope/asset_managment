@@ -537,6 +537,28 @@ function canApproveTransfer_(options) {
 }
 
 /**
+ * ✨ [權限共用] 檢查使用者是否有權限列印或查看某資產的單據 (支援同組協作)
+ * @param {string} currentUserEmail - 當前操作者的 Email
+ * @param {Array<string>} targetEmails - 該單據相關人員的 Email 陣列 (例如: [leaderEmail, userEmail, lenderEmail, newKeeperEmail])
+ * @param {boolean} groupProxyEnabled - 系統是否啟用同組代理
+ * @param {Set<string>} groupEmailSet - 同組成員的 Email 集合
+ * @returns {boolean} 是否允許存取
+ */
+function isUserAllowedToAccessDocument(currentUserEmail, targetEmails, groupProxyEnabled, groupEmailSet) {
+  const normalizedUserEmail = String(currentUserEmail || '').toLowerCase().trim();
+  if (!targetEmails || !Array.isArray(targetEmails)) return false;
+  for (const email of targetEmails) {
+    if (!email) continue;
+    const lowerEmail = String(email).toLowerCase().trim();
+    // 本人
+    if (lowerEmail === normalizedUserEmail) return true;
+    // 同組成員
+    if (groupProxyEnabled && groupEmailSet && groupEmailSet.has(lowerEmail)) return true;
+  }
+  return false;
+}
+
+/**
  * ✨ NEW: 獲取當前使用者相關的所有資產 (無論是保管人或使用人)。
  * 當 D2 = "是" 時，會自動包含同組所有成員的資產
  * @returns {Array<Object>} 包含所有相關資產物件的陣列。
