@@ -4827,6 +4827,11 @@ function getScrappingDataForAdmin(assetCategory, forceUserScope) {
   const isAdmin = checkAdminPermissions();
   const useAdminScope = isAdmin && !forceUserScope;
 
+  const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+  const groupEmailSet = groupProxyEnabled
+    ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+    : null;
+
   try {
     const allAssets = getAllAssets();
     
@@ -4834,11 +4839,15 @@ function getScrappingDataForAdmin(assetCategory, forceUserScope) {
 
     allAssets.forEach(asset => {
       if (asset.assetStatus === '報廢中' && asset.leaderName && asset.assetCategory === assetCategory) {
-        // 權限過濾：非管理員只能看到自己的資料
+        // 權限過濾
         if (!useAdminScope) {
-          if (asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
-            return; 
-          }
+          const isAllowed = isUserAllowedToAccessDocument(
+            currentUserEmail,
+            [asset.leaderEmail, asset.userEmail],
+            groupProxyEnabled,
+            groupEmailSet
+          );
+          if (!isAllowed) return; 
         }
 
         if (applicants[asset.leaderName]) {
@@ -4880,6 +4889,11 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
 
+  const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+  const groupEmailSet = groupProxyEnabled
+    ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+    : null;
+
   // 🛡️ 安全檢查：防止一般使用者產生他人的報表
   // 如果不是管理員，我們強制檢查 applicantName 是否對應到當前使用者，
   // 或者更嚴格地，我們在篩選資產時再次過濾。
@@ -4904,9 +4918,17 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
       allAssets.forEach(asset => {
         if (assetIdSet.has(asset.assetId)) {
           // 🛡️ 權限檢查
-          if (!isAdmin && asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
-            Logger.log(`[Security Block] User ${currentUserEmail} tried to print asset ${asset.assetId} belonging to ${asset.leaderEmail}`);
-            return; // 跳過不屬於自己的資產
+          if (!isAdmin) {
+            const isAllowed = isUserAllowedToAccessDocument(
+              currentUserEmail,
+              [asset.leaderEmail, asset.userEmail],
+              groupProxyEnabled,
+              groupEmailSet
+            );
+            if (!isAllowed) {
+              Logger.log(`[Security Block] User ${currentUserEmail} tried to print asset ${asset.assetId} belonging to ${asset.leaderEmail}`);
+              return; // 跳過不屬於自己的資產
+            }
           }
           assetsToScrap.push(asset);
         }
@@ -4916,8 +4938,16 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
       allAssets.forEach(asset => {
         if (asset.leaderName === applicantName && asset.assetStatus === '報廢中' && asset.assetCategory === assetCategory) {
            // 🛡️ 權限檢查
-           if (!isAdmin && asset.leaderEmail !== currentUserEmail && asset.userEmail !== currentUserEmail) {
-             return; // 跳過
+           if (!isAdmin) {
+             const isAllowed = isUserAllowedToAccessDocument(
+               currentUserEmail,
+               [asset.leaderEmail, asset.userEmail],
+               groupProxyEnabled,
+               groupEmailSet
+             );
+             if (!isAllowed) {
+               return; // 跳過
+             }
            }
           assetsToScrap.push(asset);
         }
@@ -6577,6 +6607,11 @@ function getScrapDocHistory(assetCategory) {
   const isAdmin = checkAdminPermissions();
   const allAssets = getAllAssets();
   
+  const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+  const groupEmailSet = groupProxyEnabled
+    ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
+    : null;
+
   // 1. 篩選有 docUrl 且符合類別的資產
   const printedAssets = allAssets.filter(asset => {
     if (!asset.docUrl || asset.docUrl.trim() === '') return false;
@@ -6584,7 +6619,12 @@ function getScrapDocHistory(assetCategory) {
     
     // 權限檢查
     if (!isAdmin) {
-      return asset.leaderEmail === currentUserEmail || asset.userEmail === currentUserEmail;
+      return isUserAllowedToAccessDocument(
+        currentUserEmail,
+        [asset.leaderEmail, asset.userEmail],
+        groupProxyEnabled,
+        groupEmailSet
+      );
     }
     return true;
   });
