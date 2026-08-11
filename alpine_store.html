@@ -1029,7 +1029,9 @@
             },
 
             /* ── 首屏載入：核心資料阻塞渲染主表格，次要資料（抽屜卡片）靜默補載 ── */
-            loadData: function (overrideViewMode) {
+            loadData: function (overrideViewMode, options) {
+                options = options || {};
+                var refreshContext = options.refreshContext || 'all';
                 var self = this;
                 var perfT0 = Date.now();
                 var isInitialLoad = !overrideViewMode && !refs.viewModeInitialized;
@@ -1106,18 +1108,32 @@
                         console.log('[loadPerf] 後端往返 ' + (perfT1 - perfT0) + 'ms；後端內部 '
                             + JSON.stringify((core && core.timings) || {}) + '；前端處理 '
                             + (Date.now() - perfT1) + 'ms（' + rows.length + ' 筆）');
-                        // 沿用既有的細粒度靜默預載排程
-                        self.scheduleTransferOverviewLoad(forceUserScope);
-                        self.scheduleScrapPendingPreload(forceUserScope);
-                        self.scheduleLocationErrorPreload(forceUserScope);
-                        self.scheduleTransferPendingPreload(forceUserScope);
-                        if (response.isAdmin && !forceUserScope) {
-                            self.scheduleAddAssetDropdownPreload();
-                        }
-                        if (self.inventoryFeatureEnabled) {
-                            self.schedulePendingInventoryLoad(forceUserScope);
+                        // 沿用既有的細粒度靜默預載排程，並加入精準阻斷 (Targeted Refresh)
+                        if (isInitialLoad || refreshContext === 'all') {
+                            self.scheduleTransferOverviewLoad(forceUserScope);
+                            self.scheduleScrapPendingPreload(forceUserScope);
+                            self.scheduleLocationErrorPreload(forceUserScope);
+                            self.scheduleTransferPendingPreload(forceUserScope);
+                            if (response.isAdmin && !forceUserScope) {
+                                self.scheduleAddAssetDropdownPreload();
+                            }
+                            if (self.inventoryFeatureEnabled) {
+                                self.schedulePendingInventoryLoad(forceUserScope);
+                            } else {
+                                self.clearInventoryState();
+                            }
                         } else {
-                            self.clearInventoryState();
+                            // 根據 refreshContext 只觸發相關清單
+                            if (refreshContext === 'transfer') {
+                                self.scheduleTransferOverviewLoad(forceUserScope);
+                                self.scheduleTransferPendingPreload(forceUserScope);
+                            } else if (refreshContext === 'scrap') {
+                                self.scheduleScrapPendingPreload(forceUserScope);
+                            } else if (refreshContext === 'locationError') {
+                                self.scheduleLocationErrorPreload(forceUserScope);
+                            } else if (refreshContext === 'inventory') {
+                                if (self.inventoryFeatureEnabled) self.schedulePendingInventoryLoad(forceUserScope);
+                            }
                         }
                         // 抽屜卡片所需的次要資料靜默補載
                         self.loadSecondaryData(forceUserScope);
@@ -1971,9 +1987,9 @@
                 this.selectedAsset = null;
                 this.quickActionMode = 'submit';
             },
-            handleQuickActionSuccess: function (skipReload) {
+            handleQuickActionSuccess: function (skipReload, type) {
                 if (!skipReload) {
-                    this.loadData();
+                    this.loadData(null, { refreshContext: type || 'all' });
                 }
             },
             handleOpenEditModal: function (asset) {
@@ -1981,10 +1997,10 @@
                 this.showEditAssetModal = true;
             },
             handleEditAssetSuccess: function () {
-                this.loadData();
+                this.loadData(null, { refreshContext: 'edit' });
             },
             handleAddAssetSuccess: function () {
-                this.loadData();
+                this.loadData(null, { refreshContext: 'add' });
             },
             handleOpenInventoryModal: function (asset) {
                 if (!this.hasActiveInventoryForAsset(asset.assetId)) {
@@ -2643,7 +2659,7 @@
                 var self = this;
                 this.loadData();
                 // 全域刷新契約(舊頁 14417;vanilla 審核區審核後呼叫)
-                window.refreshReactData = function () { self.loadData(); };
+                window.refreshReactData = function (type) { self.loadData(null, { refreshContext: type || 'all' }); };
                 // 頁面網址事件(舊頁 14422-14434)
                 window.addEventListener(USERSTATE_PAGE_URLS_EVENT, function (event) {
                     self.userStatePageUrls = Object.assign({}, self.userStatePageUrls, event.detail || {});
