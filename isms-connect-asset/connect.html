@@ -2365,67 +2365,130 @@
   <!-- 系統設定 Modal -->
   <div class="modal-overlay hidden" id="settingsModal">
     <div class="modal-box" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto;">
-      <h3 class="text-xl font-bold text-gray-900 border-b pb-3 mb-4">
+      <h3 class="text-xl font-bold text-gray-900 pb-3 mb-0">
         <i class="fas fa-cog text-gray-500 mr-2"></i>系統設定
       </h3>
-      
-      <div class="space-y-6">
 
-        <!-- 資訊資產數量顯示格式設定 -->
-        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <label class="block mb-2">
-            <span class="text-sm font-bold text-gray-700">資訊資產數量顯示格式</span>
-            <select id="settingQuantityDisplayMode" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
-              <option value="both">兩者皆顯示 (虛擬數量/連動數量)</option>
-              <option value="virtual">僅顯示虛擬數量</option>
-              <option value="mapped">僅顯示實際連動數量</option>
-            </select>
-          </label>
-          <p class="text-xs text-gray-500">此設定為全域設定，變更後所有使用者的表格「資產數量」欄位都會統一改變顯示格式。</p>
-        </div>
+      <!-- Tab 頁籤列 -->
+      <div class="settings-tab-bar">
+        <button id="settingsTabProcess" class="settings-tab-btn settings-tab-active" onclick="switchSettingsTab('process')">
+          <i class="fas fa-project-diagram mr-1"></i>業務流程
+        </button>
+        <button id="settingsTabHr" class="settings-tab-btn" onclick="switchSettingsTab('hr')">
+          <i class="fas fa-users-cog mr-1"></i>HR 對照管理
+        </button>
+      </div>
 
-        <!-- 動態業務流程 -->
-        <div>
-          <h4 class="text-md font-bold text-gray-800 mb-2">動態業務流程 (來自系統清冊)</h4>
-          <div class="bg-white border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="bg-gray-100 text-gray-600 sticky top-0">
-                <tr>
-                  <th class="px-3 py-2">原始名稱 (系統清冊)</th>
-                  <th class="px-3 py-2">對照顯示名稱 (留白則用原名)</th>
-                  <th class="px-3 py-2 w-24 text-center">ISO 範圍</th>
-                </tr>
-              </thead>
-              <tbody id="settingsDynamicList" class="divide-y divide-gray-100">
-                <!-- 動態載入 -->
-              </tbody>
-            </table>
+      <!-- Tab 1: 業務流程（現有內容原封不動） -->
+      <div id="settingsTab1">
+        <div class="space-y-6">
+
+          <!-- 資訊資產數量顯示格式設定 -->
+          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <label class="block mb-2">
+              <span class="text-sm font-bold text-gray-700">資訊資產數量顯示格式</span>
+              <select id="settingQuantityDisplayMode" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+                <option value="both">兩者皆顯示 (虛擬數量/連動數量)</option>
+                <option value="virtual">僅顯示虛擬數量</option>
+                <option value="mapped">僅顯示實際連動數量</option>
+              </select>
+            </label>
+            <p class="text-xs text-gray-500">此設定為全域設定，變更後所有使用者的表格「資產數量」欄位都會統一改變顯示格式。</p>
           </div>
-        </div>
 
-        <!-- 靜態業務流程 -->
-        <div>
-          <div class="flex justify-between items-center mb-2">
-            <h4 class="text-md font-bold text-gray-800">靜態業務流程 (自訂新增)</h4>
-            <button class="btn-secondary text-xs" onclick="addStaticProcessRow()">+ 新增項目</button>
+          <!-- 動態業務流程 -->
+          <div>
+            <h4 class="text-md font-bold text-gray-800 mb-2">動態業務流程 (來自系統清冊)</h4>
+            <div class="bg-white border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-600 sticky top-0">
+                  <tr>
+                    <th class="px-3 py-2">原始名稱 (系統清冊)</th>
+                    <th class="px-3 py-2">對照顯示名稱 (留白則用原名)</th>
+                    <th class="px-3 py-2 w-24 text-center">ISO 範圍</th>
+                  </tr>
+                </thead>
+                <tbody id="settingsDynamicList" class="divide-y divide-gray-100">
+                  <!-- 動態載入 -->
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div class="bg-white border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="bg-gray-100 text-gray-600 sticky top-0">
-                <tr>
-                  <th class="px-3 py-2">業務流程名稱</th>
-                  <th class="px-3 py-2 w-24 text-center">ISO 範圍</th>
-                  <th class="px-3 py-2 w-16 text-center">操作</th>
-                </tr>
-              </thead>
-              <tbody id="settingsStaticList" class="divide-y divide-gray-100">
-                <!-- 動態載入 -->
-              </tbody>
-            </table>
+
+          <!-- 靜態業務流程 -->
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <h4 class="text-md font-bold text-gray-800">靜態業務流程 (自訂新增)</h4>
+              <button class="btn-secondary text-xs" onclick="addStaticProcessRow()">+ 新增項目</button>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-600 sticky top-0">
+                  <tr>
+                    <th class="px-3 py-2">業務流程名稱</th>
+                    <th class="px-3 py-2 w-24 text-center">ISO 範圍</th>
+                    <th class="px-3 py-2 w-16 text-center">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="settingsStaticList" class="divide-y divide-gray-100">
+                  <!-- 動態載入 -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- Tab 2: HR 對照管理（新增） -->
+      <div id="settingsTab2" class="hidden">
+
+        <!-- 說明文字 -->
+        <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-4">
+          <p class="text-sm text-blue-800">
+            <i class="fas fa-info-circle mr-1"></i>
+            管理 HR 組織架構名稱對照。ISO 範圍掃描時，系統會使用此對照表將 HR
+            原始名稱轉為本系統慣用名稱，以正確比對駐站地點。留白表示沿用 HR 原名。
+          </p>
+        </div>
+
+        <!-- 搜尋框 -->
+        <div class="relative mb-3">
+          <i class="fas fa-search hr-map-search-icon"></i>
+          <input type="text" id="hrGroupSearchInput" class="hr-map-search-input"
+                 placeholder="搜尋官方名稱或已設定名稱..."
+                 oninput="filterHrGroupRows()">
+        </div>
+
+        <!-- 對照表格 -->
+        <div class="bg-white border border-gray-200 rounded-lg overflow-y-auto" style="max-height: 300px;">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-gray-100 text-gray-600 sticky top-0">
+              <tr>
+                <th class="px-3 py-2" style="width: 45%;">HR 官方名稱</th>
+                <th class="px-3 py-2 text-center" style="width: 10%;">→</th>
+                <th class="px-3 py-2" style="width: 45%;">系統慣用名稱</th>
+              </tr>
+            </thead>
+            <tbody id="hrGroupMappingList" class="divide-y divide-gray-100">
+              <!-- 動態載入 -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 進階 JSON 編輯（可收合） -->
+        <details class="mt-4 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+          <summary class="px-4 py-2 text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100">
+            <i class="fas fa-code mr-1"></i>進階：編輯原始 JSON
+          </summary>
+          <div class="p-3 border-t border-gray-200 bg-white">
+            <textarea id="hrGroupNameMapJson" rows="5"
+                      class="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 text-xs font-mono focus:outline-none focus:border-blue-500"
+                      oninput="syncJsonToTable()"></textarea>
+          </div>
+        </details>
+      </div>
+
+      <!-- 底部工具列（共用，不在任何 Tab 裡） -->
       <div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
         <div>
           <button class="btn-secondary text-blue-600 border-blue-200" onclick="closeSettingsModal(); runIsoScan();">
