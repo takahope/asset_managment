@@ -11,7 +11,7 @@ document.addEventListener('alpine:init', function () {
             isLoading: true, isSubmitting: false, activeTab: 'general',
             enabled: true, provider: 'GEMINI',
             geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
-            reportAdminEmails: '', adminEmailNotifyEnabled: false, userEmailNotifyEnabled: true,
+            reportAdminEmails: '', dataUpdateEmails: '', adminEmailNotifyEnabled: false, userEmailNotifyEnabled: true,
             groupProxyEnabled: false, inventoryFeatureEnabled: true, fabMenuEnabled: true,
             locationErrorMode: 'immediate',
             hrGroupNameMap: '',
@@ -111,6 +111,7 @@ document.addEventListener('alpine:init', function () {
                     .withSuccessHandler(function (s) {
                         var settings = s || {};
                         self.reportAdminEmails = settings.reportAdminEmails || '';
+                        self.dataUpdateEmails = settings.dataUpdateEmails || '';
                         self.adminEmailNotifyEnabled = !!settings.adminEmailNotifyEnabled;
                         self.userEmailNotifyEnabled = settings.userEmailNotifyEnabled !== false;
                         self.groupProxyEnabled = !!settings.groupProxyEnabled;
@@ -187,6 +188,7 @@ document.addEventListener('alpine:init', function () {
                             })
                             .saveSystemSettings({
                                 reportAdminEmails: self.reportAdminEmails,
+                                dataUpdateEmails: self.dataUpdateEmails,
                                 adminEmailNotifyEnabled: self.adminEmailNotifyEnabled,
                                 userEmailNotifyEnabled: self.userEmailNotifyEnabled,
                                 groupProxyEnabled: self.groupProxyEnabled,
@@ -360,6 +362,13 @@ document.addEventListener('alpine:init', function () {
                                 </div>
 
                                 <div class="space-y-4 pt-2">
+                                    <label class="block">
+                                        <span class="text-sm font-medium text-slate-700 block mb-1">資料更新承辦窗口 Email (多筆請用逗號分隔)</span>
+                                        <input type="text" x-model="dataUpdateEmails" placeholder="example1@company.com, example2@company.com"
+                                               class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <p class="mt-1 text-xs text-slate-500">系統發出的轉移或報廢等異動通知，將統一寄給此名單。設定在此名單的人員將自動具有與管理員相同的系統操作權限。</p>
+                                    </label>
+
                                     <label class="block">
                                         <span class="text-sm font-medium text-slate-700 block mb-1">電腦回報管理員 Email</span>
                                         <textarea x-model="reportAdminEmails" rows="2" placeholder="多筆以逗號或換行分隔"
