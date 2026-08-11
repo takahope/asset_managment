@@ -4782,9 +4782,11 @@ function saveSystemSettings(settings) {
 }
 
 function checkAdminPermissions() {
-  const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
+  const userEmail = Session.getActiveUser().getEmail().toLowerCase();
   const adminEmails = getAdminEmails().map(email => email.toLowerCase());
-  return adminEmails.includes(currentUserEmail);
+  const dataUpdateEmails = getDataUpdateEmails().map(email => email.toLowerCase());
+
+  return adminEmails.includes(userEmail) || dataUpdateEmails.includes(userEmail);
 }
 
 function checkAdminStatus() {
