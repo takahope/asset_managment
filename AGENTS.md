@@ -46,6 +46,7 @@ PRs should include:
 - Web app access is domain-restricted in `appsscript.json`; confirm this matches deployment needs.
 
 ## Event Log
+- 2026-08-11: Added HR Group Name Mapping management Tab to `connect.html` settings modal, with backend endpoints `getHrGroupSettings()` and `saveHrGroupNameMap()` in `code.js`. Enables administrators to maintain `HR_GROUP_NAME_MAP` (HR org names → system display names) via UI, fixing ISO scope scan station name mismatch.
 - 2026-07-31: Fixed mobile bottom action bar (`actionBar`) layout in `connect.html`: restructured elements to make search and remarks inputs full-width by applying scoped CSS classes (`max-width: 100% !important` to override base `300px` limit) and removing inline styles, and grouped edit/delete buttons inline with the business process dropdown on mobile.
 - 2026-07-31: Fixed mobile scan panel (`embeddedActionPanel`) layout disorder in `connect.html`: global `.search-input { order: -1 }` was pushing search/remarks inputs above the status card; scoped rule to `.card .flex.flex-wrap .search-input`, moved status card + meta outside panel body to between scannerStatus and panel header, swapped remarks/business-process order in bottom action bar.
 - 2026-07-29: Added B219 HW Label Filter to `connect.html` alongside the station checkbox, enabling filtering by confidentiality level mapping for B219 hardware assets.
