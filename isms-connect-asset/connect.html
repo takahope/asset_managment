@@ -6812,28 +6812,59 @@
     });
 
     // --- Settings Modal Logic ---
+    var settingsActiveTab = 'process';
+
+    function switchSettingsTab(tab) {
+      settingsActiveTab = tab;
+      document.getElementById('settingsTab1').classList.toggle('hidden', tab !== 'process');
+      document.getElementById('settingsTab2').classList.toggle('hidden', tab !== 'hr');
+      document.getElementById('settingsTabProcess').classList.toggle('settings-tab-active', tab === 'process');
+      document.getElementById('settingsTabHr').classList.toggle('settings-tab-active', tab === 'hr');
+    }
+
     let currentRawDynamicList = [];
     let globalQuantityDisplayMode = 'both';
 
     function openSettingsModal() {
       document.getElementById('settingsModal').classList.remove('hidden');
-      const btn = document.getElementById('btnSaveSettings');
+      switchSettingsTab('process');
+      var btn = document.getElementById('btnSaveSettings');
       btn.disabled = true;
       btn.textContent = '載入中...';
-      
-      google.script.run
-        .withSuccessHandler(res => {
+
+      var loadedCount = 0;
+      function maybeFinishLoading() {
+        loadedCount++;
+        if (loadedCount >= 2) {
           btn.disabled = false;
           btn.textContent = '儲存設定';
+        }
+      }
+
+      // Tab 1: 業務流程（現有邏輯不變）
+      google.script.run
+        .withSuccessHandler(function(res) {
           if (res.error) showToast(res.error, 'error');
           renderSettings(res);
+          maybeFinishLoading();
         })
-        .withFailureHandler(err => {
-          btn.disabled = false;
-          btn.textContent = '儲存設定';
+        .withFailureHandler(function(err) {
           showToast('讀取設定失敗: ' + err.message, 'error');
+          maybeFinishLoading();
         })
         .getBusinessProcessSettings();
+
+      // Tab 2: HR 對照管理（新增）
+      google.script.run
+        .withSuccessHandler(function(res) {
+          renderHrGroupSettings(res);
+          maybeFinishLoading();
+        })
+        .withFailureHandler(function(err) {
+          showToast('讀取 HR 對照失敗: ' + err.message, 'error');
+          maybeFinishLoading();
+        })
+        .getHrGroupSettings();
     }
 
     function closeSettingsModal() {
@@ -6885,52 +6916,146 @@
       tbody.appendChild(tr);
     }
 
+    // --- HR Group Name Mapping ---
+    var hrOfficialGroupsCache = [];
+    var parsedHrGroupNameMap = {};
+
+    function renderHrGroupSettings(res) {
+      hrOfficialGroupsCache = res.hrOfficialGroups || [];
+      try { parsedHrGroupNameMap = JSON.parse(res.hrGroupNameMap || '{}'); }
+      catch (e) { parsedHrGroupNameMap = {}; }
+
+      var tbody = document.getElementById('hrGroupMappingList');
+      tbody.innerHTML = '';
+
+      if (hrOfficialGroupsCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="px-3 py-4 text-center text-gray-500">無法讀取 HR 組織架構名稱（請確認 HR_SPREADSHEET_ID 是否正確）</td></tr>';
+        return;
+      }
+
+      hrOfficialGroupsCache.forEach(function(hrGroup) {
+        var mapped = parsedHrGroupNameMap[hrGroup] || '';
+        var tr = document.createElement('tr');
+        tr.className = 'hr-map-row' + (mapped ? ' hr-map-row-highlight' : '');
+        tr.dataset.hrGroup = hrGroup;
+        tr.innerHTML =
+          '<td class="px-3 py-2 text-gray-700 font-medium">' + escapeHtml(hrGroup) + '</td>' +
+          '<td class="px-3 py-2 text-gray-400 text-center">→</td>' +
+          '<td class="px-3 py-2">' +
+            '<input type="text" class="hr-map-input w-full px-2 py-1 border border-gray-300 rounded text-sm" ' +
+            'placeholder="' + escapeHtml(hrGroup) + '" value="' + escapeHtml(mapped) + '" ' +
+            'oninput="syncTableToJson()">' +
+          '</td>';
+        tbody.appendChild(tr);
+      });
+
+      syncTableToJson();
+    }
+
+    function syncTableToJson() {
+      parsedHrGroupNameMap = {};
+      document.querySelectorAll('.hr-map-row').forEach(function(tr) {
+        var hrGroup = tr.dataset.hrGroup;
+        var input = tr.querySelector('.hr-map-input');
+        var value = (input.value || '').trim();
+        if (value) parsedHrGroupNameMap[hrGroup] = value;
+        if (value) { tr.classList.add('hr-map-row-highlight'); }
+        else { tr.classList.remove('hr-map-row-highlight'); }
+      });
+      var textarea = document.getElementById('hrGroupNameMapJson');
+      if (textarea) textarea.value = JSON.stringify(parsedHrGroupNameMap, null, 2);
+    }
+
+    function syncJsonToTable() {
+      var textarea = document.getElementById('hrGroupNameMapJson');
+      try {
+        parsedHrGroupNameMap = JSON.parse(textarea.value || '{}');
+      } catch (e) { return; }
+      document.querySelectorAll('.hr-map-row').forEach(function(tr) {
+        var hrGroup = tr.dataset.hrGroup;
+        var input = tr.querySelector('.hr-map-input');
+        var newVal = parsedHrGroupNameMap[hrGroup] || '';
+        input.value = newVal;
+        if (newVal) { tr.classList.add('hr-map-row-highlight'); }
+        else { tr.classList.remove('hr-map-row-highlight'); }
+      });
+    }
+
+    function filterHrGroupRows() {
+      var query = (document.getElementById('hrGroupSearchInput').value || '').toLowerCase();
+      document.querySelectorAll('.hr-map-row').forEach(function(tr) {
+        var hrGroup = (tr.dataset.hrGroup || '').toLowerCase();
+        var mapped = (tr.querySelector('.hr-map-input').value || '').toLowerCase();
+        var match = !query || hrGroup.indexOf(query) !== -1 || mapped.indexOf(query) !== -1;
+        tr.style.display = match ? '' : 'none';
+      });
+    }
+
     function saveSettings() {
-      const config = { 
-        staticProcesses: [], 
+      var config = {
+        staticProcesses: [],
         dynamicMap: {},
         quantityDisplayMode: document.getElementById('settingQuantityDisplayMode').value
       };
-      
-      document.querySelectorAll('.stat-row').forEach(tr => {
-        const name = tr.querySelector('.stat-name').value.trim();
-        const isIso = tr.querySelector('.stat-iso-chk').checked;
+
+      document.querySelectorAll('.stat-row').forEach(function(tr) {
+        var name = tr.querySelector('.stat-name').value.trim();
+        var isIso = tr.querySelector('.stat-iso-chk').checked;
         if (name) {
-          config.staticProcesses.push({ name, isIso });
-        }
-      });
-      
-      const dynRows = document.querySelectorAll('.dyn-row');
-      dynRows.forEach(tr => {
-        const rawName = tr.querySelector('.dyn-raw-name').textContent;
-        const mappedName = tr.querySelector('.dyn-map-name').value.trim();
-        const isIso = tr.querySelector('.dyn-iso-chk').checked;
-        if (mappedName || isIso) {
-          config.dynamicMap[rawName] = { mappedName, isIso };
+          config.staticProcesses.push({ name: name, isIso: isIso });
         }
       });
 
-      const btn = document.getElementById('btnSaveSettings');
-      const origText = btn.textContent;
+      document.querySelectorAll('.dyn-row').forEach(function(tr) {
+        var rawName = tr.querySelector('.dyn-raw-name').textContent;
+        var mappedName = tr.querySelector('.dyn-map-name').value.trim();
+        var isIso = tr.querySelector('.dyn-iso-chk').checked;
+        if (mappedName || isIso) {
+          config.dynamicMap[rawName] = { mappedName: mappedName, isIso: isIso };
+        }
+      });
+
+      var btn = document.getElementById('btnSaveSettings');
+      var origText = btn.textContent;
       btn.disabled = true;
       btn.textContent = '儲存中...';
 
+      // 序列儲存：先業務流程，再 HR 對照
       google.script.run
-        .withSuccessHandler(res => {
-          btn.disabled = false;
-          btn.textContent = origText;
-          if (res.success) {
-            showToast('設定已儲存', 'success');
-            globalQuantityDisplayMode = config.quantityDisplayMode;
-            if (typeof applyFilters === 'function') applyFilters();
-            closeSettingsModal();
-            preloadDropdowns();
+        .withSuccessHandler(function(res1) {
+          if (!res1.success) {
+            btn.disabled = false;
+            btn.textContent = origText;
+            showToast('業務流程設定儲存失敗', 'error');
+            return;
           }
+          // 儲存 HR 對照
+          var hrJson = JSON.stringify(parsedHrGroupNameMap);
+          google.script.run
+            .withSuccessHandler(function(res2) {
+              btn.disabled = false;
+              btn.textContent = origText;
+              if (res2.success) {
+                showToast('設定已儲存', 'success');
+                globalQuantityDisplayMode = config.quantityDisplayMode;
+                if (typeof applyFilters === 'function') applyFilters();
+                closeSettingsModal();
+                preloadDropdowns();
+              } else {
+                showToast('HR 對照儲存失敗: ' + (res2.error || ''), 'error');
+              }
+            })
+            .withFailureHandler(function(err) {
+              btn.disabled = false;
+              btn.textContent = origText;
+              showToast('HR 對照儲存失敗: ' + (err && err.message ? err.message : '未知錯誤'), 'error');
+            })
+            .saveHrGroupNameMap(hrJson);
         })
-        .withFailureHandler(err => {
+        .withFailureHandler(function(err) {
           btn.disabled = false;
           btn.textContent = origText;
-          showToast('儲存失敗: ' + err.message, 'error');
+          showToast('業務流程設定儲存失敗: ' + (err && err.message ? err.message : '未知錯誤'), 'error');
         })
         .saveBusinessProcessSettings(config);
     }
