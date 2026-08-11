@@ -1032,12 +1032,20 @@
             loadData: function (overrideViewMode) {
                 var self = this;
                 var perfT0 = Date.now();
-                showFlyProgressBar('正在載入財產狀態資料...', { mask: true });
+                var isInitialLoad = !overrideViewMode && !refs.viewModeInitialized;
+                
+                if (isInitialLoad) {
+                    showFlyProgressBar('正在載入財產狀態資料...', { mask: true });
+                } else {
+                    if (typeof showToastProgress === 'function') {
+                        showToastProgress('正在背景更新最新資料...');
+                    }
+                }
+                
                 this.isLoadingCards = true;
                 this.secondaryLoaded = false;
                 // 新一輪載入立即讓任何在途的次要回應失效，避免視角切換時舊資料污染
                 refs.secondaryRequest += 1;
-                var isInitialLoad = !overrideViewMode && !refs.viewModeInitialized;
                 var effectiveViewMode = overrideViewMode || this.viewMode;
                 var forceUserScope = isInitialLoad ? false : (effectiveViewMode === 'user');
 
@@ -1046,7 +1054,11 @@
                         var response = core && core.userState;
                         if (!response || response.error) {
                             alert('載入失敗：' + ((response && response.error) || '無資料'));
-                            hideFlyProgressBar('載入失敗', 0);
+                            if (isInitialLoad) {
+                                hideFlyProgressBar('載入失敗', 0);
+                            } else {
+                                if (typeof hideToastProgress === 'function') hideToastProgress('更新失敗', 300);
+                            }
                             return;
                         }
                         var perfT1 = Date.now();
@@ -1054,7 +1066,11 @@
                         var rows = response.assetRows;
                         if (!Array.isArray(fields) || !Array.isArray(rows)) {
                             alert('載入失敗：資料格式錯誤（請重新整理，若持續發生請聯絡管理員）');
-                            hideFlyProgressBar('載入失敗', 0);
+                            if (isInitialLoad) {
+                                hideFlyProgressBar('載入失敗', 0);
+                            } else {
+                                if (typeof hideToastProgress === 'function') hideToastProgress('更新失敗', 300);
+                            }
                             return;
                         }
                         var unpacked = new Array(rows.length);
@@ -1082,7 +1098,11 @@
                         self.isLoadingCards = false;
                         self.isReady = true;
                         self.syncAssetGlobals();
-                        hideFlyProgressBar('資料載入完成！', 300);
+                        if (isInitialLoad) {
+                            hideFlyProgressBar('資料載入完成！', 300);
+                        } else {
+                            if (typeof hideToastProgress === 'function') hideToastProgress('資料更新完成！', 300);
+                        }
                         console.log('[loadPerf] 後端往返 ' + (perfT1 - perfT0) + 'ms；後端內部 '
                             + JSON.stringify((core && core.timings) || {}) + '；前端處理 '
                             + (Date.now() - perfT1) + 'ms（' + rows.length + ' 筆）');
@@ -1104,7 +1124,11 @@
                     })
                     .withFailureHandler(function (error) {
                         self.isLoadingCards = false;
-                        hideFlyProgressBar('載入失敗', 0);
+                        if (isInitialLoad) {
+                            hideFlyProgressBar('載入失敗', 0);
+                        } else {
+                            if (typeof hideToastProgress === 'function') hideToastProgress('更新失敗', 300);
+                        }
                         alert('錯誤：' + error.message);
                     })
                     .getUserStateCore(forceUserScope);
