@@ -1939,6 +1939,56 @@
         display: none;
       }
     }
+
+    /* ── Settings Modal Tab ── */
+    .settings-tab-bar {
+      display: flex;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 16px;
+      gap: 0;
+    }
+    .settings-tab-btn {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #6b7280;
+      border: none;
+      border-bottom: 2px solid transparent;
+      background: none;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .settings-tab-btn:hover {
+      color: #374151;
+    }
+    .settings-tab-active {
+      color: #2563eb;
+      border-bottom-color: #2563eb;
+    }
+    .hr-map-row-highlight {
+      background-color: #eff6ff;
+    }
+    .hr-map-search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .hr-map-search-input {
+      width: 100%;
+      padding: 8px 12px 8px 36px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .hr-map-search-input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
   </style>
 </head>
 <body>
