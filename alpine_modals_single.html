@@ -138,7 +138,7 @@ document.addEventListener('alpine:init', function () {
                             waitReview: waitReview
                         });
                         // 以權威資料對帳:純地點轉移維持在庫、部分成功等情形皆由此修正,並更新卡片統計
-                        store.refreshCardData();
+                        store.refreshCardData('transfer');
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAsset(asset.assetId);
@@ -247,7 +247,7 @@ document.addEventListener('alpine:init', function () {
                             waitReview: waitReview
                         });
                         // 以權威資料對帳:部分成功(未在庫/無權限被跳過)等情形由此修正,並更新卡片統計
-                        store.refreshCardData();
+                        store.refreshCardData('lending');
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAsset(asset.assetId);
@@ -332,7 +332,7 @@ document.addEventListener('alpine:init', function () {
                             waitReview: false
                         });
                         // 以權威資料對帳:部分成功等情形由此修正,並更新卡片統計(取代整頁 loadData)
-                        store.refreshCardData();
+                        store.refreshCardData('scrap');
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAsset(asset.assetId);

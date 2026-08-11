@@ -1134,6 +1134,8 @@
                             } else if (refreshContext === 'inventory') {
                                 if (self.inventoryFeatureEnabled) self.schedulePendingInventoryLoad(forceUserScope);
                             }
+                            // 註：若 refreshContext 為 'edit' 或 'add'，則完全跳過上述所有長篇清單的預載，
+                            // 這是一個刻意的效能最佳化 (Targeted Refresh)，藉此省下大量的 GAS 並行額度。
                         }
                         // 抽屜卡片所需的次要資料靜默補載
                         self.loadSecondaryData(forceUserScope);
@@ -1218,7 +1220,8 @@
             },
 
             /* ── 卡片重新整理(舊頁 14185-14309 refreshCardData;並行載入 + 最短顯示時間) ── */
-            refreshCardData: function () {
+            refreshCardData: function (refreshContext) {
+                refreshContext = refreshContext || 'all';
                 var self = this;
                 var MIN_LOADING_DURATION = 500;
                 this.isLoadingCards = true;
@@ -1226,9 +1229,14 @@
                 this.pendingInventoryError = '';
                 var startTime = Date.now();
                 var forceUserScope = this.viewMode === 'user';
-                this.scheduleScrapPendingPreload(forceUserScope);
-                this.scheduleTransferPendingPreload(forceUserScope);
-                if (this.isAdmin && !forceUserScope) {
+                
+                if (refreshContext === 'all' || refreshContext === 'scrap') {
+                    this.scheduleScrapPendingPreload(forceUserScope);
+                }
+                if (refreshContext === 'all' || refreshContext === 'transfer' || refreshContext === 'lending') {
+                    this.scheduleTransferPendingPreload(forceUserScope);
+                }
+                if (this.isAdmin && !forceUserScope && (refreshContext === 'all' || refreshContext === 'add')) {
                     this.scheduleAddAssetDropdownPreload();
                 }
                 var run = function (fnName, arg) {
@@ -2294,15 +2302,15 @@
 
             /* ── P6:列印/文件 modal 關閉與刷新(舊頁 16043-16139 App render 的 inline callback) ── */
             closeTransferringModal: function () { this.activeModal = null; },
-            handleCancelTransferSuccess: function () { this.activeModal = null; this.refreshCardData(); },
+            handleCancelTransferSuccess: function () { this.activeModal = null; this.refreshCardData('transfer'); },
             closeLentModal: function () { this.activeModal = null; },
             openLendingPrintFromLent: function () { this.activeModal = 'lendingPrint'; },
-            handleReturnSuccess: function () { this.activeModal = null; this.refreshCardData(); },
+            handleReturnSuccess: function () { this.activeModal = null; this.refreshCardData('lending'); },
             closeLendingPrintModal: function () { this.activeModal = null; },
             closeScrapPrintModal: function () { this.activeModal = null; this.scrapPendingDetails = null; },
-            handleScrapPrintRefresh: function () { this.activeModal = null; this.scrapPendingDetails = null; this.refreshCardData(); },
+            handleScrapPrintRefresh: function () { this.activeModal = null; this.scrapPendingDetails = null; this.refreshCardData('scrap'); },
             closeTransferPrintModal: function () { this.activeModal = null; this.transferPendingDetails = null; },
-            handleTransferPrintRefresh: function () { this.activeModal = null; this.transferPendingDetails = null; this.refreshCardData(); },
+            handleTransferPrintRefresh: function () { this.activeModal = null; this.transferPendingDetails = null; this.refreshCardData('transfer'); },
             closeOperationManualModal: function () { this.showOperationManualModal = false; },
 
             /* ── 盤點會話完成(舊頁 3759-3797,由 InventoryDashboardCard 呼叫) ── */
