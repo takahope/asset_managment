@@ -4249,6 +4249,15 @@ function getAdminEmails() {
 }
 
 /**
+ * 獲取資料更新承辦窗口 Email 列表
+ * @returns {string[]} 一個包含所有承辦窗口 Email 的陣列。
+ */
+function getDataUpdateEmails() {
+  const props = PropertiesService.getScriptProperties();
+  return parseEmailListProperty_(props.getProperty('DATA_UPDATE_EMAILS'));
+}
+
+/**
  * 檢查是否啟用管理員郵件通知功能
  * 透過 Script Property ADMIN_EMAIL_NOTIFY_ENABLED 控制（原為「管理員名單」工作表 C2）
  * @returns {boolean} true = 啟用郵件通知, false = 停用
@@ -4643,6 +4652,7 @@ function getSystemSettings() {
   const props = PropertiesService.getScriptProperties();
   return {
     reportAdminEmails: props.getProperty('REPORT_ADMIN_EMAILS') || '',
+    dataUpdateEmails: props.getProperty('DATA_UPDATE_EMAILS') || '',
     adminEmailNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
     userEmailNotifyEnabled: props.getProperty('USER_EMAIL_NOTIFY_ENABLED') !== 'false',
     groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
@@ -4679,6 +4689,9 @@ function saveSystemSettings(settings) {
   const s = settings || {};
   if (s.reportAdminEmails !== undefined) {
     props.setProperty('REPORT_ADMIN_EMAILS', String(s.reportAdminEmails).trim());
+  }
+  if (s.dataUpdateEmails !== undefined) {
+    props.setProperty('DATA_UPDATE_EMAILS', String(s.dataUpdateEmails).trim());
   }
   if (s.adminEmailNotifyEnabled !== undefined) {
     props.setProperty('ADMIN_EMAIL_NOTIFY_ENABLED', String(!!s.adminEmailNotifyEnabled));
