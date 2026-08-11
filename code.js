@@ -2013,7 +2013,7 @@ function processBatchTransferApplication(formData) {
     // 情況3：只變更地點（change-location 勾選，其他未勾）
     else if (actualNewLocation && !actualNewKeeperEmail && !actualNewUserEmail) {
       // 通知管理員
-      const adminEmails = getAdminEmails();
+      const adminEmails = getDataUpdateEmails();
       if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
         const webAppUrl = getAppUrl();
         const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
@@ -2508,7 +2508,7 @@ function processBatchApproval(appIds) {
     });
 
     if (successCount > 0) {
-      const adminEmails = getAdminEmails();
+      const adminEmails = getDataUpdateEmails();
       if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
         const webAppUrl = getAppUrl();
         const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
@@ -3867,7 +3867,7 @@ function processBatchScrapping(formData) {
       try {
         const applicantEmail = Session.getActiveUser().getEmail();
         const applicantName = scrappedAssets[0].keeperName; // 申請人即為保管人
-        const adminEmails = getAdminEmails();
+        const adminEmails = getDataUpdateEmails();
 
         if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
           const webAppUrl = getAppUrl();
