@@ -234,6 +234,78 @@ function getHrGroupNameMap_() {
 }
 
 /**
+ * 讀取 HR 組織架構樹中所有正式組別名稱（排除 TF-* 等非正式組織）。
+ * 移植自上游主專案 hr_directory.js:448-467。
+ * @returns {string[]}
+ */
+function getHrOfficialGroups_() {
+  try {
+    const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
+    const orgSheet = hrSs.getSheetByName(CONFIG.HR_ORG_TREE_SHEET_NAME);
+    if (!orgSheet || orgSheet.getLastRow() <= 1) return [];
+
+    const idx = HR_ORG_TREE_COLUMN_INDICES;
+    const numCols = Math.max(idx.CODE, idx.NAME);
+    const names = new Set();
+    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, numCols).getValues().forEach(row => {
+      const code = String(row[idx.CODE - 1] || '').trim();
+      const name = String(row[idx.NAME - 1] || '').trim();
+      if (name && orgCodeRank_(code) < 99) {
+        names.add(name);
+      }
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  } catch (e) {
+    console.error('無法取得 HR 組織名稱:', e);
+    return [];
+  }
+}
+
+/**
+ * 讀取 HR 對照管理所需資料：官方組別名稱清單 + 現有對照 JSON。
+ * 權限：白名單。
+ * @returns {{hrOfficialGroups: string[], hrGroupNameMap: string}}
+ */
+function getHrGroupSettings() {
+  const email = getCurrentUserEmail_();
+  if (!isInWhitelist_(email)) {
+    throw new Error('您沒有權限讀取 HR 對照設定。');
+  }
+  return {
+    hrOfficialGroups: getHrOfficialGroups_(),
+    hrGroupNameMap: PropertiesService.getScriptProperties().getProperty('HR_GROUP_NAME_MAP') || ''
+  };
+}
+
+/**
+ * 儲存 HR 組別名稱對照表並清除認證駐站快取。
+ * 權限：管理員。
+ * @param {string} jsonStr HR_GROUP_NAME_MAP 的 JSON 字串
+ * @returns {{success: boolean, error?: string}}
+ */
+function saveHrGroupNameMap(jsonStr) {
+  const access = assertWriteAccess_(true);
+  if (!access.ok) return { success: false, error: access.error };
+
+  const raw = String(jsonStr || '').trim();
+  if (raw) {
+    try { JSON.parse(raw); } catch (e) {
+      return { success: false, error: '組別轉換表不是合法 JSON：' + e.message };
+    }
+  }
+
+  PropertiesService.getScriptProperties().setProperty('HR_GROUP_NAME_MAP', raw);
+
+  // 清除認證駐站快取，讓新的對照表即時生效
+  try {
+    CacheService.getScriptCache().remove(ISO_STATION_CACHE_KEY);
+  } catch (_) { /* 快取清除失敗不影響功能 */ }
+
+  return { success: true };
+}
+
+
+/**
  * 主職判定順序(ECOSYSTEM 契約):PRE → CEO → DEPT-* → GRP-*;其餘(含 TF-*)視為兼任(99)。
  * @param {string} code 組別代碼
  * @returns {number}
