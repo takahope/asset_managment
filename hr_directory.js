@@ -155,6 +155,7 @@ function buildKeeperDirectoryFromHr_() {
   const assignmentSheet = hrSs.getSheetByName(HR_ASSIGNMENT_SHEET_NAME);
   const emailToMainCode = {};
   const custodianSet = {};
+  const projectViewerSet = {}; // ✨ 新增：收集專案檢視員
   if (assignmentSheet && assignmentSheet.getLastRow() > 1) {
     assignmentSheet.getRange(2, 1, assignmentSheet.getLastRow() - 1, 5).getValues().forEach(row => {
       const email = String(row[0] || '').toLowerCase().trim();
@@ -162,6 +163,7 @@ function buildKeeperDirectoryFromHr_() {
       const orgCode = String(row[2] || '').trim();
       const title = String(row[4] || '').trim();
       if (title === HR_STATION_MANAGER_TITLE) custodianSet[email] = true;
+      if (orgCode === 'GRP-PROJ') projectViewerSet[email] = true; // ✨ 新增：擷取 GRP-PROJ
       if (orgCode && orgCodeRank_(orgCode) < 99) {
         const current = emailToMainCode[email];
         if (!current || orgCodeRank_(orgCode) < orgCodeRank_(current)) {
@@ -190,7 +192,8 @@ function buildKeeperDirectoryFromHr_() {
     groupToMembers: groupToMembers,
     custodianEmails: Object.keys(custodianSet),
     allEmails: Object.keys(emailToName),
-    stationGroups: stationGroups
+    stationGroups: stationGroups,
+    projectViewerEmails: Object.keys(projectViewerSet) // ✨ 新增
   };
 }
 
@@ -199,7 +202,7 @@ function buildKeeperDirectoryFromHr_() {
  * 已知限制:首次同步後 C 欄為空,fallback 期間駐管清單會是空的(緊急降級,可接受)。
  */
 function buildKeeperDirectoryFromSheetFallback_() {
-  const directory = { emailToName: {}, emailToGroup: {}, groupToMembers: {}, custodianEmails: [], allEmails: [] };
+  const directory = { emailToName: {}, emailToGroup: {}, groupToMembers: {}, custodianEmails: [], allEmails: [], projectViewerEmails: [] };
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(KEEPER_EMAIL_MAP_SHEET_NAME);
   if (!sheet || sheet.getLastRow() <= 1) return directory;
   sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues().forEach(row => {
