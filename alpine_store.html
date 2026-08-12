@@ -2345,10 +2345,18 @@
                 var allowed = selectedIds.filter(function (assetId) {
                     var isTask = self.resolveAssetIsTask(assetId);
                     if (isTask) { blockedCount += 1; return false; }
+                    
+                    // ✨ 排除無操作權限的資產
+                    var assetDetail = self.resolveAssetDetail(assetId);
+                    if (assetDetail && assetDetail.canOperate === false) {
+                        blockedCount += 1; 
+                        return false; 
+                    }
+                    
                     return true;
                 });
                 if (blockedCount > 0) {
-                    this.toastOrAlert('已自動排除 ' + blockedCount + ' 筆同組成員資產，僅保留可操作的項目。', 'warning');
+                    this.toastOrAlert('已自動排除 ' + blockedCount + ' 筆執行中或無操作權限的資產，僅保留可操作的項目。', 'warning');
                 }
                 return allowed;
             },
