@@ -286,7 +286,8 @@
             },
             
             allAssets: [],
-            isAdmin: false,
+            isAdmin: window.__INITIAL_STATE__ ? window.__INITIAL_STATE__.isAdmin : false,
+            isProjectViewer: window.__INITIAL_STATE__ ? window.__INITIAL_STATE__.isProjectViewer : false,
             viewMode: 'user',
             currentUserEmail: '',
             currentUserName: '',
@@ -1086,6 +1087,7 @@
                         }
                         self.webAppUrl = core.appUrl || '';
                         self.isAdmin = !!response.isAdmin;
+                        self.isProjectViewer = !!response.isProjectViewer;
                         self.currentUserEmail = response.userEmail || '';
                         self.currentUserName = response.userName || '';
                         self.allAssets = self.decorateAssetListForUserState(unpacked);
