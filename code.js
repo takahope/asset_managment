@@ -1261,7 +1261,7 @@ function getUserStateExportDataByTargets(targets, forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
     let filteredData;
 
@@ -2189,7 +2189,7 @@ function getPendingApprovals(forceUserScope) {
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
@@ -3058,7 +3058,7 @@ function getLentOutAssets(forceUserScope) {
         const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
         const isAdmin = checkAdminPermissions();
         const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+        const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
         const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
         
@@ -3246,7 +3246,7 @@ function getExternalLendingPrintGroups(forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
@@ -6072,7 +6072,7 @@ function getTransferringAssets(forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
@@ -6156,7 +6156,7 @@ function getTransferOverviewForUserState(forceUserScope) {
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
 
     const allAssets = getAllAssets();
@@ -6368,7 +6368,7 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
     const groupEmailSet = !useAdminScope
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase()))
@@ -6485,7 +6485,7 @@ function getAssetStatusDetail(assetId, forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const allAssets = getAllAssets();
     const asset = allAssets.find(item => String(item.assetId || '').trim() === normalizedAssetId);
 
@@ -7960,7 +7960,7 @@ function getInventoryData(forceUserScope) {
     // 檢查是否為管理員
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
     // 只取得狀態為「在庫」的資產
     const availableAssets = allAssets.filter(asset => asset.assetStatus === '在庫');
@@ -8096,7 +8096,7 @@ function getPendingInventoryAssignments(forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
     const isProjectViewer = checkProjectViewerPermissions();
-  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
+    const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const inventoryStatusByAsset = {};
     const inventoryStatusPriority = {
       '未盤點': 0,
