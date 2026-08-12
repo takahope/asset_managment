@@ -2014,16 +2014,16 @@ function processBatchTransferApplication(formData) {
     else if (actualNewLocation && !actualNewKeeperEmail && !actualNewUserEmail) {
       // 通知資料更新承辦窗口
       const notifyEmails = getDataUpdateEmails();
-      if (isAdminEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
+      if (isDataUpdateEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
         const webAppUrl = getAppUrl();
-        const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
+        const systemLink = `${webAppUrl}`; 
         const subject = `[財產通知] ${autoCompletedApps.length} 筆財產地點已變更`;
         let body = `您好，\n\n${currentUserEmail} 已變更以下財產的地點：\n\n`;
         autoCompletedApps.forEach(app => {
           body += `  - ${app.id}: ${app.assetName} → 新地點: ${actualNewLocation}\n`;
         });
-        body += `請點擊下方連結，前往更新頁面進行操作：\n`;
-        body += `${printTransferLink}\n\n`; // ✨ 新增：直接連結
+        body += `請點擊下方連結，前往系統主頁進行操作：\n`;
+        body += `${systemLink}\n\n`; 
         body += `\n此為系統自動發送郵件。`;
         MailApp.sendEmail(notifyEmails.join(','), subject, body);
       }
@@ -2462,7 +2462,7 @@ function processBatchApproval(appIds) {
             // 只有當申請人不是審核者本人時才發送通知（避免自己審核自己的申請收到多餘通知）
             if (applicantEmail && applicantEmail.toLowerCase() !== currentUserEmail.toLowerCase()) {
               const webAppUrl = getAppUrl();
-              const printTransferLink = `${webAppUrl}?page=printTransfer`;
+              const systemLink = `${webAppUrl}`;
 
               // 嘗試取得申請人姓名
               const applicantName = getAllAssets()
@@ -2483,8 +2483,8 @@ function processBatchApproval(appIds) {
                 body += `新使用人：${notifyNewUserName}\n`;
               }
               body += `審核時間：${now.toLocaleString('zh-TW')}\n\n`;
-              body += `請點擊下方連結，前往「列印轉移申請」頁面列印轉移申請單：\n`;
-              body += `${printTransferLink}\n\n`;
+              body += `請點擊下方連結，前往系統主頁列印轉移申請單：\n`;
+              body += `${systemLink}\n\n`;
               body += `此為系統自動發送郵件。`;
 
               if (isUserEmailEnabled()) {
@@ -2509,14 +2509,14 @@ function processBatchApproval(appIds) {
 
     if (successCount > 0) {
       const notifyEmails = getDataUpdateEmails();
-      if (isAdminEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
+      if (isDataUpdateEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
         const webAppUrl = getAppUrl();
-        const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
+        const systemLink = `${webAppUrl}`; 
 
         const subject = `[系統通知] 有 ${successCount} 筆已完成轉移的財產待您更新`;
         let body = `您好，\n\n系統剛剛有 ${successCount} 筆財產轉移申請已被核准，請您執行後續的上傳更新作業。\n\n`;
-        body += `請點擊下方連結，前往更新頁面進行操作：\n`;
-        body += `${printTransferLink}\n\n`; // ✨ 新增：直接連結
+        body += `請點擊下方連結，前往系統主頁進行操作：\n`;
+        body += `${systemLink}\n\n`; 
         body += `此為系統自動發送郵件。`;
         MailApp.sendEmail(notifyEmails.join(','), subject, body);
       }
@@ -3869,9 +3869,9 @@ function processBatchScrapping(formData) {
         const applicantName = scrappedAssets[0].keeperName; // 申請人即為保管人
         const notifyEmails = getDataUpdateEmails();
 
-        if (isAdminEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
+        if (isDataUpdateEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
           const webAppUrl = getAppUrl();
-          const printScrapLink = `${webAppUrl}?page=printScrap`;
+          const systemLink = `${webAppUrl}`;
 
           const subject = `[財產報廢通知] ${applicantName} 提交了 ${successCount} 筆財產報廢申請`;
           let body = `您好，\n\n`;
@@ -3885,8 +3885,8 @@ function processBatchScrapping(formData) {
           });
 
           body += `📋 報廢原因：${fullReason}\n\n`;
-          body += `請點擊下方連結前往「列印報廢申請紀錄」頁面進行列印：\n`;
-          body += `${printScrapLink}\n\n`;
+          body += `請點擊下方連結，前往系統主頁列印申請單：\n`;
+          body += `${systemLink}\n\n`;
           body += `此為系統自動發送郵件。`;
 
           MailApp.sendEmail(notifyEmails.join(','), subject, body);
@@ -4258,11 +4258,11 @@ function getDataUpdateEmails() {
 }
 
 /**
- * 檢查是否啟用管理員郵件通知功能
- * 透過 Script Property ADMIN_EMAIL_NOTIFY_ENABLED 控制（原為「管理員名單」工作表 C2）
+ * 檢查是否啟用承辦窗口郵件通知功能
+ * 透過 Script Property ADMIN_EMAIL_NOTIFY_ENABLED 控制（因歷史淵源，此變數目前控制承辦窗口通知）
  * @returns {boolean} true = 啟用郵件通知, false = 停用
  */
-function isAdminEmailEnabled() {
+function isDataUpdateEmailEnabled() {
   const props = PropertiesService.getScriptProperties();
   const isEnabled = props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true';
   if (!isEnabled) {
@@ -4645,7 +4645,7 @@ function exportResolvedLocationErrors() {
 /**
  * ✨ [管理員專用] 取得系統設定（電腦回報管理員 email、通知開關、同組資產開關、盤點功能開關）。
  * 供設定視窗（alpine_model_setting.html）讀取初始值。加 admin 守衛避免非管理員讀取 email 清單。
- * @returns {{reportAdminEmails:string, adminEmailNotifyEnabled:boolean, groupProxyEnabled:boolean, inventoryFeatureEnabled:boolean}}
+ * @returns {{reportAdminEmails:string, dataUpdateNotifyEnabled:boolean, groupProxyEnabled:boolean, inventoryFeatureEnabled:boolean}}
  */
 function getSystemSettings() {
   if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可讀取系統設定。');
@@ -4653,7 +4653,7 @@ function getSystemSettings() {
   return {
     reportAdminEmails: props.getProperty('REPORT_ADMIN_EMAILS') || '',
     dataUpdateEmails: props.getProperty('DATA_UPDATE_EMAILS') || '',
-    adminEmailNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
+    dataUpdateNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
     userEmailNotifyEnabled: props.getProperty('USER_EMAIL_NOTIFY_ENABLED') !== 'false',
     groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
     inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
@@ -4680,7 +4680,7 @@ function getSystemSettings() {
 /**
  * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
  * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
- * @param {{reportAdminEmails?:string, adminEmailNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
+ * @param {{reportAdminEmails?:string, dataUpdateNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
  * @returns {{success:boolean}}
  */
 function saveSystemSettings(settings) {
@@ -4693,8 +4693,8 @@ function saveSystemSettings(settings) {
   if (s.dataUpdateEmails !== undefined) {
     props.setProperty('DATA_UPDATE_EMAILS', String(s.dataUpdateEmails).trim());
   }
-  if (s.adminEmailNotifyEnabled !== undefined) {
-    props.setProperty('ADMIN_EMAIL_NOTIFY_ENABLED', String(!!s.adminEmailNotifyEnabled));
+  if (s.dataUpdateNotifyEnabled !== undefined) {
+    props.setProperty('ADMIN_EMAIL_NOTIFY_ENABLED', String(!!s.dataUpdateNotifyEnabled));
   }
   if (s.userEmailNotifyEnabled !== undefined) {
     props.setProperty('USER_EMAIL_NOTIFY_ENABLED', String(!!s.userEmailNotifyEnabled));

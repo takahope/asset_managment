@@ -11,7 +11,7 @@ document.addEventListener('alpine:init', function () {
             isLoading: true, isSubmitting: false, activeTab: 'general',
             enabled: true, provider: 'GEMINI',
             geminiModelId: '', openaiModelId: '', nvidiaModelId: '',
-            reportAdminEmails: '', dataUpdateEmails: '', adminEmailNotifyEnabled: false, userEmailNotifyEnabled: true,
+            reportAdminEmails: '', dataUpdateEmails: '', dataUpdateNotifyEnabled: false, userEmailNotifyEnabled: true,
             groupProxyEnabled: false, inventoryFeatureEnabled: true, fabMenuEnabled: true,
             locationErrorMode: 'immediate',
             hrGroupNameMap: '',
@@ -112,7 +112,7 @@ document.addEventListener('alpine:init', function () {
                         var settings = s || {};
                         self.reportAdminEmails = settings.reportAdminEmails || '';
                         self.dataUpdateEmails = settings.dataUpdateEmails || '';
-                        self.adminEmailNotifyEnabled = !!settings.adminEmailNotifyEnabled;
+                        self.dataUpdateNotifyEnabled = !!settings.dataUpdateNotifyEnabled;
                         self.userEmailNotifyEnabled = settings.userEmailNotifyEnabled !== false;
                         self.groupProxyEnabled = !!settings.groupProxyEnabled;
                         self.inventoryFeatureEnabled = settings.inventoryFeatureEnabled !== false;
@@ -189,7 +189,7 @@ document.addEventListener('alpine:init', function () {
                             .saveSystemSettings({
                                 reportAdminEmails: self.reportAdminEmails,
                                 dataUpdateEmails: self.dataUpdateEmails,
-                                adminEmailNotifyEnabled: self.adminEmailNotifyEnabled,
+                                dataUpdateNotifyEnabled: self.dataUpdateNotifyEnabled,
                                 userEmailNotifyEnabled: self.userEmailNotifyEnabled,
                                 groupProxyEnabled: self.groupProxyEnabled,
                                 inventoryFeatureEnabled: self.inventoryFeatureEnabled,
@@ -341,12 +341,12 @@ document.addEventListener('alpine:init', function () {
 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                        <span class="text-sm font-medium text-slate-700">管理員通知信</span>
-                                        <button type="button" role="switch" :aria-checked="!!adminEmailNotifyEnabled" @click="adminEmailNotifyEnabled = !adminEmailNotifyEnabled"
+                                        <span class="text-sm font-medium text-slate-700">資料更新通知信</span>
+                                        <button type="button" role="switch" :aria-checked="!!dataUpdateNotifyEnabled" @click="dataUpdateNotifyEnabled = !dataUpdateNotifyEnabled"
                                                 class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                                :class="adminEmailNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換管理員通知信">
+                                                :class="dataUpdateNotifyEnabled ? 'bg-blue-500' : 'bg-slate-300'" aria-label="切換資料更新通知信">
                                             <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                                  :class="adminEmailNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                                                  :class="dataUpdateNotifyEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
                                         </button>
                                     </div>
 
