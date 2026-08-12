@@ -38,3 +38,8 @@ files/
 node_modules/
 dist/
 .playwright-mcp/
+
+.cline/
+.cursor/
+docs/
+scratch/
