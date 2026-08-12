@@ -1040,19 +1040,22 @@ function getUserStateData(forceUserScope, options) {
     }
   });
 
+  // ✨ 提前計算同組代理資訊 (供過濾與權限標記使用)
+  const groupProxyEnabled = isGroupProxyTransferEnabled();
+  let groupEmailSet = new Set();
+  if (groupProxyEnabled) {
+    const groupEmails = getGroupMemberEmails(currentUserEmail);
+    groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
+  }
+
   let filteredData;
 
   if (useAdminScope) {
     filteredData = getAllAssets();
   } else {
-    // ✨ 檢查是否啟用同組代理功能
-    const groupProxyEnabled = isGroupProxyTransferEnabled();
     const allAssets = getAllAssets();
-
     if (groupProxyEnabled) {
       // 功能啟用：顯示同組成員的資產
-      const groupEmails = getGroupMemberEmails(currentUserEmail);
-      const groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
       filteredData = allAssets.filter(asset => {
         const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
         const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
@@ -1077,6 +1080,21 @@ function getUserStateData(forceUserScope, options) {
     const mappedUserGroup = asset.userName ? (userNameToGroupMap[String(asset.userName).trim()] || '') : '';
     const mappedLeaderGroup = asset.leaderName ? (userNameToGroupMap[String(asset.leaderName).trim()] || '') : '';
     const groupName = defaultGroup || mappedUserGroup || mappedLeaderGroup || '未分組';
+
+    // ✨ 計算單筆資產操作權限
+    let canOperate = false;
+    if (isAdmin) {
+      canOperate = true;
+    } else {
+      const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
+      const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
+      if (groupProxyEnabled) {
+        canOperate = groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
+      } else {
+        canOperate = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
+      }
+    }
+
     const record = {
       assetId: asset.assetId,
       assetName: asset.assetName,
@@ -1098,7 +1116,8 @@ function getUserStateData(forceUserScope, options) {
       isActuallyComputer: asset.isActuallyComputer || '',
       isIsoScope: asset.isIsoScope || '',
       ismsAssetId: String(asset.ismsAssetId || ''),
-      propertyCategory: String(asset.propertyCategory || '')
+      propertyCategory: String(asset.propertyCategory || ''),
+      canOperate: canOperate
     };
     if (!skipDisplayDate) {
       record.purchaseDateDisplay = formatUserStateDateDisplay_(asset.purchaseDate, scriptTimeZone);
