@@ -206,7 +206,8 @@ const USERSTATE_ASSET_DTO_FIELDS = [
   'assetId', 'assetName', 'assetAlias', 'productSerial', 'modelBrand',
   'leader', 'leaderEmail', 'userEmail', 'location', 'status',
   'category', 'group', 'userName', 'sourceSheet', 'useLife',
-  'purchaseDate', 'isItAsset', 'isActuallyComputer', 'isIsoScope', 'ismsAssetId', 'propertyCategory'
+  'purchaseDate', 'isItAsset', 'isActuallyComputer', 'isIsoScope', 'ismsAssetId', 'propertyCategory',
+  'canOperate'
 ];
 
 // 行動駐站清單（出借「借出後放置地點」下拉選單擴充來源）工作表欄位索引
