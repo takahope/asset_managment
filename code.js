@@ -3890,7 +3890,7 @@ function processBatchScrapping(formData) {
           body += `此為系統自動發送郵件。`;
 
           MailApp.sendEmail(notifyEmails.join(','), subject, body);
-          Logger.log(`✅ 已發送報廢通知給 ${adminEmails.length} 位管理員`);
+          Logger.log(`✅ 已發送報廢通知給 ${notifyEmails.length} 位資料更新承辦窗口`);
         }
       } catch (emailError) {
         Logger.log(`⚠️ 郵件發送失敗: ${emailError.message}`);
