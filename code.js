@@ -2012,9 +2012,9 @@ function processBatchTransferApplication(formData) {
     }
     // 情況3：只變更地點（change-location 勾選，其他未勾）
     else if (actualNewLocation && !actualNewKeeperEmail && !actualNewUserEmail) {
-      // 通知管理員
-      const adminEmails = getDataUpdateEmails();
-      if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
+      // 通知資料更新承辦窗口
+      const notifyEmails = getDataUpdateEmails();
+      if (isAdminEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
         const webAppUrl = getAppUrl();
         const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
         const subject = `[財產通知] ${autoCompletedApps.length} 筆財產地點已變更`;
@@ -2025,7 +2025,7 @@ function processBatchTransferApplication(formData) {
         body += `請點擊下方連結，前往更新頁面進行操作：\n`;
         body += `${printTransferLink}\n\n`; // ✨ 新增：直接連結
         body += `\n此為系統自動發送郵件。`;
-        MailApp.sendEmail(adminEmails.join(','), subject, body);
+        MailApp.sendEmail(notifyEmails.join(','), subject, body);
       }
       resultMessage = `${autoCompletedApps.length} 筆財產地點已變更！請列印轉移申請單。`;
     }
@@ -2508,8 +2508,8 @@ function processBatchApproval(appIds) {
     });
 
     if (successCount > 0) {
-      const adminEmails = getDataUpdateEmails();
-      if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
+      const notifyEmails = getDataUpdateEmails();
+      if (isAdminEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
         const webAppUrl = getAppUrl();
         const printTransferLink = `${webAppUrl}?page=printTransfer`; // ✨ 新增：更新頁面連結
 
@@ -2518,7 +2518,7 @@ function processBatchApproval(appIds) {
         body += `請點擊下方連結，前往更新頁面進行操作：\n`;
         body += `${printTransferLink}\n\n`; // ✨ 新增：直接連結
         body += `此為系統自動發送郵件。`;
-        MailApp.sendEmail(adminEmails.join(','), subject, body);
+        MailApp.sendEmail(notifyEmails.join(','), subject, body);
       }
     }
 
@@ -3862,14 +3862,14 @@ function processBatchScrapping(formData) {
         .setValues(scrapLogRows);
     }
 
-    // 📧 發送郵件通知給所有管理員
+    // 📧 發送郵件通知給資料更新承辦窗口
     if (successCount > 0) {
       try {
         const applicantEmail = Session.getActiveUser().getEmail();
         const applicantName = scrappedAssets[0].keeperName; // 申請人即為保管人
-        const adminEmails = getDataUpdateEmails();
+        const notifyEmails = getDataUpdateEmails();
 
-        if (isAdminEmailEnabled() && adminEmails && adminEmails.length > 0) {
+        if (isAdminEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
           const webAppUrl = getAppUrl();
           const printScrapLink = `${webAppUrl}?page=printScrap`;
 
@@ -3889,7 +3889,7 @@ function processBatchScrapping(formData) {
           body += `${printScrapLink}\n\n`;
           body += `此為系統自動發送郵件。`;
 
-          MailApp.sendEmail(adminEmails.join(','), subject, body);
+          MailApp.sendEmail(notifyEmails.join(','), subject, body);
           Logger.log(`✅ 已發送報廢通知給 ${adminEmails.length} 位管理員`);
         }
       } catch (emailError) {
