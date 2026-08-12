@@ -1021,7 +1021,8 @@ function getUserStateData(forceUserScope, options) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const normalizedCurrentEmail = String(currentUserEmail).toLowerCase();
   const isAdmin = checkAdminPermissions();
-  const useAdminScope = isAdmin && !forceUserScope;
+  const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
   // 查詢使用者姓名與「姓名→組別」對照（HR keeper directory）
   let currentUserName = currentUserEmail.split('@')[0]; // 預設使用 email 前綴
@@ -1107,6 +1108,7 @@ function getUserStateData(forceUserScope, options) {
 
   return {
     isAdmin: isAdmin,
+    isProjectViewer: isProjectViewer, // ✨ 新增
     userEmail: currentUserEmail, // ✨ Add userEmail
     userName: currentUserName, // ✨ 新增使用者姓名
     assets: results
@@ -1258,7 +1260,8 @@ function getUserStateExportDataByTargets(targets, forceUserScope) {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
     let filteredData;
 
@@ -1447,7 +1450,8 @@ function getTransferData(forceUserScope) {
 
   // ✨ 檢查權限和視圖模式
   const isAdmin = checkAdminPermissions();
-  const useAdminScope = isAdmin && !forceUserScope;
+  const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
   // ✨ 檢查同組代理功能狀態（只在一般使用者視圖時生效）
   const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
@@ -2184,7 +2188,8 @@ function getPendingApprovals(forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
@@ -3052,7 +3057,8 @@ function getLentOutAssets(forceUserScope) {
     try {
         const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
         const isAdmin = checkAdminPermissions();
-        const useAdminScope = isAdmin && !forceUserScope;
+        const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
         const lendingLogSheet = ss.getSheetByName(LENDING_LOG_SHEET_NAME);
         
@@ -3239,7 +3245,8 @@ function getExternalLendingPrintGroups(forceUserScope) {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
@@ -3530,7 +3537,8 @@ function createLendingDoc(lendIds) {
 function getLendingDocHistory(forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
   const isAdmin = checkAdminPermissions();
-  const useAdminScope = isAdmin && !forceUserScope;
+  const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
   const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
   const groupEmailSet = groupProxyEnabled
     ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
@@ -4794,6 +4802,21 @@ function checkAdminStatus() {
 }
 
 /**
+ * 檢查當前使用者是否為「專案檢視員 (GRP-PROJ)」
+ * @returns {boolean}
+ */
+function checkProjectViewerPermissions() {
+  try {
+    const userEmail = Session.getActiveUser().getEmail().toLowerCase();
+    const directory = getKeeperDirectory_();
+    return (directory.projectViewerEmails || []).indexOf(userEmail) !== -1;
+  } catch (e) {
+    Logger.log('checkProjectViewerPermissions 發生錯誤：' + e.message);
+    return false;
+  }
+}
+
+/**
  * 取得所有待報廢的詳細項目 (詳細模式用)
  * @param {string} assetCategory - 財產類別 (財產/非消耗品)
  * @returns {Array<Object>} 包含詳細資訊的陣列
@@ -4803,7 +4826,8 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const currentUserEmailLower = String(currentUserEmail || '').toLowerCase().trim();
   const isAdmin = checkAdminPermissions();
-  const useAdminScope = isAdmin && !forceUserScope;
+  const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
   // ✨ 同組協作：取得同組成員 Email 清單
   const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
@@ -4872,7 +4896,8 @@ function getScrappingDataForAdmin(assetCategory, forceUserScope) {
   // 此函式名稱雖保留 "ForAdmin"，但現在已支援一般使用者
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
-  const useAdminScope = isAdmin && !forceUserScope;
+  const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
   const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
   const groupEmailSet = groupProxyEnabled
@@ -5414,7 +5439,8 @@ function getTransferDataForPrint(assetCategory) {
 function getAllTransferableItems(assetCategory, forceUserScope) {
   const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
   const isAdmin = checkAdminPermissions();
-  const useAdminScope = isAdmin && !forceUserScope;
+  const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
   // 移除強制阻擋
 
   try {
@@ -6045,7 +6071,8 @@ function getTransferringAssets(forceUserScope) {
   try {
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
@@ -6128,7 +6155,8 @@ function getTransferOverviewForUserState(forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
 
     const allAssets = getAllAssets();
@@ -6339,7 +6367,8 @@ function getTransferStatusDetailsByAssets(assetIds, forceUserScope) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = String(currentUserEmail || '').toLowerCase();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
     const groupEmailSet = !useAdminScope
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase()))
@@ -6455,7 +6484,8 @@ function getAssetStatusDetail(assetId, forceUserScope) {
 
     const currentUserEmail = Session.getActiveUser().getEmail();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const allAssets = getAllAssets();
     const asset = allAssets.find(item => String(item.assetId || '').trim() === normalizedAssetId);
 
@@ -7929,7 +7959,8 @@ function getInventoryData(forceUserScope) {
 
     // 檢查是否為管理員
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
     // 只取得狀態為「在庫」的資產
     const availableAssets = allAssets.filter(asset => asset.assetStatus === '在庫');
@@ -8064,7 +8095,8 @@ function getPendingInventoryAssignments(forceUserScope) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const currentUserEmail = Session.getActiveUser().getEmail().toLowerCase();
     const isAdmin = checkAdminPermissions();
-    const useAdminScope = isAdmin && !forceUserScope;
+    const isProjectViewer = checkProjectViewerPermissions();
+  const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
     const inventoryStatusByAsset = {};
     const inventoryStatusPriority = {
       '未盤點': 0,
