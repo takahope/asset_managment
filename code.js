@@ -1940,7 +1940,7 @@ function processBatchTransferApplication(formData) {
     
     let resultMessage = '';
     const webAppUrl = getAppUrl();
-    const reviewLink = `${webAppUrl}?page=review`;
+    const systemLink = `${webAppUrl}`;
     const currentUserEmail = Session.getActiveUser().getEmail();
     
     // ✨ 改進：根據不同情況發送不同的通知
@@ -1954,8 +1954,8 @@ function processBatchTransferApplication(formData) {
         needsApprovalApps.forEach(app => {
           body += `  - ${app.id}: ${app.assetName}\n`;
         });
-        body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
-        body += `${reviewLink}\n\n此為系統自動發送郵件。`;
+        body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
+        body += `${systemLink}\n\n此為系統自動發送郵件。`;
         if (isUserEmailEnabled()) {
           MailApp.sendEmail(actualNewUserEmail, subject, body);
         }
@@ -1987,8 +1987,8 @@ function processBatchTransferApplication(formData) {
       needsApprovalApps.forEach(app => {
         body += `  - ${app.id}: ${app.assetName}\n`;
       });
-      body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
-      body += `${reviewLink}\n\n此為系統自動發送郵件。`;
+      body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
+      body += `${systemLink}\n\n此為系統自動發送郵件。`;
       if (isUserEmailEnabled()) {
         MailApp.sendEmail(actualNewKeeperEmail, subject, body);
       }
@@ -2045,8 +2045,8 @@ function processBatchTransferApplication(formData) {
         if (actualNewUserEmail) {
           body += `\n新使用人：${finalNewUserName}\n`;
         }
-        body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
-        body += `${reviewLink}\n`;
+        body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
+        body += `${systemLink}\n`;
         body += `\n⚠️ 提醒：此申請需要您或新使用人審核，任一方審核即可完成轉移。\n`;
         body += `\n此為系統自動發送郵件。`;
         if (isUserEmailEnabled()) {
@@ -2067,8 +2067,8 @@ function processBatchTransferApplication(formData) {
         if (actualNewKeeperEmail) {
           body += `\n新保管人：${newKeeperName}\n`;
         }
-        body += `\n請點擊下方連結，前往您的審核儀表板進行批次簽核：\n`;
-        body += `${reviewLink}\n`;
+        body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
+        body += `${systemLink}\n`;
         body += `\n⚠️ 提醒：此申請需要您或新保管人審核，任一方審核即可完成轉移。\n`;
         body += `\n此為系統自動發送郵件。`;
         if (isUserEmailEnabled()) {
