@@ -126,6 +126,21 @@ document.addEventListener('alpine:init', function () {
                 keeperName: true, userName: false, lenderName: false, borrower: true,
                 expectedReturnDate: true, originalLocation: false, lendingLocation: true, reason: true
             },
+            sortCol: null,
+            sortDir: null,
+            toggleSort: function(colId) {
+                if (this.sortCol === colId) {
+                    if (this.sortDir === 'asc') {
+                        this.sortDir = 'desc';
+                    } else if (this.sortDir === 'desc') {
+                        this.sortDir = null;
+                        this.sortCol = null;
+                    }
+                } else {
+                    this.sortCol = colId;
+                    this.sortDir = 'asc';
+                }
+            },
 
             init: function () {
                 var self = this;
@@ -137,7 +152,7 @@ document.addEventListener('alpine:init', function () {
                 var d = this.lentAssetsDetails;
                 var f = this.filters;
                 if (!d) return [];
-                return d.filter(function (asset) {
+                var filtered = d.filter(function (asset) {
                     var matchLocation = !f.location || asset.lendingLocation === f.location;
                     var returnDate = new Date(asset.expectedReturnDate);
                     var matchDateRange = (!f.startDate || returnDate >= new Date(f.startDate)) && (!f.endDate || returnDate <= new Date(f.endDate));
@@ -159,6 +174,19 @@ document.addEventListener('alpine:init', function () {
                         (asset.lenderName && asset.lenderName.toUpperCase().indexOf(kw) !== -1);
                     return matchLocation && matchDateRange && matchOverdue && matchSearch;
                 });
+
+                if (this.sortCol && this.sortDir) {
+                    var colId = this.sortCol;
+                    var dir = this.sortDir;
+                    filtered.sort(function(a, b) {
+                        var valA = String(a[colId] || '');
+                        var valB = String(b[colId] || '');
+                        return dir === 'asc' 
+                            ? valA.localeCompare(valB, 'zh-TW') 
+                            : valB.localeCompare(valA, 'zh-TW');
+                    });
+                }
+                return filtered;
             },
             get uniqueLocations() {
                 var d = this.lentAssetsDetails;
@@ -693,18 +721,54 @@ document.addEventListener('alpine:init', function () {
                                 <table class="w-full text-sm border-collapse">
                                     <thead class="bg-slate-50 sticky top-0 shadow-sm"><tr>
                                         <th class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" :disabled="isSubmitting" class="w-4 h-4 cursor-pointer"></th>
-                                        <th x-show="visibleColumns.assetId" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">財產編號</th>
-                                        <th x-show="visibleColumns.assetName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">財產名稱</th>
-                                        <th x-show="visibleColumns.assetAlias" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">財產別名</th>
-                                        <th x-show="visibleColumns.modelBrand" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">型號/廠牌</th>
-                                        <th x-show="visibleColumns.keeperName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">保管人</th>
-                                        <th x-show="visibleColumns.userName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">使用人</th>
-                                        <th x-show="visibleColumns.lenderName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">出借人</th>
-                                        <th x-show="visibleColumns.borrower" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">借用人</th>
-                                        <th x-show="visibleColumns.expectedReturnDate" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">預計歸還日</th>
-                                        <th x-show="visibleColumns.originalLocation" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">原放置地點</th>
-                                        <th x-show="visibleColumns.lendingLocation" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">出借後地點</th>
-                                        <th x-show="visibleColumns.reason" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap">出借事由</th>
+                                        <th x-show="visibleColumns.assetId" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('assetId')">
+                                            財產編號
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetId', 'fa-sort-up text-blue-600': sortCol === 'assetId' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'assetId' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.assetName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('assetName')">
+                                            財產名稱
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetName', 'fa-sort-up text-blue-600': sortCol === 'assetName' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'assetName' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.assetAlias" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('assetAlias')">
+                                            財產別名
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetAlias', 'fa-sort-up text-blue-600': sortCol === 'assetAlias' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'assetAlias' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.modelBrand" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('modelBrand')">
+                                            型號/廠牌
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'modelBrand', 'fa-sort-up text-blue-600': sortCol === 'modelBrand' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'modelBrand' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.keeperName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('keeperName')">
+                                            保管人
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'keeperName', 'fa-sort-up text-blue-600': sortCol === 'keeperName' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'keeperName' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.userName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('userName')">
+                                            使用人
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'userName', 'fa-sort-up text-blue-600': sortCol === 'userName' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'userName' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.lenderName" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('lenderName')">
+                                            出借人
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'lenderName', 'fa-sort-up text-blue-600': sortCol === 'lenderName' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'lenderName' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.borrower" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('borrower')">
+                                            借用人
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'borrower', 'fa-sort-up text-blue-600': sortCol === 'borrower' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'borrower' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.expectedReturnDate" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('expectedReturnDate')">
+                                            預計歸還日
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'expectedReturnDate', 'fa-sort-up text-blue-600': sortCol === 'expectedReturnDate' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'expectedReturnDate' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.originalLocation" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('originalLocation')">
+                                            原放置地點
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'originalLocation', 'fa-sort-up text-blue-600': sortCol === 'originalLocation' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'originalLocation' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.lendingLocation" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('lendingLocation')">
+                                            出借後地點
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'lendingLocation', 'fa-sort-up text-blue-600': sortCol === 'lendingLocation' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'lendingLocation' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th x-show="visibleColumns.reason" class="px-3 py-3 text-left font-semibold text-slate-600 border-b-2 border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('reason')">
+                                            出借事由
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'reason', 'fa-sort-up text-blue-600': sortCol === 'reason' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'reason' && sortDir === 'desc'}"></i>
+                                        </th>
                                     </tr></thead>
                                     <tbody class="divide-y divide-slate-100">
                                         <template x-for="(asset, index) in filteredAssets" :key="'lent-' + asset.lendId + '-' + index">
