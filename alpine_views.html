@@ -267,6 +267,21 @@ document.addEventListener('alpine:init', function () {
         return {
             ROWS_PER_PAGE: 50,
             currentPage: 1,
+            sortCol: null,
+            sortDir: null,
+            toggleSort: function(colId) {
+                if (this.sortCol === colId) {
+                    if (this.sortDir === 'asc') {
+                        this.sortDir = 'desc';
+                    } else if (this.sortDir === 'desc') {
+                        this.sortDir = null;
+                        this.sortCol = null;
+                    }
+                } else {
+                    this.sortCol = colId;
+                    this.sortDir = 'asc';
+                }
+            },
             expandedAssetIds: [],
             inventoryStatusStyles: {
                 '未盤點': 'text-slate-400 hover:text-slate-600',
@@ -295,7 +310,23 @@ document.addEventListener('alpine:init', function () {
                 });
             },
 
-            get assets() { return this.$store.app.filteredAssets; },
+            get assets() { 
+                var baseAssets = this.$store.app.filteredAssets;
+                if (!this.sortCol || !this.sortDir || !baseAssets) {
+                    return baseAssets;
+                }
+                var sorted = baseAssets.slice();
+                var colId = this.sortCol;
+                var dir = this.sortDir;
+                sorted.sort(function(a, b) {
+                    var valA = String(a[colId] || '');
+                    var valB = String(b[colId] || '');
+                    return dir === 'asc' 
+                        ? valA.localeCompare(valB, 'zh-TW') 
+                        : valB.localeCompare(valA, 'zh-TW');
+                });
+                return sorted;
+            },
             get totalPages() {
                 return Math.max(1, Math.ceil(((this.assets && this.assets.length) || 0) / this.ROWS_PER_PAGE));
             },
@@ -1663,17 +1694,50 @@ document.addEventListener('alpine:init', function () {
                                                class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                :title="'全選所有「在庫」資產 (' + selectableAssets.length + ' 筆)'">
                                     </th>
-                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產編號</th>
-                                    <th x-show="$store.app.visibleColumns.includes('systemCategory')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">系統類別</th>
-                                    <th x-show="$store.app.visibleColumns.includes('assetName')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產名稱</th>
-                                    <th x-show="$store.app.visibleColumns.includes('aliasDisplay')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px]">財產別名</th>
-                                    <th x-show="$store.app.visibleColumns.includes('modelBrand')" class="px-2 py-3 font-semibold text-slate-600 w-[180px] max-w-[180px]">型號/廠牌</th>
-                                    <th x-show="$store.app.visibleColumns.includes('userName')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">使用者</th>
-                                    <th x-show="$store.app.visibleColumns.includes('leader')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">保管人</th>
-                                    <th x-show="$store.app.visibleColumns.includes('location')" class="px-2 py-3 font-semibold text-slate-600 min-w-[100px]">保管位置</th>
-                                    <th x-show="$store.app.visibleColumns.includes('group')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">組別</th>
-                                    <th x-show="$store.app.visibleColumns.includes('category')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">財產類別</th>
-                                    <th x-show="$store.app.visibleColumns.includes('status')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap">狀態</th>
+                                    <th class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('assetId')">
+                                        財產編號
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetId', 'fa-sort-up text-blue-600': sortCol === 'assetId' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'assetId' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('systemCategory')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('systemCategory')">
+                                        系統類別
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'systemCategory', 'fa-sort-up text-blue-600': sortCol === 'systemCategory' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'systemCategory' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('assetName')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px] cursor-pointer hover:bg-slate-100" @click="toggleSort('assetName')">
+                                        財產名稱
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetName', 'fa-sort-up text-blue-600': sortCol === 'assetName' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'assetName' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('aliasDisplay')" class="px-2 py-3 font-semibold text-slate-600 w-[160px] max-w-[160px] cursor-pointer hover:bg-slate-100" @click="toggleSort('aliasDisplay')">
+                                        財產別名
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'aliasDisplay', 'fa-sort-up text-blue-600': sortCol === 'aliasDisplay' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'aliasDisplay' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('modelBrand')" class="px-2 py-3 font-semibold text-slate-600 w-[180px] max-w-[180px] cursor-pointer hover:bg-slate-100" @click="toggleSort('modelBrand')">
+                                        型號/廠牌
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'modelBrand', 'fa-sort-up text-blue-600': sortCol === 'modelBrand' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'modelBrand' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('userName')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('userName')">
+                                        使用者
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'userName', 'fa-sort-up text-blue-600': sortCol === 'userName' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'userName' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('leader')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('leader')">
+                                        保管人
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'leader', 'fa-sort-up text-blue-600': sortCol === 'leader' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'leader' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('location')" class="px-2 py-3 font-semibold text-slate-600 min-w-[100px] cursor-pointer hover:bg-slate-100" @click="toggleSort('location')">
+                                        保管位置
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'location', 'fa-sort-up text-blue-600': sortCol === 'location' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'location' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('group')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('group')">
+                                        組別
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'group', 'fa-sort-up text-blue-600': sortCol === 'group' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'group' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('category')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('category')">
+                                        財產類別
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'category', 'fa-sort-up text-blue-600': sortCol === 'category' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'category' && sortDir === 'desc'}"></i>
+                                    </th>
+                                    <th x-show="$store.app.visibleColumns.includes('status')" class="px-2 py-3 font-semibold text-slate-600 whitespace-nowrap cursor-pointer hover:bg-slate-100" @click="toggleSort('status')">
+                                        狀態
+                                        <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'status', 'fa-sort-up text-blue-600': sortCol === 'status' && sortDir === 'asc', 'fa-sort-down text-blue-600': sortCol === 'status' && sortDir === 'desc'}"></i>
+                                    </th>
                                     <th x-show="!$store.app.isAdvancedMode" class="px-2 py-3 font-semibold text-slate-600 text-left whitespace-nowrap min-w-[160px]">操作</th>
                                 </tr>
                             </thead>
