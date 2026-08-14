@@ -319,7 +319,7 @@ document.addEventListener('alpine:init', function () {
 <!-- ===== 已選資產清單片段(三 modal 共用樣板) ===== -->
 <!-- ===== BatchTransferModal ===== -->
 <template x-if="$store.app.batchModalType === 'transfer' && $store.app.transferOptions">
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="batchTransferModal">
+    <div class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="batchTransferModal">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
             <div class="px-6 py-4 border-b bg-blue-50 flex justify-between items-center">
                 <h3 class="text-lg font-bold text-blue-800"><i class="fa-solid fa-right-left mr-2"></i>批次轉移財產 (<span x-text="selectedAssetIds.length"></span> 筆)</h3>
@@ -427,7 +427,7 @@ document.addEventListener('alpine:init', function () {
 
 <!-- ===== BatchLendingModal ===== -->
 <template x-if="$store.app.batchModalType === 'lending' && $store.app.lendingOptions">
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="batchLendingModal">
+    <div class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="batchLendingModal">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
             <div class="px-6 py-4 border-b bg-purple-50 flex justify-between items-center">
                 <h3 class="text-lg font-bold text-purple-800"><i class="fa-solid fa-hand-holding-hand mr-2"></i>批次出借財產 (<span x-text="selectedAssetIds.length"></span> 筆)</h3>
@@ -511,7 +511,7 @@ document.addEventListener('alpine:init', function () {
 
 <!-- ===== BatchScrapModal ===== -->
 <template x-if="$store.app.batchModalType === 'scrap'">
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="batchScrapModal">
+    <div class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-data="batchScrapModal">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
             <div class="px-6 py-4 border-b bg-red-50 flex justify-between items-center">
                 <h3 class="text-lg font-bold text-red-800"><i class="fa-regular fa-trash-can mr-2"></i>批次申請報廢財產 (<span x-text="selectedAssetIds.length"></span> 筆)</h3>
