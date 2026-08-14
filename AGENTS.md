@@ -46,6 +46,7 @@ PRs should include:
 - Web app access is domain-restricted in `appsscript.json`; confirm this matches deployment needs.
 
 ## Event Log
+- 2026-08-14: Implemented batch actions (Transfer, Scrap, Lending) for "Needs Confirmation" (location error) modal. Added checkboxes, top action bar to `alpine_modals_location_error.html`. Updated `alpine_store.html` to manage selected IDs and remove processed items inline. In `code.js`, implemented `silentResolveLocationError_` and integrated it into `processBatchTransferApplication`, `processBatchLending`, and `processBatchScrapping` to sync backend resolution state automatically.
 - 2026-08-12: Replaced `getAdminEmails()` with `getDataUpdateEmails()` in `code.js` for location change, transfer approval, and scrap application notifications, separating admin roles from data update contact notifications.
 - 2026-08-11: Added HR Group Name Mapping management Tab to `connect.html` settings modal, with backend endpoints `getHrGroupSettings()` and `saveHrGroupNameMap()` in `code.js`. Enables administrators to maintain `HR_GROUP_NAME_MAP` (HR org names → system display names) via UI, fixing ISO scope scan station name mismatch.
 - 2026-07-31: Fixed mobile bottom action bar (`actionBar`) layout in `connect.html`: restructured elements to make search and remarks inputs full-width by applying scoped CSS classes (`max-width: 100% !important` to override base `300px` limit) and removing inline styles, and grouped edit/delete buttons inline with the business process dropdown on mobile.

@@ -16,9 +16,46 @@
         <div class="text-center py-8 text-slate-400">目前沒有需確認的財產。</div>
       </template>
       <template x-if="$store.app.locationErrorLoaded && $store.app.locationErrorRecords && $store.app.locationErrorRecords.length > 0">
-        <div class="divide-y divide-slate-100">
+        <div>
+          <!-- 批次動作列 -->
+          <div class="px-5 py-3 mb-2 border-b border-slate-100 bg-slate-50 flex flex-wrap items-center gap-3 rounded-lg">
+            <label class="flex items-center gap-2 cursor-pointer text-sm text-slate-600 mr-auto">
+              <input type="checkbox" 
+                     class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                     :checked="$store.app.locationErrorSelectedIds.length === $store.app.locationErrorRecords.length && $store.app.locationErrorRecords.length > 0"
+                     @change="$store.app.toggleLocationErrorSelectAll()">
+              <span x-text="$store.app.locationErrorSelectedIds.length > 0 ? `已選取 ${$store.app.locationErrorSelectedIds.length} 筆` : '全選'"></span>
+            </label>
+            
+            <button type="button" 
+                    class="px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="$store.app.locationErrorSelectedIds.length === 0"
+                    @click="$store.app.handleBatchTransfer($store.app.locationErrorSelectedIds)">
+              轉移
+            </button>
+            <button type="button" 
+                    class="px-3 py-1.5 text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="$store.app.locationErrorSelectedIds.length === 0"
+                    @click="$store.app.handleBatchScrap($store.app.locationErrorSelectedIds)">
+              報廢
+            </button>
+            <button type="button" 
+                    class="px-3 py-1.5 text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="$store.app.locationErrorSelectedIds.length === 0"
+                    @click="$store.app.handleBatchLending($store.app.locationErrorSelectedIds)">
+              出借
+            </button>
+          </div>
+          <div class="divide-y divide-slate-100">
           <template x-for="rec in $store.app.locationErrorRecords" :key="rec.assetId">
             <div class="py-3 flex items-start gap-3">
+              <div class="pt-1">
+                <input type="checkbox"
+                       class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                       :value="rec.assetId"
+                       :checked="$store.app.locationErrorSelectedIds.indexOf(rec.assetId) > -1"
+                       @change="$store.app.toggleLocationErrorSelect(rec.assetId)">
+              </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   <span class="font-mono text-xs text-slate-500" x-text="rec.assetId"></span>
@@ -37,6 +74,7 @@
                       @click="$store.app.handleResolveLocationError(rec.assetId)">已確認/已處理</button>
             </div>
           </template>
+        </div>
         </div>
       </template>
     </div>

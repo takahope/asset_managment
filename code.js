@@ -2561,11 +2561,10 @@ function processBatchApproval(appIds) {
       message += `\n（注意：${unauthorizedApps.length} 筆申請因權限不足已跳過）`;
     }
 
-    // ✨ 轉移完成：清除對應的位置有誤待確認紀錄（存在才刪，靜默略過）
-    if (resolvedLocationErrorAssetIds.length > 0) {
-      const props = PropertiesService.getScriptProperties();
+    // ✨ 轉移完成：清除對應的位置有誤待確認紀錄並留存
+    if (resolvedLocationErrorAssetIds && resolvedLocationErrorAssetIds.length > 0) {
       resolvedLocationErrorAssetIds.forEach(id => {
-        try { props.deleteProperty(LOCATION_ERROR_KEY_PREFIX + String(id || '').trim()); } catch (e) { /* 略過 */ }
+        silentResolveLocationError_(id);
       });
     }
 
@@ -3051,6 +3050,13 @@ function processBatchLending(formData) {
       if (successCount === 0) {
         throw new Error(`權限不足：您不是所選財產的保管人，無法執行出借操作。`);
       }
+    }
+
+    // ✨ 操作完成：清除並註記對應的位置有誤待確認紀錄
+    if (assetIds && assetIds.length > 0) {
+      assetIds.forEach(id => {
+        silentResolveLocationError_(id);
+      });
     }
 
     if (successCount === 0) {
@@ -3881,6 +3887,13 @@ function processBatchScrapping(formData) {
       }
     }
 
+    // ✨ 操作完成：清除並註記對應的位置有誤待確認紀錄
+    if (assetIds && assetIds.length > 0) {
+      assetIds.forEach(id => {
+        silentResolveLocationError_(id);
+      });
+    }
+
     if (successCount === 0) {
       throw new Error("處理失敗，勾選的財產可能已在報廢流程中或狀態已變更。");
     }
@@ -4554,6 +4567,28 @@ function resolveLocationError(assetId) {
   } catch (e) {
     Logger.log('resolveLocationError 錯誤：' + e.message);
     return '❌ 結案失敗：' + e.message;
+  }
+}
+
+function silentResolveLocationError_(assetId) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const raw = props.getProperty(LOCATION_ERROR_KEY_PREFIX + assetId);
+    if (!raw) return; // 沒錯誤就不處理
+    
+    const record = JSON.parse(raw);
+    const currentEmail = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+    
+    // 批次轉移/報廢/出借觸發時，視為系統自動處理，不需要擋權限，直接標記
+    record.processorEmail = currentEmail + ' (批次操作)';
+    record.processedAt = new Date().toISOString();
+    const timestamp = Date.now();
+    const resolvedKey = 'RESOLVED_LOCERR_' + assetId + '_' + timestamp;
+    
+    props.setProperty(resolvedKey, JSON.stringify(record));
+    props.deleteProperty(LOCATION_ERROR_KEY_PREFIX + assetId);
+  } catch(e) {
+    // 靜默處理
   }
 }
 

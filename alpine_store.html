@@ -337,6 +337,22 @@
             locationErrorCount: 0,            // ✨ 待確認財產卡片計數
             locationErrorRecords: null,       // ✨ 清單 modal 資料（null=未載入）
             locationErrorLoaded: false,       // ✨ 卡片計數是否就緒（Task 5 使用）
+            locationErrorSelectedIds: [],
+            toggleLocationErrorSelect: function(assetId) {
+                var idx = this.locationErrorSelectedIds.indexOf(assetId);
+                if (idx > -1) {
+                    this.locationErrorSelectedIds.splice(idx, 1);
+                } else {
+                    this.locationErrorSelectedIds.push(assetId);
+                }
+            },
+            toggleLocationErrorSelectAll: function() {
+                if (this.locationErrorSelectedIds.length === this.locationErrorRecords.length && this.locationErrorRecords.length > 0) {
+                    this.locationErrorSelectedIds = [];
+                } else {
+                    this.locationErrorSelectedIds = this.locationErrorRecords.map(function(r) { return r.assetId; });
+                }
+            },
             inventoryPendingByAsset: {},
             pendingInventoryItems: [],
             isLoadingPendingInventory: false,
@@ -2422,8 +2438,19 @@
                 // modalTypeOverride:提交時 modal 已被 handleCloseBatchModal 關閉並清空 batchModalType,
                 // 呼叫端須把提交前捕捉的類型傳入,否則進階模式無法依動作類型清除購物車。
                 var currentType = modalTypeOverride || this.batchModalType;
+                var processedIds = this.batchActionAssetIds || [];
                 this.batchModalType = null;
                 this.batchActionAssetIds = [];
+                
+                // 從需確認財產清單中移除剛處理完的資產
+                if (processedIds.length > 0 && this.locationErrorRecords) {
+                    this.locationErrorRecords = this.locationErrorRecords.filter(function(r) {
+                        return processedIds.indexOf(r.assetId) === -1;
+                    });
+                    this.locationErrorCount = this.locationErrorRecords.length;
+                }
+                this.locationErrorSelectedIds = [];
+                
                 if (this.isAdvancedMode) {
                     var actionType = ACTION_TYPE_BY_MODAL[currentType];
                     if (actionType && window.AssetCartStore) window.AssetCartStore.removeItemsByAction(actionType);
