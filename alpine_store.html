@@ -2353,10 +2353,16 @@
             },
 
             /* ── 批次操作(舊頁 12993-13019, 15366-15517, 15308-15364) ── */
-            getSelectedAssetsForAction: function (actionType) {
+            getSelectedAssetsForAction: function (actionType, overrideIds) {
                 var self = this;
-                if (typeof BatchList_getItems !== 'function') return [];
-                var selectedIds = BatchList_getItems();
+                var selectedIds = [];
+                if (overrideIds && Array.isArray(overrideIds)) {
+                    selectedIds = overrideIds;
+                } else if (typeof BatchList_getItems === 'function') {
+                    selectedIds = BatchList_getItems();
+                }
+                if (selectedIds.length === 0) return [];
+                
                 if (actionType === 'INVENTORY') return selectedIds;
                 var blockedCount = 0;
                 var allowed = selectedIds.filter(function (assetId) {
@@ -2379,8 +2385,11 @@
             },
             handleBatchTransfer: function (overrideIds) {
                 if (!this.transferOptions) { alert('轉移選項尚未載入，請稍後再試'); return; }
-                if (overrideIds && overrideIds.length > 0) {
-                    this.batchActionAssetIds = [].concat(overrideIds);
+                if (overrideIds && Array.isArray(overrideIds)) {
+                    if (overrideIds.length === 0) { alert('請先選取要處理的資產'); return; }
+                    var allowedOverride = this.getSelectedAssetsForAction('TRANSFER', overrideIds);
+                    if (allowedOverride.length === 0) { alert('選取的資產皆為執行中或無操作權限，無法批次轉移。'); return; }
+                    this.batchActionAssetIds = allowedOverride;
                     this.batchModalType = 'transfer';
                     return;
                 }
@@ -2396,14 +2405,17 @@
                 if (typeof BatchList_getItems !== 'function') { alert('批次選取功能尚未載入'); return; }
                 if (BatchList_getItems().length === 0) { alert('請先選取要處理的資產'); return; }
                 var allowed = this.getSelectedAssetsForAction('TRANSFER');
-                if (allowed.length === 0) { alert('選取的資產皆為同組成員資產，無法批次轉移。'); return; }
+                if (allowed.length === 0) { alert('選取的資產皆為執行中或無操作權限，無法批次轉移。'); return; }
                 this.batchActionAssetIds = allowed;
                 this.batchModalType = 'transfer';
             },
             handleBatchLending: function (overrideIds) {
                 if (!this.lendingOptions) { alert('出借選項尚未載入，請稍後再試'); return; }
-                if (overrideIds && overrideIds.length > 0) {
-                    this.batchActionAssetIds = [].concat(overrideIds);
+                if (overrideIds && Array.isArray(overrideIds)) {
+                    if (overrideIds.length === 0) { alert('請先選取要處理的資產'); return; }
+                    var allowedOverride = this.getSelectedAssetsForAction('LENDING', overrideIds);
+                    if (allowedOverride.length === 0) { alert('選取的資產皆為執行中或無操作權限，無法批次出借。'); return; }
+                    this.batchActionAssetIds = allowedOverride;
                     this.batchModalType = 'lending';
                     return;
                 }
@@ -2419,13 +2431,16 @@
                 if (typeof BatchList_getItems !== 'function') { alert('批次選取功能尚未載入'); return; }
                 if (BatchList_getItems().length === 0) { alert('請先選取要處理的資產'); return; }
                 var allowed = this.getSelectedAssetsForAction('LENDING');
-                if (allowed.length === 0) { alert('選取的資產皆為同組成員資產，無法批次出借。'); return; }
+                if (allowed.length === 0) { alert('選取的資產皆為執行中或無操作權限，無法批次出借。'); return; }
                 this.batchActionAssetIds = allowed;
                 this.batchModalType = 'lending';
             },
             handleBatchScrap: function (overrideIds) {
-                if (overrideIds && overrideIds.length > 0) {
-                    this.batchActionAssetIds = [].concat(overrideIds);
+                if (overrideIds && Array.isArray(overrideIds)) {
+                    if (overrideIds.length === 0) { alert('請先選取要處理的資產'); return; }
+                    var allowedOverride = this.getSelectedAssetsForAction('SCRAP', overrideIds);
+                    if (allowedOverride.length === 0) { alert('選取的資產皆為執行中或無操作權限，無法批次報廢。'); return; }
+                    this.batchActionAssetIds = allowedOverride;
                     this.batchModalType = 'scrap';
                     return;
                 }
@@ -2441,7 +2456,7 @@
                 if (typeof BatchList_getItems !== 'function') { alert('批次選取功能尚未載入'); return; }
                 if (BatchList_getItems().length === 0) { alert('請先選取要處理的資產'); return; }
                 var allowed = this.getSelectedAssetsForAction('SCRAP');
-                if (allowed.length === 0) { alert('選取的資產皆為同組成員資產，無法批次報廢。'); return; }
+                if (allowed.length === 0) { alert('選取的資產皆為執行中或無操作權限，無法批次報廢。'); return; }
                 this.batchActionAssetIds = allowed;
                 this.batchModalType = 'scrap';
             },
