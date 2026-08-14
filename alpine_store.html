@@ -2377,8 +2377,13 @@
                 }
                 return allowed;
             },
-            handleBatchTransfer: function () {
+            handleBatchTransfer: function (overrideIds) {
                 if (!this.transferOptions) { alert('轉移選項尚未載入，請稍後再試'); return; }
+                if (overrideIds && overrideIds.length > 0) {
+                    this.batchActionAssetIds = [].concat(overrideIds);
+                    this.batchModalType = 'transfer';
+                    return;
+                }
                 if (this.isAdvancedMode) {
                     var items = window.AssetCartStore
                         ? window.AssetCartStore.getItems().filter(function (i) { return i.actionType === 'TRANSFER'; }).map(function (i) { return i.assetId; })
@@ -2395,8 +2400,13 @@
                 this.batchActionAssetIds = allowed;
                 this.batchModalType = 'transfer';
             },
-            handleBatchLending: function () {
+            handleBatchLending: function (overrideIds) {
                 if (!this.lendingOptions) { alert('出借選項尚未載入，請稍後再試'); return; }
+                if (overrideIds && overrideIds.length > 0) {
+                    this.batchActionAssetIds = [].concat(overrideIds);
+                    this.batchModalType = 'lending';
+                    return;
+                }
                 if (this.isAdvancedMode) {
                     var items = window.AssetCartStore
                         ? window.AssetCartStore.getItems().filter(function (i) { return i.actionType === 'LEND'; }).map(function (i) { return i.assetId; })
@@ -2413,7 +2423,12 @@
                 this.batchActionAssetIds = allowed;
                 this.batchModalType = 'lending';
             },
-            handleBatchScrap: function () {
+            handleBatchScrap: function (overrideIds) {
+                if (overrideIds && overrideIds.length > 0) {
+                    this.batchActionAssetIds = [].concat(overrideIds);
+                    this.batchModalType = 'scrap';
+                    return;
+                }
                 if (this.isAdvancedMode) {
                     var items = window.AssetCartStore
                         ? window.AssetCartStore.getItems().filter(function (i) { return i.actionType === 'SCRAP'; }).map(function (i) { return i.assetId; })
@@ -2434,11 +2449,13 @@
                 this.batchModalType = null;
                 this.batchActionAssetIds = [];
             },
-            handleBatchActionSuccess: function (skipReload, modalTypeOverride) {
+            handleBatchActionSuccess: function (skipReload, modalTypeOverride, processedIdsOverride) {
                 // modalTypeOverride:提交時 modal 已被 handleCloseBatchModal 關閉並清空 batchModalType,
                 // 呼叫端須把提交前捕捉的類型傳入,否則進階模式無法依動作類型清除購物車。
                 var currentType = modalTypeOverride || this.batchModalType;
-                var processedIds = this.batchActionAssetIds || [];
+                // processedIdsOverride：handleCloseBatchModal 會先清空 batchActionAssetIds，
+                // 所以呼叫端須在關閉前捕捉 processingIds 並傳入。
+                var processedIds = processedIdsOverride || this.batchActionAssetIds || [];
                 this.batchModalType = null;
                 this.batchActionAssetIds = [];
                 

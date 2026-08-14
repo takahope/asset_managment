@@ -133,7 +133,7 @@ document.addEventListener('alpine:init', function () {
                             waitReview: waitReview
                         });
                         // 清購物車(依提交前類型)並以權威資料對帳,修正純地點/部分成功等狀態落差
-                        store.handleBatchActionSuccess(false, submittedModalType);
+                        store.handleBatchActionSuccess(false, submittedModalType, processingIds);
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAssets(processingIds);
@@ -210,7 +210,7 @@ document.addEventListener('alpine:init', function () {
                             waitReview: waitReview
                         });
                         // 清購物車(依提交前類型)並以權威資料對帳,修正部分成功等狀態落差
-                        store.handleBatchActionSuccess(false, submittedModalType);
+                        store.handleBatchActionSuccess(false, submittedModalType, processingIds);
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAssets(processingIds);
@@ -277,7 +277,7 @@ document.addEventListener('alpine:init', function () {
                             waitReview: false
                         });
                         // 清購物車(依提交前類型)並以權威資料對帳,修正部分成功等狀態落差
-                        store.handleBatchActionSuccess(false, submittedModalType);
+                        store.handleBatchActionSuccess(false, submittedModalType, processingIds);
                     })
                     .withFailureHandler(function (error) {
                         store.removeProcessingAssets(processingIds);
