@@ -955,7 +955,7 @@
                         google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getAllTransferableItems('財產', forceUserScope);
                     }),
                     new Promise(function (resolve, reject) {
-                        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getAllTransferableItems('物品', forceUserScope);
+                        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getAllTransferableItems('非消耗品', forceUserScope);
                     })
                 ]).then(function (results) {
                     if (refs.transferPendingRequest !== requestId) {
@@ -963,13 +963,13 @@
                         return;
                     }
                     var propertyResult = results[0];
-                    var itemResult = results[1];
+                    var nonConsumableResult = results[1];
                     var propertyAssets = propertyResult.status === 'fulfilled' ? propertyResult.value : [];
-                    var itemAssets = itemResult.status === 'fulfilled' ? itemResult.value : [];
+                    var nonConsumableAssets = nonConsumableResult.status === 'fulfilled' ? nonConsumableResult.value : [];
                     var hasInvalidData = (propertyResult.status === 'fulfilled' && !Array.isArray(propertyAssets)) ||
-                        (itemResult.status === 'fulfilled' && !Array.isArray(itemAssets));
+                        (nonConsumableResult.status === 'fulfilled' && !Array.isArray(nonConsumableAssets));
                     if (hasInvalidData) {
-                        console.error('收到的轉移資料格式錯誤，可能是後端序列化失敗', { propertyAssets: propertyAssets, itemAssets: itemAssets });
+                        console.error('收到的轉移資料格式錯誤，可能是後端序列化失敗', { propertyAssets: propertyAssets, nonConsumableAssets: nonConsumableAssets });
                         if (!silent) {
                             alert('載入失敗：資料格式錯誤');
                             self.activeModal = null;
@@ -980,8 +980,9 @@
                     }
                     self.transferPendingDetails = {
                         property: propertyAssets,
-                        items: itemAssets,
-                        total: ((propertyAssets && propertyAssets.length) || 0) + ((itemAssets && itemAssets.length) || 0)
+                        nonConsumables: nonConsumableAssets,
+                        items: nonConsumableAssets,
+                        total: ((propertyAssets && propertyAssets.length) || 0) + ((nonConsumableAssets && nonConsumableAssets.length) || 0)
                     };
                     if (!silent) self.isLoadingTransferDetails = false;
                     if (typeof onComplete === 'function') onComplete(null);

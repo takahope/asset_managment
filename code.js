@@ -5395,8 +5395,8 @@ function createScrapDocByDateRange(startDate, endDate, assetCategory) {
 // ========== ✨ 轉移列印功能 ========== //
 
 /**
- * [供 printTransfer.html 呼叫] 取得已完成轉移的資產統計（按保管人分組）
- * @param {string} assetCategory - 財產類別：'財產' 或 '物品'
+ * [供 printTransfer.html 呼叫] 取得各保管人的待列印轉移記錄數量（簡易模式）
+ * @param {string} assetCategory - 財產類別：'財產' 或 '非消耗品'
  * @returns {Array} 返回格式：[{ keeper: '李四', count: 3 }, ...]
  */
 function getTransferDataForPrint(assetCategory) {
@@ -5407,20 +5407,29 @@ function getTransferDataForPrint(assetCategory) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    if (!appLogSheet || appLogSheet.getLastRow() <= 1) {
+      return [];
+    }
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
 
-    // 建立資產ID到最新轉移記錄的映射
+    // 建立資產ID到最新轉移記錄的映射 (Key 正規化)
     const assetToLatestTransfer = new Map();
 
     appLogData.forEach(row => {
-      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
-      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const rawAssetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const assetId = String(rawAssetId !== null && rawAssetId !== undefined ? rawAssetId : '').trim();
+      if (!assetId) return;
+
+      const status = String(row[AL_STATUS_COLUMN_INDEX - 1] || '').trim();
       const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
 
       if (status === '已完成' && reviewTime) {
+        const reviewDate = new Date(reviewTime);
+        if (isNaN(reviewDate.getTime())) return;
+
         // 比較時間，保留最新的記錄
         if (!assetToLatestTransfer.has(assetId) ||
-            new Date(reviewTime) > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
+            reviewDate > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
           assetToLatestTransfer.set(assetId, {
             newKeeper: row[AL_NEW_LEADER_COLUMN_INDEX - 1],
             newKeeperEmail: row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1], // ✨ 用於權限判斷
@@ -5433,8 +5442,8 @@ function getTransferDataForPrint(assetCategory) {
 
     // 取得所有資產資料，用於篩選類別
     const allAssets = getAllAssets();
-    const assetCategoryMap = new Map(allAssets.map(asset => [asset.assetId, asset.assetCategory]));
-    const assetIsUploadedMap = new Map(allAssets.map(asset => [asset.assetId, asset.isUploaded]));
+    const assetCategoryMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), String(asset.assetCategory || '').trim()]));
+    const assetIsUploadedMap = new Map(allAssets.map(asset => [String(asset.assetId || '').trim(), String(asset.isUploaded || '').trim()]));
 
     // 按新保管人分組計數（同時篩選類別）
     const keeperCount = {};
@@ -5446,7 +5455,7 @@ function getTransferDataForPrint(assetCategory) {
       const category = assetCategoryMap.get(assetId);
       const isUploaded = assetIsUploadedMap.get(assetId);
 
-      // 1. 類別與上傳狀態篩選
+      // 1. 類別與上傳狀態篩選 (比對 assetCategory = '財產' 或 '非消耗品')
       if (category === assetCategory && isUploaded !== 'V') {
         
         // 2. 🛡️ 權限篩選
@@ -5488,7 +5497,7 @@ function getTransferDataForPrint(assetCategory) {
 
 /**
  * [供 printTransfer.html 呼叫] 取得所有已完成轉移資產的明細清單（詳細模式）
- * @param {string} assetCategory - 財產類別：'財產' 或 '物品'
+ * @param {string} assetCategory - 財產類別：'財產' 或 '非消耗品'
  * @returns {Array} 返回格式：[{ assetId, assetName, oldKeeper, newKeeper, oldLocation, newLocation, transferDate }, ...]
  */
 function getAllTransferableItems(assetCategory, forceUserScope) {
@@ -5501,20 +5510,29 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    if (!appLogSheet || appLogSheet.getLastRow() <= 1) {
+      return [];
+    }
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
 
-    // 建立資產ID到最新轉移記錄的映射
+    // 建立資產ID到最新轉移記錄的映射 (Key 正規化)
     const assetToLatestTransfer = new Map();
 
     appLogData.forEach(row => {
-      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
-      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const rawAssetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const assetId = String(rawAssetId !== null && rawAssetId !== undefined ? rawAssetId : '').trim();
+      if (!assetId) return;
+
+      const status = String(row[AL_STATUS_COLUMN_INDEX - 1] || '').trim();
       const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
 
       if (status === '已完成' && reviewTime) {
+        const reviewDate = new Date(reviewTime);
+        if (isNaN(reviewDate.getTime())) return;
+
         // 比較時間，保留最新的記錄
         if (!assetToLatestTransfer.has(assetId) ||
-            new Date(reviewTime) > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
+            reviewDate > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
           assetToLatestTransfer.set(assetId, {
             oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
             oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
@@ -5536,18 +5554,24 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
     const items = [];
 
     allAssets.forEach(asset => {
-      // 篩選條件：資產類別匹配且有轉移記錄且未上傳
-      if (asset.assetCategory === assetCategory &&
-          assetToLatestTransfer.has(asset.assetId) &&
-          asset.isUploaded !== 'V') {
+      const assetId = String(asset.assetId !== null && asset.assetId !== undefined ? asset.assetId : '').trim();
+      if (!assetId) return;
+
+      const assetCat = String(asset.assetCategory || '').trim();
+      const isUploaded = String(asset.isUploaded || '').trim();
+
+      // 篩選條件：資產類別匹配 (assetCategory = '財產' 或 '非消耗品') 且有轉移記錄且未上傳
+      if (assetCat === assetCategory &&
+          assetToLatestTransfer.has(assetId) &&
+          isUploaded !== 'V') {
         
-        const transfer = assetToLatestTransfer.get(asset.assetId);
+        const transfer = assetToLatestTransfer.get(assetId);
 
         // 🛡️ 權限過濾
         if (!useAdminScope) {
            // 一般使用者只能看到自己相關的（新保管人或新使用人）
-           const newKeeperEmailLower = transfer.newKeeperEmail ? transfer.newKeeperEmail.toLowerCase() : '';
-           const newUserEmailLower = transfer.newUserEmail ? transfer.newUserEmail.toLowerCase() : '';
+           const newKeeperEmailLower = transfer.newKeeperEmail ? String(transfer.newKeeperEmail).toLowerCase().trim() : '';
+           const newUserEmailLower = transfer.newUserEmail ? String(transfer.newUserEmail).toLowerCase().trim() : '';
            const isOwner = newKeeperEmailLower === currentUserEmail || newUserEmailLower === currentUserEmail;
 
            // ✨ 同組協作：同組成員的轉移申請單也應可見
@@ -5556,26 +5580,26 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
            if (groupProxyEnabled) {
              const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim());
              const groupEmailSet = new Set(groupEmails);
-             isGroupMember = groupEmailSet.has(newKeeperEmailLower) || (newUserEmailLower && groupEmailSet.has(newUserEmailLower));
+             isGroupMember = (newKeeperEmailLower && groupEmailSet.has(newKeeperEmailLower)) || (newUserEmailLower && groupEmailSet.has(newUserEmailLower));
            }
 
            if (!isOwner && !isGroupMember) return;
         }
 
         items.push({
-          assetId: asset.assetId,
-          assetName: asset.assetName,
+          assetId: assetId,
+          assetName: asset.assetName || '',
           assetAlias: String(asset.assetAlias || ''),
           productSerial: String(asset.productSerial || ''),
           modelBrand: asset.modelBrand || '',
-          oldKeeper: transfer.oldKeeper,
+          oldKeeper: transfer.oldKeeper || '',
           oldUser: transfer.oldUser || '',
-          oldLocation: transfer.oldLocation,
-          newKeeper: transfer.newKeeper,
+          oldLocation: transfer.oldLocation || '',
+          newKeeper: transfer.newKeeper || '',
           newUser: transfer.newUser || '',
-          newLocation: transfer.newLocation,
-          transferType: transfer.transferType,
-          transferDate: new Date(transfer.reviewTime).toLocaleDateString('zh-TW'),
+          newLocation: transfer.newLocation || '',
+          transferType: transfer.transferType || '',
+          transferDate: Utilities.formatDate(new Date(transfer.reviewTime), Session.getScriptTimeZone(), 'yyyy/MM/dd'),
           sourceSheet: String(asset.sourceSheet || '')
         });
       }
@@ -5592,13 +5616,13 @@ function getAllTransferableItems(assetCategory, forceUserScope) {
 
 /**
  * [供 userstate.html 呼叫] 獲取待列印轉移申請單的數量
- * @returns {number} 待列印的轉移記錄總數（財產 + 物品）
+ * @returns {number} 待列印的轉移記錄總數（財產 + 非消耗品）
  */
 function getTransferableItemsCount(forceUserScope) {
   try {
     const propertyItems = getAllTransferableItems('財產', forceUserScope);
-    const itemItems = getAllTransferableItems('物品', forceUserScope);
-    return propertyItems.length + itemItems.length;
+    const nonConsumableItems = getAllTransferableItems('非消耗品', forceUserScope);
+    return propertyItems.length + nonConsumableItems.length;
   } catch (e) {
     Logger.log(`getTransferableItemsCount 失敗: ${e.message}`);
     return 0; // 錯誤時返回 0，避免前端崩潰
@@ -5608,7 +5632,7 @@ function getTransferableItemsCount(forceUserScope) {
 /**
  * [供 printTransfer.html 呼叫] 為指定保管人產生一份彙整的轉移記錄文件
  * @param {string} keeperName - 保管人名稱（簡易模式）或管理員名稱（詳細模式）
- * @param {string} assetCategory - 財產類別：'財產' 或 '物品'
+ * @param {string} assetCategory - 財產類別：'財產' 或 '非消耗品'
  * @param {Array|null} assetIds - 指定的資產ID陣列（詳細模式），或 null（簡易模式）
  * @returns {Object} { fileUrl: '...' }
  */
@@ -5619,21 +5643,30 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    if (!appLogSheet || appLogSheet.getLastRow() <= 1) {
+      throw new Error("轉移申請紀錄中無資料。");
+    }
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
     const now = new Date();
 
-    // 1️⃣ 建立資產ID到最新轉移記錄的映射
+    // 1️⃣ 建立資產ID到最新轉移記錄的映射 (Key 正規化)
     const assetToLatestTransfer = new Map();
 
     appLogData.forEach((row, index) => {  // ✨ 新增 index 參數
-      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
-      const status = row[AL_STATUS_COLUMN_INDEX - 1];
+      const rawAssetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const assetId = String(rawAssetId !== null && rawAssetId !== undefined ? rawAssetId : '').trim();
+      if (!assetId) return;
+
+      const status = String(row[AL_STATUS_COLUMN_INDEX - 1] || '').trim();
       const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
 
       if (status === '已完成' && reviewTime) {
+        const reviewDate = new Date(reviewTime);
+        if (isNaN(reviewDate.getTime())) return;
+
         // 比較時間，保留最新的記錄
         if (!assetToLatestTransfer.has(assetId) ||
-            new Date(reviewTime) > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
+            reviewDate > new Date(assetToLatestTransfer.get(assetId).reviewTime)) {
           assetToLatestTransfer.set(assetId, {
             oldKeeper: row[AL_OLD_LEADER_COLUMN_INDEX - 1],
             oldLocation: row[AL_OLD_LOCATION_COLUMN_INDEX - 1],
@@ -5659,10 +5692,11 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
 
     if (assetIds && assetIds.length > 0) {
       // 詳細模式：根據指定的ID陣列篩選
-      const assetIdSet = new Set(assetIds);
+      const assetIdSet = new Set(assetIds.map(id => String(id || '').trim()));
       allAssets.forEach(asset => {
-        if (assetIdSet.has(asset.assetId) && assetToLatestTransfer.has(asset.assetId)) {
-          const transfer = assetToLatestTransfer.get(asset.assetId);
+        const assetId = String(asset.assetId || '').trim();
+        if (assetIdSet.has(assetId) && assetToLatestTransfer.has(assetId)) {
+          const transfer = assetToLatestTransfer.get(assetId);
           
           // 🛡️ 權限檢查
           if (!isAdmin) {
@@ -5684,10 +5718,12 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
     } else {
       // 簡易模式：根據保管人名稱 + 類別篩選
       allAssets.forEach(asset => {
-        if (assetToLatestTransfer.has(asset.assetId)) {
-          const transfer = assetToLatestTransfer.get(asset.assetId);
+        const assetId = String(asset.assetId || '').trim();
+        if (assetToLatestTransfer.has(assetId)) {
+          const transfer = assetToLatestTransfer.get(assetId);
+          const assetCat = String(asset.assetCategory || '').trim();
           // 篩選條件：新保管人匹配 + 類別匹配
-          if (transfer.newKeeper === keeperName && asset.assetCategory === assetCategory) {
+          if (transfer.newKeeper === keeperName && assetCat === assetCategory) {
             
             // 🛡️ 權限檢查
             if (!isAdmin) {
@@ -5716,9 +5752,11 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
     // 3️⃣ 選擇模板並複製文件
     const templateId = assetCategory === '財產'
         ? TRANSFER_TEMPLATE_DOC_ID_PROPERTY
-        : TRANSFER_TEMPLATE_DOC_ID_ITEM;
+        : (typeof TRANSFER_TEMPLATE_DOC_ID_NON_CONSUMABLE !== 'undefined'
+            ? TRANSFER_TEMPLATE_DOC_ID_NON_CONSUMABLE
+            : TRANSFER_TEMPLATE_DOC_ID_ITEM);
 
-    const categoryName = assetCategory === '財產' ? '財產' : '物品';
+    const categoryName = assetCategory === '財產' ? '財產' : '非消耗品';
     const docName = `${categoryName}轉移記錄_${keeperName}_${Utilities.formatDate(now, "GMT+8", "yyyyMMdd")}`;
 
     const templateFile = DriveApp.getFileById(templateId);
@@ -5896,7 +5934,7 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
 
 /**
  * 取得轉移文件的歷史紀錄
- * @param {string} assetCategory - 財產類別（'財產' 或 '物品'）
+ * @param {string} assetCategory - 財產類別（'財產' 或 '非消耗品'）
  * @returns {Array} 歷史紀錄陣列，按日期降序排列
  */
 function getTransferDocHistory(assetCategory) {
@@ -5908,19 +5946,27 @@ function getTransferDocHistory(assetCategory) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    if (!appLogSheet || appLogSheet.getLastRow() <= 1) {
+      return [];
+    }
     const appLogData = appLogSheet.getRange(2, 1, appLogSheet.getLastRow() - 1, appLogSheet.getLastColumn()).getValues();
 
-    // 1️⃣ 篩選有文件連結的記錄
+    // 1️⃣ 建立資產對照表以優化查詢效率
+    const allAssets = getAllAssets();
+    const assetIdToAssetMap = new Map(allAssets.map(a => [String(a.assetId || '').trim(), a]));
+
+    // 2️⃣ 篩選有文件連結的記錄
     const recordsWithDoc = [];
     appLogData.forEach(row => {
       const docUrl = row[AL_DOC_URL_COLUMN_INDEX - 1];
-      const status = row[AL_STATUS_COLUMN_INDEX - 1];
-      const assetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const status = String(row[AL_STATUS_COLUMN_INDEX - 1] || '').trim();
+      const rawAssetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const assetId = String(rawAssetId !== null && rawAssetId !== undefined ? rawAssetId : '').trim();
       const newKeeperEmail = row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
       const newUserEmail = row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1];
 
       // 跳過沒有文件連結或狀態不是「已完成」的記錄
-      if (!docUrl || docUrl.trim() === '' || status !== '已完成') {
+      if (!docUrl || String(docUrl).trim() === '' || status !== '已完成') {
         return;
       }
 
@@ -5935,12 +5981,13 @@ function getTransferDocHistory(assetCategory) {
         if (!isAllowed) return;
       }
 
-      // 取得資產類別（需要從資產表查詢）
-      const asset = getAllAssets().find(a => a.assetId === assetId);
+      // 取得資產類別（從預先建立的 Map 查詢）
+      const asset = assetIdToAssetMap.get(assetId);
       if (!asset) return;
 
-      // 類別篩選
-      if (assetCategory && asset.assetCategory !== assetCategory) {
+      const assetCat = String(asset.assetCategory || '').trim();
+      // 類別篩選 (比對 assetCategory = '財產' 或 '非消耗品')
+      if (assetCategory && assetCat !== assetCategory) {
         return;
       }
 
@@ -5952,7 +5999,7 @@ function getTransferDocHistory(assetCategory) {
       });
     });
 
-    // 2️⃣ 依文件 URL 分組統計
+    // 3️⃣ 依文件 URL 分組統計
     const docMap = new Map();
     recordsWithDoc.forEach(record => {
       const url = record.url;
@@ -5967,7 +6014,7 @@ function getTransferDocHistory(assetCategory) {
       docMap.get(url).count++;
     });
 
-    // 3️⃣ 轉換為陣列並排序（按日期降序）
+    // 4️⃣ 轉換為陣列並排序（按日期降序）
     const history = Array.from(docMap.values()).map(item => ({
       url: item.url,
       keeper: item.keeper,

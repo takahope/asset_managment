@@ -378,7 +378,7 @@ document.addEventListener('alpine:init', function () {
             get currentAssets() {
                 var d = this.details;
                 if (!d) return [];
-                return this.selectedCategory === '財產' ? d.property : d.items;
+                return this.selectedCategory === '財產' ? (d.property || []) : (d.nonConsumables || d.items || []);
             },
             handleSelectAll: function (checked) {
                 this.selectAll = checked;
@@ -1042,7 +1042,7 @@ document.addEventListener('alpine:init', function () {
                         <div>
                             <label class="font-medium text-slate-700 mr-4">財產類別：</label>
                             <label class="inline-flex items-center mr-6"><input type="radio" name="transferCategoryHistory" value="財產" x-model="selectedCategory" class="mr-2"><span>財產</span></label>
-                            <label class="inline-flex items-center"><input type="radio" name="transferCategoryHistory" value="物品" x-model="selectedCategory" class="mr-2"><span>物品</span></label>
+                            <label class="inline-flex items-center"><input type="radio" name="transferCategoryHistory" value="非消耗品" x-model="selectedCategory" class="mr-2"><span>非消耗品</span></label>
                         </div>
                         <button @click="loadHistoryRecords()" class="text-sm text-purple-600 hover:text-purple-800 transition-colors"><i class="fas fa-sync-alt mr-1"></i>重新整理</button>
                     </div>
