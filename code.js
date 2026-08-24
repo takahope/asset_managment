@@ -213,9 +213,10 @@ const USERSTATE_ASSET_DTO_FIELDS = [
 // 行動駐站清單（出借「借出後放置地點」下拉選單擴充來源）工作表欄位索引
 const PORTABLE_STATION_SHEET_NAME = "行動駐站";
 const PORTABLE_STATION_COLUMN_INDICES = {
-  CODE: 1,     // A欄: 組別代碼
-  NAME: 2,     // B欄: 駐站名稱
-  DELETED: 6   // F欄: 刪除標記，空白表示尚未刪除
+  CODE: 1,          // A欄: 組別代碼
+  NAME: 2,          // B欄: 駐站名稱
+  MANAGER_EMAIL: 3, // C欄: 駐站管理員email
+  DELETED: 6        // F欄: 刪除標記，空白表示尚未刪除
 };
 
 // 在「軟體版本清單」工作表中的欄位
@@ -1535,6 +1536,14 @@ function getTransferData(forceUserScope) {
   // 存置地點設定(原「存置地點列表」工作表已遷 Script Properties + HR 駐站;spec 2026-07-19)
   const locConfig = getLocationConfig_();
 
+  // 站點對照表指定的在職管理者也必須出現在「轉移給駐管」下拉選單。
+  // 不可只依「人員職務配置」的職務文字，否則 UI 篩選後會找不到站點 H 欄/行動駐站 C 欄所解析的管理者。
+  Object.keys(locConfig.custodianToStations || {}).forEach(email => {
+    const normalized = String(email).toLowerCase().trim();
+    const name = directory.emailToName[normalized];
+    if (name) custodianMap.set(normalized, name);
+  });
+
   // 3. 將 Map 轉換為前端需要的格式
   const keepers = {};
   uniqueKeepersMap.forEach((name, email) => {
@@ -1560,8 +1569,10 @@ function getTransferData(forceUserScope) {
     keepers: keepers,
     users: users,
     locations: locations,
-    custodians: custodians,           // ✨ 駐管列表
+    custodians: custodians,                       // ✨ 駐管列表
     stationLocations: locConfig.stationLocations, // ✨ 駐站地點列表
+    stationToCustodians: locConfig.stationToCustodians || {}, // ✨ 駐站 ➜ 駐管雙向字典
+    custodianToStations: locConfig.custodianToStations || {}, // ✨ 駐管 ➜ 駐站雙向字典
     // ✨ 資訊組相關資料
     infoCustodian: infoCustodianMap.size > 0 ? Object.fromEntries(infoCustodianMap) : null,
     infoUser: infoUserMap.size > 0 ? Object.fromEntries(infoUserMap) : null,
@@ -2881,15 +2892,21 @@ function getPortableStationObjects_() {
     data.forEach(row => {
       const code = String(row[indices.CODE - 1] || '').trim();
       const stationName = String(row[indices.NAME - 1] || '').trim();
+      const rawEmails = String(row[indices.MANAGER_EMAIL - 1] || '').trim();
       const deletedMark = String(row[indices.DELETED - 1] || '').trim();
       
       // 確保 F 欄空白且名稱存在
       if (stationName && !deletedMark) {
+        const managerEmails = rawEmails
+          ? rawEmails.split(/[\n,;、\s]+/).map(e => e.toLowerCase().trim()).filter(e => e.includes('@'))
+          : [];
+
         stations.push({
           code: code || stationName, // 若沒代碼，回退使用名稱
           name: stationName + '(行動駐站)', // 統一加入後綴以減少 UI 混淆
           hrName: stationName,
-          category: 'PORTABLE'
+          category: 'PORTABLE',
+          managerEmails: managerEmails
         });
       }
     });

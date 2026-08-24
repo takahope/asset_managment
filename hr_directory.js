@@ -39,7 +39,8 @@ function stationCategoryOf_(code) {
 // 同步防呆:HR 在職人數低於此門檻即中止同步,避免上游異常清空白名單
 const HR_SYNC_MIN_HEADCOUNT = 5;
 
-const KEEPER_DIRECTORY_CACHE_KEY = 'keeper_directory_v1';
+// v2 起 stationGroups 含 managers；升版避免沿用部署連動功能前的舊資料結構。
+const KEEPER_DIRECTORY_CACHE_KEY = 'keeper_directory_v2';
 const KEEPER_DIRECTORY_CACHE_SECONDS = 600; // 與白名單快取同為 10 分鐘
 
 /**
@@ -136,17 +137,39 @@ function buildKeeperDirectoryFromHr_() {
     emailToName[email] = name || email.split('@')[0];
   });
 
-  // 2. 組織架構樹:C 代碼、D 名稱 → 代碼轉中文名;順手收集駐站組別(GRP-CO-*)
+  const nameToEmails = {};
+  Object.keys(emailToName).forEach(email => {
+    const n = emailToName[email];
+    if (!nameToEmails[n]) nameToEmails[n] = [];
+    nameToEmails[n].push(email);
+  });
+
+  // 2. 組織架構樹:C 代碼、D 名稱、H 駐管姓名 → 代碼轉中文名;順手收集駐站組別(GRP-CO-*)
   const orgSheet = hrSs.getSheetByName(HR_ORG_TREE_SHEET_NAME);
   const codeToOrgName = {};
   const stationGroups = [];
   if (orgSheet && orgSheet.getLastRow() > 1) {
-    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 4).getValues().forEach(row => {
+    const numCols = Math.max(8, orgSheet.getLastColumn());
+    orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, numCols).getValues().forEach(row => {
       const code = String(row[2] || '').trim();
       const name = String(row[3] || '').trim();
+      const rawManagerNames = String(row[7] || '').trim(); // H 欄 (1-based 8, row[7])
       if (code && name) {
         codeToOrgName[code] = name;
-        if (stationCategoryOf_(code)) stationGroups.push({ code: code, name: name });
+        const cat = stationCategoryOf_(code);
+        if (cat) {
+          const managers = [];
+          if (rawManagerNames) {
+            const names = rawManagerNames.split(/[\n,;、\s]+/).map(s => s.trim()).filter(Boolean);
+            names.forEach(n => {
+              const matchedEmails = nameToEmails[n] || [];
+              matchedEmails.forEach(em => {
+                managers.push({ email: em, name: n });
+              });
+            });
+          }
+          stationGroups.push({ code: code, name: name, managers: managers });
+        }
       }
     });
   }
@@ -271,7 +294,7 @@ function clearLocationConfigMemo_() {
  * 靜態地點來自 STATIC_LOCATIONS;駐站依 STATION_CATEGORIES 過濾 HR 組織架構樹,
  * 名稱經 HR_GROUP_NAME_MAP 轉慣用名;directory 走 fallback 時改用 STATION_NAME_SNAPSHOT。
  * 順序:靜態(設定順序)在前、駐站(組織架構樹列序)在後。
- * @returns {{locations:string[], stationLocations:string[], infoLocation:?string, intakeLocation:?string, infoComputerLocation:?string}}
+ * @returns {{locations:string[], stationLocations:string[], stationToCustodians:Object, custodianToStations:Object, infoLocation:?string, intakeLocation:?string, infoComputerLocation:?string}}
  */
 function getLocationConfig_() {
   if (LOCATION_CONFIG_MEMO_) return LOCATION_CONFIG_MEMO_;
@@ -282,11 +305,12 @@ function getLocationConfig_() {
     .split(/[\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
 
   // 駐站名冊:HR 直讀優先;fallback 物件無 stationGroups 鍵時降級用快照
-  let stationGroups = getKeeperDirectory_().stationGroups;
+  const directory = getKeeperDirectory_();
+  let stationGroups = directory.stationGroups;
   if (!Array.isArray(stationGroups)) {
     try {
       const snapshot = JSON.parse(props['STATION_NAME_SNAPSHOT'] || '{}');
-      stationGroups = Object.keys(snapshot).map(code => ({ code: code, name: snapshot[code] }));
+      stationGroups = Object.keys(snapshot).map(code => ({ code: code, name: snapshot[code], managers: [] }));
     } catch (e) {
       Logger.log('STATION_NAME_SNAPSHOT 解析失敗(駐站清單降級為空):' + e.message);
       stationGroups = [];
@@ -294,24 +318,60 @@ function getLocationConfig_() {
   }
 
   const groupNameMap = getHrGroupNameMap_();
+  const stationLocations = [];
+  const stationToCustodians = {};
+  const custodianToStations = {};
+
+  function addMapping_(stationName, email, name) {
+    if (!stationName || !email) return;
+    const normEmail = String(email).toLowerCase().trim();
+    if (!stationToCustodians[stationName]) stationToCustodians[stationName] = [];
+    if (!stationToCustodians[stationName].some(c => c.email === normEmail)) {
+      stationToCustodians[stationName].push({ email: normEmail, name: name || normEmail });
+    }
+
+    if (!custodianToStations[normEmail]) custodianToStations[normEmail] = [];
+    if (!custodianToStations[normEmail].includes(stationName)) {
+      custodianToStations[normEmail].push(stationName);
+    }
+  }
+
   // 過濾出從 HR 讀取且啟用、但不包含 PORTABLE 的駐站 (PORTABLE 從外部試算表讀取)
-  let stationLocations = stationGroups
-    .filter(g => {
-      const cat = stationCategoryOf_(g.code);
-      return cat !== 'PORTABLE' && enabledCategories.indexOf(cat) !== -1;
-    })
-    .map(g => groupNameMap[g.name] || g.name)
-    .filter(Boolean);
+  stationGroups.forEach(g => {
+    const cat = stationCategoryOf_(g.code);
+    if (cat !== 'PORTABLE' && enabledCategories.indexOf(cat) !== -1) {
+      const mappedName = groupNameMap[g.name] || g.name;
+      if (mappedName) {
+        stationLocations.push(mappedName);
+        if (Array.isArray(g.managers)) {
+          g.managers.forEach(m => addMapping_(mappedName, m.email, m.name));
+        }
+      }
+    }
+  });
 
   // 如果設定中有啟用 PORTABLE，則從外部行動駐站試算表讀取並合併
   if (enabledCategories.indexOf('PORTABLE') !== -1) {
-    const portableStations = getPortableStationObjects_().map(s => s.name);
-    stationLocations = stationLocations.concat(portableStations);
+    const portableStations = getPortableStationObjects_();
+    portableStations.forEach(s => {
+      stationLocations.push(s.name);
+      if (Array.isArray(s.managerEmails)) {
+        s.managerEmails.forEach(em => {
+          const normEmail = String(em).toLowerCase().trim();
+          const managerName = directory.emailToName[normEmail];
+          if (managerName) { // 確保為在職人員
+            addMapping_(s.name, normEmail, managerName);
+          }
+        });
+      }
+    });
   }
 
   LOCATION_CONFIG_MEMO_ = {
     locations: staticLocations.concat(stationLocations),
     stationLocations: stationLocations,
+    stationToCustodians: stationToCustodians,
+    custodianToStations: custodianToStations,
     infoLocation: String(props['INFO_LOCATION'] || '').trim() || null,
     intakeLocation: String(props['INTAKE_LOCATION'] || '').trim() || null,
     infoComputerLocation: String(props['INFO_COMPUTER_LOCATION'] || '').trim() || null
@@ -586,4 +646,19 @@ function debugLocationConfig() {
   Logger.log('資訊組:表=' + firstFlag(2) + ' / 新=' + config.infoLocation + (firstFlag(2) === config.infoLocation ? ' ✔' : ' ✘'));
   Logger.log('收案組:表=' + firstFlag(3) + ' / 新=' + config.intakeLocation + (firstFlag(3) === config.intakeLocation ? ' ✔' : ' ✘'));
   Logger.log('電腦專用:表=' + firstFlag(4) + ' / 新=' + config.infoComputerLocation + (firstFlag(4) === config.infoComputerLocation ? ' ✔' : ' ✘'));
+}
+
+/**
+ * [診斷工具] 測試駐站與駐管雙向連動字典解析結果
+ */
+function debugTestStationCustodianLinkage() {
+  clearKeeperDirectoryCache();
+  const config = getLocationConfig_();
+  Logger.log('=== 駐站與駐管雙向連動檢測 ===');
+  Logger.log('啟用駐站數: ' + (config.stationLocations || []).length);
+  Logger.log('stationToCustodians 筆數: ' + Object.keys(config.stationToCustodians || {}).length);
+  Logger.log('custodianToStations 筆數: ' + Object.keys(config.custodianToStations || {}).length);
+  Logger.log('範例 stationToCustodians: ' + JSON.stringify(config.stationToCustodians, null, 2));
+  Logger.log('範例 custodianToStations: ' + JSON.stringify(config.custodianToStations, null, 2));
+  return config;
 }

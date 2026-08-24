@@ -35,6 +35,50 @@ document.addEventListener('alpine:init', function () {
             entries: function (obj) {
                 return Object.entries(obj || {});
             },
+            get availableStationLocations() {
+                var allLocations = this.uniqueStationLocations || [];
+                if (!this.custodianEmail) return allLocations;
+                var mapping = (this.options && this.options.custodianToStations) || {};
+                var allowed = mapping[this.custodianEmail];
+                if (!allowed || allowed.length === 0) return allLocations;
+                return allLocations.filter(function (loc) { return allowed.indexOf(loc) !== -1; });
+            },
+            get availableCustodians() {
+                var allCustodians = this.entries((this.options && this.options.custodians) || {});
+                if (!this.stationLocation) return allCustodians;
+                var mapping = (this.options && this.options.stationToCustodians) || {};
+                var allowed = mapping[this.stationLocation];
+                if (!allowed || allowed.length === 0) return allCustodians;
+                var allowedEmails = allowed.map(function (c) { return c.email; });
+                return allCustodians.filter(function (entry) { return allowedEmails.indexOf(entry[0]) !== -1; });
+            },
+            handleStationChange: function (newStation) {
+                this.stationLocation = newStation;
+                if (!newStation) return;
+                var mapping = (this.options && this.options.stationToCustodians) || {};
+                var matched = mapping[newStation] || [];
+                if (matched.length === 1) {
+                    this.custodianEmail = matched[0].email;
+                } else if (matched.length > 1) {
+                    var emails = matched.map(function (c) { return c.email; });
+                    if (this.custodianEmail && emails.indexOf(this.custodianEmail) === -1) {
+                        this.custodianEmail = '';
+                    }
+                }
+            },
+            handleCustodianChange: function (newEmail) {
+                this.custodianEmail = newEmail;
+                if (!newEmail) return;
+                var mapping = (this.options && this.options.custodianToStations) || {};
+                var matched = mapping[newEmail] || [];
+                if (matched.length === 1) {
+                    this.stationLocation = matched[0];
+                } else if (matched.length > 1) {
+                    if (this.stationLocation && matched.indexOf(this.stationLocation) === -1) {
+                        this.stationLocation = '';
+                    }
+                }
+            },
             get aliasLabel() { return S.getAssetAliasLabel(this.asset); },
             get aliasDisplay() { return S.getAssetAliasDisplay(this.asset); },
 
@@ -457,9 +501,9 @@ document.addEventListener('alpine:init', function () {
                                 <label class="block text-sm font-medium text-slate-700 mb-2">
                                     轉移給駐管：<span class="text-red-600">*</span>
                                 </label>
-                                <select x-model="custodianEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <select x-model="custodianEmail" @change="handleCustodianChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">請選擇駐管...</option>
-                                    <template x-for="entry in entries(options.custodians)" :key="entry[0]">
+                                    <template x-for="entry in availableCustodians" :key="entry[0]">
                                         <option :value="entry[0]" x-text="entry[1]"></option>
                                     </template>
                                 </select>
@@ -468,9 +512,9 @@ document.addEventListener('alpine:init', function () {
                                 <label class="block text-sm font-medium text-slate-700 mb-2">
                                     駐站地點：<span class="text-red-600">*</span>
                                 </label>
-                                <select x-model="stationLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <select x-model="stationLocation" @change="handleStationChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">請選擇駐站地點...</option>
-                                    <template x-for="loc in uniqueStationLocations" :key="loc">
+                                    <template x-for="loc in availableStationLocations" :key="loc">
                                         <option :value="loc" x-text="loc"></option>
                                     </template>
                                 </select>
