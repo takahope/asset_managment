@@ -387,6 +387,7 @@
         };
 
         window.BatchList_clearAll = function () {
+            if (window.BatchList_isProcessing) return;
             if (window.AssetCartStore && window.AssetCartStore.isAdvancedMode()) {
                 return window.AssetCartStore.clearAll();
             }
@@ -416,9 +417,10 @@
                 return;
             }
 
+            const isProcessing = !!window.BatchList_isProcessing;
             const submitSection = `
                 <div class="px-3 py-2 border-b border-slate-100">
-                    <button class="lm-btn lm-btn--primary lm-btn--sm" onclick="window.AdvancedCart_submit && window.AdvancedCart_submit()">
+                    <button id="AdvancedCart_submitBtn" class="lm-btn lm-btn--primary lm-btn--sm" ${isProcessing ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="window.AdvancedCart_submit && window.AdvancedCart_submit()">
                         <i class="fa-solid fa-paper-plane mr-1"></i>送出清單
                     </button>
                 </div>

@@ -2586,6 +2586,9 @@
                 var items = window.AssetCartStore.getItems();
                 if (items.length === 0) { this.toastOrAlert('清單沒有可送出的項目', 'warning'); return Promise.resolve(); }
                 refs.advancedSubmit = true;
+                if (typeof window.BatchList_startProgress === 'function') {
+                    window.BatchList_startProgress();
+                }
                 this.toastProgress('正在送出進階清單...');
                 var allAssetIds = items.map(function(i) { return i.assetId; });
                 this.addProcessingAssets(allAssetIds);
@@ -2651,6 +2654,9 @@
                     })
                     .catch(function (error) { console.warn('進階清單送出失敗：', error); })
                     .finally(function () {
+                        if (typeof window.BatchList_finishProgress === 'function') {
+                            window.BatchList_finishProgress();
+                        }
                         if (successIds.length > 0) window.AssetCartStore.removeItemsByIds(successIds);
                         if (successIds.length > 0) self.loadData();
                         var messageParts = [];

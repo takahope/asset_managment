@@ -116,14 +116,74 @@
   flex-shrink: 0;
 }
 
+.batch-list-sidebar .sidebar-footer .btn {
+  flex-shrink: 0;
+}
+
 .batch-list-sidebar .item-count {
   font-size: 14px;
   color: #666;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .batch-list-sidebar .item-count strong {
   color: #4a90e2;
   font-size: 16px;
+}
+
+/* ========== 底部進度條樣式 ========== */
+.batch-list-progress-area {
+  flex: 1;
+  margin: 0 10px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  transition: opacity 0.3s ease;
+}
+
+.batch-list-progress-area.is-fading {
+  opacity: 0;
+}
+
+.batch-list-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #475569;
+}
+
+.batch-list-progress-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.batch-list-progress-percent {
+  font-weight: 600;
+  color: #2563eb;
+  margin-left: 4px;
+}
+
+.batch-list-progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.batch-list-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #3b82f6, #06b6d4);
+  border-radius: 9999px;
+  transition: width 0.25s ease-out;
 }
 
 /* ========== 清單項目樣式 ========== */
@@ -413,9 +473,18 @@
   </div>
 
   <div class="sidebar-footer">
-    <button class="btn btn-danger btn-sm" onclick="BatchList_clearAll()">
+    <button id="BatchList_clearBtn" class="btn btn-danger btn-sm" onclick="BatchList_clearAll()">
       <i class="fas fa-trash"></i> 清空
     </button>
+    <div id="BatchList_progressArea" class="batch-list-progress-area" style="display: none;">
+      <div class="batch-list-progress-info">
+        <span id="BatchList_progressText" class="batch-list-progress-text">正在驗證清單項目...</span>
+        <span id="BatchList_progressPercent" class="batch-list-progress-percent">0%</span>
+      </div>
+      <div class="batch-list-progress-track">
+        <div id="BatchList_progressFill" class="batch-list-progress-fill"></div>
+      </div>
+    </div>
     <span class="item-count">共 <strong id="BatchList_count">0</strong> 項</span>
   </div>
 </div>
@@ -631,6 +700,7 @@
   };
 
   window.BatchList_clearAll = function() {
+    if (window.BatchList_isProcessing) return;
     if (BatchList_items.length === 0) return;
 
     if (!confirm('確定要清空批次處理清單嗎？')) return;
@@ -958,6 +1028,117 @@
     if (overlay) overlay.classList.remove('active');
 
     console.log('[BatchList] 已重置清單（切換盤點會話）');
+  };
+
+  // ========== 底部進度條控制邏輯 ==========
+  let progressTimer = null;
+  let progressFadeTimer = null;
+  window.BatchList_isProcessing = false;
+
+  window.BatchList_startProgress = function() {
+    window.BatchList_isProcessing = true;
+    if (progressTimer) clearInterval(progressTimer);
+    if (progressFadeTimer) clearTimeout(progressFadeTimer);
+
+    const area = document.getElementById('BatchList_progressArea');
+    const textEl = document.getElementById('BatchList_progressText');
+    const percentEl = document.getElementById('BatchList_progressPercent');
+    const fillEl = document.getElementById('BatchList_progressFill');
+    const clearBtn = document.getElementById('BatchList_clearBtn');
+    const submitBtn = document.getElementById('AdvancedCart_submitBtn');
+
+    if (clearBtn) {
+      clearBtn.disabled = true;
+      clearBtn.style.opacity = '0.5';
+      clearBtn.style.cursor = 'not-allowed';
+    }
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+      submitBtn.style.cursor = 'not-allowed';
+    }
+
+    if (!area || !textEl || !percentEl || !fillEl) return;
+
+    area.classList.remove('is-fading');
+    area.style.display = 'flex';
+    fillEl.style.transition = 'width 0.25s ease-out';
+    fillEl.style.width = '0%';
+    percentEl.textContent = '0%';
+    textEl.textContent = '正在驗證清單項目...';
+
+    const startTime = Date.now();
+
+    progressTimer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      let percent = 0;
+      let statusText = '正在驗證清單項目...';
+
+      if (elapsed < 1500) {
+        percent = Math.round((elapsed / 1500) * 35);
+        statusText = '正在驗證清單項目...';
+      } else if (elapsed < 3500) {
+        percent = 35 + Math.round(((elapsed - 1500) / 2000) * 30);
+        statusText = '正在批次更新資料庫...';
+      } else if (elapsed < 5000) {
+        percent = 65 + Math.round(((elapsed - 3500) / 1500) * 15);
+        statusText = '正在同步伺服器狀態...';
+      } else {
+        const extraSec = (elapsed - 5000) / 1000;
+        percent = Math.min(88, 80 + Math.round(extraSec * 1.5));
+        statusText = '即將完成，請稍候...';
+      }
+
+      fillEl.style.width = percent + '%';
+      percentEl.textContent = percent + '%';
+      textEl.textContent = statusText;
+    }, 100);
+  };
+
+  window.BatchList_finishProgress = function(callback) {
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+
+    const area = document.getElementById('BatchList_progressArea');
+    const textEl = document.getElementById('BatchList_progressText');
+    const percentEl = document.getElementById('BatchList_progressPercent');
+    const fillEl = document.getElementById('BatchList_progressFill');
+
+    if (!area || !textEl || !percentEl || !fillEl) {
+      window.BatchList_isProcessing = false;
+      const clearBtn = document.getElementById('BatchList_clearBtn');
+      const submitBtn = document.getElementById('AdvancedCart_submitBtn');
+      if (clearBtn) { clearBtn.disabled = false; clearBtn.style.opacity = ''; clearBtn.style.cursor = ''; }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = ''; submitBtn.style.cursor = ''; }
+      if (typeof callback === 'function') callback();
+      return;
+    }
+
+    fillEl.style.transition = 'width 0.2s ease-out';
+    fillEl.style.width = '100%';
+    percentEl.textContent = '100%';
+    textEl.textContent = '處理完成！';
+
+    progressFadeTimer = setTimeout(() => {
+      area.classList.add('is-fading');
+
+      setTimeout(() => {
+        area.style.display = 'none';
+        area.classList.remove('is-fading');
+        fillEl.style.width = '0%';
+        percentEl.textContent = '0%';
+        window.BatchList_isProcessing = false;
+
+        const clearBtn = document.getElementById('BatchList_clearBtn');
+        const submitBtn = document.getElementById('AdvancedCart_submitBtn');
+        if (clearBtn) { clearBtn.disabled = false; clearBtn.style.opacity = ''; clearBtn.style.cursor = ''; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = ''; submitBtn.style.cursor = ''; }
+
+        if (typeof callback === 'function') callback();
+      }, 300);
+    }, 1500);
   };
 
   console.log('[BatchList] 模組已載入，等待初始化...');
