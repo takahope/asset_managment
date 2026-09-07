@@ -2229,7 +2229,8 @@
                         });
                         if (added) this.toastOrAlert('已加入進階清單：' + (asset.assetName || asset.assetId) + '（' + actionSummaryText + '）', 'success');
                     }
-                    this.closeActionPanel({ keepPending: true });
+                    // 動作已完成選擇，立即釋放 pending 鎖，讓使用者可繼續處理下一筆。
+                    this.closeActionPanel();
                     return;
                 }
 
@@ -2246,7 +2247,8 @@
                 if (!confirm(confirmMsg)) return;
                 
                 this.toastProgress('正在標記' + actionSummaryText + '...');
-                this.closeActionPanel({ keepPending: true });
+                // 後端可在背景執行；先釋放目前面板的 pending 鎖，避免阻擋下一筆選取或掃描。
+                this.closeActionPanel();
                 google.script.run
                     .withSuccessHandler(function (message) {
                         var isError = typeof message === 'string' && message.indexOf('❌') === 0;
