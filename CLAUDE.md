@@ -114,6 +114,12 @@ return {
 
 ## 事件紀錄
 
+### 2026-09-08 文件生成「無法插入空白文字元素」修復 (createTransferDoc/createScrapDoc/createLendingDoc)
+- 症狀：管理員列印非消耗品時拋出 `Error：產生轉移記錄文件時發生錯誤：填充數據時發生錯誤（第1筆）：無法插入空白文字元素。`
+- 根因：非消耗品（物品總表）或部分欄位（型號廠牌、備註、保管人地點）值為空字串 `""` 或 null；GAS DocumentApp 的 `asParagraph().setText("")` 或 `cell.setText("")` 試圖插入長度為 0 的 Text 節點，違反 Google Docs DOM 規範被系統拒絕。另 `createTransferDoc` 使用 `appendTableRow()` 會將資料行加到簽名欄下方。
+- 修法：在 `code.js` 增加 `safeDocText_`（空值自動 fallback 為單一空白 `' '`，視覺透明且長度 ≥ 1）；於 `createTransferDoc`、`createScrapDoc`、`createLendingDoc` 的儲存格文字設定處套用；將 `createTransferDoc` 改為 `insertTableRow(insertPosition)`。
+- 通則已沉澱：`~/.agents/skills-bullpen/gas-google-docs-table-generation/` 問題 11。檔案：`code.js`。
+
 ### 2026-07-22 客製化顯示欄位(桌面表格)三個 bug 修復
 - 症狀：①顯示欄位下拉被其他元件遮蓋 ②設定鈕未與搜尋框同排 ③欄位全勾選但表格欄位不顯示。
 - 根因 A(版面 ①②)：新 UI 用了預建 `css_tailwind.html` **未收錄**的 utility(`z-[60]`/`top-full`/`w-48`/`col-span-2`/`lg:w-auto`)，凍結 Tailwind 下無聲失效。修法：下拉改具名 class `.column-dropdown-menu`(定位+z-index)，按鈕沿用既有 `.filter-toolbar-action`。

@@ -3463,6 +3463,45 @@ function getExternalLendingPrintGroups(forceUserScope) {
 }
 
 /**
+ * 確保文字可安全插入 Google Docs 元素，避免「無法插入空白文字元素」錯誤
+ * DocumentApp 的 setText/appendText 不接受長度為 0 的空字串或 null/undefined，需使用至少一個字元（如單一空白 ' '）
+ * @param {*} val - 原始資料值
+ * @return {string} 至少包含一個字元的字串（空值轉為單一空白 ' '）
+ */
+function safeDocText_(val) {
+  if (val === null || val === undefined) return ' ';
+  const str = String(val);
+  return str.trim() === '' ? ' ' : str;
+}
+
+/**
+ * 驗證 safeDocText_ 空白文字防護函式（供 GAS 編輯器直接執行驗證）
+ */
+function verifyDocTextFix_() {
+  const cases = [
+    { input: '', expected: ' ' },
+    { input: '   ', expected: ' ' },
+    { input: null, expected: ' ' },
+    { input: undefined, expected: ' ' },
+    { input: 0, expected: '0' },
+    { input: '0', expected: '0' },
+    { input: 'MacBook', expected: 'MacBook' }
+  ];
+  let passCount = 0;
+  for (let i = 0; i < cases.length; i++) {
+    const c = cases[i];
+    const res = safeDocText_(c.input);
+    if (res === c.expected && res.length >= 1) {
+      passCount++;
+    } else {
+      throw new Error(`safeDocText_ 驗證失敗: 輸入 ${JSON.stringify(c.input)}, 預期 ${JSON.stringify(c.expected)}, 實際 ${JSON.stringify(res)}`);
+    }
+  }
+  Logger.log(`✅ safeDocText_ 驗證通過 (${passCount}/${cases.length})`);
+  return `✅ safeDocText_ 驗證通過 (${passCount}/${cases.length})`;
+}
+
+/**
  * [供 userstate.html 呼叫] 建立出借申請單
  */
 function createLendingDoc(lendIds) {
@@ -3617,14 +3656,15 @@ function createLendingDoc(lendIds) {
       for (let i = 0; i < cellData.length; i++) {
         const templateCell = templateRow.getCell(i);
         const newCell = templateCell.copy();
+        const textToSet = safeDocText_(cellData[i]);
         if (newCell.getNumChildren() > 0 &&
             newCell.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH) {
-          newCell.getChild(0).asParagraph().setText(cellData[i]);
+          newCell.getChild(0).asParagraph().setText(textToSet);
           while (newCell.getNumChildren() > 1) {
             newCell.removeChild(newCell.getChild(1));
           }
         } else {
-          newCell.setText(cellData[i]);
+          newCell.setText(textToSet);
         }
         try {
           newCell.setAttributes(borderStyle);
@@ -5379,18 +5419,19 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
             // 1️⃣ 複製範本儲存格（繼承所有樣式）
             const templateCell = templateRow.getCell(i);
             const newCell = templateCell.copy();
+            const textToSet = safeDocText_(cellData[i]);
 
-            // 2️⃣ 更新段落文字（保留對齊格式）
+            // 2️⃣ 更新段落文字（保留對齊格式，使用 safeDocText_ 防止空白文字元素錯誤）
             if (newCell.getNumChildren() > 0 &&
                 newCell.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH) {
-              newCell.getChild(0).asParagraph().setText(cellData[i]);
+              newCell.getChild(0).asParagraph().setText(textToSet);
 
               // 清理多餘的空行
               while (newCell.getNumChildren() > 1) {
                 newCell.removeChild(newCell.getChild(1));
               }
             } else {
-              newCell.setText(cellData[i]);
+              newCell.setText(textToSet);
             }
 
             // 3️⃣ 強制設定邊框樣式（雙重保險）
@@ -5987,8 +6028,9 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
       const transfer = item.transfer;
 
       try {
-        // 創建新行（空行）
-        const newRow = targetTable.appendTableRow();
+        // 在範本行之後插入新行（避免 appendTableRow 插入到簽名區域之後）
+        const insertPosition = templateRowIndex + index + 1;
+        const newRow = targetTable.insertTableRow(insertPosition);
 
         // 準備 9 個欄位的數據
         const cellData = [
@@ -6010,17 +6052,18 @@ function createTransferDoc(keeperName, assetCategory, assetIds) {
           
           // 2. 複製該儲存格 (保留樣式、邊框、對齊)
           const newCell = templateCell.copy();
+          const textToSet = safeDocText_(cellData[i]);
           
-          // 3. 設定文字內容 (保留段落樣式)
+          // 3. 設定文字內容 (保留段落樣式，使用 safeDocText_ 防止空白文字元素錯誤)
           // 嘗試獲取第一個段落並設定文字，如果沒有段落則直接設定儲存格文字
           if (newCell.getNumChildren() > 0 && newCell.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH) {
-             newCell.getChild(0).asParagraph().setText(cellData[i]);
+             newCell.getChild(0).asParagraph().setText(textToSet);
              // 移除可能存在的多餘段落 (如果範本儲存格有多行)
              while(newCell.getNumChildren() > 1) {
                newCell.removeChild(newCell.getChild(1));
              }
           } else {
-             newCell.setText(cellData[i]);
+             newCell.setText(textToSet);
           }
 
           // 4. 強制設定邊框 (確保黑色實線)
