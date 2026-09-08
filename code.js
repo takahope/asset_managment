@@ -207,7 +207,7 @@ const USERSTATE_ASSET_DTO_FIELDS = [
   'leader', 'leaderEmail', 'userEmail', 'location', 'status',
   'category', 'group', 'userName', 'sourceSheet', 'useLife',
   'purchaseDate', 'isItAsset', 'isActuallyComputer', 'isIsoScope', 'ismsAssetId', 'propertyCategory',
-  'canOperate'
+  'canTransfer', 'canLend', 'canScrap', 'canOperate'
 ];
 
 // 行動駐站清單（出借「借出後放置地點」下拉選單擴充來源）工作表欄位索引
@@ -448,18 +448,46 @@ function buildInventoryAssetContextMap_(assetIds) {
 }
 
 /**
- * ✨ [系統功能] 檢查是否啟用「同組代理轉移」功能
- * 透過 Script Property GROUP_PROXY_ENABLED 控制（原為「管理員名單」工作表 D2）
+ * ✨ [系統功能] 取得同組協作權限設定（嚴格階層相依防護與向下相容）
+ * @returns {{view: boolean, transferLend: boolean, scrap: boolean}}
+ */
+function getGroupCollaborationSettings_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const legacy = props.getProperty('GROUP_PROXY_ENABLED') === 'true';
+    const viewRaw = props.getProperty('GROUP_VIEW_ENABLED');
+    const transferLendRaw = props.getProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED');
+    const scrapRaw = props.getProperty('GROUP_PROXY_SCRAP_ENABLED');
+
+    const view = viewRaw !== null ? viewRaw === 'true' : legacy;
+    const transferLend = view && (transferLendRaw !== null ? transferLendRaw === 'true' : legacy);
+    const scrap = view && (scrapRaw !== null ? scrapRaw === 'true' : false);
+
+    return { view, transferLend, scrap };
+  } catch (error) {
+    Logger.log(`getGroupCollaborationSettings_ 錯誤: ${error.message}`);
+    return { view: false, transferLend: false, scrap: false };
+  }
+}
+
+function isGroupViewEnabled() {
+  return getGroupCollaborationSettings_().view;
+}
+
+function isGroupProxyTransferLendEnabled() {
+  return getGroupCollaborationSettings_().transferLend;
+}
+
+function isGroupProxyScrapEnabled() {
+  return getGroupCollaborationSettings_().scrap;
+}
+
+/**
+ * ✨ [系統功能] 檢查是否啟用「同組代理轉移」功能（相容舊函式呼叫點）
  * @returns {boolean} true = 啟用，false = 停用
  */
 function isGroupProxyTransferEnabled() {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    return props.getProperty('GROUP_PROXY_ENABLED') === 'true';
-  } catch (error) {
-    Logger.log(`isGroupProxyTransferEnabled 錯誤: ${error.message}`);
-    return false; // 發生錯誤時預設關閉
-  }
+  return isGroupProxyTransferLendEnabled();
 }
 
 /**
@@ -513,8 +541,13 @@ function canApproveTransfer_(options) {
   const currentUserEmailLower = String(options.currentUserEmailLower || '').toLowerCase();
   const newLeaderEmailLower = String(options.newLeaderEmailLower || '').toLowerCase();
   const newUserEmailLower = String(options.newUserEmailLower || '').toLowerCase();
-  const groupProxyEnabled = Boolean(options.groupProxyEnabled);
-  const groupEmailSet = options.groupEmailSet || null;
+  const groupSettings = getGroupCollaborationSettings_();
+  const groupProxyEnabled = options.groupProxyEnabled !== undefined
+    ? Boolean(options.groupProxyEnabled)
+    : groupSettings.transferLend;
+  const groupEmailSet = options.groupEmailSet || (groupProxyEnabled
+    ? new Set(getGroupMemberEmails(currentUserEmailLower).map(e => String(e).toLowerCase().trim()))
+    : null);
   const normalizedTransferType = normalizeTransferType_(options.transferType);
 
   let canApprove = false;
@@ -569,18 +602,18 @@ function getAssetsForCurrentUser() {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const normalizedCurrentEmail = String(currentUserEmail).toLowerCase().trim();
 
-  // ✨ 檢查是否啟用同組代理功能
-  const groupProxyEnabled = isGroupProxyTransferEnabled();
+  // ✨ 檢查是否啟用同組資產純檢視功能
+  const groupViewEnabled = isGroupViewEnabled();
 
   let targetEmails = [normalizedCurrentEmail]; // 預設只查詢自己的資產
 
-  if (groupProxyEnabled) {
-    // ✨ 啟用同組代理：取得同組所有成員的 Email
+  if (groupViewEnabled) {
+    // ✨ 啟用同組檢視：取得同組所有成員的 Email
     const groupMemberEmails = getGroupMemberEmails(currentUserEmail);
 
     if (groupMemberEmails && groupMemberEmails.length > 0) {
       targetEmails = groupMemberEmails.map(email => String(email).toLowerCase().trim());
-      Logger.log(`同組代理模式啟用：包含 ${targetEmails.length} 位成員的資產`);
+      Logger.log(`同組資產檢視啟用：包含 ${targetEmails.length} 位成員的資產`);
     } else {
       Logger.log('未找到同組成員，僅顯示自己的資產');
     }
@@ -597,7 +630,7 @@ function getAssetsForCurrentUser() {
     return targetEmails.includes(leaderEmail) || targetEmails.includes(userEmail);
   });
 
-  Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產 (同組代理: ${groupProxyEnabled})`);
+  Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產 (同組可見: ${groupViewEnabled})`);
   return userAssets;
 }
 
@@ -1042,12 +1075,12 @@ function getUserStateData(forceUserScope, options) {
     }
   });
 
-  // ✨ 提前計算同組代理資訊 (供過濾與權限標記使用)
-  const groupProxyEnabled = isGroupProxyTransferEnabled();
+  // ✨ 提前計算同組協作資訊 (供過濾與權限標記使用)
+  const groupSettings = getGroupCollaborationSettings_();
   let groupEmailSet = new Set();
-  if (groupProxyEnabled) {
+  if (groupSettings.view) {
     const groupEmails = getGroupMemberEmails(currentUserEmail);
-    groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase()));
+    groupEmailSet = new Set(groupEmails.map(email => String(email).toLowerCase().trim()));
   }
 
   let filteredData;
@@ -1056,18 +1089,18 @@ function getUserStateData(forceUserScope, options) {
     filteredData = getAllAssets();
   } else {
     const allAssets = getAllAssets();
-    if (groupProxyEnabled) {
+    if (groupSettings.view) {
       // 功能啟用：顯示同組成員的資產
       filteredData = allAssets.filter(asset => {
-        const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
-        const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
+        const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase().trim() : '';
+        const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase().trim() : '';
         return groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
       });
     } else {
       // 功能關閉：只顯示自己的資產
       filteredData = allAssets.filter(asset => {
-        const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
-        const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
+        const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase().trim() : '';
+        const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase().trim() : '';
         return leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
       });
     }
@@ -1083,19 +1116,16 @@ function getUserStateData(forceUserScope, options) {
     const mappedLeaderGroup = asset.leaderName ? (userNameToGroupMap[String(asset.leaderName).trim()] || '') : '';
     const groupName = defaultGroup || mappedUserGroup || mappedLeaderGroup || '未分組';
 
-    // ✨ 計算單筆資產操作權限
-    let canOperate = false;
-    if (isAdmin) {
-      canOperate = true;
-    } else {
-      const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase() : '';
-      const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase() : '';
-      if (groupProxyEnabled) {
-        canOperate = groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
-      } else {
-        canOperate = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
-      }
-    }
+    // ✨ 計算單筆資產動作級操作權限
+    const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase().trim() : '';
+    const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase().trim() : '';
+    const isOwner = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
+    const isGroupMember = groupEmailSet && (groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail));
+
+    const canTransfer = isAdmin || isOwner || (groupSettings.transferLend && isGroupMember);
+    const canLend     = isAdmin || isOwner || (groupSettings.transferLend && isGroupMember);
+    const canScrap    = isAdmin || isOwner || (groupSettings.scrap && isGroupMember);
+    const canOperate  = canTransfer || canLend || canScrap;
 
     const record = {
       assetId: asset.assetId,
@@ -1119,6 +1149,9 @@ function getUserStateData(forceUserScope, options) {
       isIsoScope: asset.isIsoScope || '',
       ismsAssetId: String(asset.ismsAssetId || ''),
       propertyCategory: String(asset.propertyCategory || ''),
+      canTransfer: canTransfer,
+      canLend: canLend,
+      canScrap: canScrap,
       canOperate: canOperate
     };
     if (!skipDisplayDate) {
@@ -1474,14 +1507,17 @@ function getTransferData(forceUserScope) {
   const isProjectViewer = checkProjectViewerPermissions();
   const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
-  // ✨ 檢查同組代理功能狀態（只在一般使用者視圖時生效）
-  const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+  // ✨ 檢查同組協作功能狀態（只在一般使用者視圖時生效）
+  const groupSettings = getGroupCollaborationSettings_();
+  const groupProxyEnabled = !useAdminScope && groupSettings.transferLend;
+  const groupViewEnabled = !useAdminScope && groupSettings.view;
+  const groupProxyScrapEnabled = !useAdminScope && groupSettings.scrap;
 
   // ✨ 取得同組成員 Email 列表（用於前端判斷）
   let groupMemberEmailsLower = [];
   let currentGroup = null;
 
-  if (groupProxyEnabled) {
+  if (groupViewEnabled || groupProxyEnabled) {
     const groupMemberEmails = getGroupMemberEmails(currentUserEmail);
     groupMemberEmailsLower = groupMemberEmails.map(e => String(e).toLowerCase().trim());
 
@@ -1583,6 +1619,9 @@ function getTransferData(forceUserScope) {
     intakeLocation: locConfig.intakeLocation,
     // ✨ 同組代理功能資訊
     groupProxyEnabled: groupProxyEnabled,
+    groupViewEnabled: groupViewEnabled,
+    groupProxyTransferLendEnabled: groupProxyEnabled,
+    groupProxyScrapEnabled: groupProxyScrapEnabled,
     currentGroup: currentGroup,
     currentUserEmail: currentUserEmail,
     groupMemberEmailsLower: groupMemberEmailsLower,
@@ -3024,18 +3063,26 @@ function processBatchLending(formData) {
     const now = new Date();
     let successCount = 0;
 
+    const groupSettings = getGroupCollaborationSettings_();
+    const groupEmailSet = groupSettings.transferLend
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e).toLowerCase().trim()))
+      : null;
+
     assetIds.forEach(assetId => {
       const asset = assetMap.get(assetId);
       if (asset) {
-        // 🛡️ 安全性修復：驗證使用者是否有權出借此資產（保管人或使用人皆可出借）
+        // 🛡️ 安全性修復：驗證使用者是否有權出借此資產（保管人、使用人或同組成員代理）
         if (!isAdmin) {
-          const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
-          const assetUserEmail = (asset.userEmail || '').toLowerCase();
+          const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase().trim();
+          const assetUserEmail = (asset.userEmail || '').toLowerCase().trim();
+          const isOwner = assetLeaderEmail === currentUserEmailLower || assetUserEmail === currentUserEmailLower;
+          const isGroupProxyAllowed = groupSettings.transferLend && groupEmailSet
+            ? (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail)))
+            : false;
 
-          // 允許保管人 OR 使用人
-          if (assetLeaderEmail !== currentUserEmailLower && assetUserEmail !== currentUserEmailLower) {
+          if (!isOwner && !isGroupProxyAllowed) {
             unauthorizedAssets.push(assetId);
-            Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權出借資產 ${assetId}（非保管人也非使用人）`);
+            Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權出借資產 ${assetId}（非保管人、使用人或未開啟同組出借）`);
             return; // 跳過此資產
           }
         }
@@ -3158,14 +3205,24 @@ function getLentOutAssets(forceUserScope) {
 
                 if (useAdminScope) return true;
 
-                const normalizedLender = String(lenderEmail).toLowerCase();
+                const groupSettings = getGroupCollaborationSettings_();
+                const groupEmailSet = groupSettings.transferLend
+                    ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e).toLowerCase().trim()))
+                    : null;
+
+                const normalizedLender = String(lenderEmail).toLowerCase().trim();
                 const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
                 const assetInfo = assetIdToInfoMap.get(assetId) || {};
-                const leaderEmail = (assetInfo.leaderEmail || '').toLowerCase();
-                const userEmail = (assetInfo.userEmail || '').toLowerCase();
-                return normalizedLender === currentUserEmail ||
+                const leaderEmail = (assetInfo.leaderEmail || '').toLowerCase().trim();
+                const userEmail = (assetInfo.userEmail || '').toLowerCase().trim();
+
+                const isDirectOwner = normalizedLender === currentUserEmail ||
                        (leaderEmail && leaderEmail === currentUserEmail) ||
                        (userEmail && userEmail === currentUserEmail);
+                const isGroupAllowed = groupSettings.transferLend && groupEmailSet &&
+                       (groupEmailSet.has(normalizedLender) || (leaderEmail && groupEmailSet.has(leaderEmail)) || (userEmail && groupEmailSet.has(userEmail)));
+
+                return isDirectOwner || isGroupAllowed;
             })
             .map(row => {
                 const assetId = String(row[LL_ASSET_ID_COLUMN_INDEX - 1] || '').trim();
@@ -3231,15 +3288,38 @@ function processBatchReturn(lendIds) {
         const now = new Date();
         let successCount = 0;
 
+        const groupSettings = getGroupCollaborationSettings_();
+        const groupEmailSet = groupSettings.transferLend
+          ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e).toLowerCase().trim()))
+          : null;
+
         lendIds.forEach(lendId => {
             const lendDetails = lendingMap.get(lendId);
             if (lendDetails && lendDetails.row[LL_STATUS_COLUMN_INDEX - 1] === '出借中') {
                 const assetId = lendDetails.row[2];
-                const lenderEmail = lendDetails.row[LL_LENDER_EMAIL_COLUMN_INDEX - 1];  // ✨ 讀取 D 欄（出借人 Email）
+                const lenderEmail = String(lendDetails.row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim();
 
-                // 🛡️ 安全性修復：驗證使用者是否為出借人
+                // 🛡️ 安全性修復：驗證使用者是否為出借人或同組成員（若開啟同組代理出借）
                 if (!isAdmin) {
-                    if (!lenderEmail || lenderEmail.toLowerCase() !== currentUserEmailLower) {
+                    let canReturn = lenderEmail && lenderEmail === currentUserEmailLower;
+
+                    if (!canReturn && groupSettings.transferLend && groupEmailSet) {
+                        // 查找資產原保管人
+                        const assetLocation = findAssetLocation(assetId);
+                        let assetLeaderEmail = '';
+                        if (assetLocation) {
+                            const row = assetLocation.sheet.getRange(assetLocation.rowIndex, 1, 1, assetLocation.sheet.getLastColumn()).getValues()[0];
+                            const indices = assetLocation.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+                            assetLeaderEmail = String(row[indices.LEADER_EMAIL - 1] || '').toLowerCase().trim();
+                        }
+
+                        if ((lenderEmail && groupEmailSet.has(lenderEmail)) ||
+                            (assetLeaderEmail && groupEmailSet.has(assetLeaderEmail))) {
+                            canReturn = true;
+                        }
+                    }
+
+                    if (!canReturn) {
                         unauthorizedLends.push(lendId);
                         Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權歸還此記錄（出借人：${lenderEmail}）`);
                         return; // 跳過此記錄
@@ -3264,7 +3344,7 @@ function processBatchReturn(lendIds) {
         // 🛡️ 安全性修復：如果有無權限的記錄，處理錯誤
         if (unauthorizedLends.length > 0) {
             if (successCount === 0) {
-                throw new Error('權限不足：您不是這些資產的出借人，無法執行歸還操作。');
+                throw new Error('權限不足：您不是這些資產的出借人或原保管人同組成員，無法執行歸還操作。');
             }
         }
 
@@ -3821,9 +3901,19 @@ function processBatchScrapping(formData) {
 
     // 🛡️ 安全性修復：取得當前使用者身分
     const currentUserEmail = Session.getActiveUser().getEmail();
-    const currentUserEmailLower = currentUserEmail.toLowerCase();
+    const currentUserEmailLower = currentUserEmail.toLowerCase().trim();
     const isAdmin = checkAdminPermissions();
     const unauthorizedAssets = []; // 🛡️ 收集無權限的資產
+
+    // ✨ 取得同組協同設定與同組成員
+    const groupSettings = getGroupCollaborationSettings_();
+    const groupEmailSet = groupSettings.scrap
+      ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e || '').toLowerCase().trim()))
+      : null;
+
+    // 解析申請人姓名
+    const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToName: {} };
+    const applicantName = (directory.emailToName && directory.emailToName[currentUserEmailLower]) || currentUserEmail.split('@')[0];
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const scrapLogSheet = getScrapLogSheet(ss);
@@ -3833,27 +3923,43 @@ function processBatchScrapping(formData) {
     const now = new Date();
     let successCount = 0;
     const scrappedAssets = []; // 收集報廢財產資訊供郵件通知使用
-    const fullReason = reason === '其他' ? `其他: ${remarks}` : `${reason} ${remarks}`;
+    const baseReason = reason === '其他' ? `其他: ${remarks}` : `${reason} ${remarks}`;
     const scrapLogRows = [];
     let logSequence = 0;
+
+    // 收集代理報廢需知會的原保管人清單 (keeperEmail -> [assetInfo])
+    const proxyNotificationMap = new Map();
 
     assetIds.forEach(assetId => {
       const asset = assetMap.get(assetId);
 
-      // 🛡️ 安全性修復：驗證使用者是否有權報廢此資產
-      if (asset && !isAdmin) {
-        const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase();
-        const assetUserEmail = (asset.userEmail || '').toLowerCase();
-        if (assetLeaderEmail !== currentUserEmailLower && assetUserEmail !== currentUserEmailLower) {
-          unauthorizedAssets.push(assetId);
-          Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權報廢資產 ${assetId}`);
-          return; // 跳過此資產
-        }
+      if (!asset) {
+        Logger.log(`processBatchScrapping: 找不到資產 ${assetId}，跳過。`);
+        return;
       }
 
-      if (asset && asset.assetStatus !== '已報廢' && asset.assetStatus !== '報廢中') {
+      const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+      const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
+      const isOwnerOrUser = (assetLeaderEmail === currentUserEmailLower || assetUserEmail === currentUserEmailLower);
+      const isGroupProxyAllowed = groupSettings.scrap && groupEmailSet
+        ? (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail)))
+        : false;
+
+      // 🛡️ 安全性修復：驗證使用者是否有權報廢此資產
+      if (!isAdmin && !isOwnerOrUser && !isGroupProxyAllowed) {
+        unauthorizedAssets.push(assetId);
+        Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權報廢資產 ${assetId}`);
+        return; // 跳過此資產
+      }
+
+      if (asset.assetStatus !== '已報廢' && asset.assetStatus !== '報廢中') {
         const location = findAssetLocation(assetId);
         if (location) {
+          const isGroupProxy = !isOwnerOrUser && isGroupProxyAllowed;
+          const fullReason = isGroupProxy
+            ? `【同組代辦】${baseReason} (代辦人: ${applicantName})`
+            : baseReason;
+
           const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
           location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('報廢中');
           location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue(now);
@@ -3866,8 +3972,25 @@ function processBatchScrapping(formData) {
             keeperName: asset.leaderName,
             userName: asset.userName || '無',
             location: asset.location,
-            category: asset.assetCategory  // 修正：使用正確的屬性名稱 assetCategory
+            category: asset.assetCategory,
+            isGroupProxy: isGroupProxy,
+            leaderEmail: asset.leaderEmail
           });
+
+          // 若為代理報廢，收集原保管人通知
+          if (isGroupProxy && asset.leaderEmail) {
+            const keeperEmail = asset.leaderEmail.toLowerCase().trim();
+            if (!proxyNotificationMap.has(keeperEmail)) {
+              proxyNotificationMap.set(keeperEmail, []);
+            }
+            proxyNotificationMap.get(keeperEmail).push({
+              assetId: assetId,
+              assetName: asset.assetName,
+              location: asset.location,
+              category: asset.assetCategory,
+              keeperName: asset.leaderName
+            });
+          }
 
           const scrapId = `SCRAP-${now.getTime()}-${logSequence}`;
           logSequence += 1;
@@ -3900,7 +4023,7 @@ function processBatchScrapping(formData) {
     // 🛡️ 安全性修復：如果有無權限的資產，處理錯誤
     if (unauthorizedAssets.length > 0) {
       if (successCount === 0) {
-        throw new Error(`權限不足：您不是所選財產的保管人或使用人，無法執行報廢操作。`);
+        throw new Error(`權限不足：您不是所選財產的保管人、使用人或授權之同組代辦人員，無法執行報廢操作。`);
       }
     }
 
@@ -3920,11 +4043,33 @@ function processBatchScrapping(formData) {
         .setValues(scrapLogRows);
     }
 
-    // 📧 發送郵件通知給資料更新承辦窗口
+    // 📧 1. 發送原保管人知會信（同組代理報廢通知）
+    if (proxyNotificationMap.size > 0 && isUserEmailEnabled()) {
+      try {
+        proxyNotificationMap.forEach((assets, keeperEmail) => {
+          const keeperName = (directory.emailToName && directory.emailToName[keeperEmail]) || assets[0].keeperName || keeperEmail.split('@')[0];
+          const subject = `[資產管理通知] 同組同仁 ${applicantName} 已代您提交 ${assets.length} 筆資產報廢申請`;
+          let body = `您好 ${keeperName}，\n\n`;
+          body += `同組同仁 ${applicantName} (${currentUserEmail}) 已代您提交了 ${assets.length} 筆由您保管的資產報廢申請：\n\n`;
+          assets.forEach(a => {
+            body += `  📦 ${a.assetId} - ${a.assetName}\n`;
+            body += `     地點：${a.location} | 類別：${a.category}\n\n`;
+          });
+          body += `📋 報廢原因：${baseReason}\n\n`;
+          body += `若您對此申請有任何疑義，請儘速與同組同仁 (${applicantName}) 或資產管理窗口聯繫確認。\n\n`;
+          body += `此為系統自動發送郵件。`;
+
+          MailApp.sendEmail(keeperEmail, subject, body);
+          Logger.log(`✅ 已發送代理報廢知會信給原保管人: ${keeperEmail}`);
+        });
+      } catch (proxyEmailErr) {
+        Logger.log(`⚠️ 原保管人知會信發送失敗: ${proxyEmailErr.message}`);
+      }
+    }
+
+    // 📧 2. 發送郵件通知給資料更新承辦窗口
     if (successCount > 0) {
       try {
-        const applicantEmail = Session.getActiveUser().getEmail();
-        const applicantName = scrappedAssets[0].keeperName; // 申請人即為保管人
         const notifyEmails = getDataUpdateEmails();
 
         if (isDataUpdateEmailEnabled() && notifyEmails && notifyEmails.length > 0) {
@@ -3933,16 +4078,17 @@ function processBatchScrapping(formData) {
 
           const subject = `[財產報廢通知] ${applicantName} 提交了 ${successCount} 筆財產報廢申請`;
           let body = `您好，\n\n`;
-          body += `使用者 ${applicantName} (${applicantEmail}) 剛剛提交了 ${successCount} 筆財產的報廢申請：\n\n`;
+          body += `使用者 ${applicantName} (${currentUserEmail}) 剛剛提交了 ${successCount} 筆財產的報廢申請：\n\n`;
 
           // 列出報廢財產清單
           scrappedAssets.forEach(asset => {
-            body += `  📦 ${asset.assetId} - ${asset.assetName}\n`;
+            const proxyNote = asset.isGroupProxy ? `（同組代辦，原保管人：${asset.keeperName}）` : '';
+            body += `  📦 ${asset.assetId} - ${asset.assetName}${proxyNote ? ' ' + proxyNote : ''}\n`;
             body += `     保管人：${asset.keeperName} | 使用人：${asset.userName}\n`;
             body += `     地點：${asset.location} | 類別：${asset.category}\n\n`;
           });
 
-          body += `📋 報廢原因：${fullReason}\n\n`;
+          body += `📋 報廢原因：${baseReason}\n\n`;
           body += `請點擊下方連結，前往系統主頁列印申請單：\n`;
           body += `${systemLink}\n\n`;
           body += `此為系統自動發送郵件。`;
@@ -4730,12 +4876,16 @@ function exportResolvedLocationErrors() {
 function getSystemSettings() {
   if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可讀取系統設定。');
   const props = PropertiesService.getScriptProperties();
+  const groupSettings = getGroupCollaborationSettings_();
   return {
     reportAdminEmails: props.getProperty('REPORT_ADMIN_EMAILS') || '',
     dataUpdateEmails: props.getProperty('DATA_UPDATE_EMAILS') || '',
     dataUpdateNotifyEnabled: props.getProperty('ADMIN_EMAIL_NOTIFY_ENABLED') === 'true',
     userEmailNotifyEnabled: props.getProperty('USER_EMAIL_NOTIFY_ENABLED') !== 'false',
-    groupProxyEnabled: props.getProperty('GROUP_PROXY_ENABLED') === 'true',
+    groupViewEnabled: groupSettings.view,
+    groupProxyTransferLendEnabled: groupSettings.transferLend,
+    groupProxyScrapEnabled: groupSettings.scrap,
+    groupProxyEnabled: groupSettings.transferLend, // 向下相容
     inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
     fabMenuEnabled: props.getProperty('FAB_MENU_ENABLED') !== 'false',
     locationErrorMode: getLocationErrorMode_(), // ✨ 位置有誤執行模式
@@ -4760,7 +4910,7 @@ function getSystemSettings() {
 /**
  * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
  * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
- * @param {{reportAdminEmails?:string, dataUpdateNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
+ * @param {{reportAdminEmails?:string, dataUpdateNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupViewEnabled?:boolean, groupProxyTransferLendEnabled?:boolean, groupProxyScrapEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
  * @returns {{success:boolean}}
  */
 function saveSystemSettings(settings) {
@@ -4780,8 +4930,19 @@ function saveSystemSettings(settings) {
     props.setProperty('USER_EMAIL_NOTIFY_ENABLED', String(!!s.userEmailNotifyEnabled));
   }
 
-  if (s.groupProxyEnabled !== undefined) {
+  // ✨ 三階同組協作開關儲存
+  if (s.groupViewEnabled !== undefined) {
+    props.setProperty('GROUP_VIEW_ENABLED', String(!!s.groupViewEnabled));
+  }
+  if (s.groupProxyTransferLendEnabled !== undefined) {
+    props.setProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED', String(!!s.groupProxyTransferLendEnabled));
+    props.setProperty('GROUP_PROXY_ENABLED', String(!!s.groupProxyTransferLendEnabled)); // 同步相容舊鍵
+  } else if (s.groupProxyEnabled !== undefined) {
     props.setProperty('GROUP_PROXY_ENABLED', String(!!s.groupProxyEnabled));
+    props.setProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED', String(!!s.groupProxyEnabled));
+  }
+  if (s.groupProxyScrapEnabled !== undefined) {
+    props.setProperty('GROUP_PROXY_SCRAP_ENABLED', String(!!s.groupProxyScrapEnabled));
   }
   if (s.inventoryFeatureEnabled !== undefined) {
     props.setProperty('INVENTORY_FEATURE_ENABLED', String(!!s.inventoryFeatureEnabled));
@@ -4901,9 +5062,9 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
   const isProjectViewer = checkProjectViewerPermissions();
   const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
-  // ✨ 同組協作：取得同組成員 Email 清單
-  const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
-  const groupEmailSet = groupProxyEnabled
+  // ✨ 同組協作：取得同組成員 Email 清單（依同組可見開關）
+  const groupViewEnabled = !useAdminScope && isGroupViewEnabled();
+  const groupEmailSet = groupViewEnabled
     ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
     : null;
 
@@ -4971,7 +5132,7 @@ function getScrappingDataForAdmin(assetCategory, forceUserScope) {
   const isProjectViewer = checkProjectViewerPermissions();
   const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
-  const groupProxyEnabled = !useAdminScope && isGroupProxyTransferEnabled();
+  const groupProxyEnabled = !useAdminScope && isGroupProxyScrapEnabled();
   const groupEmailSet = groupProxyEnabled
     ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
     : null;
@@ -5033,7 +5194,7 @@ function createScrapDoc(applicantName, assetCategory, assetIds) {
   const currentUserEmail = Session.getActiveUser().getEmail();
   const isAdmin = checkAdminPermissions();
 
-  const groupProxyEnabled = !isAdmin && isGroupProxyTransferEnabled();
+  const groupProxyEnabled = !isAdmin && isGroupProxyScrapEnabled();
   const groupEmailSet = groupProxyEnabled
     ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
     : null;
@@ -6101,10 +6262,15 @@ function cancelTransferOrScrap(assetId) {
                         assetLeaderEmail === currentUserEmailLower ||
                         assetUserEmail === currentUserEmailLower;
 
-    // ✨ 同組協作權限檢查：同組成員可以取消同組資產的轉移/報廢
+    // ✨ 同組協作權限檢查：同組成員可以取消同組資產的轉移/報廢（分別校驗 transferLend 與 scrap）
     if (!hasPermission && !isAdmin) {
-      const groupProxyEnabled = isGroupProxyTransferEnabled();
-      if (groupProxyEnabled) {
+      const groupSettings = getGroupCollaborationSettings_();
+      const originalStatus = asset.assetStatus;
+      const isTransfer = (originalStatus === '轉移中' || originalStatus === '待接收');
+      const isScrap = (originalStatus === '報廢中');
+
+      const isProxyAllowed = (isTransfer && groupSettings.transferLend) || (isScrap && groupSettings.scrap);
+      if (isProxyAllowed) {
         const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim());
         const groupEmailSet = new Set(groupEmails);
         if (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail))) {
@@ -6114,7 +6280,7 @@ function cancelTransferOrScrap(assetId) {
     }
 
     if (!hasPermission) {
-      throw new Error("權限不足，只有此財產的保管人、使用人、同組成員或管理員才能執行此操作。");
+      throw new Error("權限不足，只有此財產的保管人、使用人、同組代理授權成員或管理員才能執行此操作。");
     }
 
     const originalStatus = asset.assetStatus;
@@ -10591,3 +10757,125 @@ function migrateKeeperFlagsToProperties() {
   Logger.log(`遷移完成:資訊組保管人 ${infoCustodians.length} 筆、資訊組使用人 ${infoUsers.length} 筆、` +
     `收案組 ${intakeCustodians.length} 筆、盤點組別 ${ismsGroups.size} 筆。原欄位未清空(回退保險)。`);
 }
+
+/**
+ * 🧪 [測試驗證] 驗證同組協作三階權限矩陣與階層互鎖
+ * 可在 GAS 編輯器直接選取此函式執行驗證。
+ * 包含安全還原機制，測試完成後會還原原始 Script Properties。
+ */
+function testGroupCollaborationMatrix_() {
+  const props = PropertiesService.getScriptProperties();
+  const originalView = props.getProperty('GROUP_VIEW_ENABLED');
+  const originalTransferLend = props.getProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED');
+  const originalScrap = props.getProperty('GROUP_PROXY_SCRAP_ENABLED');
+  const originalLegacy = props.getProperty('GROUP_PROXY_ENABLED');
+
+  const results = [];
+  function assertTest(name, condition) {
+    if (condition) {
+      results.push(`  ✅ PASS: ${name}`);
+      Logger.log(`✅ PASS: ${name}`);
+    } else {
+      results.push(`  ❌ FAIL: ${name}`);
+      Logger.log(`❌ FAIL: ${name}`);
+    }
+  }
+
+  Logger.log("=== 開始執行同組協同三階開關矩陣驗證 ===");
+
+  try {
+    // 測試案例 1：向下相容舊開關 (GROUP_PROXY_ENABLED = 'true', 新開關未設定)
+    props.deleteProperty('GROUP_VIEW_ENABLED');
+    props.deleteProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED');
+    props.deleteProperty('GROUP_PROXY_SCRAP_ENABLED');
+    props.setProperty('GROUP_PROXY_ENABLED', 'true');
+    {
+      const s = getGroupCollaborationSettings_();
+      assertTest("案例 1-1: 舊開關為 true 時，view 預設開啟", s.view === true);
+      assertTest("案例 1-2: 舊開關為 true 時，transferLend 預設開啟", s.transferLend === true);
+      assertTest("案例 1-3: 舊開關為 true 時，scrap 預設開啟", s.scrap === true);
+    }
+
+    // 測試案例 2：階層互鎖防護 (view = false，但子開關設為 true)
+    props.setProperty('GROUP_VIEW_ENABLED', 'false');
+    props.setProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED', 'true');
+    props.setProperty('GROUP_PROXY_SCRAP_ENABLED', 'true');
+    {
+      const s = getGroupCollaborationSettings_();
+      assertTest("案例 2-1: view 為 false 時，強制 view 為 false", s.view === false);
+      assertTest("案例 2-2: 階層互鎖 - view 為 false 時，transferLend 被強制歸零", s.transferLend === false);
+      assertTest("案例 2-3: 階層互鎖 - view 為 false 時，scrap 被強制歸零", s.scrap === false);
+      assertTest("案例 2-4: isGroupProxyTransferEnabled() 回傳 false", isGroupProxyTransferEnabled() === false);
+      assertTest("案例 2-5: isGroupProxyScrapEnabled() 回傳 false", isGroupProxyScrapEnabled() === false);
+    }
+
+    // 測試案例 3：純檢視模式 (view = true, transferLend = false, scrap = false)
+    props.setProperty('GROUP_VIEW_ENABLED', 'true');
+    props.setProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED', 'false');
+    props.setProperty('GROUP_PROXY_SCRAP_ENABLED', 'false');
+    {
+      const s = getGroupCollaborationSettings_();
+      assertTest("案例 3-1: 純檢視模式 view 為 true", s.view === true);
+      assertTest("案例 3-2: 純檢視模式 transferLend 為 false", s.transferLend === false);
+      assertTest("案例 3-3: 純檢視模式 scrap 為 false", s.scrap === false);
+    }
+
+    // 測試案例 4：轉移出借代理模式 (view = true, transferLend = true, scrap = false)
+    props.setProperty('GROUP_VIEW_ENABLED', 'true');
+    props.setProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED', 'true');
+    props.setProperty('GROUP_PROXY_SCRAP_ENABLED', 'false');
+    {
+      const s = getGroupCollaborationSettings_();
+      assertTest("案例 4-1: 代理轉移模式 view 為 true", s.view === true);
+      assertTest("案例 4-2: 代理轉移模式 transferLend 為 true", s.transferLend === true);
+      assertTest("案例 4-3: 代理轉移模式 scrap 為 false", s.scrap === false);
+    }
+
+    // 測試案例 5：全開放模式 (view = true, transferLend = true, scrap = true)
+    props.setProperty('GROUP_VIEW_ENABLED', 'true');
+    props.setProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED', 'true');
+    props.setProperty('GROUP_PROXY_SCRAP_ENABLED', 'true');
+    {
+      const s = getGroupCollaborationSettings_();
+      assertTest("案例 5-1: 全功能模式 view 為 true", s.view === true);
+      assertTest("案例 5-2: 全功能模式 transferLend 為 true", s.transferLend === true);
+      assertTest("案例 5-3: 全功能模式 scrap 為 true", s.scrap === true);
+    }
+
+    // 測試案例 6：儲存與讀取整合 (saveSystemSettings & getSystemSettings)
+    saveSystemSettings({
+      groupViewEnabled: true,
+      groupProxyTransferLendEnabled: true,
+      groupProxyScrapEnabled: false
+    });
+    {
+      const settings = getSystemSettings();
+      assertTest("案例 6-1: getSystemSettings().groupViewEnabled === true", settings.groupViewEnabled === true);
+      assertTest("案例 6-2: getSystemSettings().groupProxyTransferLendEnabled === true", settings.groupProxyTransferLendEnabled === true);
+      assertTest("案例 6-3: getSystemSettings().groupProxyScrapEnabled === false", settings.groupProxyScrapEnabled === false);
+    }
+
+  } finally {
+    // 🛡️ 還原原始設定，確保不污染生產環境
+    if (originalView !== null) props.setProperty('GROUP_VIEW_ENABLED', originalView);
+    else props.deleteProperty('GROUP_VIEW_ENABLED');
+
+    if (originalTransferLend !== null) props.setProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED', originalTransferLend);
+    else props.deleteProperty('GROUP_PROXY_TRANSFER_LEND_ENABLED');
+
+    if (originalScrap !== null) props.setProperty('GROUP_PROXY_SCRAP_ENABLED', originalScrap);
+    else props.deleteProperty('GROUP_PROXY_SCRAP_ENABLED');
+
+    if (originalLegacy !== null) props.setProperty('GROUP_PROXY_ENABLED', originalLegacy);
+    else props.deleteProperty('GROUP_PROXY_ENABLED');
+
+    Logger.log("🛡️ 已安全還原原始 Script Properties 設定。");
+  }
+
+  Logger.log("=== 測試結果摘要 ===");
+  results.forEach(r => Logger.log(r));
+  const allPassed = results.every(r => r.includes("PASS"));
+  Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
+  return allPassed;
+}
+

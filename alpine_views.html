@@ -352,7 +352,9 @@ document.addEventListener('alpine:init', function () {
                 var self = this;
                 var store = this.$store.app;
                 var normalizedCurrentEmail = String(store.currentUserEmail || '').toLowerCase().trim();
-                var groupProxyEnabled = (store.transferOptions && store.transferOptions.groupProxyEnabled) || false;
+                var groupViewEnabled = (store.transferOptions && (store.transferOptions.groupViewEnabled !== undefined ? store.transferOptions.groupViewEnabled : store.transferOptions.groupProxyEnabled)) || false;
+                var groupTransferLendEnabled = (store.transferOptions && (store.transferOptions.groupProxyTransferLendEnabled !== undefined ? store.transferOptions.groupProxyTransferLendEnabled : store.transferOptions.groupProxyEnabled)) || false;
+                var groupScrapEnabled = (store.transferOptions && (store.transferOptions.groupProxyScrapEnabled !== undefined ? store.transferOptions.groupProxyScrapEnabled : store.transferOptions.groupProxyEnabled)) || false;
                 var groupMemberEmailsLower = (store.transferOptions && store.transferOptions.groupMemberEmailsLower) || [];
                 var isAdmin = store.isAdminView;
                 return this.paginatedAssets.map(function (asset, index) {
@@ -360,15 +362,15 @@ document.addEventListener('alpine:init', function () {
                     var isOwner = normalizedCurrentEmail &&
                         (normalizedCurrentEmail === String(asset.leaderEmail || '').toLowerCase().trim() ||
                             normalizedCurrentEmail === String(asset.userEmail || '').toLowerCase().trim());
-                    var canCancel = !isTask && (isAdmin || isOwner);
+                    var assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+                    var isGroupMemberAsset = groupViewEnabled &&
+                        assetLeaderEmail !== normalizedCurrentEmail &&
+                        groupMemberEmailsLower.indexOf(assetLeaderEmail) !== -1;
+                    var canCancel = !isTask && (isAdmin || isOwner || (isGroupMemberAsset && ((asset.status === '報廢中' && groupScrapEnabled) || (asset.status !== '報廢中' && groupTransferLendEnabled))));
                     var isSelectable = asset.status === '在庫';
                     // 注意:選取/展開狀態刻意「不」放進 row 物件 — 否則每次勾選都會重建
                     // 整頁 row 物件並重算所有列綁定(~500ms 停頓)。markup 改用
                     // $store.app.isAssetSelected() / isRowExpanded() 逐列 O(1) 查詢。
-                    var assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
-                    var isGroupMemberAsset = groupProxyEnabled &&
-                        assetLeaderEmail !== normalizedCurrentEmail &&
-                        groupMemberEmailsLower.indexOf(assetLeaderEmail) !== -1;
 
                     var rowBaseClass = '';
                     var borderClass = '';
@@ -1384,9 +1386,9 @@ document.addEventListener('alpine:init', function () {
                 <div>
                     <div class="action-panel__section-title">資產操作 ACTIONS</div>
                     <div class="action-panel__actions">
-                        <button type="button" class="action-panel__button action-panel__button--transfer" :disabled="!hasAsset || !canOperate" :title="(!hasAsset || canOperate) ? '' : '您沒有權限操作此資產'" @click="$store.app.openQueueActionModal('TRANSFER')"><i class="fa-solid fa-right-left"></i>轉移</button>
-                        <button type="button" class="action-panel__button action-panel__button--lend" :disabled="!hasAsset || !canOperate" :title="(!hasAsset || canOperate) ? '' : '您沒有權限操作此資產'" @click="$store.app.openQueueActionModal('LEND')"><i class="fa-solid fa-hand-holding-hand"></i>出借</button>
-                        <button type="button" class="action-panel__button action-panel__button--scrap" :disabled="!hasAsset || !canOperate" :title="(!hasAsset || canOperate) ? '' : '您沒有權限操作此資產'" @click="$store.app.openQueueActionModal('SCRAP')"><i class="fa-regular fa-trash-can"></i>報廢</button>
+                        <button type="button" class="action-panel__button action-panel__button--transfer" :disabled="!hasAsset || !canTransfer" :title="(!hasAsset || canTransfer) ? '' : '您沒有權限轉移此資產'" @click="$store.app.openQueueActionModal('TRANSFER')"><i class="fa-solid fa-right-left"></i>轉移</button>
+                        <button type="button" class="action-panel__button action-panel__button--lend" :disabled="!hasAsset || !canLend" :title="(!hasAsset || canLend) ? '' : '您沒有權限出借此資產'" @click="$store.app.openQueueActionModal('LEND')"><i class="fa-solid fa-hand-holding-hand"></i>出借</button>
+                        <button type="button" class="action-panel__button action-panel__button--scrap" :disabled="!hasAsset || !canScrap" :title="(!hasAsset || canScrap) ? '' : '您沒有權限報廢此資產'" @click="$store.app.openQueueActionModal('SCRAP')"><i class="fa-regular fa-trash-can"></i>報廢</button>
                         <button type="button" class="action-panel__button action-panel__button--location-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('position')"><i class="fa-solid fa-location-dot"></i>位置有誤</button>
                         <button type="button" class="action-panel__button action-panel__button--keeper-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('keeper')"><i class="fa-solid fa-user-tag"></i>保管人有誤</button>
                         <button type="button" class="action-panel__button action-panel__button--tag-error" :disabled="!hasAsset" @click="$store.app.handleLocationErrorAction('tag')"><i class="fa-solid fa-tag"></i>標籤有誤</button>
@@ -1640,15 +1642,15 @@ document.addEventListener('alpine:init', function () {
                                                 </button>
                                                 <template x-if="!row.isTask && row.asset.status === '在庫'">
                                                     <div class="flex flex-wrap gap-2">
-                                                        <button type="button" @click.stop="$store.app.handleOpenTransferModal(row.asset)"
+                                                        <button type="button" x-show="$store.app.isAdminView || row.asset.canTransfer !== false" @click.stop="$store.app.handleOpenTransferModal(row.asset)"
                                                                 class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-blue-200 bg-blue-50 text-blue-700" title="轉移">
                                                             <i class="fa-solid fa-right-left text-base"></i><span>轉移</span>
                                                         </button>
-                                                        <button type="button" @click.stop="$store.app.handleOpenLendingModal(row.asset)"
+                                                        <button type="button" x-show="$store.app.isAdminView || row.asset.canLend !== false" @click.stop="$store.app.handleOpenLendingModal(row.asset)"
                                                                 class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-purple-200 bg-purple-50 text-purple-700" title="出借">
                                                             <i class="fa-solid fa-hand-holding-hand text-base"></i><span>出借</span>
                                                         </button>
-                                                        <button type="button" @click.stop="$store.app.handleOpenScrapModal(row.asset)"
+                                                        <button type="button" x-show="$store.app.isAdminView || row.asset.canScrap !== false" @click.stop="$store.app.handleOpenScrapModal(row.asset)"
                                                                 class="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold border-rose-200 bg-rose-50 text-rose-700" title="報廢">
                                                             <i class="fa-regular fa-trash-can text-base"></i><span>報廢</span>
                                                         </button>
@@ -1821,15 +1823,15 @@ document.addEventListener('alpine:init', function () {
                                                 </button>
                                                 <template x-if="!row.isTask && row.asset.status === '在庫'">
                                                     <div class="flex justify-start gap-2">
-                                                        <button type="button" @click="$store.app.handleOpenTransferModal(row.asset)"
+                                                        <button type="button" x-show="$store.app.isAdminView || row.asset.canTransfer !== false" @click="$store.app.handleOpenTransferModal(row.asset)"
                                                                 class="text-blue-600 hover:text-blue-800 transition-colors p-1" title="轉移">
                                                             <i class="fa-solid fa-right-left text-base"></i>
                                                         </button>
-                                                        <button type="button" @click="$store.app.handleOpenLendingModal(row.asset)"
+                                                        <button type="button" x-show="$store.app.isAdminView || row.asset.canLend !== false" @click="$store.app.handleOpenLendingModal(row.asset)"
                                                                 class="text-purple-600 hover:text-purple-800 transition-colors p-1" title="出借">
                                                             <i class="fa-solid fa-hand-holding-hand text-base"></i>
                                                         </button>
-                                                        <button type="button" @click="$store.app.handleOpenScrapModal(row.asset)"
+                                                        <button type="button" x-show="$store.app.isAdminView || row.asset.canScrap !== false" @click="$store.app.handleOpenScrapModal(row.asset)"
                                                                 class="text-red-600 hover:text-red-800 transition-colors p-1" title="報廢">
                                                             <i class="fa-regular fa-trash-can text-base"></i>
                                                         </button>

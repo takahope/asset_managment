@@ -195,11 +195,26 @@ document.addEventListener('alpine:init', function () {
             get state() { return this.$store.app.actionPanelState; },
             get asset() { return this.state.asset; },
             get hasAsset() { return !!(this.asset && this.asset.assetId); },
-            // ✨ 新增 canOperate 判斷
+            // ✨ 新增 canOperate / canTransfer / canLend / canScrap 判斷
             get canOperate() {
                 if (!this.hasAsset) return true; // 反正沒資產時 hasAsset 會擋
                 if (this.$store.app.isAdmin) return true;
                 return this.asset.canOperate !== false; // 若為 false 則無權限
+            },
+            get canTransfer() {
+                if (!this.hasAsset) return true;
+                if (this.$store.app.isAdmin) return true;
+                return this.asset.canTransfer !== false;
+            },
+            get canLend() {
+                if (!this.hasAsset) return true;
+                if (this.$store.app.isAdmin) return true;
+                return this.asset.canLend !== false;
+            },
+            get canScrap() {
+                if (!this.hasAsset) return true;
+                if (this.$store.app.isAdmin) return true;
+                return this.asset.canScrap !== false;
             },
             get hasInventoryTask() { return this.state.assetId ? this.$store.app.hasInventoryTaskForActionPanel(this.state.assetId) : false; },
             get inventoryStatusLabel() { return this.state.assetId ? this.$store.app.resolveInventoryStatusLabel(this.state.assetId) : '無盤點任務'; },

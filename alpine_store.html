@@ -2133,9 +2133,24 @@
                 statusValue = statusValue || null;
                 if (!window.AssetCartStore || !this.actionPanelState.assetId) return;
                 var assetId = this.actionPanelState.assetId;
+                var asset = this.actionPanelState.asset || this.resolveAssetDetail(assetId);
+                if (!this.isAdmin && asset) {
+                    if (actionType === 'TRANSFER' && asset.canTransfer === false) {
+                        this.toastOrAlert('您沒有權限轉移此資產', 'warning');
+                        return;
+                    }
+                    if (actionType === 'LEND' && asset.canLend === false) {
+                        this.toastOrAlert('您沒有權限出借此資產', 'warning');
+                        return;
+                    }
+                    if (actionType === 'SCRAP' && asset.canScrap === false) {
+                        this.toastOrAlert('您沒有權限報廢此資產', 'warning');
+                        return;
+                    }
+                }
                 var isTaskOnly = actionType !== 'INVENTORY' && this.resolveAssetIsTask(assetId);
                 if (isTaskOnly) {
-                    this.toastOrAlert('此資產屬於同組成員，僅能進行盤點', 'warning');
+                    this.toastOrAlert('此資產僅能進行盤點', 'warning');
                     return;
                 }
                 if (actionType === 'INVENTORY' && !this.hasInventoryTaskForActionPanel(assetId)) {
@@ -2199,8 +2214,22 @@
                 if (actionType === 'LEND' && !this.lendingOptions) { alert('出借選項尚未載入，請稍後再試'); return; }
                 var asset = this.actionPanelState.asset || this.resolveAssetDetail(this.actionPanelState.assetId);
                 if (!asset || !asset.assetId) return;
+                if (!this.isAdmin) {
+                    if (actionType === 'TRANSFER' && asset.canTransfer === false) {
+                        this.toastOrAlert('您沒有權限轉移此資產', 'warning');
+                        return;
+                    }
+                    if (actionType === 'LEND' && asset.canLend === false) {
+                        this.toastOrAlert('您沒有權限出借此資產', 'warning');
+                        return;
+                    }
+                    if (actionType === 'SCRAP' && asset.canScrap === false) {
+                        this.toastOrAlert('您沒有權限報廢此資產', 'warning');
+                        return;
+                    }
+                }
                 if (this.resolveAssetIsTask(asset.assetId)) {
-                    this.toastOrAlert('此資產屬於同組成員，僅能進行盤點', 'warning');
+                    this.toastOrAlert('此資產僅能進行盤點', 'warning');
                     return;
                 }
                 refs.queueReturnContext = { assetId: asset.assetId, shouldRestoreActionPanel: false };
