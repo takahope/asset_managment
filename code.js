@@ -1517,7 +1517,7 @@ function getTransferData(forceUserScope) {
   let groupMemberEmailsLower = [];
   let currentGroup = null;
 
-  if (groupViewEnabled || groupProxyEnabled) {
+  if (groupViewEnabled || groupProxyEnabled || groupProxyScrapEnabled) {
     const groupMemberEmails = getGroupMemberEmails(currentUserEmail);
     groupMemberEmailsLower = groupMemberEmails.map(e => String(e).toLowerCase().trim());
 
@@ -5102,9 +5102,9 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
   const isProjectViewer = checkProjectViewerPermissions();
   const useAdminScope = (isAdmin || isProjectViewer) && !forceUserScope;
 
-  // ✨ 同組協作：取得同組成員 Email 清單（依同組可見開關）
-  const groupViewEnabled = !useAdminScope && isGroupViewEnabled();
-  const groupEmailSet = groupViewEnabled
+  // ✨ 同組協作：取得同組成員 Email 清單（依同組代理報廢開關）
+  const groupProxyScrapEnabled = !useAdminScope && isGroupProxyScrapEnabled();
+  const groupEmailSet = groupProxyScrapEnabled
     ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
     : null;
 
@@ -5126,7 +5126,7 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
     const isOwner = assetLeaderEmail === currentUserEmailLower || assetUserEmail === currentUserEmailLower;
 
     // ✨ 同組協作：同組成員的報廢中資產也應可見
-    const isGroupMember = groupProxyEnabled && groupEmailSet &&
+    const isGroupMember = groupProxyScrapEnabled && groupEmailSet &&
                           (groupEmailSet.has(assetLeaderEmail) || groupEmailSet.has(assetUserEmail));
 
     return isOwner || isGroupMember;
@@ -10896,6 +10896,22 @@ function testGroupCollaborationMatrix_() {
       assertTest("案例 6-1: getSystemSettings().groupViewEnabled === true", settings.groupViewEnabled === true);
       assertTest("案例 6-2: getSystemSettings().groupProxyTransferLendEnabled === true", settings.groupProxyTransferLendEnabled === true);
       assertTest("案例 6-3: getSystemSettings().groupProxyScrapEnabled === false", settings.groupProxyScrapEnabled === false);
+    }
+
+    // 測試案例 7：報廢清單與轉移資料整合
+    {
+      const transferData = getTransferData(true);
+      assertTest("案例 7-1: getTransferData() 包含 groupProxyScrapEnabled 欄位", typeof transferData.groupProxyScrapEnabled === 'boolean');
+      
+      let scrapItemsNoThrow = false;
+      try {
+        const items = getAllScrappableItems('財產', true);
+        scrapItemsNoThrow = Array.isArray(items);
+      } catch (e) {
+        Logger.log("案例 7-2 報錯: " + e.message);
+        scrapItemsNoThrow = false;
+      }
+      assertTest("案例 7-2: getAllScrappableItems('財產', true) 執行不拋錯且返回陣列", scrapItemsNoThrow);
     }
 
   } finally {

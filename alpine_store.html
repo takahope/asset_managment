@@ -455,7 +455,7 @@
                 if (this.isAdminView) {
                     scrapPendingCount = scrappingAssets.length;
                 } else {
-                    var groupProxyEnabled = (this.transferOptions && this.transferOptions.groupProxyEnabled) || false;
+                    var groupProxyScrapEnabled = (this.transferOptions && (this.transferOptions.groupProxyScrapEnabled || this.transferOptions.groupProxyEnabled)) || false;
                     var groupMemberEmailsLower = (this.transferOptions && this.transferOptions.groupMemberEmailsLower) || [];
                     var groupEmailSet = {};
                     groupMemberEmailsLower.forEach(function (e) { groupEmailSet[e] = true; });
@@ -464,7 +464,7 @@
                         var leaderEmail = (a.leaderEmail || '').toLowerCase();
                         var userEmail = (a.userEmail || '').toLowerCase();
                         var isOwner = leaderEmail === currentEmailLower || userEmail === currentEmailLower;
-                        var isGroupMember = groupProxyEnabled && (groupEmailSet[leaderEmail] || groupEmailSet[userEmail]);
+                        var isGroupMember = groupProxyScrapEnabled && (groupEmailSet[leaderEmail] || groupEmailSet[userEmail]);
                         return isOwner || isGroupMember;
                     }).length;
                 }

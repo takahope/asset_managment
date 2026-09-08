@@ -114,6 +114,11 @@ return {
 
 ## 事件紀錄
 
+### 2026-09-08 同組報廢待列印清單與抽屜計數支援同組成員申請
+- 症狀：同組報廢功能開啟後，同組成員在待列印報廢單彈窗 (`ScrapPrintModal`) 只能看到自己的報廢申請，無法看到同組同仁的報廢申請；且抽屜卡片報廢計數未納入同組申請。
+- 根因：`getAllScrappableItems` (`code.js:5106`) 誤宣告為 `groupViewEnabled`，而篩選邏輯引用未宣告變數 `groupProxyEnabled`（值為 undefined），導致同組成員判定 `isGroupMember` 永遠為 falsy；且 `getTransferData` 未在僅開啟報廢代理時載入組員清單；前端 `alpine_store.html` 之 `cardCounts.scrapPending` 僅檢查舊開關 `groupProxyEnabled`。
+- 修法：在 `code.js` 宣告 `groupProxyScrapEnabled = !useAdminScope && isGroupProxyScrapEnabled()` 並修正 `getAllScrappableItems` 篩選判定；於 `getTransferData` 加入 `groupProxyScrapEnabled`；於 `alpine_store.html` 之 `cardCounts.scrapPending` 支援 `groupProxyScrapEnabled`；於 `testGroupCollaborationMatrix_` 加入測試案例 7。檔案：`code.js`、`alpine_store.html`。
+
 ### 2026-09-08 文件生成「無法插入空白文字元素」修復 (createTransferDoc/createScrapDoc/createLendingDoc)
 - 症狀：管理員列印非消耗品時拋出 `Error：產生轉移記錄文件時發生錯誤：填充數據時發生錯誤（第1筆）：無法插入空白文字元素。`
 - 根因：非消耗品（物品總表）或部分欄位（型號廠牌、備註、保管人地點）值為空字串 `""` 或 null；GAS DocumentApp 的 `asParagraph().setText("")` 或 `cell.setText("")` 試圖插入長度為 0 的 Text 節點，違反 Google Docs DOM 規範被系統拒絕。另 `createTransferDoc` 使用 `appendTableRow()` 會將資料行加到簽名欄下方。
