@@ -218,18 +218,26 @@ function getHrSpreadsheetId_() {
   return String(id).trim();
 }
 
+let HR_GROUP_NAME_MAP_MEMO_ = null;
+
 /**
- * HR 組別名 → 本系統組別名 轉換表(本專案 Script Property HR_GROUP_NAME_MAP,值同主專案)
+ * HR 組別名 → 本系統組別名 轉換表（支援請求範圍記憶化）
  * @returns {Object}
  */
 function getHrGroupNameMap_() {
+  if (HR_GROUP_NAME_MAP_MEMO_ !== null) return HR_GROUP_NAME_MAP_MEMO_;
   const raw = PropertiesService.getScriptProperties().getProperty('HR_GROUP_NAME_MAP');
-  if (!raw) return {};
+  if (!raw) {
+    HR_GROUP_NAME_MAP_MEMO_ = {};
+    return HR_GROUP_NAME_MAP_MEMO_;
+  }
   try {
-    return JSON.parse(raw) || {};
+    HR_GROUP_NAME_MAP_MEMO_ = JSON.parse(raw) || {};
+    return HR_GROUP_NAME_MAP_MEMO_;
   } catch (e) {
     console.error('HR_GROUP_NAME_MAP 解析失敗(視為空表):', e);
-    return {};
+    HR_GROUP_NAME_MAP_MEMO_ = {};
+    return HR_GROUP_NAME_MAP_MEMO_;
   }
 }
 

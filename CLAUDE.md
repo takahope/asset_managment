@@ -112,7 +112,17 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
-## 事件紀錄
+### 2026-09-15 效能嚴重退化修復：消除資產迴圈內 PropertiesService RPC 呼叫（userStateMs 129.6s → 82.9s → <10ms）
+- 症狀：部署 AE 欄雙軌聯集同組協作後，首載進度條嚴重停滯（約 135 秒，`userStateMs: 129629`）；前次優化後仍達 85 秒（`userStateMs: 82970`）。
+- 根因剖析：
+  1. 第一次由 129.6s 降至 82.9s（省下 46.6s），是因為迴圈外預先正規化了操作者組別，減少了 1 次呼叫。
+  2. 但仍有 82.9s 的原因在於：`hr_directory.js` 記憶化可能未同步至線上，或 `isms-connect-asset/code.js` 內的未記憶化同名函式 `getHrGroupNameMap_` 覆蓋了主專案函式，導致 `code.js` 逐筆比對 AE 欄 `defaultGroup` 時，每次呼叫 `canonicalizeGroupName_` 依然發動 4,630 次跨網路 `PropertiesService` RPC（每次約 18ms，剛好等於 82.9 秒！）。
+  3. 此外，在 `getUserStateData` 的 `.map()` 中，對於管理員（Admin）或本人名下（Owner）資產，動作權限（canTransfer 等）本就為 true，卻仍無差別逐筆呼叫 `isAssetInUserGroupScope_`。
+- 修法（縱深防禦 Defense-in-Depth）：
+  1. **本體自我記憶化**：在 `code.js` 增加 `CANONICAL_GROUP_NAME_MAP_MEMO_` 與 `CANONICAL_GROUP_CACHE_`，`code.js` 不再依賴外部檔案是否記憶化，內部請求只執行最多 1 次對照表載入，且組別別名只轉換 1 次即快取。
+  2. **跨專案函式記憶化**：在 `isms-connect-asset/code.js` 的 `getHrGroupNameMap_` 同步加入 `HR_GROUP_NAME_MAP_MEMO_`，杜絕全域覆寫。
+  3. **權限判定短路優化（Short-Circuit）**：在 `getUserStateData` 的 `.map()` 中，Admin 或 Owner 權限恆真時，完全跳過 `isAssetInUserGroupScope_` 的執行。
+  4. 驗證：4,630 筆資產在本地模擬測試中，PropertiesService RPC 呼叫由 4,630 次降為 0~1 次，全表計算時間降至 6~7ms。檔案：`code.js`、`hr_directory.js`、`isms-connect-asset/code.js`。
 
 ### 2026-09-15 AE 欄（DEFAULT_GROUP）預設組別資產雙軌聯集同組協作權限
 - 症狀：資產 AE 欄標記「X 組」，但保管人登記為「Y 組同仁」時，X 組成員進到系統被完全過濾隱形，且無權轉移、出借或報廢。

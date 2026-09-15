@@ -55,19 +55,27 @@ function getHrSpreadsheetId_() {
   return String(id).trim();
 }
 
+let HR_GROUP_NAME_MAP_MEMO_ = null;
+
 /**
- * HR 組別名 → 資產系統慣用組別名 轉換表
+ * HR 組別名 → 資產系統慣用組別名 轉換表（支援請求範圍記憶化）
  * 例:{"行政支援組(行政組)":"行政組","資料運用組":"釋出組","專案規劃組":"策略組"}
  * @returns {Object}
  */
 function getHrGroupNameMap_() {
+  if (HR_GROUP_NAME_MAP_MEMO_ !== null) return HR_GROUP_NAME_MAP_MEMO_;
   const raw = PropertiesService.getScriptProperties().getProperty('HR_GROUP_NAME_MAP');
-  if (!raw) return {};
+  if (!raw) {
+    HR_GROUP_NAME_MAP_MEMO_ = {};
+    return HR_GROUP_NAME_MAP_MEMO_;
+  }
   try {
-    return JSON.parse(raw) || {};
+    HR_GROUP_NAME_MAP_MEMO_ = JSON.parse(raw) || {};
+    return HR_GROUP_NAME_MAP_MEMO_;
   } catch (e) {
     Logger.log('HR_GROUP_NAME_MAP 解析失敗(視為空表):' + e.message);
-    return {};
+    HR_GROUP_NAME_MAP_MEMO_ = {};
+    return HR_GROUP_NAME_MAP_MEMO_;
   }
 }
 
@@ -277,6 +285,7 @@ function getKeeperDirectory_() {
 function clearKeeperDirectoryCache() {
   KEEPER_DIRECTORY_MEMO_ = null;
   LOCATION_CONFIG_MEMO_ = null;
+  HR_GROUP_NAME_MAP_MEMO_ = null;
   CacheService.getScriptCache().remove(KEEPER_DIRECTORY_CACHE_KEY);
 }
 

@@ -532,16 +532,50 @@ function normalizeTransferType_(transferType) {
   return normalized.trim();
 }
 
+let CANONICAL_GROUP_NAME_MAP_MEMO_ = null;
+const CANONICAL_GROUP_CACHE_ = Object.create(null);
+
+/** 清除組別別名快取（設定變更後呼叫） */
+function clearCanonicalGroupNameMapMemo_() {
+  CANONICAL_GROUP_NAME_MAP_MEMO_ = null;
+  for (const k in CANONICAL_GROUP_CACHE_) {
+    delete CANONICAL_GROUP_CACHE_[k];
+  }
+}
+
+/** 取得正規化組別名稱對照表（code.js 自帶獨立記憶化，免受跨檔案覆寫或未部署影響） */
+function getCanonicalGroupNameMap_() {
+  if (CANONICAL_GROUP_NAME_MAP_MEMO_ !== null) return CANONICAL_GROUP_NAME_MAP_MEMO_;
+  if (typeof getHrGroupNameMap_ === 'function') {
+    CANONICAL_GROUP_NAME_MAP_MEMO_ = getHrGroupNameMap_() || {};
+  } else {
+    try {
+      const raw = PropertiesService.getScriptProperties().getProperty('HR_GROUP_NAME_MAP');
+      CANONICAL_GROUP_NAME_MAP_MEMO_ = raw ? (JSON.parse(raw) || {}) : {};
+    } catch (e) {
+      CANONICAL_GROUP_NAME_MAP_MEMO_ = {};
+    }
+  }
+  return CANONICAL_GROUP_NAME_MAP_MEMO_;
+}
+
 /**
- * 取得正規化組別名稱（支援 HR_GROUP_NAME_MAP 別名轉換）
+ * 取得正規化組別名稱（支援 HR_GROUP_NAME_MAP 別名轉換與本地高速記憶化）
  * @param {string} groupName 原始組別名稱
+ * @param {Object} [optMap] 選擇性預先載入之對照表，若省略則自快取取得
  * @returns {string} 正規化後之慣用組別名稱
  */
-function canonicalizeGroupName_(groupName) {
+function canonicalizeGroupName_(groupName, optMap) {
   const g = String(groupName || '').trim();
   if (!g) return '';
-  const map = typeof getHrGroupNameMap_ === 'function' ? getHrGroupNameMap_() : {};
-  return map[g] || g;
+  if (optMap) return optMap[g] || g;
+  if (CANONICAL_GROUP_CACHE_[g] !== undefined) {
+    return CANONICAL_GROUP_CACHE_[g];
+  }
+  const map = getCanonicalGroupNameMap_();
+  const res = map[g] || g;
+  CANONICAL_GROUP_CACHE_[g] = res;
+  return res;
 }
 
 /**
@@ -551,17 +585,20 @@ function canonicalizeGroupName_(groupName) {
  * @param {Object} asset - 資產物件（需包含 defaultGroup, leaderEmail, userEmail）
  * @param {string} currentUserGroup - 操作者所屬組別名稱
  * @param {Set<string>|null} groupEmailSet - 操作者同組成員 Email 集合（小寫）
+ * @param {string} [memoizedNormalizedUserGroup] - 選擇性預先計算之操作者正規化組別（小寫），提升批量比對效能
  * @returns {boolean} 是否符合同組協作範圍
  */
-function isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet) {
+function isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet, memoizedNormalizedUserGroup) {
   if (!asset) return false;
 
   // 軌道一：資產歸屬軌（AE 欄明確標註組別，且操作者即為該組成員）
   const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
   if (defaultGroup && currentUserGroup && currentUserGroup !== '未分組') {
-    const normalizedDefault = canonicalizeGroupName_(defaultGroup);
-    const normalizedUser = canonicalizeGroupName_(currentUserGroup);
-    if (normalizedDefault.toLowerCase() === normalizedUser.toLowerCase()) {
+    const targetUserGroup = memoizedNormalizedUserGroup !== undefined
+      ? memoizedNormalizedUserGroup
+      : canonicalizeGroupName_(currentUserGroup).toLowerCase();
+    const normalizedDefault = canonicalizeGroupName_(defaultGroup).toLowerCase();
+    if (normalizedDefault === targetUserGroup) {
       return true;
     }
   }
@@ -668,6 +705,8 @@ function getAssetsForCurrentUser() {
     }
   }
 
+  const normalizedUserGroupLower = canonicalizeGroupName_(currentUserGroup).toLowerCase();
+
   // 取得所有資產
   const allAssets = getAllAssets();
 
@@ -680,7 +719,7 @@ function getAssetsForCurrentUser() {
     if (!groupViewEnabled) {
       return isOwner;
     }
-    return isOwner || isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
+    return isOwner || isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet, normalizedUserGroupLower);
   });
 
   Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產 (同組可見: ${groupViewEnabled})`);
@@ -890,7 +929,10 @@ function getAllowedEmails() {
  */
 function clearPermissionCache() {
   CacheService.getScriptCache().remove('system_access_allowlist');
-  clearKeeperDirectoryCache();
+  clearCanonicalGroupNameMapMemo_();
+  if (typeof clearKeeperDirectoryCache === 'function') {
+    clearKeeperDirectoryCache();
+  }
 }
 
 /**
@@ -1130,6 +1172,7 @@ function getUserStateData(forceUserScope, options) {
 
   // ✨ 提前計算同組協作資訊 (供過濾與權限標記使用)
   const currentUserGroup = directory.emailToGroup[normalizedCurrentEmail] || '未分組';
+  const normalizedUserGroupLower = canonicalizeGroupName_(currentUserGroup).toLowerCase();
   const groupSettings = getGroupCollaborationSettings_();
   let groupEmailSet = new Set();
   if (groupSettings.view) {
@@ -1149,7 +1192,7 @@ function getUserStateData(forceUserScope, options) {
         const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase().trim() : '';
         const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase().trim() : '';
         const isOwner = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
-        return isOwner || isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
+        return isOwner || isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet, normalizedUserGroupLower);
       });
     } else {
       // 功能關閉：只顯示自己的資產
@@ -1175,12 +1218,25 @@ function getUserStateData(forceUserScope, options) {
     const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase().trim() : '';
     const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase().trim() : '';
     const isOwner = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
-    const isGroupScope = isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
 
-    const canTransfer = isAdmin || isOwner || (groupSettings.transferLend && isGroupScope);
-    const canLend     = isAdmin || isOwner || (groupSettings.transferLend && isGroupScope);
-    const canScrap    = isAdmin || isOwner || (groupSettings.scrap && isGroupScope);
-    const canOperate  = canTransfer || canLend || canScrap;
+    // ✨ 效能防禦：Admin 或本人名下資產權限恆真，或同組操作設定全關閉時，完全跳過 isAssetInUserGroupScope_ 計算
+    let canTransfer = isAdmin || isOwner;
+    let canLend = canTransfer;
+    let canScrap = canTransfer;
+
+    if (!canTransfer && (groupSettings.transferLend || groupSettings.scrap)) {
+      const isGroupScope = isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet, normalizedUserGroupLower);
+      if (isGroupScope) {
+        if (groupSettings.transferLend) {
+          canTransfer = true;
+          canLend = true;
+        }
+        if (groupSettings.scrap) {
+          canScrap = true;
+        }
+      }
+    }
+    const canOperate = canTransfer || canLend || canScrap;
 
     const record = {
       assetId: asset.assetId,
