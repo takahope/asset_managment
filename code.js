@@ -533,6 +533,52 @@ function normalizeTransferType_(transferType) {
 }
 
 /**
+ * 取得正規化組別名稱（支援 HR_GROUP_NAME_MAP 別名轉換）
+ * @param {string} groupName 原始組別名稱
+ * @returns {string} 正規化後之慣用組別名稱
+ */
+function canonicalizeGroupName_(groupName) {
+  const g = String(groupName || '').trim();
+  if (!g) return '';
+  const map = typeof getHrGroupNameMap_ === 'function' ? getHrGroupNameMap_() : {};
+  return map[g] || g;
+}
+
+/**
+ * 判斷資產是否屬於操作者的同組協作範圍（雙軌聯集判定）
+ * 軌道一：資產歸屬軌（AE 欄 defaultGroup 等於操作者組別）
+ * 軌道二：同仁保管軌（保管人或使用人為操作者的同組同事）
+ * @param {Object} asset - 資產物件（需包含 defaultGroup, leaderEmail, userEmail）
+ * @param {string} currentUserGroup - 操作者所屬組別名稱
+ * @param {Set<string>|null} groupEmailSet - 操作者同組成員 Email 集合（小寫）
+ * @returns {boolean} 是否符合同組協作範圍
+ */
+function isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet) {
+  if (!asset) return false;
+
+  // 軌道一：資產歸屬軌（AE 欄明確標註組別，且操作者即為該組成員）
+  const defaultGroup = asset.defaultGroup ? String(asset.defaultGroup).trim() : '';
+  if (defaultGroup && currentUserGroup && currentUserGroup !== '未分組') {
+    const normalizedDefault = canonicalizeGroupName_(defaultGroup);
+    const normalizedUser = canonicalizeGroupName_(currentUserGroup);
+    if (normalizedDefault.toLowerCase() === normalizedUser.toLowerCase()) {
+      return true;
+    }
+  }
+
+  // 軌道二：同仁保管軌（保管人或使用人為操作者的同組同事）
+  if (groupEmailSet) {
+    const leaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+    const userEmail = String(asset.userEmail || '').toLowerCase().trim();
+    if ((leaderEmail && groupEmailSet.has(leaderEmail)) || (userEmail && groupEmailSet.has(userEmail))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * 判斷使用者是否可審核/接收某筆轉移（含同組代理）
  * @param {Object} options
  * @returns {boolean}
@@ -551,7 +597,7 @@ function canApproveTransfer_(options) {
   const normalizedTransferType = normalizeTransferType_(options.transferType);
 
   let canApprove = false;
-  if (normalizedTransferType === '保管人+使用人') {
+  if (normalizedTransferType === '保管人+使用人' || normalizedTransferType === '資訊組轉出') {
     canApprove = currentUserEmailLower === newLeaderEmailLower || currentUserEmailLower === newUserEmailLower;
   } else if (normalizedTransferType === '使用人') {
     canApprove = currentUserEmailLower === newUserEmailLower;
@@ -562,7 +608,7 @@ function canApproveTransfer_(options) {
   if (canApprove) return true;
   if (!groupProxyEnabled || !groupEmailSet) return false;
 
-  if (normalizedTransferType === '保管人+使用人') {
+  if (normalizedTransferType === '保管人+使用人' || normalizedTransferType === '資訊組轉出') {
     return groupEmailSet.has(newLeaderEmailLower) || groupEmailSet.has(newUserEmailLower);
   }
   if (normalizedTransferType === '使用人') {
@@ -605,15 +651,18 @@ function getAssetsForCurrentUser() {
   // ✨ 檢查是否啟用同組資產純檢視功能
   const groupViewEnabled = isGroupViewEnabled();
 
-  let targetEmails = [normalizedCurrentEmail]; // 預設只查詢自己的資產
+  const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToGroup: {} };
+  const currentUserGroup = (directory.emailToGroup && directory.emailToGroup[normalizedCurrentEmail]) || '未分組';
+
+  let groupEmailSet = null;
 
   if (groupViewEnabled) {
     // ✨ 啟用同組檢視：取得同組所有成員的 Email
     const groupMemberEmails = getGroupMemberEmails(currentUserEmail);
 
     if (groupMemberEmails && groupMemberEmails.length > 0) {
-      targetEmails = groupMemberEmails.map(email => String(email).toLowerCase().trim());
-      Logger.log(`同組資產檢視啟用：包含 ${targetEmails.length} 位成員的資產`);
+      groupEmailSet = new Set(groupMemberEmails.map(email => String(email).toLowerCase().trim()));
+      Logger.log(`同組資產檢視啟用：包含 ${groupEmailSet.size} 位成員的資產`);
     } else {
       Logger.log('未找到同組成員，僅顯示自己的資產');
     }
@@ -622,12 +671,16 @@ function getAssetsForCurrentUser() {
   // 取得所有資產
   const allAssets = getAllAssets();
 
-  // 篩選：保管人或使用人是目標 Email 集合中的任一個
+  // 篩選：本人名下 OR 符合同組範圍（雙軌聯集）
   const userAssets = allAssets.filter(asset => {
     const leaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
     const userEmail = String(asset.userEmail || '').toLowerCase().trim();
+    const isOwner = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
 
-    return targetEmails.includes(leaderEmail) || targetEmails.includes(userEmail);
+    if (!groupViewEnabled) {
+      return isOwner;
+    }
+    return isOwner || isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
   });
 
   Logger.log(`getAssetsForCurrentUser: 為 ${currentUserEmail} 找到 ${userAssets.length} 筆相關資產 (同組可見: ${groupViewEnabled})`);
@@ -1076,6 +1129,7 @@ function getUserStateData(forceUserScope, options) {
   });
 
   // ✨ 提前計算同組協作資訊 (供過濾與權限標記使用)
+  const currentUserGroup = directory.emailToGroup[normalizedCurrentEmail] || '未分組';
   const groupSettings = getGroupCollaborationSettings_();
   let groupEmailSet = new Set();
   if (groupSettings.view) {
@@ -1090,11 +1144,12 @@ function getUserStateData(forceUserScope, options) {
   } else {
     const allAssets = getAllAssets();
     if (groupSettings.view) {
-      // 功能啟用：顯示同組成員的資產
+      // 功能啟用：顯示自己名下 OR 符合同組協作範圍（雙軌聯集）的資產
       filteredData = allAssets.filter(asset => {
         const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase().trim() : '';
         const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase().trim() : '';
-        return groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail);
+        const isOwner = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
+        return isOwner || isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
       });
     } else {
       // 功能關閉：只顯示自己的資產
@@ -1120,11 +1175,11 @@ function getUserStateData(forceUserScope, options) {
     const leaderEmail = asset.leaderEmail ? String(asset.leaderEmail).toLowerCase().trim() : '';
     const userEmail = asset.userEmail ? String(asset.userEmail).toLowerCase().trim() : '';
     const isOwner = leaderEmail === normalizedCurrentEmail || userEmail === normalizedCurrentEmail;
-    const isGroupMember = groupEmailSet && (groupEmailSet.has(leaderEmail) || groupEmailSet.has(userEmail));
+    const isGroupScope = isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
 
-    const canTransfer = isAdmin || isOwner || (groupSettings.transferLend && isGroupMember);
-    const canLend     = isAdmin || isOwner || (groupSettings.transferLend && isGroupMember);
-    const canScrap    = isAdmin || isOwner || (groupSettings.scrap && isGroupMember);
+    const canTransfer = isAdmin || isOwner || (groupSettings.transferLend && isGroupScope);
+    const canLend     = isAdmin || isOwner || (groupSettings.transferLend && isGroupScope);
+    const canScrap    = isAdmin || isOwner || (groupSettings.scrap && isGroupScope);
     const canOperate  = canTransfer || canLend || canScrap;
 
     const record = {
@@ -1654,6 +1709,8 @@ function processBatchTransferApplication(formData) {
       isIntakeTransfer,   // 是否為「駐站回送中心收案組」
       intakeCustodianEmail, // 收案組保管人 Email（同時也是使用人）
       intakeLocation,      // 收案組地點
+      // ✨ 新增：資訊組轉出模式
+      isInfoOutTransfer,  // 是否為「資訊組轉出」
       // ✨ 新增：代理轉移參數（前端傳入）
       proxyTransfers      // 格式：[{ assetId, originalKeeperEmail, originalKeeperName }]
     } = formData;
@@ -1718,6 +1775,16 @@ function processBatchTransferApplication(formData) {
       if (!intakeCustodianEmail || !intakeLocation) {
         throw new Error("收案組轉移需要完整的保管人和地點資料。");
       }
+    } else if (isInfoOutTransfer) {
+      // ✨ 資訊組轉出模式：保管人和使用人強制為同一人（接收人）
+      actualNewKeeperEmail = newKeeperEmail;
+      actualNewUserEmail = newKeeperEmail; // 保證同一人
+      actualNewLocation = newLocation || null; // 選填：若未提供則保持原地點
+      actualTransferType = '資訊組轉出';
+
+      if (!actualNewKeeperEmail) {
+        throw new Error("資訊組轉出需要選擇接收人員。");
+      }
     } else {
       // 一般轉移模式驗證
       if (!newKeeperEmail && !newLocation && !newUserName && !newUserEmail) {
@@ -1766,6 +1833,7 @@ function processBatchTransferApplication(formData) {
     const now = new Date();
     const applicantEmail = Session.getActiveUser().getEmail(); // 申請操作人員 Email
     const applicantEmailLower = applicantEmail.toLowerCase(); // 🛡️ 安全性修復：統一小寫比對
+    const applicantGroup = (directory.emailToGroup && directory.emailToGroup[applicantEmailLower]) || '未分組';
     const isAdmin = checkAdminPermissions(); // 🛡️ 安全性修復：檢查是否為管理員
     const groupEmailSet = groupProxyEnabled
       ? new Set(getGroupMemberEmails(applicantEmail).map(e => String(e).toLowerCase().trim()))
@@ -1783,12 +1851,11 @@ function processBatchTransferApplication(formData) {
 
         // 🛡️ 安全性修復：驗證使用者是否有權操作此資產
         if (!isAdmin) {
-          const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase();
-          const assetUserEmail = String(asset.userEmail || '').toLowerCase();
+          const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+          const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
           const isOwner = assetLeaderEmail === applicantEmailLower || assetUserEmail === applicantEmailLower;
-          const isGroupProxyAllowed = groupProxyEnabled && groupEmailSet
-            ? (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail)))
-            : false;
+          const isGroupScope = isAssetInUserGroupScope_(asset, applicantGroup, groupEmailSet);
+          const isGroupProxyAllowed = groupProxyEnabled && isGroupScope;
           if (!isOwner && !isGroupProxyAllowed) {
             unauthorizedAssets.push(assetId);
             Logger.log(`🛡️ 權限拒絕：${applicantEmail} 無權轉移資產 ${assetId}`);
@@ -1877,6 +1944,8 @@ function processBatchTransferApplication(formData) {
             transferType = '駐站回送資訊組';
           } else if (actualTransferType === '駐站回送收案組') {
             transferType = '駐站回送收案組';
+          } else if (actualTransferType === '資訊組轉出') {
+            transferType = '資訊組轉出';
           } else {
             // 動態組合轉移類型
             const parts = [];
@@ -3053,6 +3122,8 @@ function processBatchLending(formData) {
     // 🛡️ 安全性修復：取得當前使用者身分
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUserEmailLower = currentUserEmail.toLowerCase();
+    const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToGroup: {} };
+    const currentUserGroup = (directory.emailToGroup && directory.emailToGroup[currentUserEmailLower]) || '未分組';
     const isAdmin = checkAdminPermissions();
     const unauthorizedAssets = []; // 🛡️ 收集無權限的資產
 
@@ -3076,9 +3147,8 @@ function processBatchLending(formData) {
           const assetLeaderEmail = (asset.leaderEmail || '').toLowerCase().trim();
           const assetUserEmail = (asset.userEmail || '').toLowerCase().trim();
           const isOwner = assetLeaderEmail === currentUserEmailLower || assetUserEmail === currentUserEmailLower;
-          const isGroupProxyAllowed = groupSettings.transferLend && groupEmailSet
-            ? (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail)))
-            : false;
+          const isGroupScope = isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
+          const isGroupProxyAllowed = groupSettings.transferLend && isGroupScope;
 
           if (!isOwner && !isGroupProxyAllowed) {
             unauthorizedAssets.push(assetId);
@@ -3278,6 +3348,8 @@ function processBatchReturn(lendIds) {
         // 🛡️ 安全性修復：取得當前使用者身分
         const currentUserEmail = Session.getActiveUser().getEmail();
         const currentUserEmailLower = currentUserEmail.toLowerCase();
+        const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToGroup: {} };
+        const currentUserGroup = (directory.emailToGroup && directory.emailToGroup[currentUserEmailLower]) || '未分組';
         const isAdmin = checkAdminPermissions();
         const unauthorizedLends = []; // 🛡️ 收集無權限的歸還
 
@@ -3299,22 +3371,33 @@ function processBatchReturn(lendIds) {
                 const assetId = lendDetails.row[2];
                 const lenderEmail = String(lendDetails.row[LL_LENDER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim();
 
+                const assetLocation = findAssetLocation(assetId);
+
                 // 🛡️ 安全性修復：驗證使用者是否為出借人或同組成員（若開啟同組代理出借）
                 if (!isAdmin) {
                     let canReturn = lenderEmail && lenderEmail === currentUserEmailLower;
 
-                    if (!canReturn && groupSettings.transferLend && groupEmailSet) {
-                        // 查找資產原保管人
-                        const assetLocation = findAssetLocation(assetId);
+                    if (!canReturn && groupSettings.transferLend) {
+                        // 查找資產原保管人、使用人與 AE 欄 defaultGroup
                         let assetLeaderEmail = '';
+                        let assetUserEmail = '';
+                        let assetDefaultGroup = '';
                         if (assetLocation) {
                             const row = assetLocation.sheet.getRange(assetLocation.rowIndex, 1, 1, assetLocation.sheet.getLastColumn()).getValues()[0];
                             const indices = assetLocation.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
                             assetLeaderEmail = String(row[indices.LEADER_EMAIL - 1] || '').toLowerCase().trim();
+                            assetUserEmail = (indices.USER_EMAIL && row[indices.USER_EMAIL - 1]) ? String(row[indices.USER_EMAIL - 1]).toLowerCase().trim() : '';
+                            assetDefaultGroup = indices.DEFAULT_GROUP ? String(row[indices.DEFAULT_GROUP - 1] || '').trim() : '';
                         }
 
-                        if ((lenderEmail && groupEmailSet.has(lenderEmail)) ||
-                            (assetLeaderEmail && groupEmailSet.has(assetLeaderEmail))) {
+                        const mockAsset = {
+                            defaultGroup: assetDefaultGroup,
+                            leaderEmail: assetLeaderEmail,
+                            userEmail: assetUserEmail
+                        };
+
+                        if ((lenderEmail && groupEmailSet && groupEmailSet.has(lenderEmail)) ||
+                            isAssetInUserGroupScope_(mockAsset, currentUserGroup, groupEmailSet)) {
                             canReturn = true;
                         }
                     }
@@ -3331,8 +3414,8 @@ function processBatchReturn(lendIds) {
                 lendingLogSheet.getRange(lendRowIndex, LL_STATUS_COLUMN_INDEX).setValue('已歸還');
                 lendingLogSheet.getRange(lendRowIndex, LL_RETURN_DATE_COLUMN_INDEX).setValue(now);
                 
-                // 2. 更新財產總表的狀態
-                const location = findAssetLocation(assetId);
+                // 2. 更新財產總表的狀態 (複用前面查得之 assetLocation)
+                const location = assetLocation || findAssetLocation(assetId);
                 if (location) {
                     const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
                     location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('在庫');
@@ -3951,9 +4034,10 @@ function processBatchScrapping(formData) {
       ? new Set(getGroupMemberEmails(currentUserEmail).map(e => String(e || '').toLowerCase().trim()))
       : null;
 
-    // 解析申請人姓名
-    const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToName: {} };
+    // 解析申請人姓名與組別
+    const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToName: {}, emailToGroup: {} };
     const applicantName = (directory.emailToName && directory.emailToName[currentUserEmailLower]) || currentUserEmail.split('@')[0];
+    const currentUserGroup = (directory.emailToGroup && directory.emailToGroup[currentUserEmailLower]) || '未分組';
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const scrapLogSheet = getScrapLogSheet(ss);
@@ -3981,9 +4065,8 @@ function processBatchScrapping(formData) {
       const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
       const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
       const isOwnerOrUser = (assetLeaderEmail === currentUserEmailLower || assetUserEmail === currentUserEmailLower);
-      const isGroupProxyAllowed = groupSettings.scrap && groupEmailSet
-        ? (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail)))
-        : false;
+      const isGroupScope = isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet);
+      const isGroupProxyAllowed = groupSettings.scrap && isGroupScope;
 
       // 🛡️ 安全性修復：驗證使用者是否有權報廢此資產
       if (!isAdmin && !isOwnerOrUser && !isGroupProxyAllowed) {
@@ -6314,9 +6397,11 @@ function cancelTransferOrScrap(assetId) {
 
       const isProxyAllowed = (isTransfer && groupSettings.transferLend) || (isScrap && groupSettings.scrap);
       if (isProxyAllowed) {
+        const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToGroup: {} };
+        const currentUserGroup = (directory.emailToGroup && directory.emailToGroup[currentUserEmailLower]) || '未分組';
         const groupEmails = getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim());
         const groupEmailSet = new Set(groupEmails);
-        if (groupEmailSet.has(assetLeaderEmail) || (assetUserEmail && groupEmailSet.has(assetUserEmail))) {
+        if (isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet)) {
           hasPermission = true;
         }
       }
@@ -10937,4 +11022,91 @@ function testGroupCollaborationMatrix_() {
   Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
   return allPassed;
 }
+
+/**
+ * [自動化測試] 驗證 AE 欄（DEFAULT_GROUP）預設組別資產之雙軌聯集同組協作權限矩陣
+ * 可在 GAS 編輯器直接執行，不修改試算表資料。
+ */
+function testDefaultGroupAssetCollaborationMatrix_() {
+  const results = [];
+  function assertTest(name, condition) {
+    const passed = Boolean(condition);
+    const msg = `[${passed ? 'PASS' : 'FAIL'}] ${name}`;
+    results.push(msg);
+    Logger.log(msg);
+  }
+
+  Logger.log("=== 開始執行 AE 欄預設組別雙軌聯集權限測試 ===");
+
+  // 測試資料準備
+  const mockAssetWithDefaultGroup = {
+    assetId: 'TEST-001',
+    defaultGroup: '策略組',
+    leaderEmail: 'keeper_admin_dept@example.com', // 行政組同仁
+    userEmail: ''
+  };
+
+  const mockAssetWithoutDefaultGroup = {
+    assetId: 'TEST-002',
+    defaultGroup: '',
+    leaderEmail: 'keeper_admin_dept@example.com', // 行政組同仁
+    userEmail: ''
+  };
+
+  const adminGroupEmails = new Set(['keeper_admin_dept@example.com', 'colleague_admin_dept@example.com']);
+  const strategyGroupEmails = new Set(['member_strategy_dept@example.com']);
+  const itGroupEmails = new Set(['member_it_dept@example.com']);
+
+  // 案例 1：軌道一命中（AE 欄 = 策略組，使用者為策略組成員）
+  {
+    const isScope = isAssetInUserGroupScope_(mockAssetWithDefaultGroup, '策略組', strategyGroupEmails);
+    assertTest("案例 1: 策略組成員命中軌道一（資產 AE 欄為策略組）", isScope === true);
+  }
+
+  // 案例 2：軌道二命中（AE 欄 = 策略組，但使用者為行政組同事，與保管人同組）
+  {
+    const isScope = isAssetInUserGroupScope_(mockAssetWithDefaultGroup, '行政組', adminGroupEmails);
+    assertTest("案例 2: 行政組同事命中軌道二（保管人在其同組清單中）", isScope === true);
+  }
+
+  // 案例 3：兩軌皆未命中（AE 欄 = 策略組，使用者為資訊組成員，保管人為行政組）
+  {
+    const isScope = isAssetInUserGroupScope_(mockAssetWithDefaultGroup, '資訊組', itGroupEmails);
+    assertTest("案例 3: 無關之資訊組成員兩軌皆無", isScope === false);
+  }
+
+  // 案例 4：AE 欄為空，回退同仁同組比對（命中）
+  {
+    const isScope = isAssetInUserGroupScope_(mockAssetWithoutDefaultGroup, '行政組', adminGroupEmails);
+    assertTest("案例 4: AE 欄為空且保管人同組（回退軌道二命中）", isScope === true);
+  }
+
+  // 案例 5：AE 欄為空，回退同仁同組比對（未命中）
+  {
+    const isScope = isAssetInUserGroupScope_(mockAssetWithoutDefaultGroup, '策略組', strategyGroupEmails);
+    assertTest("案例 5: AE 欄為空且非保管人同組（回退軌道二未命中）", isScope === false);
+  }
+
+  // 案例 6：組別名稱正規化比對（支援 HR 官方名稱與簡稱別名相容）
+  {
+    const mockAliasAsset = {
+      assetId: 'TEST-003',
+      defaultGroup: '專案規劃組', // 官方名
+      leaderEmail: 'other@example.com',
+      userEmail: ''
+    };
+    const canonicalDefault = canonicalizeGroupName_('專案規劃組');
+    assertTest("案例 6-1: canonicalizeGroupName_ 正確執行不拋錯", typeof canonicalDefault === 'string');
+
+    const isScopeSame = isAssetInUserGroupScope_(mockAliasAsset, '專案規劃組', new Set(['user@example.com']));
+    assertTest("案例 6-2: AE 欄全名與同全名操作者比對命中", isScopeSame === true);
+  }
+
+  Logger.log("=== 測試結果摘要 ===");
+  results.forEach(r => Logger.log(r));
+  const allPassed = results.every(r => r.includes("PASS"));
+  Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
+  return allPassed;
+}
+
 

@@ -114,6 +114,11 @@ return {
 
 ## 事件紀錄
 
+### 2026-09-15 AE 欄（DEFAULT_GROUP）預設組別資產雙軌聯集同組協作權限
+- 症狀：資產 AE 欄標記「X 組」，但保管人登記為「Y 組同仁」時，X 組成員進到系統被完全過濾隱形，且無權轉移、出借或報廢。
+- 根因：同組協作判斷僅比對登入者同組成員 Email 清單與保管人/使用人 Email（Peer-to-Peer），未將 AE 欄（`DEFAULT_GROUP`）納入同組範圍；且後端 API（轉移、出借、歸還、報廢）校驗時亦未支援。
+- 修法：在 `code.js` 提煉 `canonicalizeGroupName_` 與 `isAssetInUserGroupScope_` 雙軌聯集 Helper（資產歸屬軌 $\lor$ 人員保管軌）；重構 `getUserStateData`、`getAssetsForCurrentUser`、`processBatchTransferApplication`、`processBatchLending`、`processBatchReturn`、`processBatchScrapping`、`cancelTransferOrScrap`；轉移時維持 AE 欄不變；新增自動化單元測試 `testDefaultGroupAssetCollaborationMatrix_()`。檔案：`code.js`。
+
 ### 2026-09-08 同組報廢待列印清單與抽屜計數支援同組成員申請
 - 症狀：同組報廢功能開啟後，同組成員在待列印報廢單彈窗 (`ScrapPrintModal`) 只能看到自己的報廢申請，無法看到同組同仁的報廢申請；且抽屜卡片報廢計數未納入同組申請。
 - 根因：`getAllScrappableItems` (`code.js:5106`) 誤宣告為 `groupViewEnabled`，而篩選邏輯引用未宣告變數 `groupProxyEnabled`（值為 undefined），導致同組成員判定 `isGroupMember` 永遠為 falsy；且 `getTransferData` 未在僅開啟報廢代理時載入組員清單；前端 `alpine_store.html` 之 `cardCounts.scrapPending` 僅檢查舊開關 `groupProxyEnabled`。
