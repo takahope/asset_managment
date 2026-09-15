@@ -81,6 +81,26 @@ document.addEventListener('alpine:init', function () {
             },
             get aliasLabel() { return S.getAssetAliasLabel(this.asset); },
             get aliasDisplay() { return S.getAssetAliasDisplay(this.asset); },
+            get availableKeepers() {
+                var keepers = (this.options && this.options.keepers) || {};
+                var currentLeaderEmail = (this.asset && this.asset.leaderEmail)
+                    ? String(this.asset.leaderEmail).toLowerCase().trim()
+                    : '';
+                return Object.entries(keepers).filter(function (entry) {
+                    if (!currentLeaderEmail) return true;
+                    return String(entry[0]).toLowerCase().trim() !== currentLeaderEmail;
+                });
+            },
+            get availableUsers() {
+                var users = (this.options && this.options.users) || {};
+                var currentUserEmail = (this.asset && this.asset.userEmail)
+                    ? String(this.asset.userEmail).toLowerCase().trim()
+                    : '';
+                return Object.entries(users).filter(function (entry) {
+                    if (!currentUserEmail) return true;
+                    return String(entry[0]).toLowerCase().trim() !== currentUserEmail;
+                });
+            },
 
             buildSummary: function () {
                 var options = this.options;
@@ -114,8 +134,20 @@ document.addEventListener('alpine:init', function () {
                         return;
                     }
                     if (this.changeLocation && !this.newLocation) { alert('請選擇新地點'); return; }
-                    if (this.changeKeeper && !this.newKeeperEmail) { alert('請選擇新保管人'); return; }
-                    if (this.changeUser && !this.newUserEmail) { alert('請選擇新使用人'); return; }
+                    if (this.changeKeeper) {
+                        if (!this.newKeeperEmail) { alert('請選擇新保管人'); return; }
+                        if (this.asset && this.asset.leaderEmail && String(this.newKeeperEmail).toLowerCase().trim() === String(this.asset.leaderEmail).toLowerCase().trim()) {
+                            alert('新保管人不能與原保管人相同');
+                            return;
+                        }
+                    }
+                    if (this.changeUser) {
+                        if (!this.newUserEmail) { alert('請選擇新使用人'); return; }
+                        if (this.asset && this.asset.userEmail && String(this.newUserEmail).toLowerCase().trim() === String(this.asset.userEmail).toLowerCase().trim()) {
+                            alert('新使用人不能與原使用人相同');
+                            return;
+                        }
+                    }
                 } else if (this.transferMode === 'station') {
                     if (!this.custodianEmail) { alert('請選擇駐管！'); return; }
                     if (!this.stationLocation) { alert('請選擇駐站地點！'); return; }
@@ -468,7 +500,7 @@ document.addEventListener('alpine:init', function () {
                             <template x-if="changeKeeper">
                                 <select x-model="newKeeperEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">請選擇新保管人...</option>
-                                    <template x-for="entry in entries(options.keepers)" :key="entry[0]">
+                                    <template x-for="entry in availableKeepers" :key="entry[0]">
                                         <option :value="entry[0]" x-text="entry[1]"></option>
                                     </template>
                                 </select>
@@ -482,7 +514,7 @@ document.addEventListener('alpine:init', function () {
                             <template x-if="changeUser">
                                 <select x-model="newUserEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">請選擇新使用人...</option>
-                                    <template x-for="entry in entries(options.users)" :key="entry[0]">
+                                    <template x-for="entry in availableUsers" :key="entry[0]">
                                         <option :value="entry[0]" x-text="entry[1]"></option>
                                     </template>
                                 </select>

@@ -44,6 +44,28 @@ document.addEventListener('alpine:init', function () {
             entries: function (obj) { return Object.entries(obj || {}); },
             aliasLabel: function (a) { return S.getAssetAliasLabel(a); },
             aliasDisplay: function (a) { return S.getAssetAliasDisplay(a); },
+            get availableKeepers() {
+                var keepers = (this.options && this.options.keepers) || {};
+                var details = this.selectedAssetsDetails || [];
+                var excludedEmails = new Set(details.map(function (a) {
+                    return String(a.leaderEmail || '').toLowerCase().trim();
+                }).filter(Boolean));
+
+                return Object.entries(keepers).filter(function (entry) {
+                    return !excludedEmails.has(String(entry[0]).toLowerCase().trim());
+                });
+            },
+            get availableUsers() {
+                var users = (this.options && this.options.users) || {};
+                var details = this.selectedAssetsDetails || [];
+                var excludedEmails = new Set(details.map(function (a) {
+                    return String(a.userEmail || '').toLowerCase().trim();
+                }).filter(Boolean));
+
+                return Object.entries(users).filter(function (entry) {
+                    return !excludedEmails.has(String(entry[0]).toLowerCase().trim());
+                });
+            },
             get availableStationLocations() {
                 var allLocations = (this.options && this.options.stationLocations) || [];
                 if (!this.custodianEmail) return allLocations;
@@ -97,8 +119,28 @@ document.addEventListener('alpine:init', function () {
                 if (this.transferMode === 'normal') {
                     if (!this.changeLocation && !this.changeKeeper && !this.changeUser) { alert('請至少選擇一項變更（地點、保管人或使用人）'); return; }
                     if (this.changeLocation && !this.newLocation) { alert('請選擇新地點'); return; }
-                    if (this.changeKeeper && !this.newKeeperEmail) { alert('請選擇新保管人'); return; }
-                    if (this.changeUser && !this.newUserEmail) { alert('請選擇新使用人'); return; }
+                    if (this.changeKeeper) {
+                        if (!this.newKeeperEmail) { alert('請選擇新保管人'); return; }
+                        var targetKeeper = String(this.newKeeperEmail).toLowerCase().trim();
+                        var anyKeeperSame = this.selectedAssetsDetails.some(function (a) {
+                            return String(a.leaderEmail || '').toLowerCase().trim() === targetKeeper;
+                        });
+                        if (anyKeeperSame) {
+                            alert('新保管人不能與所選資產的原保管人相同');
+                            return;
+                        }
+                    }
+                    if (this.changeUser) {
+                        if (!this.newUserEmail) { alert('請選擇新使用人'); return; }
+                        var targetUser = String(this.newUserEmail).toLowerCase().trim();
+                        var anyUserSame = this.selectedAssetsDetails.some(function (a) {
+                            return a.userEmail && String(a.userEmail).toLowerCase().trim() === targetUser;
+                        });
+                        if (anyUserSame) {
+                            alert('新使用人不能與所選資產的原使用人相同');
+                            return;
+                        }
+                    }
                 } else if (this.transferMode === 'station') {
                     if (!this.custodianEmail) { alert('請選擇駐管！'); return; }
                     if (!this.stationLocation) { alert('請選擇駐站地點！'); return; }
@@ -418,7 +460,7 @@ document.addEventListener('alpine:init', function () {
                             <template x-if="changeKeeper">
                                 <select x-model="newKeeperEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                     <option value="">請選擇新保管人...</option>
-                                    <template x-for="entry in entries(options.keepers)" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
+                                    <template x-for="entry in availableKeepers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
                                 </select>
                             </template>
                         </div>
@@ -427,7 +469,7 @@ document.addEventListener('alpine:init', function () {
                             <template x-if="changeUser">
                                 <select x-model="newUserEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                     <option value="">請選擇新使用人...</option>
-                                    <template x-for="entry in entries(options.users)" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
+                                    <template x-for="entry in availableUsers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
                                 </select>
                             </template>
                         </div>
