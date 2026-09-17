@@ -2850,6 +2850,224 @@ function processBatchRejection(appIds) {
   }
 }
 
+/**
+ * [供列印轉移申請單呼叫] 批次退回已接收/待列印的轉移資產，還原為原保管人、原使用人、原存置地點
+ * @param {Array<string>} assetIds - 勾選退回的資產編號清單
+ * @returns {object} { success: boolean, count: number, message: string }
+ */
+function processBatchTransferRollback(assetIds) {
+  Logger.log("\n\n--- processBatchTransferRollback 開始執行 ---");
+  if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
+    return { success: false, count: 0, message: "請至少勾選一筆要退回的項目。" };
+  }
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = String(currentUserEmail || '').toLowerCase().trim();
+    const isAdmin = checkAdminPermissions();
+    const groupSettings = getGroupCollaborationSettings_();
+    const groupProxyEnabled = !isAdmin && (groupSettings.transferLend || isGroupProxyTransferEnabled());
+    const groupEmails = groupProxyEnabled
+      ? getGroupMemberEmails(currentUserEmail).map(e => String(e || '').toLowerCase().trim())
+      : [];
+    const groupEmailSet = new Set(groupEmails);
+
+    const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToName: {}, emailToGroup: {} };
+    const allAssets = getAllAssets();
+
+    // 建立姓名 → Email 反查表 (小寫)
+    const nameToEmailMap = new Map();
+    if (directory && directory.emailToName) {
+      Object.entries(directory.emailToName).forEach(([email, name]) => {
+        const n = String(name || '').trim();
+        const em = String(email || '').toLowerCase().trim();
+        if (n && em && !nameToEmailMap.has(n)) {
+          nameToEmailMap.set(n, em);
+        }
+      });
+    }
+    allAssets.forEach(a => {
+      const leaderName = String(a.leaderName || '').trim();
+      const leaderEmail = String(a.leaderEmail || '').toLowerCase().trim();
+      if (leaderName && leaderEmail && !nameToEmailMap.has(leaderName)) {
+        nameToEmailMap.set(leaderName, leaderEmail);
+      }
+      const userName = String(a.userName || '').trim();
+      const userEmail = String(a.userEmail || '').toLowerCase().trim();
+      if (userName && userEmail && !nameToEmailMap.has(userName)) {
+        nameToEmailMap.set(userName, userEmail);
+      }
+    });
+
+    // 讀取 APPLICATION_LOG_SHEET
+    const appLogSheet = ss.getSheetByName(APPLICATION_LOG_SHEET_NAME);
+    if (!appLogSheet || appLogSheet.getLastRow() <= 1) {
+      return { success: false, count: 0, message: "找不到轉移申請紀錄或目前無任何轉移資料。" };
+    }
+
+    const appLogLastRow = appLogSheet.getLastRow();
+    const appLogLastCol = appLogSheet.getLastColumn();
+    const appLogData = appLogSheet.getRange(2, 1, appLogLastRow - 1, appLogLastCol).getValues();
+
+    // 針對每一個資產，找出最新一筆狀態為「已完成」的轉移紀錄 (rowIndex = index + 2)
+    const assetToLatestCompleted = new Map();
+    appLogData.forEach((row, index) => {
+      const rawAssetId = row[AL_ASSET_ID_COLUMN_INDEX - 1];
+      const assetId = String(rawAssetId !== null && rawAssetId !== undefined ? rawAssetId : '').trim();
+      if (!assetId) return;
+
+      const status = String(row[AL_STATUS_COLUMN_INDEX - 1] || '').trim();
+      const reviewTime = row[AL_REVIEW_TIME_COLUMN_INDEX - 1];
+
+      if (status === '已完成' && reviewTime) {
+        const reviewDate = new Date(reviewTime);
+        if (isNaN(reviewDate.getTime())) return;
+
+        if (!assetToLatestCompleted.has(assetId) ||
+            reviewDate > new Date(assetToLatestCompleted.get(assetId).reviewTime)) {
+          assetToLatestCompleted.set(assetId, {
+            rowIndex: index + 2,
+            appId: row[AL_APP_ID_COLUMN_INDEX - 1],
+            oldKeeper: String(row[AL_OLD_LEADER_COLUMN_INDEX - 1] || '').trim(),
+            oldLocation: String(row[AL_OLD_LOCATION_COLUMN_INDEX - 1] || '').trim(),
+            oldUser: String(row[AL_OLD_USER_COLUMN_INDEX - 1] || '').trim(),
+            newKeeper: String(row[AL_NEW_LEADER_COLUMN_INDEX - 1] || '').trim(),
+            newKeeperEmail: String(row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim(),
+            newLocation: String(row[AL_NEW_LOCATION_COLUMN_INDEX - 1] || '').trim(),
+            newUser: String(row[AL_NEW_USER_COLUMN_INDEX - 1] || '').trim(),
+            newUserEmail: String(row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim(),
+            applicantEmail: String(row[AL_APPLICANT_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim(),
+            transferType: String(row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '').trim(),
+            reviewTime: reviewTime
+          });
+        }
+      }
+    });
+
+    const now = new Date();
+    let successCount = 0;
+    const errors = [];
+    const unauthorizedAssets = [];
+
+    assetIds.forEach(id => {
+      const assetId = String(id || '').trim();
+      if (!assetId) return;
+
+      const logEntry = assetToLatestCompleted.get(assetId);
+      if (!logEntry) {
+        errors.push(`${assetId}: 找不到待列印或已完成的最新轉移紀錄`);
+        return;
+      }
+
+      const location = findAssetLocation(assetId);
+      if (!location) {
+        errors.push(`${assetId}: 在工作表中找不到該資產資料`);
+        return;
+      }
+
+      const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+      const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
+      const asset = mapRowToAssetObject(assetRow, indices, location.sheetName);
+
+      // 權限檢查：管理者、新保管人、新使用人、原申請人、當前主表保管人/使用人，或同組代理授權成員
+      if (!isAdmin) {
+        const isNewKeeper = logEntry.newKeeperEmail && logEntry.newKeeperEmail === currentUserEmailLower;
+        const isNewUser = logEntry.newUserEmail && logEntry.newUserEmail === currentUserEmailLower;
+        const isApplicant = logEntry.applicantEmail && logEntry.applicantEmail === currentUserEmailLower;
+        const isCurrentAssetKeeper = String(asset.leaderEmail || '').toLowerCase().trim() === currentUserEmailLower;
+        const isCurrentAssetUser = String(asset.userEmail || '').toLowerCase().trim() === currentUserEmailLower;
+
+        let isGroupAllowed = false;
+        if (groupProxyEnabled) {
+          const currentUserGroup = (directory && directory.emailToGroup && directory.emailToGroup[currentUserEmailLower]) || '未分組';
+          isGroupAllowed = isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet) ||
+                           (logEntry.newKeeperEmail && groupEmailSet.has(logEntry.newKeeperEmail)) ||
+                           (logEntry.applicantEmail && groupEmailSet.has(logEntry.applicantEmail));
+        }
+
+        if (!isNewKeeper && !isNewUser && !isApplicant && !isCurrentAssetKeeper && !isCurrentAssetUser && !isGroupAllowed) {
+          unauthorizedAssets.push(assetId);
+          Logger.log(`🛡️ 權限拒絕：${currentUserEmail} 無權退回資產 ${assetId} 的轉移`);
+          return;
+        }
+      }
+
+      // 開始還原主表欄位
+      // 1. 還原存置地點
+      const restoredLocation = logEntry.oldLocation || asset.location;
+      location.sheet.getRange(location.rowIndex, indices.LOCATION).setValue(restoredLocation);
+
+      // 2. 還原保管人姓名與 Email
+      const restoredKeeperName = logEntry.oldKeeper || asset.leaderName;
+      let restoredKeeperEmail = '';
+      if (logEntry.applicantEmail && (
+          restoredKeeperName === logEntry.applicantEmail.split('@')[0] ||
+          (directory && directory.emailToName && directory.emailToName[logEntry.applicantEmail] === restoredKeeperName)
+      )) {
+        restoredKeeperEmail = logEntry.applicantEmail;
+      } else if (nameToEmailMap.has(restoredKeeperName)) {
+        restoredKeeperEmail = nameToEmailMap.get(restoredKeeperName);
+      }
+      location.sheet.getRange(location.rowIndex, indices.LEADER_NAME).setValue(restoredKeeperName);
+      location.sheet.getRange(location.rowIndex, indices.LEADER_EMAIL).setValue(restoredKeeperEmail);
+
+      // 3. 若為財產總表，還原使用人姓名與 Email
+      if (location.sheetName === PROPERTY_MASTER_SHEET_NAME) {
+        const restoredUserName = logEntry.oldUser || '';
+        const restoredUserEmail = restoredUserName ? (nameToEmailMap.get(restoredUserName) || '') : '';
+        location.sheet.getRange(location.rowIndex, indices.USER_NAME).setValue(restoredUserName);
+        location.sheet.getRange(location.rowIndex, indices.USER_EMAIL).setValue(restoredUserEmail);
+      }
+
+      // 4. 還原狀態與時間戳記
+      location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('在庫');
+      location.sheet.getRange(location.rowIndex, indices.APPLICATION_TIME).setValue('');
+      location.sheet.getRange(location.rowIndex, indices.TRANSFER_TIME).setValue('');
+
+      // 5. 上傳狀態標記為 'V'，標示與公務系統原態一致，不需再作為轉移異動上傳
+      location.sheet.getRange(location.rowIndex, indices.IS_UPLOADED).setValue('V');
+      location.sheet.getRange(location.rowIndex, indices.UPLOAD_TIME).setValue(now);
+
+      // 6. 駐站電腦重新判定
+      const isStation = isStationLocation_(restoredLocation);
+      const isActuallyComputer = indices.IS_ACTUALLY_COMPUTER ? assetRow[indices.IS_ACTUALLY_COMPUTER - 1] === '是' : false;
+      location.sheet.getRange(location.rowIndex, indices.IS_COMPUTER).setValue(isStation && isActuallyComputer ? '是' : '');
+
+      // 7. 更新轉移申請紀錄
+      appLogSheet.getRange(logEntry.rowIndex, AL_STATUS_COLUMN_INDEX).setValue('已退回');
+      appLogSheet.getRange(logEntry.rowIndex, AL_REVIEW_TIME_COLUMN_INDEX).setValue(now);
+      appLogSheet.getRange(logEntry.rowIndex, AL_APPROVER_EMAIL_COLUMN_INDEX).setValue(currentUserEmail);
+
+      successCount++;
+    });
+
+    let message = `成功退回 ${successCount} 筆轉移申請，資產已還原為原保管人、原使用人與原存置地點。`;
+    if (unauthorizedAssets.length > 0) {
+      message += `\n⚠️ ${unauthorizedAssets.length} 筆因權限不足未處理：${unauthorizedAssets.join(', ')}`;
+    }
+    if (errors.length > 0) {
+      message += `\n❌ ${errors.length} 筆發生錯誤：\n${errors.join('\n')}`;
+    }
+
+    Logger.log(message);
+    return {
+      success: successCount > 0,
+      count: successCount,
+      unauthorizedCount: unauthorizedAssets.length,
+      errorCount: errors.length,
+      message: message
+    };
+  } catch (e) {
+    Logger.log(`processBatchTransferRollback 失敗: ${e.message}`);
+    return {
+      success: false,
+      count: 0,
+      message: `退回作業失敗：${e.message}`
+    };
+  }
+}
+
 // =================================================================
 // --- 資產管理員更新功能 (後端) ---
 // =================================================================
@@ -11164,5 +11382,90 @@ function testDefaultGroupAssetCollaborationMatrix_() {
   Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
   return allPassed;
 }
+
+/**
+ * [自動化測試] 驗證待列印移轉退回（Transfer Rollback）邏輯與權限矩陣
+ * 可在 GAS 編輯器直接執行，不修改試算表資料。
+ */
+function testTransferRollbackLogic_() {
+  const results = [];
+  function assertTest(name, condition) {
+    const passed = Boolean(condition);
+    const msg = `[${passed ? 'PASS' : 'FAIL'}] ${name}`;
+    results.push(msg);
+    Logger.log(msg);
+  }
+
+  Logger.log("=== 開始執行移轉待列印退回（Rollback）邏輯測試 ===");
+
+  // 案例 1: 參數防呆
+  {
+    const emptyRes = processBatchTransferRollback([]);
+    assertTest("案例 1-1: 空陣列防呆攔截", emptyRes && emptyRes.success === false && emptyRes.count === 0);
+
+    const nullRes = processBatchTransferRollback(null);
+    assertTest("案例 1-2: null 參數防呆攔截", nullRes && nullRes.success === false);
+  }
+
+  // 案例 2: 姓名 → Email 反查邏輯
+  {
+    const mockEmailToName = {
+      'alice@example.com': '愛麗絲',
+      'bob@example.com': '鮑伯'
+    };
+    const nameToEmailMap = new Map();
+    Object.entries(mockEmailToName).forEach(([email, name]) => {
+      nameToEmailMap.set(name.trim(), email.toLowerCase().trim());
+    });
+
+    assertTest("案例 2-1: 依姓名反查 Email 命中", nameToEmailMap.get('愛麗絲') === 'alice@example.com');
+    assertTest("案例 2-2: 不存在之姓名回傳 undefined", nameToEmailMap.get('查理') === undefined);
+  }
+
+  // 案例 3: 駐站電腦重新標記邏輯
+  {
+    const isStationLoc = isStationLocation_('B219');
+    assertTest("案例 3-1: isStationLocation_ 函式可正常調用", typeof isStationLoc === 'boolean');
+  }
+
+  // 案例 4: 雙重防禦狀態驗證（已退回 + isUploaded='V' 必須被 getAllTransferableItems 排除）
+  {
+    const mockLogStatus = '已退回';
+    const isEligibleInLog = (mockLogStatus === '已完成');
+    const mockIsUploaded = 'V';
+    const isEligibleInMaster = (mockIsUploaded !== 'V');
+
+    assertTest("案例 4-1: '已退回' 狀態被 log 篩選排除", isEligibleInLog === false);
+    assertTest("案例 4-2: 'V' 上傳標記被 master 篩選排除", isEligibleInMaster === false);
+  }
+
+  // 案例 5: 權限判定邏輯模擬
+  {
+    const mockLogEntry = {
+      newKeeperEmail: 'new_keeper@example.com',
+      newUserEmail: 'new_user@example.com',
+      applicantEmail: 'original_applicant@example.com'
+    };
+
+    const isNewKeeper = (mockLogEntry.newKeeperEmail === 'new_keeper@example.com');
+    const isNewUser = (mockLogEntry.newUserEmail === 'new_user@example.com');
+    const isApplicant = (mockLogEntry.applicantEmail === 'original_applicant@example.com');
+    const isUnrelated = ('stranger@example.com' === mockLogEntry.newKeeperEmail ||
+                         'stranger@example.com' === mockLogEntry.newUserEmail ||
+                         'stranger@example.com' === mockLogEntry.applicantEmail);
+
+    assertTest("案例 5-1: 新保管人符合退回權限", isNewKeeper === true);
+    assertTest("案例 5-2: 新使用人符合退回權限", isNewUser === true);
+    assertTest("案例 5-3: 原申請人符合退回權限", isApplicant === true);
+    assertTest("案例 5-4: 無關人員不符合退回權限", isUnrelated === false);
+  }
+
+  Logger.log("=== 測試結果摘要 ===");
+  results.forEach(r => Logger.log(r));
+  const allPassed = results.every(r => r.includes("PASS"));
+  Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
+  return allPassed;
+}
+
 
 

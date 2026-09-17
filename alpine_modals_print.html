@@ -17,6 +17,29 @@
         min-height: 0;
         overflow-y: auto;
     }
+    .btn-rollback-transfer {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #fecdd3;
+        background-color: #fff1f2;
+        color: #be123c;
+        font-weight: 500;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        transition: all 0.15s ease;
+    }
+    .btn-rollback-transfer:hover:not(:disabled) {
+        background-color: #ffe4e6;
+        border-color: #fda4af;
+        color: #9f1239;
+    }
+    .btn-rollback-transfer:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 </style>
 <script>
 document.addEventListener('alpine:init', function () {
@@ -364,7 +387,7 @@ document.addEventListener('alpine:init', function () {
     /* ===== TransferPrintModal(舊頁 8553-8981) ===== */
     Alpine.data('transferPrintModal', function () {
         return {
-            selectedCategory: '財產', selectedIds: [], selectAll: false, isGenerating: false,
+            selectedCategory: '財產', selectedIds: [], selectAll: false, isGenerating: false, isRollingBack: false,
             activeTab: 'pending',
             historyRecords: [], isLoadingHistory: false, historyError: '', hasHistoryLoaded: false, historyLoadedCategory: '',
 
@@ -450,6 +473,38 @@ document.addEventListener('alpine:init', function () {
                         self.isLoadingHistory = false; self.hasHistoryLoaded = true; self.historyLoadedCategory = category;
                     })
                     .getTransferDocHistory(category);
+            },
+            handleRollbackTransfer: function () {
+                var self = this;
+                if (this.selectedIds.length === 0) {
+                    alert('請至少勾選一筆要退回的項目。');
+                    return;
+                }
+                var confirmMsg = '確定要退回所選的 ' + this.selectedIds.length + ' 筆轉移嗎？\n\n⚠️ 退回後資產將自動還原為原保管人、原使用人與原保管地點，並自待列印清單移除。';
+                if (!confirm(confirmMsg)) return;
+
+                this.isRollingBack = true;
+                if (typeof showToastProgress === 'function') {
+                    showToastProgress('正在處理退回轉移作業...');
+                }
+
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        if (typeof hideToastProgress === 'function') hideToastProgress('處理完成！', 300);
+                        self.isRollingBack = false;
+                        if (result && result.success) {
+                            alert('✅ ' + (result.message || '退回成功！'));
+                            self.$store.app.handleTransferPrintRefresh();
+                        } else {
+                            alert('❌ 退回失敗：' + ((result && result.message) || '未知錯誤'));
+                        }
+                    })
+                    .withFailureHandler(function (error) {
+                        if (typeof hideToastProgress === 'function') hideToastProgress('處理失敗', 300);
+                        self.isRollingBack = false;
+                        alert('❌ 退回失敗：' + ((error && error.message) || error));
+                    })
+                    .processBatchTransferRollback(self.selectedIds);
             }
         };
     });
@@ -1094,8 +1149,12 @@ document.addEventListener('alpine:init', function () {
             <div x-show="activeTab === 'pending'" class="px-6 py-4 border-t bg-slate-50 flex justify-between items-center shrink-0">
                 <div class="text-sm text-slate-600">已選擇 <span class="font-bold text-purple-600" x-text="selectedIds.length"></span> 筆資產</div>
                 <div class="flex gap-3">
-                    <button @click="$store.app.closeTransferPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" :disabled="isGenerating">取消</button>
-                    <button @click="handleGenerateDoc()" :disabled="isGenerating || selectedIds.length === 0" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button @click="$store.app.closeTransferPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" :disabled="isGenerating || isRollingBack">關閉</button>
+                    <button @click="handleRollbackTransfer()" :disabled="isGenerating || isRollingBack || selectedIds.length === 0" class="btn-rollback-transfer">
+                        <template x-if="isRollingBack"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div><span>退回中...</span></span></template>
+                        <template x-if="!isRollingBack"><span class="flex items-center gap-2"><i class="fas fa-undo-alt"></i><span>退回選取的轉移</span></span></template>
+                    </button>
+                    <button @click="handleGenerateDoc()" :disabled="isGenerating || isRollingBack || selectedIds.length === 0" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <template x-if="isGenerating"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>產生中...</span></span></template>
                         <template x-if="!isGenerating"><span class="flex items-center gap-2"><i class="fas fa-file-alt"></i><span>生成轉移申請單</span></span></template>
                     </button>

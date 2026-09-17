@@ -124,6 +124,11 @@ return {
   3. **權限判定短路優化（Short-Circuit）**：在 `getUserStateData` 的 `.map()` 中，Admin 或 Owner 權限恆真時，完全跳過 `isAssetInUserGroupScope_` 的執行。
   4. 驗證：4,630 筆資產在本地模擬測試中，PropertiesService RPC 呼叫由 4,630 次降為 0~1 次，全表計算時間降至 6~7ms。檔案：`code.js`、`hr_directory.js`、`isms-connect-asset/code.js`。
 
+### 2026-09-17 待列印移轉申請單（TransferPrintModal）支援「退回轉移」機制
+- 需求：使用者在移轉完成（已接收或純地點轉移完成）進入待列印清單後，若在列印前發現移轉錯誤需要退回，無法在系統內直接撤銷復原。
+- 根因：資產已接收時主表已覆寫為新保管人與新地點；原僅在未接收階段（轉移中）可取消，進入待列印清單後無 rollback 機制。
+- 修法：在 `code.js` 新增 `processBatchTransferRollback(assetIds)` 後端 API，從 `轉移申請紀錄` 讀取原保管人、原使用人、原地點與 Email 並還原主表，重新計算 `IS_COMPUTER`，將 `IS_UPLOADED` 設為 `'V'`，並將申請日誌改為「已退回」；在 `alpine_modals_print.html` 新增 `.btn-rollback-transfer` scoped CSS、`isRollingBack` 狀態、`handleRollbackTransfer` 及底部操作按鈕；新增單元測試 `testTransferRollbackLogic_()`。檔案：`code.js`、`alpine_modals_print.html`。
+
 ### 2026-09-15 AE 欄（DEFAULT_GROUP）預設組別資產雙軌聯集同組協作權限
 - 症狀：資產 AE 欄標記「X 組」，但保管人登記為「Y 組同仁」時，X 組成員進到系統被完全過濾隱形，且無權轉移、出借或報廢。
 - 根因：同組協作判斷僅比對登入者同組成員 Email 清單與保管人/使用人 Email（Peer-to-Peer），未將 AE 欄（`DEFAULT_GROUP`）納入同組範圍；且後端 API（轉移、出借、歸還、報廢）校驗時亦未支援。
