@@ -124,7 +124,8 @@ const SCRAP_LOG_HEADERS = [
   '更新時間',
   '審核者Email',
   '文件連結',
-  '列印時間'
+  '列印時間',
+  '申請方式'
 ];
 
 const ADMIN_LIST_HEADERS = [

@@ -255,6 +255,7 @@ const SL_UPDATE_TIME_COLUMN_INDEX = 13;
 const SL_APPROVER_EMAIL_COLUMN_INDEX = 14;
 const SL_DOC_URL_COLUMN_INDEX = 15;
 const SL_PRINT_TIME_COLUMN_INDEX = 16;
+const SL_APPLY_METHOD_COLUMN_INDEX = 17; // ✨ Q欄: 申請方式
 
 const PROPERTY_MASTER_SHEET_NAME = "財產總表"; // ✨ **拆分後：財產總表**
 const ITEM_MASTER_SHEET_NAME = "物品總表";   // ✨ **拆分後：物品總表**
@@ -4443,7 +4444,11 @@ function processBatchScrapping(formData) {
     const now = new Date();
     let successCount = 0;
     const scrappedAssets = []; // 收集報廢財產資訊供郵件通知使用
-    const baseReason = reason === '其他' ? `其他: ${remarks}` : `${reason} ${remarks}`;
+    const rawReason = String(reason || '').trim();
+    const rawRemarks = String(remarks || '').trim();
+    const pureReason = (rawReason === 'C' || rawReason === '其他')
+      ? (rawRemarks ? `C: ${rawRemarks}` : 'C')
+      : rawReason;
     const scrapLogRows = [];
     let logSequence = 0;
 
@@ -4475,14 +4480,14 @@ function processBatchScrapping(formData) {
         const location = findAssetLocation(assetId);
         if (location) {
           const isGroupProxy = !isOwnerOrUser && isGroupProxyAllowed;
-          const fullReason = isGroupProxy
-            ? `【同組代辦】${baseReason} (代辦人: ${applicantName})`
-            : baseReason;
+          const applyMethod = isGroupProxy
+            ? `同組代辦 (代辦人: ${applicantName})`
+            : '本人申請';
 
           const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
           location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('報廢中');
           location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue(now);
-          location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue(fullReason);
+          location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue(pureReason);
 
           // 收集成功報廢的財產資訊供郵件通知使用
           scrappedAssets.push({
@@ -4493,6 +4498,7 @@ function processBatchScrapping(formData) {
             location: asset.location,
             category: asset.assetCategory,
             isGroupProxy: isGroupProxy,
+            applyMethod: applyMethod,
             leaderEmail: asset.leaderEmail
           });
 
@@ -4524,12 +4530,13 @@ function processBatchScrapping(formData) {
             asset.assetCategory || '',
             asset.assetName || '',
             asset.modelBrand || '',
-            fullReason,
+            pureReason,
             '報廢中',
             '',
             '',
             '',
-            ''
+            '',
+            applyMethod
           ]);
 
           successCount++;
@@ -4558,6 +4565,9 @@ function processBatchScrapping(formData) {
     }
 
     if (scrapLogRows.length > 0) {
+      if (scrapLogSheet.getLastColumn() < SL_APPLY_METHOD_COLUMN_INDEX || !scrapLogSheet.getRange(1, SL_APPLY_METHOD_COLUMN_INDEX).getValue()) {
+        scrapLogSheet.getRange(1, SL_APPLY_METHOD_COLUMN_INDEX).setValue('申請方式');
+      }
       scrapLogSheet.getRange(scrapLogSheet.getLastRow() + 1, 1, scrapLogRows.length, scrapLogRows[0].length)
         .setValues(scrapLogRows);
     }
@@ -4574,7 +4584,8 @@ function processBatchScrapping(formData) {
             body += `  📦 ${a.assetId} - ${a.assetName}\n`;
             body += `     地點：${a.location} | 類別：${a.category}\n\n`;
           });
-          body += `📋 報廢原因：${baseReason}\n\n`;
+          body += `📋 報廢原因：${pureReason}\n`;
+          body += `👤 申請方式：同組代辦 (代辦人: ${applicantName})\n\n`;
           body += `若您對此申請有任何疑義，請儘速與同組同仁 (${applicantName}) 或資產管理窗口聯繫確認。\n\n`;
           body += `此為系統自動發送郵件。`;
 
@@ -4601,13 +4612,13 @@ function processBatchScrapping(formData) {
 
           // 列出報廢財產清單
           scrappedAssets.forEach(asset => {
-            const proxyNote = asset.isGroupProxy ? `（同組代辦，原保管人：${asset.keeperName}）` : '';
+            const proxyNote = asset.isGroupProxy ? `（${asset.applyMethod}，原保管人：${asset.keeperName}）` : '';
             body += `  📦 ${asset.assetId} - ${asset.assetName}${proxyNote ? ' ' + proxyNote : ''}\n`;
             body += `     保管人：${asset.keeperName} | 使用人：${asset.userName}\n`;
             body += `     地點：${asset.location} | 類別：${asset.category}\n\n`;
           });
 
-          body += `📋 報廢原因：${baseReason}\n\n`;
+          body += `📋 報廢原因：${pureReason}\n\n`;
           body += `請點擊下方連結，前往系統主頁列印申請單：\n`;
           body += `${systemLink}\n\n`;
           body += `此為系統自動發送郵件。`;
@@ -4739,6 +4750,7 @@ function getScrapHistoryData() {
           location: String(row[SL_LOCATION_COLUMN_INDEX - 1] || ''),
           scrapDate: formatDateValue(rawDate, 'yyyy/MM/dd'),
           scrapReason: String(row[SL_SCRAP_REASON_COLUMN_INDEX - 1] || ''),
+          applyMethod: String(row[SL_APPLY_METHOD_COLUMN_INDEX - 1] || '本人申請'),
           sourceSheet: ''
         };
       });
@@ -4851,6 +4863,7 @@ function getScrapAssetsByDateRange(startDate, endDate, assetCategory) {
         location: String(row[SL_LOCATION_COLUMN_INDEX - 1] || ''),
         scrapDate: formatDateValue(rawDate, 'yyyy/MM/dd'),
         scrapReason: String(row[SL_SCRAP_REASON_COLUMN_INDEX - 1] || ''),
+        applyMethod: String(row[SL_APPLY_METHOD_COLUMN_INDEX - 1] || '本人申請'),
         sourceSheet: String(asset.sourceSheet || '')
       };
     });
@@ -5611,7 +5624,22 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
     return isOwner || isGroupMember;
   });
 
-  // 3. 轉換為前端可用的純物件格式
+  // 3. 讀取報廢紀錄以取得最新「申請方式」
+  let pendingLogMap = {};
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
+    const scrapLogLastRow = scrapLogSheet.getLastRow();
+    const scrapLogLastCol = Math.max(scrapLogSheet.getLastColumn(), SL_APPLY_METHOD_COLUMN_INDEX);
+    const scrapLogData = scrapLogLastRow > 1
+      ? scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogLastCol).getValues()
+      : [];
+    pendingLogMap = buildLatestScrapLogIndex(scrapLogData, new Set(['報廢中']));
+  } catch (e) {
+    Logger.log(`⚠️ getAllScrappableItems: 取得報廢紀錄失敗: ${e.message}`);
+  }
+
+  // 4. 轉換為前端可用的純物件格式
   return targetAssets.map(asset => {
     // 處理日期格式化
     let scrapDateStr = '';
@@ -5623,6 +5651,11 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
       }
     }
 
+    const logEntry = pendingLogMap[asset.assetId];
+    const applyMethod = (logEntry && logEntry.row && logEntry.row[SL_APPLY_METHOD_COLUMN_INDEX - 1])
+      ? String(logEntry.row[SL_APPLY_METHOD_COLUMN_INDEX - 1]).trim()
+      : '本人申請';
+
     return {
       assetId: String(asset.assetId || ''),
       assetName: String(asset.assetName || ''),
@@ -5633,6 +5666,7 @@ function getAllScrappableItems(assetCategory, forceUserScope) {
       originalUser: String(asset.userName || ''), // 物品總表可能無此欄位，轉為空字串
       scrapDate: scrapDateStr,                    // 傳送格式化後的字串，而非 Date 物件
       scrapReason: String(asset.remarks || ''),    // 確保為字串
+      applyMethod: applyMethod,                   // ✨ Q欄: 申請方式
       sourceSheet: String(asset.sourceSheet || '')
     };
   });
@@ -11685,6 +11719,113 @@ function testBatchCancelScrapLogic_() {
   Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
   return allPassed;
 }
+
+/**
+ * ✨ 單元測試：報廢原因（K 欄）與申請方式（Q 欄）職責分離邏輯驗證
+ * 執行方式：在 GAS 編輯器直接執行 testScrapReasonAndApplyMethodSeparation_()
+ */
+function testScrapReasonAndApplyMethodSeparation_() {
+  Logger.log("=== 開始執行 testScrapReasonAndApplyMethodSeparation_ 單元測試 ===");
+  const results = [];
+  const assertTest = (title, condition) => {
+    const status = condition ? "PASS" : "FAIL";
+    results.push(`[${status}] ${title}`);
+    Logger.log(`[${status}] ${title}`);
+  };
+
+  // 案例 1: pureReason 格式化邏輯
+  {
+    const formatReason = (reason, remarks) => {
+      const rawReason = String(reason || '').trim();
+      const rawRemarks = String(remarks || '').trim();
+      return (rawReason === 'C' || rawReason === '其他')
+        ? (rawRemarks ? `C: ${rawRemarks}` : 'C')
+        : rawReason;
+    };
+
+    assertTest("案例 1-1: 選擇 A 原因時，K 欄只存 'A'", formatReason('A', '') === 'A');
+    assertTest("案例 1-2: 選擇 B 原因時，K 欄只存 'B'", formatReason('B', '') === 'B');
+    assertTest("案例 1-3: 選擇 C 原因無補充說明時，K 欄只存 'C'", formatReason('C', '') === 'C');
+    assertTest("案例 1-4: 選擇 C 原因有補充說明時，K 欄存 'C: 說明文字'", formatReason('C', '主機板燒毀') === 'C: 主機板燒毀');
+    assertTest("案例 1-5: 選擇 其他 有補充說明時，K 欄存 'C: 說明文字'", formatReason('其他', '螢幕破裂') === 'C: 螢幕破裂');
+  }
+
+  // 案例 2: applyMethod 判定邏輯
+  {
+    const getApplyMethod = (isOwnerOrUser, isGroupProxyAllowed, applicantName) => {
+      const isGroupProxy = !isOwnerOrUser && isGroupProxyAllowed;
+      return isGroupProxy
+        ? `同組代辦 (代辦人: ${applicantName})`
+        : '本人申請';
+    };
+
+    const selfMethod = getApplyMethod(true, true, '陳小美');
+    assertTest("案例 2-1: 保管人本人申請，申請方式為 '本人申請'", selfMethod === '本人申請');
+
+    const userMethod = getApplyMethod(true, false, '陳小美');
+    assertTest("案例 2-2: 使用人本人申請，申請方式為 '本人申請'", userMethod === '本人申請');
+
+    const proxyMethod = getApplyMethod(false, true, '王大明');
+    assertTest("案例 2-3: 同組代辦申請，申請方式為 '同組代辦 (代辦人: 王大明)'", proxyMethod === '同組代辦 (代辦人: 王大明)');
+  }
+
+  // 案例 3: 報廢紀錄工作表寫入結構（17 欄位對齊）
+  {
+    const now = new Date();
+    const scrapId = 'SCRAP-12345-0';
+    const pureReason = 'A';
+    const applyMethod = '同組代辦 (代辦人: 王大明)';
+    const mockRow = [
+      scrapId,
+      now,
+      'ASSET-001',
+      'proxy@example.com',
+      '原保管人',
+      '無',
+      '3F 研究室',
+      '財產',
+      '筆記型電腦',
+      'ThinkPad',
+      pureReason,
+      '報廢中',
+      '',
+      '',
+      '',
+      '',
+      applyMethod
+    ];
+
+    assertTest("案例 3-1: 報廢紀錄列總欄位數為 17 (A~Q)", mockRow.length === 17);
+    assertTest("案例 3-2: 第 11 欄 (K欄) 為 pureReason ('A')", mockRow[SL_SCRAP_REASON_COLUMN_INDEX - 1] === 'A');
+    assertTest("案例 3-3: 第 17 欄 (Q欄) 為 applyMethod", mockRow[SL_APPLY_METHOD_COLUMN_INDEX - 1] === '同組代辦 (代辦人: 王大明)');
+    assertTest("案例 3-4: 第 12 欄 (L欄) 為狀態 '報廢中'", mockRow[SL_STATUS_COLUMN_INDEX - 1] === '報廢中');
+  }
+
+  // 案例 4: DTO 解析 fallback
+  {
+    const newFormatRow = new Array(17).fill('');
+    newFormatRow[SL_APPLY_METHOD_COLUMN_INDEX - 1] = '同組代辦 (代辦人: 林小華)';
+
+    const legacyRow = new Array(16).fill(''); // 舊版無第 17 欄
+
+    const parseApplyMethod = (row) => {
+      return (row && row[SL_APPLY_METHOD_COLUMN_INDEX - 1])
+        ? String(row[SL_APPLY_METHOD_COLUMN_INDEX - 1]).trim()
+        : '本人申請';
+    };
+
+    assertTest("案例 4-1: 新格式能正確讀取 Q 欄申請方式", parseApplyMethod(newFormatRow) === '同組代辦 (代辦人: 林小華)');
+    assertTest("案例 4-2: 舊格式 fallback 為 '本人申請'", parseApplyMethod(legacyRow) === '本人申請');
+    assertTest("案例 4-3: null/undefined 列 fallback 為 '本人申請'", parseApplyMethod(null) === '本人申請');
+  }
+
+  Logger.log("=== testScrapReasonAndApplyMethodSeparation_ 測試結果摘要 ===");
+  results.forEach(r => Logger.log(r));
+  const allPassed = results.every(r => r.includes("PASS"));
+  Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
+  return allPassed;
+}
+
 
 
 

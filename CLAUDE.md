@@ -124,6 +124,15 @@ return {
   3. **權限判定短路優化（Short-Circuit）**：在 `getUserStateData` 的 `.map()` 中，Admin 或 Owner 權限恆真時，完全跳過 `isAssetInUserGroupScope_` 的執行。
   4. 驗證：4,630 筆資產在本地模擬測試中，PropertiesService RPC 呼叫由 4,630 次降為 0~1 次，全表計算時間降至 6~7ms。檔案：`code.js`、`hr_directory.js`、`isms-connect-asset/code.js`。
 
+### 2026-09-18 報廢原因（K 欄）與申請方式（Q 欄）職責分離及待報廢列印新增「申請方式」欄位
+- 需求：目前報廢申請非本人申請（同組代辦）時，報廢原因欄會夾帶非原因的代辦雜訊。希望「報廢紀錄」K 欄純粹保留選擇的 ABC 代碼（選 C 則為 C 或 C: 補充說明），代辦與本人資訊移至 Q 欄「申請方式」；主檔總表備註同步純化；待報廢列印彈窗（`ScrapPrintModal`）新增「申請方式」欄位並支援排序與即時搜尋。
+- 實作：
+  1. 欄位與定義：在 `code.js` 新增常數 `SL_APPLY_METHOD_COLUMN_INDEX = 17`；在 `deploy.js` 之 `SCRAP_LOG_HEADERS` 新增第 17 欄 `'申請方式'`。
+  2. 後端核心：重構 `processBatchScrapping`，計算純原因 `pureReason`（A/B/C:xxx）與申請方式 `applyMethod`（'本人申請' 或 '同組代辦 (代辦人: XXX)'）；主檔總表備註欄寫入 `pureReason`；報廢紀錄 K 欄寫入 `pureReason`，Q 欄寫入 `applyMethod`；自動檢測並修補 Q1 表頭。
+  3. API 與 DTO：在 `getAllScrappableItems`、`getScrappedAssetsByDateRange`、`getHistoricalScrappedAssets` 中索引報廢紀錄 Q 欄並映射至 DTO 的 `applyMethod`（舊資料 fallback 為 '本人申請'）。
+  4. 前端呈現：在 `alpine_modals_print.html` 的待報廢資產表格與依日期預覽表格新增「申請方式」欄位，表頭支援點擊三態排序，即時搜尋納入 `applyMethod`。
+  5. 驗證：新增單元測試 `testScrapReasonAndApplyMethodSeparation_()`，15 項案例全數通過。檔案：`code.js`、`deploy.js`、`alpine_modals_print.html`。
+
 ### 2026-09-18 待列印報廢申請單（ScrapPrintModal）新增批次取消報廢、8 欄位排序與關鍵字即時搜尋
 - 需求：使用者希望在「列印報廢申請單」待報廢分頁中，可透過勾選取消報廢申請還原在庫，並具備與移轉待列印相同的欄位排序（升降冪）與關鍵字即時搜尋。
 - 排版與實作：在 `code.js` 實作 `processBatchCancelScrap(assetIds)` 批次 API，嚴格驗證權限後還原主表為「在庫」、清空備註/最後修改日、更新 `ScrapLog` 為「已取消」；於 `alpine_modals_print.html` 工具列採緊湊並列排版、8 欄表頭三態排序（升 🔼 ➔ 降 🔽 ➔ 取消）、全選連動 `filteredAssets`、底部新增「取消選取的報廢」按鈕與二次確認；Scoped CSS 保障預建凍結樣式相容；新增單元測試 `testBatchCancelScrapLogic_()`。檔案：`code.js`、`alpine_modals_print.html`。
