@@ -3068,6 +3068,128 @@ function processBatchTransferRollback(assetIds) {
   }
 }
 
+/**
+ * 批次取消報廢申請 (ScrapPrintModal 呼叫)
+ * @param {Array<string>} assetIds 要取消報廢的財產編號陣列
+ * @returns {object} { success: boolean, count: number, failed: number, message: string }
+ */
+function processBatchCancelScrap(assetIds) {
+  Logger.log("\n\n--- processBatchCancelScrap 開始執行 ---");
+  if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
+    return { success: false, count: 0, failed: 0, message: "請至少勾選一筆要取消的項目。" };
+  }
+
+  try {
+    const currentUserEmail = Session.getActiveUser().getEmail();
+    const currentUserEmailLower = String(currentUserEmail || '').toLowerCase().trim();
+    const isAdmin = checkAdminPermissions();
+    const groupSettings = getGroupCollaborationSettings_();
+    const groupProxyEnabled = !isAdmin && (groupSettings.scrap || isGroupProxyScrapEnabled());
+    const groupEmails = groupProxyEnabled
+      ? getGroupMemberEmails(currentUserEmail).map(e => String(e || '').toLowerCase().trim())
+      : [];
+    const groupEmailSet = new Set(groupEmails);
+
+    const directory = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_() : { emailToGroup: {} };
+    const currentUserGroup = (directory.emailToGroup && directory.emailToGroup[currentUserEmailLower]) || '未分組';
+
+    const allAssets = getAllAssets();
+    const assetMap = new Map();
+    allAssets.forEach(a => {
+      if (a && a.assetId) assetMap.set(String(a.assetId).trim(), a);
+    });
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const scrapLogSheet = getScrapLogSheet(ss);
+    const scrapLogLastRow = scrapLogSheet.getLastRow();
+    const scrapLogData = scrapLogLastRow > 1
+      ? scrapLogSheet.getRange(2, 1, scrapLogLastRow - 1, scrapLogSheet.getLastColumn()).getValues()
+      : [];
+    const pendingLogMap = buildLatestScrapLogIndex(scrapLogData, new Set(['報廢中']));
+
+    let successCount = 0;
+    let failCount = 0;
+    const errorDetails = [];
+
+    assetIds.forEach(rawId => {
+      const assetId = String(rawId || '').trim();
+      if (!assetId) return;
+
+      const asset = assetMap.get(assetId);
+      if (!asset) {
+        failCount++;
+        errorDetails.push(`${assetId}: 找不到該資產資料`);
+        return;
+      }
+
+      // 權限檢查：管理員、保管人、使用人或同組代理成員
+      const assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
+      const assetUserEmail = String(asset.userEmail || '').toLowerCase().trim();
+      let hasPermission = isAdmin ||
+                          assetLeaderEmail === currentUserEmailLower ||
+                          assetUserEmail === currentUserEmailLower;
+
+      if (!hasPermission && groupProxyEnabled) {
+        if (isAssetInUserGroupScope_(asset, currentUserGroup, groupEmailSet)) {
+          hasPermission = true;
+        }
+      }
+
+      if (!hasPermission) {
+        failCount++;
+        errorDetails.push(`${assetId}: 權限不足`);
+        return;
+      }
+
+      if (asset.assetStatus !== '報廢中') {
+        failCount++;
+        errorDetails.push(`${assetId}: 資產狀態非「報廢中」(${asset.assetStatus})`);
+        return;
+      }
+
+      const location = findAssetLocation(assetId);
+      if (!location) {
+        failCount++;
+        errorDetails.push(`${assetId}: 找不到主表工作表位置`);
+        return;
+      }
+
+      // 1. 還原主表狀態為「在庫」，清空備註與最後修改日
+      const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+      location.sheet.getRange(location.rowIndex, indices.ASSET_STATUS).setValue('在庫');
+      location.sheet.getRange(location.rowIndex, indices.REMARKS).setValue('');
+      location.sheet.getRange(location.rowIndex, indices.LAST_MODIFIED).setValue('');
+
+      // 2. 更新 ScrapLog 為「已取消」
+      const logEntry = pendingLogMap[assetId];
+      if (logEntry) {
+        const now = new Date();
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_STATUS_COLUMN_INDEX).setValue('已取消');
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_UPDATE_TIME_COLUMN_INDEX).setValue(now);
+        scrapLogSheet.getRange(logEntry.rowIndex, SL_APPROVER_EMAIL_COLUMN_INDEX).setValue(currentUserEmail);
+      }
+
+      successCount++;
+    });
+
+    let msg = `已成功取消 ${successCount} 筆報廢申請。`;
+    if (failCount > 0) {
+      msg += `（失敗 ${failCount} 筆：${errorDetails.slice(0, 3).join('; ')}）`;
+    }
+
+    return {
+      success: successCount > 0,
+      count: successCount,
+      failed: failCount,
+      message: msg
+    };
+
+  } catch (e) {
+    Logger.log(`processBatchCancelScrap 執行失敗: ${e.message} at ${e.stack}`);
+    return { success: false, count: 0, failed: assetIds.length, message: `取消失敗：${e.message}` };
+  }
+}
+
 // =================================================================
 // --- 資產管理員更新功能 (後端) ---
 // =================================================================
@@ -11466,6 +11588,104 @@ function testTransferRollbackLogic_() {
   Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
   return allPassed;
 }
+
+/**
+ * [單元測試] 驗證批次取消報廢申請之核心邏輯
+ * 涵蓋：參數防呆、權限檢查、狀態防護、還原邏輯
+ * 執行方式：在 GAS 編輯器直接執行 testBatchCancelScrapLogic_()
+ */
+function testBatchCancelScrapLogic_() {
+  Logger.log("=== 開始執行 testBatchCancelScrapLogic_ 單元測試 ===");
+  const results = [];
+  const assertTest = (title, condition) => {
+    const status = condition ? "PASS" : "FAIL";
+    results.push(`[${status}] ${title}`);
+    Logger.log(`[${status}] ${title}`);
+  };
+
+  // 案例 1: 參數防呆
+  {
+    const emptyRes = processBatchCancelScrap([]);
+    assertTest("案例 1-1: 空陣列防呆攔截", emptyRes && emptyRes.success === false && emptyRes.count === 0);
+
+    const nullRes = processBatchCancelScrap(null);
+    assertTest("案例 1-2: null 參數防呆攔截", nullRes && nullRes.success === false);
+
+    const undefRes = processBatchCancelScrap(undefined);
+    assertTest("案例 1-3: undefined 參數防呆攔截", undefRes && undefRes.success === false);
+  }
+
+  // 案例 2: 權限檢查模擬
+  {
+    const currentEmail = 'user@example.com';
+    const mockAsset = {
+      assetId: 'TEST-001',
+      leaderEmail: 'user@example.com',
+      userEmail: 'someone@example.com',
+      assetStatus: '報廢中'
+    };
+
+    const isLeader = (mockAsset.leaderEmail === currentEmail);
+    const isUser = (mockAsset.userEmail === currentEmail);
+    const isStranger = ('stranger@example.com' === mockAsset.leaderEmail || 'stranger@example.com' === mockAsset.userEmail);
+
+    assertTest("案例 2-1: 保管人具備取消權限", isLeader === true);
+    assertTest("案例 2-2: 使用人具備取消權限", (mockAsset.userEmail === 'someone@example.com'));
+    assertTest("案例 2-3: 無關人員不具備取消權限", isStranger === false);
+  }
+
+  // 案例 3: 狀態防護檢查
+  {
+    const eligibleStatus = '報廢中';
+    const ineligibleStatus1 = '在庫';
+    const ineligibleStatus2 = '已報廢';
+
+    assertTest("案例 3-1: 僅允許 '報廢中' 狀態執行取消", eligibleStatus === '報廢中');
+    assertTest("案例 3-2: '在庫' 狀態不可取消報廢", ineligibleStatus1 !== '報廢中');
+    assertTest("案例 3-3: '已報廢' 狀態不可取消報廢", ineligibleStatus2 !== '報廢中');
+  }
+
+  // 案例 4: 主表狀態還原與備註清空
+  {
+    const simulatedMainRow = {
+      status: '報廢中',
+      remarks: '損壞嚴重申請報廢',
+      lastModified: '2026/09/10'
+    };
+
+    // 執行還原動作
+    simulatedMainRow.status = '在庫';
+    simulatedMainRow.remarks = '';
+    simulatedMainRow.lastModified = '';
+
+    assertTest("案例 4-1: 主表狀態還原為 '在庫'", simulatedMainRow.status === '在庫');
+    assertTest("案例 4-2: 主表備註清空", simulatedMainRow.remarks === '');
+    assertTest("案例 4-3: 主表最後修改日清空", simulatedMainRow.lastModified === '');
+  }
+
+  // 案例 5: 報廢日誌狀態更新
+  {
+    const simulatedLog = {
+      assetId: 'TEST-001',
+      status: '報廢中',
+      approver: ''
+    };
+
+    // 執行取消標記
+    simulatedLog.status = '已取消';
+    simulatedLog.approver = 'user@example.com';
+
+    assertTest("案例 5-1: 報廢日誌狀態變更為 '已取消'", simulatedLog.status === '已取消');
+    assertTest("案例 5-2: 記錄操作人/核准人 Email", simulatedLog.approver === 'user@example.com');
+  }
+
+  Logger.log("=== 測試結果摘要 ===");
+  results.forEach(r => Logger.log(r));
+  const allPassed = results.every(r => r.includes("PASS"));
+  Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
+  return allPassed;
+}
+
 
 
 

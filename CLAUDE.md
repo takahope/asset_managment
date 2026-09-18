@@ -124,6 +124,10 @@ return {
   3. **權限判定短路優化（Short-Circuit）**：在 `getUserStateData` 的 `.map()` 中，Admin 或 Owner 權限恆真時，完全跳過 `isAssetInUserGroupScope_` 的執行。
   4. 驗證：4,630 筆資產在本地模擬測試中，PropertiesService RPC 呼叫由 4,630 次降為 0~1 次，全表計算時間降至 6~7ms。檔案：`code.js`、`hr_directory.js`、`isms-connect-asset/code.js`。
 
+### 2026-09-18 待列印報廢申請單（ScrapPrintModal）新增批次取消報廢、8 欄位排序與關鍵字即時搜尋
+- 需求：使用者希望在「列印報廢申請單」待報廢分頁中，可透過勾選取消報廢申請還原在庫，並具備與移轉待列印相同的欄位排序（升降冪）與關鍵字即時搜尋。
+- 排版與實作：在 `code.js` 實作 `processBatchCancelScrap(assetIds)` 批次 API，嚴格驗證權限後還原主表為「在庫」、清空備註/最後修改日、更新 `ScrapLog` 為「已取消」；於 `alpine_modals_print.html` 工具列採緊湊並列排版、8 欄表頭三態排序（升 🔼 ➔ 降 🔽 ➔ 取消）、全選連動 `filteredAssets`、底部新增「取消選取的報廢」按鈕與二次確認；Scoped CSS 保障預建凍結樣式相容；新增單元測試 `testBatchCancelScrapLogic_()`。檔案：`code.js`、`alpine_modals_print.html`。
+
 ### 2026-09-18 待列印移轉申請單（TransferPrintModal）新增 12 欄位排序與關鍵字即時搜尋
 - 需求：使用者希望在「列印轉移申請單」待列印分頁中，具備與「出借歸還作業」相同的欄位排序（升降冪）與關鍵字即時搜尋。
 - 排版與實作：採「選項 A（緊湊並列）」排版，左側為財產類別單選，右側並列搜尋框與筆數統計；12 個欄位表頭點擊支援三態排序（升 🔼 ➔ 降 🔽 ➔ 取消）；全選連動當前過濾清單 `filteredAssets`；定義具名 scoped CSS（`.transfer-sortable-th`、`.transfer-search-*`）杜絕預建凍結 Tailwind 缺漏問題。檔案：`alpine_modals_print.html`。

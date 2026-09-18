@@ -92,6 +92,81 @@
     .transfer-search-clear:hover {
         color: #64748b;
     }
+    .scrap-sortable-th {
+        cursor: pointer;
+        white-space: nowrap;
+        user-select: none;
+        transition: background-color 0.15s ease;
+    }
+    .scrap-sortable-th:hover {
+        background-color: #ffedd5;
+    }
+    .scrap-search-container {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+    }
+    .scrap-search-input {
+        width: 240px;
+        padding: 0.375rem 2rem 0.375rem 2.25rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 0.5rem;
+        outline: none;
+        background-color: #ffffff;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .scrap-search-input:focus {
+        border-color: #f97316;
+        box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.25);
+    }
+    .scrap-search-icon {
+        position: absolute;
+        left: 0.75rem;
+        color: #94a3b8;
+        pointer-events: none;
+        font-size: 0.875rem;
+    }
+    .scrap-search-clear {
+        position: absolute;
+        right: 0.625rem;
+        color: #94a3b8;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        padding: 2px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+    }
+    .scrap-search-clear:hover {
+        color: #64748b;
+    }
+    .btn-cancel-scrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #fecdd3;
+        background-color: #fff1f2;
+        color: #be123c;
+        font-weight: 500;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        transition: all 0.15s ease;
+    }
+    .btn-cancel-scrap:hover:not(:disabled) {
+        background-color: #ffe4e6;
+        border-color: #fda4af;
+        color: #9f1239;
+    }
+    .btn-cancel-scrap:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 </style>
 <script>
 document.addEventListener('alpine:init', function () {
@@ -331,15 +406,46 @@ document.addEventListener('alpine:init', function () {
     /* ===== ScrapPrintModal(舊頁 7961-8551) ===== */
     Alpine.data('scrapPrintModal', function () {
         return {
-            selectedCategory: '財產', selectedIds: [], selectAll: false, isGenerating: false,
+            selectedCategory: '財產', selectedIds: [], selectAll: false, isGenerating: false, isCanceling: false,
             activeTab: 'pending',
             historyFiles: [], isLoadingHistory: false,
             startDate: '', endDate: '', previewAssets: [], isLoadingPreview: false, isGeneratingByDate: false,
+            filters: { search: '' },
+            sortCol: null,
+            sortDir: null,
+            toggleSort: function (colId) {
+                if (this.sortCol === colId) {
+                    if (this.sortDir === 'asc') {
+                        this.sortDir = 'desc';
+                    } else if (this.sortDir === 'desc') {
+                        this.sortDir = null;
+                        this.sortCol = null;
+                    }
+                } else {
+                    this.sortCol = colId;
+                    this.sortDir = 'asc';
+                }
+            },
 
             init: function () {
                 var self = this;
-                this.$watch('selectedCategory', function () { self.selectedIds = []; self.selectAll = false; });
-                this.$watch('activeTab', function (v) { if (v === 'history' && self.historyFiles.length === 0) self.loadHistoryFiles(); });
+                this.$watch('selectedCategory', function () {
+                    self.selectedIds = [];
+                    self.selectAll = false;
+                    self.filters.search = '';
+                    self.sortCol = null;
+                    self.sortDir = null;
+                });
+                this.$watch('filters.search', function () {
+                    self.updateSelectAllState();
+                });
+                this.$watch('details', function () {
+                    self.selectedIds = [];
+                    self.selectAll = false;
+                });
+                this.$watch('activeTab', function (v) {
+                    if (v === 'history' && self.historyFiles.length === 0) self.loadHistoryFiles();
+                });
                 if (!this.isLoading && this.details === null) {
                     console.error('收到的報廢資料為 null，可能是後端序列化失敗');
                     alert('載入失敗：資料格式錯誤');
@@ -352,15 +458,96 @@ document.addEventListener('alpine:init', function () {
             get currentAssets() {
                 var d = this.details;
                 if (!d) return [];
-                return this.selectedCategory === '財產' ? d.property : d.items;
+                return this.selectedCategory === '財產' ? (d.property || []) : (d.items || d.nonConsumables || []);
+            },
+            get filteredAssets() {
+                var assets = this.currentAssets;
+                if (!assets || !Array.isArray(assets)) return [];
+                var kw = (this.filters.search || '').trim().toUpperCase();
+                var filtered = assets.filter(function (asset) {
+                    if (!kw) return true;
+                    var aliasVal = (S && S.getAssetAliasValue ? S.getAssetAliasValue(asset) : (asset.assetAlias || '')) || '';
+                    return (asset.assetId && String(asset.assetId).toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.assetName && String(asset.assetName).toUpperCase().indexOf(kw) !== -1) ||
+                        (aliasVal && aliasVal.toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.modelBrand && String(asset.modelBrand).toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.originalKeeper && String(asset.originalKeeper).toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.originalUser && String(asset.originalUser).toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.scrapDate && String(asset.scrapDate).toUpperCase().indexOf(kw) !== -1) ||
+                        (asset.scrapReason && String(asset.scrapReason).toUpperCase().indexOf(kw) !== -1);
+                });
+
+                if (this.sortCol && this.sortDir) {
+                    var colId = this.sortCol;
+                    var dir = this.sortDir;
+                    filtered.sort(function (a, b) {
+                        var valA = '';
+                        var valB = '';
+                        if (colId === 'assetAlias') {
+                            valA = (S && S.getAssetAliasValue ? S.getAssetAliasValue(a) : (a.assetAlias || '')) || '';
+                            valB = (S && S.getAssetAliasValue ? S.getAssetAliasValue(b) : (b.assetAlias || '')) || '';
+                        } else {
+                            valA = String(a[colId] || '');
+                            valB = String(b[colId] || '');
+                        }
+                        return dir === 'asc'
+                            ? valA.localeCompare(valB, 'zh-TW', { numeric: true })
+                            : valB.localeCompare(valA, 'zh-TW', { numeric: true });
+                    });
+                }
+                return filtered;
+            },
+            updateSelectAllState: function () {
+                var f = this.filteredAssets;
+                if (!f || f.length === 0) {
+                    this.selectAll = false;
+                    return;
+                }
+                var self = this;
+                this.selectAll = f.every(function (a) {
+                    return self.selectedIds.indexOf(a.assetId) !== -1;
+                });
             },
             handleSelectAll: function (checked) {
                 this.selectAll = checked;
-                this.selectedIds = checked ? this.currentAssets.map(function (a) { return a.assetId; }) : [];
+                this.selectedIds = checked ? this.filteredAssets.map(function (a) { return a.assetId; }) : [];
             },
             handleSelectOne: function (assetId) {
                 var idx = this.selectedIds.indexOf(assetId);
                 this.selectedIds = idx !== -1 ? this.selectedIds.filter(function (id) { return id !== assetId; }) : this.selectedIds.concat([assetId]);
+                this.updateSelectAllState();
+            },
+            handleCancelScrap: function () {
+                var self = this;
+                if (this.selectedIds.length === 0) {
+                    alert('請至少勾選一筆要取消的項目。');
+                    return;
+                }
+                var confirmMsg = '確定要取消所選的 ' + this.selectedIds.length + ' 筆報廢申請嗎？\n\n⚠️ 取消後資產狀態將恢復為「在庫」，並自待列印清單移除。';
+                if (!confirm(confirmMsg)) return;
+
+                this.isCanceling = true;
+                if (typeof showToastProgress === 'function') {
+                    showToastProgress('正在處理取消報廢作業...');
+                }
+
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        if (typeof hideToastProgress === 'function') hideToastProgress('處理完成！', 300);
+                        self.isCanceling = false;
+                        if (result && result.success) {
+                            alert('✅ ' + (result.message || '取消成功！'));
+                            self.$store.app.handleScrapPrintRefresh();
+                        } else {
+                            alert('❌ 取消失敗：' + ((result && result.message) || '未知錯誤'));
+                        }
+                    })
+                    .withFailureHandler(function (error) {
+                        if (typeof hideToastProgress === 'function') hideToastProgress('處理失敗', 300);
+                        self.isCanceling = false;
+                        alert('❌ 取消失敗：' + ((error && error.message) || error));
+                    })
+                    .processBatchCancelScrap(self.selectedIds);
             },
             handleGenerateDoc: function () {
                 var self = this;
@@ -1033,27 +1220,76 @@ document.addEventListener('alpine:init', function () {
             </div>
             <template x-if="activeTab === 'pending'">
                 <div class="print-modal-tab-body">
-                    <div class="px-6 py-4 border-b bg-orange-50/50 shrink-0">
-                        <label class="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
-                        <label class="inline-flex items-center mr-6"><input type="radio" name="scrapCategory" value="財產" x-model="selectedCategory" class="mr-2"><span>財產</span></label>
-                        <label class="inline-flex items-center"><input type="radio" name="scrapCategory" value="非消耗品" x-model="selectedCategory" class="mr-2"><span>非消耗品</span></label>
+                    <div class="px-6 py-3 border-b bg-orange-50/50 shrink-0 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center">
+                            <label class="font-medium text-slate-700 mr-4">請選擇財產類別：</label>
+                            <label class="inline-flex items-center mr-6 cursor-pointer"><input type="radio" name="scrapCategory" value="財產" x-model="selectedCategory" class="mr-2"><span>財產</span></label>
+                            <label class="inline-flex items-center cursor-pointer"><input type="radio" name="scrapCategory" value="非消耗品" x-model="selectedCategory" class="mr-2"><span>非消耗品</span></label>
+                        </div>
+                        <div class="flex items-center gap-4 flex-wrap">
+                            <div class="scrap-search-container">
+                                <i class="fas fa-search scrap-search-icon"></i>
+                                <input type="text" x-model="filters.search" placeholder="搜尋報廢項目..." class="scrap-search-input">
+                                <button type="button" x-show="filters.search" @click="filters.search = ''" class="scrap-search-clear" title="清除搜尋">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="text-sm text-slate-600 shrink-0">
+                                顯示 <span class="font-bold text-orange-600" x-text="filteredAssets.length"></span> / <span x-text="currentAssets.length"></span> 筆
+                            </div>
+                        </div>
                     </div>
                     <div class="print-modal-scroll-area p-6">
                         <template x-if="isLoading"><div class="flex items-center justify-center py-16"><div class="text-center"><div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div><p class="mt-4 text-slate-600">載入中...</p></div></div></template>
                         <template x-if="!isLoading && currentAssets.length === 0"><div class="text-center py-16 text-slate-500"><i class="fas fa-inbox text-5xl mb-4 text-slate-300"></i><p x-text="'目前沒有任何狀態為「報廢中」的' + selectedCategory + '。'"></p></div></template>
-                        <template x-if="!isLoading && currentAssets.length > 0">
+                        <template x-if="!isLoading && currentAssets.length > 0 && filteredAssets.length === 0">
+                            <div class="text-center py-12 text-slate-500">
+                                <i class="fas fa-filter text-3xl mb-2 text-slate-300"></i>
+                                <p>查無符合關鍵字的報廢項目</p>
+                            </div>
+                        </template>
+                        <template x-if="!isLoading && currentAssets.length > 0 && filteredAssets.length > 0">
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
                                     <thead class="bg-orange-50 sticky top-0 z-10 shadow-sm"><tr>
-                                        <th class="px-3 py-2 text-left"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" class="rounded"></th>
-                                        <th class="px-3 py-2 text-left">財產編號</th><th class="px-3 py-2 text-left">財產名稱</th><th class="px-3 py-2 text-left">財產別名</th>
-                                        <th class="px-3 py-2 text-left">型號/廠牌</th><th class="px-3 py-2 text-left">原保管人</th><th class="px-3 py-2 text-left">原使用人</th>
-                                        <th class="px-3 py-2 text-left">報廢日期</th><th class="px-3 py-2 text-left">報廢原因</th>
+                                        <th class="px-3 py-2 text-left"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" class="rounded cursor-pointer"></th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('assetId')">
+                                            財產編號
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetId', 'fa-sort-up text-orange-700': sortCol === 'assetId' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'assetId' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('assetName')">
+                                            財產名稱
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetName', 'fa-sort-up text-orange-700': sortCol === 'assetName' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'assetName' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('assetAlias')">
+                                            財產別名
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'assetAlias', 'fa-sort-up text-orange-700': sortCol === 'assetAlias' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'assetAlias' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('modelBrand')">
+                                            型號/廠牌
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'modelBrand', 'fa-sort-up text-orange-700': sortCol === 'modelBrand' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'modelBrand' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('originalKeeper')">
+                                            原保管人
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'originalKeeper', 'fa-sort-up text-orange-700': sortCol === 'originalKeeper' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'originalKeeper' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('originalUser')">
+                                            原使用人
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'originalUser', 'fa-sort-up text-orange-700': sortCol === 'originalUser' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'originalUser' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('scrapDate')">
+                                            報廢日期
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'scrapDate', 'fa-sort-up text-orange-700': sortCol === 'scrapDate' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'scrapDate' && sortDir === 'desc'}"></i>
+                                        </th>
+                                        <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('scrapReason')">
+                                            報廢原因
+                                            <i class="fas ml-1" :class="{'fa-sort text-slate-300': sortCol !== 'scrapReason', 'fa-sort-up text-orange-700': sortCol === 'scrapReason' && sortDir === 'asc', 'fa-sort-down text-orange-700': sortCol === 'scrapReason' && sortDir === 'desc'}"></i>
+                                        </th>
                                     </tr></thead>
                                     <tbody>
-                                        <template x-for="asset in currentAssets" :key="asset.assetId">
+                                        <template x-for="asset in filteredAssets" :key="asset.assetId">
                                             <tr class="border-b hover:bg-orange-50/30">
-                                                <td class="px-3 py-2"><input type="checkbox" :checked="selectedIds.indexOf(asset.assetId) !== -1" @change="handleSelectOne(asset.assetId)" class="rounded"></td>
+                                                <td class="px-3 py-2"><input type="checkbox" :checked="selectedIds.indexOf(asset.assetId) !== -1" @change="handleSelectOne(asset.assetId)" class="rounded cursor-pointer"></td>
                                                 <td class="px-3 py-2" x-text="asset.assetId"></td>
                                                 <td class="px-3 py-2" x-text="asset.assetName"></td>
                                                 <td class="px-3 py-2" x-text="window.AppShared.getAssetAliasDisplay(asset)"></td>
@@ -1162,8 +1398,12 @@ document.addEventListener('alpine:init', function () {
             <div x-show="activeTab === 'pending'" class="px-6 py-4 border-t bg-slate-50 flex justify-between items-center shrink-0">
                 <div class="text-sm text-slate-600">已選擇 <span class="font-bold text-orange-600" x-text="selectedIds.length"></span> 筆資產</div>
                 <div class="flex gap-3">
-                    <button @click="$store.app.closeScrapPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" :disabled="isGenerating">取消</button>
-                    <button @click="handleGenerateDoc()" :disabled="isGenerating || selectedIds.length === 0" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button @click="$store.app.closeScrapPrintModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" :disabled="isGenerating || isCanceling">關閉</button>
+                    <button @click="handleCancelScrap()" :disabled="isGenerating || isCanceling || selectedIds.length === 0" class="btn-cancel-scrap">
+                        <template x-if="isCanceling"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div><span>取消中...</span></span></template>
+                        <template x-if="!isCanceling"><span class="flex items-center gap-2"><i class="fas fa-undo-alt"></i><span>取消選取的報廢</span></span></template>
+                    </button>
+                    <button @click="handleGenerateDoc()" :disabled="isGenerating || isCanceling || selectedIds.length === 0" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                         <template x-if="isGenerating"><span class="flex items-center gap-2"><div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div><span>產生中...</span></span></template>
                         <template x-if="!isGenerating"><span class="flex items-center gap-2"><i class="fas fa-file-alt"></i><span>生成報廢申請單</span></span></template>
                     </button>
