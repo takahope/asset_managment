@@ -124,6 +124,10 @@ return {
   3. **權限判定短路優化（Short-Circuit）**：在 `getUserStateData` 的 `.map()` 中，Admin 或 Owner 權限恆真時，完全跳過 `isAssetInUserGroupScope_` 的執行。
   4. 驗證：4,630 筆資產在本地模擬測試中，PropertiesService RPC 呼叫由 4,630 次降為 0~1 次，全表計算時間降至 6~7ms。檔案：`code.js`、`hr_directory.js`、`isms-connect-asset/code.js`。
 
+### 2026-09-18 待列印移轉申請單（TransferPrintModal）新增 12 欄位排序與關鍵字即時搜尋
+- 需求：使用者希望在「列印轉移申請單」待列印分頁中，具備與「出借歸還作業」相同的欄位排序（升降冪）與關鍵字即時搜尋。
+- 排版與實作：採「選項 A（緊湊並列）」排版，左側為財產類別單選，右側並列搜尋框與筆數統計；12 個欄位表頭點擊支援三態排序（升 🔼 ➔ 降 🔽 ➔ 取消）；全選連動當前過濾清單 `filteredAssets`；定義具名 scoped CSS（`.transfer-sortable-th`、`.transfer-search-*`）杜絕預建凍結 Tailwind 缺漏問題。檔案：`alpine_modals_print.html`。
+
 ### 2026-09-17 待列印移轉申請單（TransferPrintModal）支援「退回轉移」機制
 - 需求：使用者在移轉完成（已接收或純地點轉移完成）進入待列印清單後，若在列印前發現移轉錯誤需要退回，無法在系統內直接撤銷復原。
 - 根因：資產已接收時主表已覆寫為新保管人與新地點；原僅在未接收階段（轉移中）可取消，進入待列印清單後無 rollback 機制。
