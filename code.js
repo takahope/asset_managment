@@ -11975,8 +11975,14 @@ function testLabTransferWorkflow_() {
     };
   }
 
-  // 確保管理員權限檢查通過
-  props.setProperty('ADMIN_EMAILS', 'tester_admin@example.com');
+  // 確保管理員權限檢查通過（保留原管理員清單並納入當前執行者與測試者）
+  const activeUserEmail = (typeof Session !== 'undefined' && Session.getActiveUser && Session.getActiveUser().getEmail())
+    ? Session.getActiveUser().getEmail()
+    : 'tester_admin@example.com';
+  const testAdminList = [originalAdminEmails, activeUserEmail, 'tester_admin@example.com']
+    .filter(Boolean)
+    .join(',');
+  props.setProperty('ADMIN_EMAILS', testAdminList);
 
   if (isNode || typeof getStationCandidates_ !== 'function') {
     originalGetStationCandidates = globalThis.getStationCandidates_;
