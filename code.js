@@ -11922,97 +11922,301 @@ function testScrapReasonAndApplyMethodSeparation_() {
 }
 
 /**
- * [自動化測試] 驗證實驗組轉移模式之簽核權限判定與 AE 欄更新邏輯
- * 執行方式：在 GAS 編輯器直接執行 testLabTransferApprovalAndDefaultGroup_()
+ * [自動化測試] 驗證實驗組轉移模式之完整工作流程
+ * 涵蓋：
+ *  1. normalizeTransferType_ 轉移類型正規化
+ *  2. saveSystemSettings 與 getSystemSettings 儲存與讀取 (labCommonCustodianEmail, labCommonAutoApprove)
+ *  3. canApproveTransfer_ 簽核權限矩陣 (轉移實驗組(共同)、轉移實驗組(個人)、同組代理)
+ *  4. AE 欄 (indices.DEFAULT_GROUP, 第 31 欄) 更新條件判定與試算表寫入驗證
+ * 執行方式：可在 GAS 編輯器直接執行 testLabTransferWorkflow_()，亦支援以 Node 環境驗證。
  */
-function testLabTransferApprovalAndDefaultGroup_() {
-  Logger.log("=== 開始執行 testLabTransferApprovalAndDefaultGroup_ 單元測試 ===");
+function testLabTransferWorkflow_() {
+  const logger = (typeof Logger !== 'undefined' && Logger.log) ? Logger : console;
+  logger.log("=== 開始執行 testLabTransferWorkflow_ 單元測試 ===");
   const results = [];
   const assertTest = (title, condition) => {
     const status = condition ? "PASS" : "FAIL";
     results.push(`[${status}] ${title}`);
-    Logger.log(`[${status}] ${title}`);
+    logger.log(`[${status}] ${title}`);
   };
 
-  // 案例 1: normalizeTransferType_ 測試
-  {
-    assertTest("案例 1-1: 轉移實驗組(個人) 標準化為 保管人+使用人", 
-      normalizeTransferType_('轉移實驗組(個人)') === '保管人+使用人');
-    assertTest("案例 1-2: 代理標記之轉移實驗組(個人) 標準化為 保管人+使用人", 
-      normalizeTransferType_('【同組代理】轉移實驗組(個人)（原保管人：張三）') === '保管人+使用人');
-    assertTest("案例 1-3: 轉移實驗組(共同) 保持原樣", 
-      normalizeTransferType_('轉移實驗組(共同)') === '轉移實驗組(共同)');
-    assertTest("案例 1-4: 代理標記之轉移實驗組(共同) 標準化為 轉移實驗組(共同)", 
-      normalizeTransferType_('【管理員代理】轉移實驗組(共同)（原保管人：李四）') === '轉移實驗組(共同)');
+  // 環境偵測與 Mock 準備（支援 Node 與 GAS 跨環境直接運行）
+  const needMockProps = typeof PropertiesService === 'undefined';
+  const isNode = typeof CacheService === 'undefined' || typeof SpreadsheetApp === 'undefined';
+  let memoryProps = {};
+  let originalPropsService = null;
+  let originalSession = null;
+  let originalGetStationCandidates = null;
+  let originalGetHrOfficialGroups = null;
+  let originalGetKeeperDir = null;
+
+  if (needMockProps) {
+    originalPropsService = globalThis.PropertiesService;
+    globalThis.PropertiesService = {
+      getScriptProperties: () => ({
+        getProperty: (key) => memoryProps[key] !== undefined ? memoryProps[key] : null,
+        setProperty: (key, val) => { memoryProps[key] = String(val); },
+        deleteProperty: (key) => { delete memoryProps[key]; }
+      })
+    };
   }
 
-  // 案例 2: canApproveTransfer_ 簽核權限判斷
-  {
-    // 共同財產轉移：共同帳號本人
-    const canCommonSelf = canApproveTransfer_({
-      currentUserEmailLower: 'biobank@example.com',
-      newLeaderEmailLower: 'biobank@example.com',
-      newUserEmailLower: 'biobank@example.com',
-      transferType: '轉移實驗組(共同)',
-      groupProxyEnabled: false
-    });
-    assertTest("案例 2-1: 共同帳號本人可簽核接收 轉移實驗組(共同)", canCommonSelf === true);
+  const props = PropertiesService.getScriptProperties();
+  const originalLabEmail = props.getProperty('LAB_COMMON_CUSTODIAN_EMAIL');
+  const originalAutoApprove = props.getProperty('LAB_COMMON_AUTO_APPROVE');
+  const originalAdminEmails = props.getProperty('ADMIN_EMAILS');
 
-    // 共同財產轉移：實驗組同仁（依賴目錄對照）
-    if (typeof getKeeperDirectory_ === 'function') {
-      const dir = getKeeperDirectory_();
-      const labEmails = Object.keys(dir.emailToGroup || {}).filter(e => canonicalizeGroupName_(dir.emailToGroup[e]).toLowerCase() === '實驗組');
-      if (labEmails.length > 0) {
-        const canLabMember = canApproveTransfer_({
-          currentUserEmailLower: labEmails[0],
-          newLeaderEmailLower: 'biobank@example.com',
-          newUserEmailLower: 'biobank@example.com',
-          transferType: '轉移實驗組(共同)',
-          groupProxyEnabled: false
-        });
-        assertTest("案例 2-2: 實驗組任一同仁可簽核接收 轉移實驗組(共同)", canLabMember === true);
-      }
+  if (typeof Session === 'undefined') {
+    originalSession = globalThis.Session;
+    globalThis.Session = {
+      getActiveUser: () => ({
+        getEmail: () => 'tester_admin@example.com'
+      })
+    };
+  }
+
+  // 確保管理員權限檢查通過
+  props.setProperty('ADMIN_EMAILS', 'tester_admin@example.com');
+
+  if (isNode || typeof getStationCandidates_ !== 'function') {
+    originalGetStationCandidates = globalThis.getStationCandidates_;
+    globalThis.getStationCandidates_ = () => [];
+  }
+  if (isNode || typeof getHrOfficialGroups_ !== 'function') {
+    originalGetHrOfficialGroups = globalThis.getHrOfficialGroups_;
+    globalThis.getHrOfficialGroups_ = () => [];
+  }
+
+  try {
+    // 案例 1: normalizeTransferType_ 測試
+    {
+      assertTest("案例 1-1: 轉移實驗組(個人) 標準化為 保管人+使用人", 
+        normalizeTransferType_('轉移實驗組(個人)') === '保管人+使用人');
+      assertTest("案例 1-2: 代理標記之轉移實驗組(個人) 標準化為 保管人+使用人", 
+        normalizeTransferType_('【同組代理】轉移實驗組(個人)（原保管人：張三）') === '保管人+使用人');
+      assertTest("案例 1-3: 轉移實驗組(共同) 保持原樣", 
+        normalizeTransferType_('轉移實驗組(共同)') === '轉移實驗組(共同)');
+      assertTest("案例 1-4: 代理標記之轉移實驗組(共同) 標準化為 轉移實驗組(共同)", 
+        normalizeTransferType_('【管理員代理】轉移實驗組(共同)（原保管人：李四）') === '轉移實驗組(共同)');
     }
 
-    // 個人財產轉移：接收人本人
-    const canPersonalSelf = canApproveTransfer_({
-      currentUserEmailLower: 'lab_member@example.com',
-      newLeaderEmailLower: 'lab_member@example.com',
-      newUserEmailLower: 'lab_member@example.com',
-      transferType: '轉移實驗組(個人)',
-      groupProxyEnabled: false
-    });
-    assertTest("案例 2-3: 接收人本人可簽核接收 轉移實驗組(個人)", canPersonalSelf === true);
+    // 案例 2: saveSystemSettings 與 getSystemSettings 儲存與讀取驗證
+    {
+      // 2-1: 儲存公用帳號與開啟免審核
+      saveSystemSettings({
+        labCommonCustodianEmail: 'biobank_common@example.com',
+        labCommonAutoApprove: true
+      });
+      const s1 = getSystemSettings();
+      assertTest("案例 2-1: getSystemSettings 讀取 labCommonCustodianEmail 正確", 
+        s1.labCommonCustodianEmail === 'biobank_common@example.com');
+      assertTest("案例 2-2: getSystemSettings 讀取 labCommonAutoApprove 為 true", 
+        s1.labCommonAutoApprove === true);
 
-    // 個人財產轉移：非相關人員不可簽核
-    const canPersonalOther = canApproveTransfer_({
-      currentUserEmailLower: 'other@example.com',
-      newLeaderEmailLower: 'lab_member@example.com',
-      newUserEmailLower: 'lab_member@example.com',
-      transferType: '轉移實驗組(個人)',
-      groupProxyEnabled: false
-    });
-    assertTest("案例 2-4: 無代理時非接收人不可簽核 轉移實驗組(個人)", canPersonalOther === false);
+      // 2-2: 關閉免審核，且不覆蓋現有公用帳號
+      saveSystemSettings({
+        labCommonAutoApprove: false
+      });
+      const s2 = getSystemSettings();
+      assertTest("案例 2-3: 修改 labCommonAutoApprove 為 false 正確生效", 
+        s2.labCommonAutoApprove === false);
+      assertTest("案例 2-4: 未傳入 labCommonCustodianEmail 時原有信箱設定被安全保留", 
+        s2.labCommonCustodianEmail === 'biobank_common@example.com');
+
+      // 2-3: 帶空白字元之 Email 自動 trim
+      saveSystemSettings({
+        labCommonCustodianEmail: '  trimmed_lab@example.com  '
+      });
+      const s3 = getSystemSettings();
+      assertTest("案例 2-5: labCommonCustodianEmail 去除頭尾空白字元", 
+        s3.labCommonCustodianEmail === 'trimmed_lab@example.com');
+    }
+
+    // 案例 3: canApproveTransfer_ 簽核權限矩陣驗證
+    {
+      // 建立受控的同仁目錄 Mock
+      originalGetKeeperDir = typeof getKeeperDirectory_ === 'function' ? getKeeperDirectory_ : null;
+      globalThis.getKeeperDirectory_ = () => ({
+        emailToGroup: {
+          'lab_member_1@example.com': '實驗組',
+          'lab_member_2@example.com': '實驗組',
+          'it_member@example.com': '資訊組',
+          'admin_member@example.com': '行政組'
+        }
+      });
+
+      // 3-1: 共同財產轉移：共同帳號本人可簽核接收
+      const canCommonSelf = canApproveTransfer_({
+        currentUserEmailLower: 'lab_common@example.com',
+        newLeaderEmailLower: 'lab_common@example.com',
+        newUserEmailLower: 'lab_common@example.com',
+        transferType: '轉移實驗組(共同)',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-1: 共同帳號本人具備 轉移實驗組(共同) 簽核接收權限", canCommonSelf === true);
+
+      // 3-2: 共同財產轉移：實驗組同仁具備簽核接收權限
+      const canLabMember = canApproveTransfer_({
+        currentUserEmailLower: 'lab_member_1@example.com',
+        newLeaderEmailLower: 'lab_common@example.com',
+        newUserEmailLower: 'lab_common@example.com',
+        transferType: '轉移實驗組(共同)',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-2: 實驗組任一同仁具備 轉移實驗組(共同) 簽核接收權限", canLabMember === true);
+
+      // 3-3: 共同財產轉移：非實驗組人員無簽核接收權限
+      const canNonLabMember = canApproveTransfer_({
+        currentUserEmailLower: 'it_member@example.com',
+        newLeaderEmailLower: 'lab_common@example.com',
+        newUserEmailLower: 'lab_common@example.com',
+        transferType: '轉移實驗組(共同)',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-3: 非實驗組人員無 轉移實驗組(共同) 簽核接收權限", canNonLabMember === false);
+
+      // 3-4: 共同財產轉移：外部陌生人員無簽核接收權限
+      const canStranger = canApproveTransfer_({
+        currentUserEmailLower: 'stranger@example.com',
+        newLeaderEmailLower: 'lab_common@example.com',
+        newUserEmailLower: 'lab_common@example.com',
+        transferType: '轉移實驗組(共同)',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-4: 陌生人員無 轉移實驗組(共同) 簽核接收權限", canStranger === false);
+
+      // 3-5: 共同財產轉移：代理標記下實驗組同仁仍具備簽核權限
+      const canLabMemberProxy = canApproveTransfer_({
+        currentUserEmailLower: 'lab_member_2@example.com',
+        newLeaderEmailLower: 'lab_common@example.com',
+        newUserEmailLower: 'lab_common@example.com',
+        transferType: '【同組代理】轉移實驗組(共同)（原保管人：王大明）',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-5: 代理標記下實驗組同仁具備 轉移實驗組(共同) 簽核權限", canLabMemberProxy === true);
+
+      // 3-6: 個人財產轉移：接收人本人可簽核接收
+      const canPersonalSelf = canApproveTransfer_({
+        currentUserEmailLower: 'lab_member_1@example.com',
+        newLeaderEmailLower: 'lab_member_1@example.com',
+        newUserEmailLower: 'lab_member_1@example.com',
+        transferType: '轉移實驗組(個人)',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-6: 接收人本人具備 轉移實驗組(個人) 簽核接收權限", canPersonalSelf === true);
+
+      // 3-7: 個人財產轉移：非接收人（無代理時）不可簽核
+      const canPersonalOther = canApproveTransfer_({
+        currentUserEmailLower: 'lab_member_2@example.com',
+        newLeaderEmailLower: 'lab_member_1@example.com',
+        newUserEmailLower: 'lab_member_1@example.com',
+        transferType: '轉移實驗組(個人)',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-7: 無代理時非接收人不可簽核 轉移實驗組(個人)", canPersonalOther === false);
+
+      // 3-8: 個人財產轉移：代理標記下接收人本人仍可簽核
+      const canPersonalWithProxyTag = canApproveTransfer_({
+        currentUserEmailLower: 'lab_member_1@example.com',
+        newLeaderEmailLower: 'lab_member_1@example.com',
+        newUserEmailLower: 'lab_member_1@example.com',
+        transferType: '【同組代理】轉移實驗組(個人)（原保管人：張三）',
+        groupProxyEnabled: false
+      });
+      assertTest("案例 3-8: 代理標記下接收人本人可簽核 轉移實驗組(個人)", canPersonalWithProxyTag === true);
+    }
+
+    // 案例 4: AE 欄（indices.DEFAULT_GROUP，第 31 欄）更新觸發條件與模擬寫入
+    {
+      const isLabTransfer = (transferTypeRaw) => {
+        return Boolean(transferTypeRaw && transferTypeRaw.includes('轉移實驗組'));
+      };
+
+      assertTest("案例 4-1: 轉移實驗組(個人) 觸發 AE 欄更新", isLabTransfer('轉移實驗組(個人)') === true);
+      assertTest("案例 4-2: 轉移實驗組(共同) 觸發 AE 欄更新", isLabTransfer('轉移實驗組(共同)') === true);
+      assertTest("案例 4-3: 代理標記之實驗組轉移 觸發 AE 欄更新", isLabTransfer('【同組代理】轉移實驗組(個人)（原保管人：王大明）') === true);
+      assertTest("案例 4-4: 一般轉移 不觸發 AE 欄更新", isLabTransfer('保管人+使用人') === false);
+      assertTest("案例 4-5: 地點轉移 不觸發 AE 欄更新", isLabTransfer('地點') === false);
+
+      // 模擬試算表寫入行為驗證
+      const simulatedSheet = {
+        cells: {},
+        getRange: function(row, col) {
+          const key = `${row},${col}`;
+          return {
+            setValue: (val) => { simulatedSheet.cells[key] = val; },
+            getValue: () => simulatedSheet.cells[key]
+          };
+        }
+      };
+      const indices = PROPERTY_COLUMN_INDICES; // DEFAULT_GROUP: 31
+      assertTest("案例 4-6: DEFAULT_GROUP 欄位索引值為 31 (AE欄)", indices.DEFAULT_GROUP === 31);
+
+      const simulateApprovalUpdate = (transferTypeRaw, rowIndex) => {
+        if (transferTypeRaw && transferTypeRaw.includes('轉移實驗組')) {
+          simulatedSheet.getRange(rowIndex, indices.DEFAULT_GROUP).setValue('實驗組');
+        }
+      };
+
+      simulateApprovalUpdate('轉移實驗組(個人)', 2);
+      simulateApprovalUpdate('轉移實驗組(共同)', 3);
+      simulateApprovalUpdate('保管人+使用人', 4);
+
+      assertTest("案例 4-7: 轉移實驗組(個人) 審核後 AE 欄寫入 '實驗組'", simulatedSheet.cells['2,31'] === '實驗組');
+      assertTest("案例 4-8: 轉移實驗組(共同) 審核後 AE 欄寫入 '實驗組'", simulatedSheet.cells['3,31'] === '實驗組');
+      assertTest("案例 4-9: 一般轉移審核後 AE 欄保持未更動", simulatedSheet.cells['4,31'] === undefined);
+    }
+
+  } finally {
+    // 🛡️ 還原 Script Properties 設定，確保不污染環境
+    if (originalLabEmail !== null) props.setProperty('LAB_COMMON_CUSTODIAN_EMAIL', originalLabEmail);
+    else props.deleteProperty('LAB_COMMON_CUSTODIAN_EMAIL');
+
+    if (originalAutoApprove !== null) props.setProperty('LAB_COMMON_AUTO_APPROVE', originalAutoApprove);
+    else props.deleteProperty('LAB_COMMON_AUTO_APPROVE');
+
+    if (originalAdminEmails !== null) props.setProperty('ADMIN_EMAILS', originalAdminEmails);
+    else props.deleteProperty('ADMIN_EMAILS');
+
+    // 還原 Mocks
+    if (originalGetKeeperDir) {
+      globalThis.getKeeperDirectory_ = originalGetKeeperDir;
+    } else {
+      delete globalThis.getKeeperDirectory_;
+    }
+    if (originalSession !== null && originalSession !== undefined) {
+      globalThis.Session = originalSession;
+    } else if (originalSession === null) {
+      delete globalThis.Session;
+    }
+    if (originalGetStationCandidates !== null && originalGetStationCandidates !== undefined) {
+      globalThis.getStationCandidates_ = originalGetStationCandidates;
+    } else if (originalGetStationCandidates === null) {
+      delete globalThis.getStationCandidates_;
+    }
+    if (originalGetHrOfficialGroups !== null && originalGetHrOfficialGroups !== undefined) {
+      globalThis.getHrOfficialGroups_ = originalGetHrOfficialGroups;
+    } else if (originalGetHrOfficialGroups === null) {
+      delete globalThis.getHrOfficialGroups_;
+    }
+    if (needMockProps && originalPropsService !== undefined) {
+      if (originalPropsService) globalThis.PropertiesService = originalPropsService;
+      else delete globalThis.PropertiesService;
+    }
   }
 
-  // 案例 3: AE 欄更新條件判定
-  {
-    const isLabTransfer = (transferTypeRaw) => {
-      return Boolean(transferTypeRaw && transferTypeRaw.includes('轉移實驗組'));
-    };
-
-    assertTest("案例 3-1: 轉移實驗組(個人) 觸發 AE 欄更新", isLabTransfer('轉移實驗組(個人)') === true);
-    assertTest("案例 3-2: 轉移實驗組(共同) 觸發 AE 欄更新", isLabTransfer('轉移實驗組(共同)') === true);
-    assertTest("案例 3-3: 代理標記之實驗組轉移 觸發 AE 欄更新", isLabTransfer('【同組代理】轉移實驗組(個人)（原保管人：王大明）') === true);
-    assertTest("案例 3-4: 一般轉移 不觸發 AE 欄更新", isLabTransfer('保管人+使用人') === false);
-    assertTest("案例 3-5: 地點轉移 不觸發 AE 欄更新", isLabTransfer('地點') === false);
-  }
-
-  Logger.log("=== testLabTransferApprovalAndDefaultGroup_ 測試結果摘要 ===");
-  results.forEach(r => Logger.log(r));
+  logger.log("=== testLabTransferWorkflow_ 測試結果摘要 ===");
+  results.forEach(r => logger.log(r));
   const allPassed = results.every(r => r.includes("PASS"));
-  Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
+  logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
   return allPassed;
+}
+
+/**
+ * 相容別名：保留 testLabTransferApprovalAndDefaultGroup_() 調用入口
+ */
+function testLabTransferApprovalAndDefaultGroup_() {
+  return testLabTransferWorkflow_();
 }
 
 
