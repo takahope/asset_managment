@@ -1710,6 +1710,22 @@ function getTransferData(forceUserScope) {
   // 地點順序:靜態地點(設定順序)在前、駐站(組織架構樹列序)在後
   const locations = locConfig.locations;
 
+  // ✨ 解析實驗組成員（所屬組別為「實驗組」之在職員工）
+  const labMembers = {};
+  directory.allEmails.forEach(email => {
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    const userGroup = directory.emailToGroup[normalizedEmail];
+    if (userGroup && canonicalizeGroupName_(userGroup).toLowerCase() === '實驗組') {
+      labMembers[normalizedEmail] = directory.emailToName[normalizedEmail] || email.split('@')[0];
+    }
+  });
+
+  // ✨ 讀取實驗組共用財產保管人設定
+  const props = PropertiesService.getScriptProperties();
+  const labCommonEmail = props.getProperty('LAB_COMMON_CUSTODIAN_EMAIL') || '';
+  const labCommonName = labCommonEmail ? (directory.emailToName[labCommonEmail.toLowerCase().trim()] || labCommonEmail.split('@')[0]) : '';
+  const labCommonAutoApprove = props.getProperty('LAB_COMMON_AUTO_APPROVE') === 'true';
+
   // 4. 回傳整合後的資料
   return {
     userEmail: currentUserEmail,
@@ -1721,6 +1737,11 @@ function getTransferData(forceUserScope) {
     stationLocations: locConfig.stationLocations, // ✨ 駐站地點列表
     stationToCustodians: locConfig.stationToCustodians || {}, // ✨ 駐站 ➜ 駐管雙向字典
     custodianToStations: locConfig.custodianToStations || {}, // ✨ 駐管 ➜ 駐站雙向字典
+    // ✨ 實驗組相關資料
+    labMembers: labMembers,
+    labCommonCustodianEmail: labCommonEmail,
+    labCommonCustodianName: labCommonName,
+    labCommonAutoApprove: labCommonAutoApprove,
     // ✨ 資訊組相關資料
     infoCustodian: infoCustodianMap.size > 0 ? Object.fromEntries(infoCustodianMap) : null,
     infoUser: infoUserMap.size > 0 ? Object.fromEntries(infoUserMap) : null,
@@ -1768,6 +1789,9 @@ function processBatchTransferApplication(formData) {
       intakeLocation,      // 收案組地點
       // ✨ 新增：資訊組轉出模式
       isInfoOutTransfer,  // 是否為「資訊組轉出」
+      // ✨ 新增：實驗組轉移模式
+      isLabTransfer,      // 是否為「轉移實驗組」
+      labType,            // 'personal' | 'common'
       // ✨ 新增：代理轉移參數（前端傳入）
       proxyTransfers      // 格式：[{ assetId, originalKeeperEmail, originalKeeperName }]
     } = formData;
@@ -1841,6 +1865,26 @@ function processBatchTransferApplication(formData) {
 
       if (!actualNewKeeperEmail) {
         throw new Error("資訊組轉出需要選擇接收人員。");
+      }
+    } else if (isLabTransfer) {
+      if (labType === 'personal') {
+        actualNewKeeperEmail = newKeeperEmail;
+        actualNewUserEmail = newKeeperEmail;
+        actualNewLocation = newLocation || null;
+        actualTransferType = '轉移實驗組(個人)';
+
+        if (!actualNewKeeperEmail) {
+          throw new Error("個人財產轉移需要選擇接收人員。");
+        }
+      } else if (labType === 'common') {
+        const labCommonEmail = PropertiesService.getScriptProperties().getProperty('LAB_COMMON_CUSTODIAN_EMAIL');
+        if (!labCommonEmail) {
+          throw new Error("系統尚未設定「實驗組共同財產保管與使用人」，請聯絡管理員設定。");
+        }
+        actualNewKeeperEmail = labCommonEmail;
+        actualNewUserEmail = labCommonEmail;
+        actualNewLocation = newLocation || null;
+        actualTransferType = '轉移實驗組(共同)';
       }
     } else {
       // 一般轉移模式驗證
@@ -2003,6 +2047,10 @@ function processBatchTransferApplication(formData) {
             transferType = '駐站回送收案組';
           } else if (actualTransferType === '資訊組轉出') {
             transferType = '資訊組轉出';
+          } else if (actualTransferType === '轉移實驗組(個人)') {
+            transferType = '轉移實驗組(個人)';
+          } else if (actualTransferType === '轉移實驗組(共同)') {
+            transferType = '轉移實驗組(共同)';
           } else {
             // 動態組合轉移類型
             const parts = [];
@@ -2028,8 +2076,10 @@ function processBatchTransferApplication(formData) {
             }
           }
           
-          // 只有變更保管人或使用人時才需要設為「待接收」狀態
-          const needsApproval = isKeeperChange || isUserChange;
+          // 只有變更保管人或使用人時才需要設為「待接收」狀態（實驗組共同財產若開啟自動接收則免審核）
+          const isLabCommonAutoApprove = actualTransferType === '轉移實驗組(共同)' && 
+            PropertiesService.getScriptProperties().getProperty('LAB_COMMON_AUTO_APPROVE') === 'true';
+          const needsApproval = !isLabCommonAutoApprove && (isKeeperChange || isUserChange);
           
           if (needsApproval) {
             location.sheet.getRange(location.rowIndex, indicesToUpdate.ASSET_STATUS).setValue("轉移中");
@@ -2038,20 +2088,35 @@ function processBatchTransferApplication(formData) {
             location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
             location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue('');
           } else {
-            // 僅變更地點，直接更新無需審核
-            location.sheet.getRange(location.rowIndex, indicesToUpdate.LOCATION).setValue(finalNewLocation);
-            location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue(now);
+            if (isLabCommonAutoApprove) {
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.LOCATION).setValue(finalNewLocation);
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.LEADER_NAME).setValue(finalNewKeeperName);
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.LEADER_EMAIL).setValue(finalNewKeeperEmail);
+              if (location.sheetName === PROPERTY_MASTER_SHEET_NAME) {
+                location.sheet.getRange(location.rowIndex, indicesToUpdate.USER_NAME).setValue(actualNewUserName || finalNewKeeperName);
+                location.sheet.getRange(location.rowIndex, indicesToUpdate.USER_EMAIL).setValue(finalNewUserEmail || finalNewKeeperEmail);
+              }
+              // ✨ 寫入 AE 欄位（DEFAULT_GROUP）為「實驗組」
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.DEFAULT_GROUP).setValue('實驗組');
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue(now);
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_UPLOADED).setValue('');
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
+            } else {
+              // 僅變更地點，直接更新無需審核
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.LOCATION).setValue(finalNewLocation);
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.TRANSFER_TIME).setValue(now);
 
-            // ✨ 新增：判斷是否為駐站 + 是否為電腦，更新 IS_COMPUTER 欄位
-            const isStation = isStationLocation_(finalNewLocation);
-            const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
-            const isActuallyComputer = assetRow[indicesToUpdate.IS_ACTUALLY_COMPUTER - 1] === '是';
-            const shouldBeMarked = isStation && isActuallyComputer;
-            location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_COMPUTER).setValue(shouldBeMarked ? '是' : '');
+              // ✨ 新增：判斷是否為駐站 + 是否為電腦，更新 IS_COMPUTER 欄位
+              const isStation = isStationLocation_(finalNewLocation);
+              const assetRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
+              const isActuallyComputer = assetRow[indicesToUpdate.IS_ACTUALLY_COMPUTER - 1] === '是';
+              const shouldBeMarked = isStation && isActuallyComputer;
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_COMPUTER).setValue(shouldBeMarked ? '是' : '');
 
-            // ✨ 新增：清空上傳狀態，觸發管理員更新
-            location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_UPLOADED).setValue('');
-            location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
+              // ✨ 新增：清空上傳狀態，觸發管理員更新
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.IS_UPLOADED).setValue('');
+              location.sheet.getRange(location.rowIndex, indicesToUpdate.UPLOAD_TIME).setValue('');
+            }
           }
 
           const appId = `APP-${now.getTime()}-${createdApplications.length}`;
