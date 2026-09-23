@@ -5421,6 +5421,9 @@ function getSystemSettings() {
     inventoryFeatureEnabled: props.getProperty('INVENTORY_FEATURE_ENABLED') !== 'false',
     fabMenuEnabled: props.getProperty('FAB_MENU_ENABLED') !== 'false',
     locationErrorMode: getLocationErrorMode_(), // ✨ 位置有誤執行模式
+    // ✨ 實驗組公用財產設定
+    labCommonCustodianEmail: props.getProperty('LAB_COMMON_CUSTODIAN_EMAIL') || '',
+    labCommonAutoApprove: props.getProperty('LAB_COMMON_AUTO_APPROVE') === 'true',
     // ✨ 保管人/信箱 遷移設定（spec 2026-07-18）
     hrGroupNameMap: props.getProperty('HR_GROUP_NAME_MAP') || '',
     infoStationCustodianEmails: props.getProperty('INFO_STATION_CUSTODIAN_EMAILS') || '',
@@ -5442,7 +5445,7 @@ function getSystemSettings() {
 /**
  * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
  * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
- * @param {{reportAdminEmails?:string, dataUpdateNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupViewEnabled?:boolean, groupProxyTransferLendEnabled?:boolean, groupProxyScrapEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string}} settings
+ * @param {{reportAdminEmails?:string, dataUpdateNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupViewEnabled?:boolean, groupProxyTransferLendEnabled?:boolean, groupProxyScrapEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string, labCommonCustodianEmail?:string, labCommonAutoApprove?:boolean}} settings
  * @returns {{success:boolean}}
  */
 function saveSystemSettings(settings) {
@@ -5484,6 +5487,13 @@ function saveSystemSettings(settings) {
   }
   if (s.locationErrorMode !== undefined) {
     props.setProperty('LOCATION_ERROR_MODE', s.locationErrorMode === 'queue' ? 'queue' : 'immediate');
+  }
+  // ✨ 實驗組公用財產設定
+  if (s.labCommonCustodianEmail !== undefined) {
+    props.setProperty('LAB_COMMON_CUSTODIAN_EMAIL', String(s.labCommonCustodianEmail).trim());
+  }
+  if (s.labCommonAutoApprove !== undefined) {
+    props.setProperty('LAB_COMMON_AUTO_APPROVE', String(!!s.labCommonAutoApprove));
   }
   // ✨ 保管人/信箱 遷移設定；HR 相關鍵變更後清 directory 快取讓新值即時生效
   let hrSettingsChanged = false;

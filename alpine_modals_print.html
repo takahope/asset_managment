@@ -1252,6 +1252,19 @@ document.addEventListener('alpine:init', function () {
                         <template x-if="!isLoading && currentAssets.length > 0 && filteredAssets.length > 0">
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
+                                   <!-- 【欄位寬度集中管理】使用者如欲調整欄寬，請直接修改下方各欄的 width 與 min-width 數值 -->
+                                    <colgroup>
+                                        <col style="width: 44px; min-width: 44px;">   <!-- 1. 勾選框 -->
+                                        <col style="width: 180px; min-width: 170px;"> <!-- 2. 財產編號 -->
+                                        <col style="width: 230px; min-width: 140px;"> <!-- 3. 財產名稱 -->
+                                        <col style="width: 190px; min-width: 180px;"> <!-- 4. 財產別名 -->
+                                        <col style="width: 330px; min-width: 320px;"> <!-- 5. 型號/廠牌 -->
+                                        <col style="width: 95px; min-width: 85px;">   <!-- 6. 原保管人 -->
+                                        <col style="width: 95px; min-width: 85px;">   <!-- 7. 原使用人 -->
+                                        <col style="width: 230px; min-width: 220px;"> <!-- 8. 申請方式 -->
+                                        <col style="width: 110px; min-width: 100px;"> <!-- 9. 報廢日期 -->
+                                        <col style="min-width: 50px;">               <!-- 10. 報廢原因 (彈性填滿) -->
+                                    </colgroup>
                                     <thead class="bg-orange-50 sticky top-0 z-10 shadow-sm"><tr>
                                         <th class="px-3 py-2 text-left"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" class="rounded cursor-pointer"></th>
                                         <th class="px-3 py-2 text-left scrap-sortable-th" @click="toggleSort('assetId')">
@@ -1470,6 +1483,22 @@ document.addEventListener('alpine:init', function () {
                         <template x-if="!isLoading && currentAssets.length > 0 && filteredAssets.length > 0">
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
+                                    <!-- 【欄位寬度集中管理】使用者如欲調整欄寬，請直接修改下方各欄的 width 與 min-width 數值 -->
+                                    <colgroup>
+                                        <col style="width: 44px; min-width: 44px;">   <!-- 1. 勾選框 -->
+                                        <col style="width: 120px; min-width: 110px;"> <!-- 2. 財產編號 -->
+                                        <col style="width: 150px; min-width: 130px;"> <!-- 3. 財產名稱 -->
+                                        <col style="width: 120px; min-width: 110px;"> <!-- 4. 財產別名 -->
+                                        <col style="width: 140px; min-width: 120px;"> <!-- 5. 型號/廠牌 -->
+                                        <col style="width: 90px; min-width: 80px;">   <!-- 6. 原保管人 -->
+                                        <col style="width: 90px; min-width: 80px;">   <!-- 7. 原使用人 -->
+                                        <col style="width: 120px; min-width: 100px;"> <!-- 8. 原地點 -->
+                                        <col style="width: 90px; min-width: 80px;">   <!-- 9. 新保管人 -->
+                                        <col style="width: 90px; min-width: 80px;">   <!-- 10. 新使用人 -->
+                                        <col style="width: 120px; min-width: 100px;"> <!-- 11. 新地點 -->
+                                        <col style="width: 110px; min-width: 100px;"> <!-- 12. 轉移類型 -->
+                                        <col style="width: 110px; min-width: 100px;"> <!-- 13. 轉移日期 -->
+                                    </colgroup>
                                     <thead class="bg-purple-50 sticky top-0 z-10 shadow-sm"><tr>
                                         <th class="px-3 py-2 text-left"><input type="checkbox" :checked="selectAll" @change="handleSelectAll($event.target.checked)" class="rounded cursor-pointer"></th>
                                         <th class="px-3 py-2 text-left transfer-sortable-th" @click="toggleSort('assetId')">
