@@ -35,12 +35,16 @@ document.addEventListener('alpine:init', function () {
     Alpine.data('batchTransferModal', function () {
         return {
             transferMode: 'normal', changeLocation: false, changeKeeper: false, changeUser: false,
+            labType: 'personal', labTargetEmail: '',
             newLocation: '', newKeeperEmail: '', newUserEmail: '', infoOutTargetEmail: '', custodianEmail: '', stationLocation: '',
             isSubmitting: false,
             get options() { return this.$store.app.transferOptions; },
             get selectedAssetIds() { return this.$store.app.batchActionAssetIds; },
             get selectedAssetsDetails() { return selectedAssetsDetails(this.$store.app); },
             get hasCustodians() { return !!(this.options && this.options.custodians && Object.keys(this.options.custodians).length > 0); },
+            get uniqueLocations() {
+                return Array.from(new Set(((this.options && this.options.locations) || []).filter(Boolean)));
+            },
             entries: function (obj) { return Object.entries(obj || {}); },
             aliasLabel: function (a) { return S.getAssetAliasLabel(a); },
             aliasDisplay: function (a) { return S.getAssetAliasDisplay(a); },
@@ -65,6 +69,52 @@ document.addEventListener('alpine:init', function () {
                 return Object.entries(users).filter(function (entry) {
                     return !excludedEmails.has(String(entry[0]).toLowerCase().trim());
                 });
+            },
+            get availableLabKeepers() {
+                var labMembers = (this.options && this.options.labMembers) || {};
+                var details = this.selectedAssetsDetails || [];
+                var excludedEmails = new Set(details.map(function (a) {
+                    return String(a.leaderEmail || '').toLowerCase().trim();
+                }).filter(Boolean));
+
+                return Object.entries(labMembers).filter(function (entry) {
+                    return !excludedEmails.has(String(entry[0]).toLowerCase().trim());
+                });
+            },
+            buildSummary: function () {
+                var options = this.options || {};
+                if (this.transferMode === 'station') {
+                    var custodianName = (options.custodians && options.custodians[this.custodianEmail]) || this.custodianEmail || '-';
+                    return '中心轉駐站｜駐管:' + custodianName + '｜地點:' + (this.stationLocation || '-');
+                }
+                if (this.transferMode === 'info') return '駐站回送中心資訊組';
+                if (this.transferMode === 'intake') return '駐站回送中心收案組';
+                if (this.transferMode === 'info_out') {
+                    var recipientName = (options.keepers && options.keepers[this.infoOutTargetEmail]) || this.infoOutTargetEmail || '-';
+                    var locText = this.newLocation ? '｜地點:' + this.newLocation : '';
+                    return '資訊組轉出｜接收人:' + recipientName + locText;
+                }
+                if (this.transferMode === 'lab') {
+                    var locText = this.newLocation ? '｜地點:' + this.newLocation : '';
+                    if (this.labType === 'personal') {
+                        var targetName = (options.labMembers && options.labMembers[this.labTargetEmail]) || this.labTargetEmail || '-';
+                        return '轉移給實驗組(個人)｜接收人:' + targetName + locText;
+                    } else {
+                        var commonName = options.labCommonCustodianName || options.labCommonCustodianEmail || '-';
+                        return '轉移給實驗組(共用)｜公用保管人:' + commonName + locText;
+                    }
+                }
+                var parts = [];
+                if (this.changeLocation) parts.push('地點:' + (this.newLocation || '-'));
+                if (this.changeKeeper) {
+                    var keeperName = (options.keepers && options.keepers[this.newKeeperEmail]) || this.newKeeperEmail || '-';
+                    parts.push('保管人:' + keeperName);
+                }
+                if (this.changeUser) {
+                    var userName = (options.users && options.users[this.newUserEmail]) || this.newUserEmail || '-';
+                    parts.push('使用人:' + userName);
+                }
+                return '批次轉移' + (parts.length > 0 ? '｜' + parts.join('｜') : '');
             },
             get availableStationLocations() {
                 var allLocations = (this.options && this.options.stationLocations) || [];
@@ -146,6 +196,26 @@ document.addEventListener('alpine:init', function () {
                     if (!this.stationLocation) { alert('請選擇駐站地點！'); return; }
                 } else if (this.transferMode === 'info_out') {
                     if (!this.infoOutTargetEmail) { alert('請選擇接收人員（保管人兼使用人）！'); return; }
+                } else if (this.transferMode === 'lab') {
+                    if (this.labType === 'personal') {
+                        if (!this.labTargetEmail) {
+                            alert('請選擇接收人員（限實驗組成員）！');
+                            return;
+                        }
+                        var targetLabEmail = String(this.labTargetEmail).toLowerCase().trim();
+                        var anyKeeperSame = this.selectedAssetsDetails.some(function (a) {
+                            return String(a.leaderEmail || '').toLowerCase().trim() === targetLabEmail;
+                        });
+                        if (anyKeeperSame) {
+                            alert('新保管人不能與所選資產的原保管人相同');
+                            return;
+                        }
+                    } else if (this.labType === 'common') {
+                        if (!this.options || !this.options.labCommonCustodianEmail) {
+                            alert('系統尚未設定「實驗組共同財產保管與使用人」，請先至系統設定中完成配置！');
+                            return;
+                        }
+                    }
                 }
                 // 代理轉移偵測(舊頁 10300-10341)
                 var normalizedCurrentEmail = (window.currentUserEmail || '').toLowerCase().trim();
@@ -175,16 +245,21 @@ document.addEventListener('alpine:init', function () {
                 store.addProcessingAssets(processingIds);
                 store.handleCloseBatchModal();
 
+                var isLab = this.transferMode === 'lab';
+                var labKeeperEmail = this.labType === 'personal' ? this.labTargetEmail : (this.options && this.options.labCommonCustodianEmail);
+
                 var formData = {
                     assetIds: selectedAssetIds,
-                    newKeeperEmail: this.transferMode === 'info_out' ? this.infoOutTargetEmail : (this.changeKeeper ? this.newKeeperEmail : null),
-                    newLocation: this.transferMode === 'info_out' ? (this.newLocation || null) : (this.changeLocation ? this.newLocation : null),
+                    newKeeperEmail: this.transferMode === 'info_out' ? this.infoOutTargetEmail : (isLab ? labKeeperEmail : (this.changeKeeper ? this.newKeeperEmail : null)),
+                    newLocation: (this.transferMode === 'info_out' || isLab) ? (this.newLocation || null) : (this.changeLocation ? this.newLocation : null),
                     newUserName: null,
-                    newUserEmail: this.transferMode === 'info_out' ? this.infoOutTargetEmail : (this.changeUser ? this.newUserEmail : null),
+                    newUserEmail: this.transferMode === 'info_out' ? this.infoOutTargetEmail : (isLab ? labKeeperEmail : (this.changeUser ? this.newUserEmail : null)),
                     isStationTransfer: this.transferMode === 'station',
                     isInfoTransfer: this.transferMode === 'info',
                     isIntakeTransfer: this.transferMode === 'intake',
                     isInfoOutTransfer: this.transferMode === 'info_out',
+                    isLabTransfer: isLab,
+                    labType: isLab ? this.labType : null,
                     proxyTransfers: proxyTransfers.length > 0 ? proxyTransfers : null
                 };
                 if (this.transferMode === 'station') {
@@ -439,6 +514,7 @@ document.addEventListener('alpine:init', function () {
                     <div class="space-y-2">
                         <label class="flex items-center"><input type="radio" name="batchTransferMode" value="normal" x-model="transferMode" class="mr-2"><span>一般轉移</span></label>
                         <label class="flex items-center"><input type="radio" name="batchTransferMode" value="info_out" x-model="transferMode" class="mr-2"><span>資訊組轉出</span></label>
+                        <label class="flex items-center"><input type="radio" name="batchTransferMode" value="lab" x-model="transferMode" class="mr-2"><span>轉移給實驗組</span></label>
                         <template x-if="hasCustodians"><label class="flex items-center"><input type="radio" name="batchTransferMode" value="station" x-model="transferMode" class="mr-2"><span>中心轉給駐站</span></label></template>
                         <template x-if="options.infoCustodian">
                             <div class="space-y-2">
@@ -503,6 +579,86 @@ document.addEventListener('alpine:init', function () {
                                 <template x-for="loc in (options.locations || [])" :key="loc"><option :value="loc" x-text="loc"></option></template>
                             </select>
                         </div>
+                    </div>
+                </template>
+                <template x-if="transferMode === 'lab'">
+                    <div class="p-4 bg-blue-50 rounded-lg space-y-4">
+                        <!-- 子模式選擇 -->
+                        <div class="flex items-center gap-6 pb-2 border-b border-blue-200">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="batchLabType" value="personal" x-model="labType" class="mr-2 text-blue-600">
+                                <span class="font-medium text-slate-800">個人財產</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="batchLabType" value="common" x-model="labType" class="mr-2 text-blue-600">
+                                <span class="font-medium text-slate-800">共用財產</span>
+                            </label>
+                        </div>
+
+                        <!-- 個人財產區域 -->
+                        <template x-if="labType === 'personal'">
+                            <div class="space-y-4">
+                                <div class="flex items-center gap-2 text-sm text-blue-800">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span>所選同仁將同時設定為保管人與使用人，且資產標記為實驗組。</span>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">
+                                        接收人員（限實驗組成員）：<span class="text-red-600">*</span>
+                                    </label>
+                                    <select x-model="labTargetEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">請選擇實驗組接收人員...</option>
+                                        <template x-for="entry in availableLabKeepers" :key="entry[0]">
+                                            <option :value="entry[0]" x-text="entry[1]"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">
+                                        新存置地點（選填，未選則保留原地點）：
+                                    </label>
+                                    <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">請選擇新地點（未選擇則保留原地點）...</option>
+                                        <template x-for="loc in uniqueLocations" :key="loc">
+                                            <option :value="loc" x-text="loc"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- 共用財產區域 -->
+                        <template x-if="labType === 'common'">
+                            <div class="space-y-4">
+                                <div class="p-3 bg-white rounded-md border border-blue-200">
+                                    <template x-if="options && options.labCommonCustodianEmail">
+                                        <div class="text-sm space-y-1">
+                                            <div class="text-slate-700">
+                                                預設保管人與使用人：<strong class="text-blue-900" x-text="options.labCommonCustodianName + ' (' + options.labCommonCustodianEmail + ')'"></strong>
+                                            </div>
+                                            <div class="text-xs text-slate-500" x-text="'審核模式：' + (options.labCommonAutoApprove ? '⚡ 免審核直接生效' : '⏳ 需由實驗組同仁接收審核')"></div>
+                                        </div>
+                                    </template>
+                                    <template x-if="!options || !options.labCommonCustodianEmail">
+                                        <div class="text-sm text-amber-700 flex items-center gap-2">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            <span>系統尚未設定「實驗組共同財產保管人」，請聯絡管理員設定。</span>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">
+                                        新存置地點（選填，未選則保留原地點）：
+                                    </label>
+                                    <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">請選擇新地點（未選擇則保留原地點）...</option>
+                                        <template x-for="loc in uniqueLocations" :key="loc">
+                                            <option :value="loc" x-text="loc"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </template>
                 <template x-if="transferMode === 'station'">
