@@ -299,6 +299,43 @@ function clearLocationConfigMemo_() {
 }
 
 /**
+ * 防禦性解析 STATIC_LOCATIONS：相容 JSON 陣列、換行字串、逗號/分號分隔字串
+ * @param {*} raw
+ * @returns {string[]}
+ */
+function parseStaticLocations_(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map(s => String(s || '').trim()).filter(Boolean);
+  }
+  const str = String(raw).trim();
+  if (!str) return [];
+  // 1. 支援 JSON 陣列格式：["中心八樓", "中心九樓"]
+  if (str.startsWith('[') && str.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) {
+        const list = [];
+        parsed.forEach(item => {
+          const loc = String(item || '').trim();
+          if (loc && list.indexOf(loc) === -1) list.push(loc);
+        });
+        return list;
+      }
+    } catch (e) {
+      // JSON 解析失敗則退回純文字切割
+    }
+  }
+  // 2. 相容多重分隔符號 (換行、逗號、分號)
+  const list = [];
+  str.split(/[\n\r,，;；]+/).forEach(item => {
+    const loc = item.trim();
+    if (loc && list.indexOf(loc) === -1) list.push(loc);
+  });
+  return list;
+}
+
+/**
  * 存置地點設定唯一入口(六個讀取點皆走此,不再讀「存置地點列表」)。
  * 靜態地點來自 STATIC_LOCATIONS;駐站依 STATION_CATEGORIES 過濾 HR 組織架構樹,
  * 名稱經 HR_GROUP_NAME_MAP 轉慣用名;directory 走 fallback 時改用 STATION_NAME_SNAPSHOT。
@@ -308,8 +345,7 @@ function clearLocationConfigMemo_() {
 function getLocationConfig_() {
   if (LOCATION_CONFIG_MEMO_) return LOCATION_CONFIG_MEMO_;
   const props = PropertiesService.getScriptProperties().getProperties();
-  const staticLocations = String(props['STATIC_LOCATIONS'] || '')
-    .split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const staticLocations = parseStaticLocations_(props['STATIC_LOCATIONS']);
   const enabledCategories = String(props['STATION_CATEGORIES'] || '')
     .split(/[\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
 

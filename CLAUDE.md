@@ -146,6 +146,11 @@ return {
 - 根因：資產已接收時主表已覆寫為新保管人與新地點；原僅在未接收階段（轉移中）可取消，進入待列印清單後無 rollback 機制。
 - 修法：在 `code.js` 新增 `processBatchTransferRollback(assetIds)` 後端 API，從 `轉移申請紀錄` 讀取原保管人、原使用人、原地點與 Email 並還原主表，重新計算 `IS_COMPUTER`，將 `IS_UPLOADED` 設為 `'V'`，並將申請日誌改為「已退回」；在 `alpine_modals_print.html` 新增 `.btn-rollback-transfer` scoped CSS、`isRollingBack` 狀態、`handleRollbackTransfer` 及底部操作按鈕；新增單元測試 `testTransferRollbackLogic_()`。檔案：`code.js`、`alpine_modals_print.html`。
 
+### 2026-09-24 STATIC_LOCATIONS 原生介面儲存抹除換行修復與儲存格式升級
+- 症狀：在 GAS 原生「專案設定 > 指令碼屬性」介面新增/修改其他變數並儲存後，原本在 Web App 換行的靜態存置地點變成無分隔單行，導致前端轉移/出借下拉選單黏成單一項目。
+- 根因：GAS 官方編輯器的屬性設定為全量提交機制，且各屬性欄位使用單行 `<input type="text">`；HTML 規範下瀏覽器會強制將換行符號（`\n`）抹除或剔除，導致送回 Google 伺服器的 `STATIC_LOCATIONS` 失去 `\n`，後端 `.split(/\n+/)` 拆分失效。
+- 修法：在 `hr_directory.js` 提煉防禦型解析函式 `parseStaticLocations_`，向下相容 JSON 陣列、舊版換行、逗號與分號；在 `code.js` 的 `saveSystemSettings` 將資料改存為合法單行 JSON 陣列字串（`JSON.stringify(staticList)`），免疫 GAS 原生單行 input 抹除問題；在 `getSystemSettings` 自動轉回換行字串維持前端 `<textarea>` 編輯體驗；`alpine_model_setting.html` 預覽亦支援多重分隔符；加入單元測試 `testStaticLocationsRobustness_()`。檔案：`hr_directory.js`、`code.js`、`alpine_model_setting.html`。
+
 ### 2026-09-15 AE 欄（DEFAULT_GROUP）預設組別資產雙軌聯集同組協作權限
 - 症狀：資產 AE 欄標記「X 組」，但保管人登記為「Y 組同仁」時，X 組成員進到系統被完全過濾隱形，且無權轉移、出借或報廢。
 - 根因：同組協作判斷僅比對登入者同組成員 Email 清單與保管人/使用人 Email（Peer-to-Peer），未將 AE 欄（`DEFAULT_GROUP`）納入同組範圍；且後端 API（轉移、出借、歸還、報廢）校驗時亦未支援。

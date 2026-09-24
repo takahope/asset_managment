@@ -44,7 +44,7 @@ document.addEventListener('alpine:init', function () {
             },
             get mergedLocationsPreview() {
                 var self = this;
-                var statics = this.staticLocations.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+                var statics = this.staticLocations.split(/[\n,，;；]+/).map(function (s) { return s.trim(); }).filter(Boolean);
                 var stations = this.stationCandidates
                     .filter(function (c) { return self.stationCategories[c.category]; })
                     .map(function (c) { return c.name; });

@@ -5516,7 +5516,7 @@ function getSystemSettings() {
     intakeCustodianEmails: props.getProperty('INTAKE_CUSTODIAN_EMAILS') || '',
     ismsInventoryGroups: props.getProperty('ISMS_INVENTORY_GROUPS') || '',
     // ✨ 存置地點設定(spec 2026-07-19)
-    staticLocations: props.getProperty('STATIC_LOCATIONS') || '',
+    staticLocations: parseStaticLocations_(props.getProperty('STATIC_LOCATIONS')).join('\n'),
     stationCategories: props.getProperty('STATION_CATEGORIES') || '',
     infoLocation: props.getProperty('INFO_LOCATION') || '',
     intakeLocation: props.getProperty('INTAKE_LOCATION') || '',
@@ -5607,13 +5607,9 @@ function saveSystemSettings(settings) {
     .some(key => s[key] !== undefined);
   if (locationKeysTouched) {
     const candidates = getStationCandidates_();
-    // 靜態地點:去空白、去重複、保序
+    // 靜態地點:防禦性解析(支援 JSON 陣列、換行字串、逗號等)，去空白、去重複、保序
     const staticRaw = s.staticLocations !== undefined ? String(s.staticLocations) : (props.getProperty('STATIC_LOCATIONS') || '');
-    const staticList = [];
-    staticRaw.split(/\n+/).forEach(line => {
-      const loc = line.trim();
-      if (loc && staticList.indexOf(loc) === -1) staticList.push(loc);
-    });
+    const staticList = parseStaticLocations_(staticRaw);
     // 類別:只收合法鍵
     const validCategoryKeys = ['PERMANENT', 'OUTSOURCED', 'PORTABLE'];
     const categoriesRaw = s.stationCategories !== undefined ? String(s.stationCategories) : (props.getProperty('STATION_CATEGORIES') || '');
@@ -5634,7 +5630,7 @@ function saveSystemSettings(settings) {
         throw new Error('「' + check.label + '」地點「' + value + '」不在合併後的地點清單中,請重新選擇。');
       }
     });
-    if (s.staticLocations !== undefined) props.setProperty('STATIC_LOCATIONS', staticList.join('\n'));
+    if (s.staticLocations !== undefined) props.setProperty('STATIC_LOCATIONS', JSON.stringify(staticList));
     if (s.stationCategories !== undefined) props.setProperty('STATION_CATEGORIES', categories.join(','));
     specialChecks.forEach(check => {
       if (s[check.key] !== undefined) props.setProperty(check.prop, String(s[check.key]).trim());
@@ -12224,6 +12220,52 @@ function testLabTransferWorkflow_() {
 function testLabTransferApprovalAndDefaultGroup_() {
   return testLabTransferWorkflow_();
 }
+
+/**
+ * [編輯器手動執行] 測試 STATIC_LOCATIONS 解析與儲存強健性
+ * 驗證 JSON 陣列、傳統換行、逗號分號多重分隔與往返無損性。
+ */
+function testStaticLocationsRobustness_() {
+  const results = [];
+  const assertTest = (name, cond) => {
+    results.push((cond ? '✅ PASS: ' : '❌ FAIL: ') + name);
+  };
+
+  // 1. 傳統換行格式
+  const r1 = parseStaticLocations_("中心八樓\n中心九樓\n\n行政辦公室\n");
+  assertTest("案例 1: 傳統換行格式正確解析並過濾空行", JSON.stringify(r1) === JSON.stringify(['中心八樓', '中心九樓', '行政辦公室']));
+
+  // 2. JSON 陣列字串 (新標準格式)
+  const r2 = parseStaticLocations_('["中心八樓", "中心九樓", "行政辦公室"]');
+  assertTest("案例 2: JSON 陣列格式正確解析", JSON.stringify(r2) === JSON.stringify(['中心八樓', '中心九樓', '行政辦公室']));
+
+  // 3. 逗號與中文逗號混合
+  const r3 = parseStaticLocations_("中心八樓,中心九樓，行政辦公室;地下庫房");
+  assertTest("案例 3: 逗號、中文逗號、分號混合正確解析", JSON.stringify(r3) === JSON.stringify(['中心八樓', '中心九樓', '行政辦公室', '地下庫房']));
+
+  // 4. 去除重複與頭尾空白
+  const r4 = parseStaticLocations_('[" 中心八樓 ", "中心九樓", "中心八樓"]');
+  assertTest("案例 4: JSON 陣列去重與 trim 正確生效", JSON.stringify(r4) === JSON.stringify(['中心八樓', '中心九樓']));
+
+  // 5. 空值或無效值防呆
+  assertTest("案例 5-1: 空字串防呆回傳空陣列", parseStaticLocations_('').length === 0);
+  assertTest("案例 5-2: null 防呆回傳空陣列", parseStaticLocations_(null).length === 0);
+  assertTest("案例 5-3: undefined 防呆回傳空陣列", parseStaticLocations_(undefined).length === 0);
+
+  // 6. 往返序列化測試
+  const original = ['中心八樓', '中心九樓', '行政辦公室'];
+  const serialized = JSON.stringify(original);
+  const parsed = parseStaticLocations_(serialized);
+  const forTextarea = parsed.join('\n');
+  assertTest("案例 6: 往返序列化與前端 textarea 格式相容無損", forTextarea === '中心八樓\n中心九樓\n行政辦公室');
+
+  Logger.log("=== testStaticLocationsRobustness_ 測試報告 ===");
+  results.forEach(r => Logger.log(r));
+  const allPassed = results.every(r => r.includes("PASS"));
+  Logger.log(allPassed ? "🎉 所有驗證全數通過！" : "⚠️ 部份測試失敗，請檢查紀錄。");
+  return allPassed;
+}
+
 
 
 

@@ -25,6 +25,7 @@ async function verifyTransferOptionsIncludeLinkedCustodians() {
         [titleBasedCustodianEmail]: '職務駐管'
       },
       allEmails: [linkedCustodianEmail, titleBasedCustodianEmail],
+      emailToGroup: {},
       // 模擬站點 H 欄指定的管理人，未剛好擁有「駐站管理員」職務。
       custodianEmails: [titleBasedCustodianEmail]
     }),
@@ -43,7 +44,9 @@ async function verifyTransferOptionsIncludeLinkedCustodians() {
       infoLocation: null,
       infoComputerLocation: null,
       intakeLocation: null
-    })
+    }),
+    Logger: { log: () => {} },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => '', getProperties: () => ({}) }) }
   });
 
   const result = context.getTransferData(false);
