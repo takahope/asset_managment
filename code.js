@@ -2563,6 +2563,8 @@ function processBatchApproval(appIds) {
       ? new Set(getGroupMemberEmails(currentUserEmail).map(email => String(email || '').toLowerCase().trim()))
       : null;
     const unauthorizedApps = []; // 🛡️ 收集無權限的申請
+    // 📧 審核完成通知改經 collector，依「只通知組別窗口」設定分流（spec 2026-10-01）
+    const notifyCollector = createMailCollector_({ event: 'transferApproval', operatorEmail: currentUserEmail, appUrl: getAppUrl() });
 
     appIds.forEach(appId => {
       const appDetails = appLogMap.get(appId);
@@ -2662,6 +2664,11 @@ function processBatchApproval(appIds) {
           const shouldBeMarked = isStation && isActuallyComputer;
           location.sheet.getRange(location.rowIndex, indices.IS_COMPUTER).setValue(shouldBeMarked ? '是' : '');
 
+          // 審核後資產快照（含剛寫入的 AE 欄），供通知分流判定組別
+          const approvedAsset = mapRowToAssetObject(assetRow, indices, location.sheetName);
+          const approvedAssetName = approvedAsset.assetName || '';
+          const approvedAe = String(approvedAsset.defaultGroup || '').trim();
+
           // ✨ 方案D：如果是「保管人+使用人」申請，通知另一方審核者
           if (normalizedTransferType === '保管人+使用人') {
             const newKeeperEmail = appDetails.row[AL_NEW_LEADER_EMAIL_COLUMN_INDEX - 1];
@@ -2696,23 +2703,21 @@ function processBatchApproval(appIds) {
               try {
                 const currentUserName = getAllAssets()
                   .find(a => a.leaderEmail === currentUserEmail)?.leaderName || currentUserEmail.split('@')[0];
-
-                const subject = `[財產通知] 您的待審核申請已由其他審核者完成`;
-                let body = `您好 ${otherReviewerName}，\n\n`;
-                body += `您收到的財產轉移審核申請（申請ID: ${appId}）已由 ${currentUserName} 完成審核。\n\n`;
-                body += `資產編號：${assetId}\n`;
-                body += `新保管人：${newKeeperName}\n`;
-                body += `新使用人：${newUserName}\n`;
-                body += `審核時間：${now.toLocaleString('zh-TW')}\n\n`;
-                body += `此申請已完成，您無需再進行審核。\n\n`;
-                body += `此為系統自動發送郵件。`;
-
-                if (isUserEmailEnabled()) {
-                  MailApp.sendEmail(otherReviewerEmail, subject, body);
-                }
-                Logger.log(`✅ 已通知另一方審核者: ${otherReviewerEmail}`);
+                const otherReviewerCtx = {
+                  otherReviewerName: otherReviewerName, appId: appId, approverName: currentUserName, assetId: assetId,
+                  newKeeperName: newKeeperName, newUserName: newUserName, reviewTime: now.toLocaleString('zh-TW')
+                };
+                notifyCollector.add({
+                  email: otherReviewerEmail,
+                  items: [{
+                    assetId: assetId, assetName: approvedAssetName, aeValue: approvedAe, kind: 'done',
+                    windowLine: `${assetId}: ${approvedAssetName} → 已由 ${currentUserName} 完成審核（原通知對象：${otherReviewerName}）`
+                  }],
+                  render: () => renderApprovalOtherReviewerMail_(otherReviewerCtx)
+                });
+                Logger.log(`✅ 已排入另一方審核者通知: ${otherReviewerEmail}`);
               } catch (emailError) {
-                Logger.log(`⚠️ 發送通知給另一方審核者時發生錯誤: ${emailError.message}`);
+                Logger.log(`⚠️ 排入另一方審核者通知時發生錯誤: ${emailError.message}`);
                 // 不中斷流程，繼續處理
               }
             }
@@ -2737,26 +2742,22 @@ function processBatchApproval(appIds) {
                 ? appDetails.row[AL_NEW_USER_COLUMN_INDEX - 1]
                 : '';
 
-              const subject = `[財產轉移通知] 您的轉移申請已審核完成`;
-              let body = `您好 ${applicantName}，\n\n`;
-              body += `您提交的財產轉移申請（申請ID: ${appId}）已審核完成。\n\n`;
-              body += `資產編號：${assetId}\n`;
-              body += `新保管人：${newKeeperName}\n`;
-              if (notifyNewUserName && notifyNewUserName.toString().trim() !== '') {
-                body += `新使用人：${notifyNewUserName}\n`;
-              }
-              body += `審核時間：${now.toLocaleString('zh-TW')}\n\n`;
-              body += `請點擊下方連結，前往系統主頁列印轉移申請單：\n`;
-              body += `${systemLink}\n\n`;
-              body += `此為系統自動發送郵件。`;
-
-              if (isUserEmailEnabled()) {
-                MailApp.sendEmail(applicantEmail, subject, body);
-              }
-              Logger.log(`✅ 已通知申請人: ${applicantEmail}`);
+              const applicantCtx = {
+                applicantName: applicantName, appId: appId, assetId: assetId, newKeeperName: newKeeperName,
+                newUserName: notifyNewUserName, reviewTime: now.toLocaleString('zh-TW'), systemLink: systemLink
+              };
+              notifyCollector.add({
+                email: applicantEmail,
+                items: [{
+                  assetId: assetId, assetName: approvedAssetName, aeValue: approvedAe, kind: 'done',
+                  windowLine: `${assetId}: ${approvedAssetName} → ${applicantName} 的轉移申請已審核完成，請列印轉移申請單`
+                }],
+                render: () => renderApprovalApplicantMail_(applicantCtx)
+              });
+              Logger.log(`✅ 已排入申請人通知: ${applicantEmail}`);
             }
           } catch (emailError) {
-            Logger.log(`⚠️ 發送通知給申請人時發生錯誤: ${emailError.message}`);
+            Logger.log(`⚠️ 排入申請人通知時發生錯誤: ${emailError.message}`);
             // 不中斷流程
           }
 
@@ -2769,6 +2770,9 @@ function processBatchApproval(appIds) {
         errors.push(`申請ID ${appId} 狀態不符或不存在`);
       }
     });
+
+    // 📧 送出本批審核完成通知（依組別窗口設定分流）
+    const notifySummary = notifyCollector.flush();
 
     if (successCount > 0) {
       const notifyEmails = getDataUpdateEmails();
@@ -2785,7 +2789,7 @@ function processBatchApproval(appIds) {
       }
     }
 
-    let message = `成功核准 ${successCount} 筆申請。`;
+    let message = `成功核准 ${successCount} 筆申請。` + formatRoutedNote_(notifySummary);
     if (errors.length > 0) {
       message += `\n失敗或跳過 ${errors.length} 筆 (${errors.join('; ')})。`;
     }
