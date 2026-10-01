@@ -3,6 +3,16 @@
   外殼仿 alpine_modals_asset.html 的 AddAssetModal(fixed inset-0 + 白色卡片)。
   對應後端 copilot.js 的 getCopilotSettings() / saveCopilotSettings()。
 -->
+<style>
+  /* 組別窗口通知清單：凍結 Tailwind 未收錄 max-h-[300px] / w-1/2 / divide-slate-200 / pointer-events-none，改用具名 class */
+  .group-notify-list { max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: #fff; }
+  .group-notify-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem; border-bottom: 1px solid #e2e8f0; }
+  .group-notify-row:last-child { border-bottom: none; }
+  .group-notify-row:hover { background: #f8fafc; }
+  .group-notify-name { width: 40%; flex-shrink: 0; }
+  .group-notify-input { flex: 1 1 auto; min-width: 0; }
+  .group-notify-icon { pointer-events: none; }
+</style>
 <script>
 document.addEventListener('alpine:init', function () {
 
@@ -20,6 +30,10 @@ document.addEventListener('alpine:init', function () {
             locationErrorMode: 'immediate',
             labCommonCustodianEmail: '',
             labCommonAutoApprove: false,
+            groupContactNotifyOnly: false,
+            groupNotifyContacts: {},
+            groupNotifyCandidates: [],
+            groupNotifySearchQuery: '',
             hrGroupNameMap: '',
             parsedHrGroupNameMap: {}, hrOfficialGroups: [],
             infoStationCustodianEmails: '', infoStationUserEmails: '', intakeCustodianEmails: '',
@@ -41,6 +55,21 @@ document.addEventListener('alpine:init', function () {
                     var mapped = self.parsedHrGroupNameMap[g] || '';
                     return g.toLowerCase().indexOf(q) !== -1 || mapped.toLowerCase().indexOf(q) !== -1;
                 });
+            },
+            get filteredGroupNotifyCandidates() {
+                var q = (this.groupNotifySearchQuery || '').toLowerCase();
+                if (!q) return this.groupNotifyCandidates;
+                var self = this;
+                return this.groupNotifyCandidates.filter(function (g) {
+                    var emails = String(self.groupNotifyContacts[g] || '').toLowerCase();
+                    return g.toLowerCase().indexOf(q) !== -1 || emails.indexOf(q) !== -1;
+                });
+            },
+            get configuredGroupNotifyCount() {
+                var self = this;
+                return this.groupNotifyCandidates.filter(function (g) {
+                    return String(self.groupNotifyContacts[g] || '').trim() !== '';
+                }).length;
             },
             get mergedLocationsPreview() {
                 var self = this;
@@ -149,6 +178,13 @@ document.addEventListener('alpine:init', function () {
                         self.locationErrorMode = settings.locationErrorMode === 'queue' ? 'queue' : 'immediate';
                         self.labCommonCustodianEmail = settings.labCommonCustodianEmail || '';
                         self.labCommonAutoApprove = !!settings.labCommonAutoApprove;
+                        self.groupContactNotifyOnly = !!settings.groupContactNotifyOnly;
+                        var groupContacts = settings.groupNotifyContacts || {};
+                        (settings.groupNotifyCandidates || []).forEach(function (g) {
+                            if (groupContacts[g] === undefined) groupContacts[g] = '';
+                        });
+                        self.groupNotifyContacts = groupContacts;
+                        self.groupNotifyCandidates = settings.groupNotifyCandidates || [];
                         self.fabMenuEnabled = settings.fabMenuEnabled !== false;
                         self.hrGroupNameMap = settings.hrGroupNameMap || '';
                         try { self.parsedHrGroupNameMap = JSON.parse(self.hrGroupNameMap || '{}'); } catch(e) { self.parsedHrGroupNameMap = {}; }
@@ -232,6 +268,8 @@ document.addEventListener('alpine:init', function () {
                                 fabMenuEnabled: self.fabMenuEnabled,
                                 labCommonCustodianEmail: self.labCommonCustodianEmail,
                                 labCommonAutoApprove: self.labCommonAutoApprove,
+                                groupContactNotifyOnly: self.groupContactNotifyOnly,
+                                groupNotifyContacts: JSON.parse(JSON.stringify(self.groupNotifyContacts)),
                                 hrGroupNameMap: self.hrGroupNameMap,
                                 infoStationCustodianEmails: self.infoStationCustodianEmails,
                                 infoStationUserEmails: self.infoStationUserEmails,
@@ -428,6 +466,46 @@ document.addEventListener('alpine:init', function () {
                                         </button>
                                     </div>
                                 </div>
+
+                                <!-- 組別窗口通知（spec 2026-10-01） -->
+                                <div class="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-4">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div>
+                                            <h5 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                <i class="fa-solid fa-user-tie text-blue-600"></i>
+                                                <span>只通知組別窗口</span>
+                                            </h5>
+                                            <span class="text-xs text-slate-500 block mt-1">開啟後，轉移、審核完成、同組代辦報廢通知依資產 AE 欄（空白則依收件人 HR 組別）改寄該組窗口；未設窗口的組別照舊寄本人。</span>
+                                        </div>
+                                        <button type="button" role="switch" :aria-checked="!!groupContactNotifyOnly" @click="groupContactNotifyOnly = !groupContactNotifyOnly"
+                                                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0"
+                                                :class="groupContactNotifyOnly ? 'bg-blue-600' : 'bg-slate-300'" aria-label="切換只通知組別窗口">
+                                            <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                                  :class="groupContactNotifyOnly ? 'translate-x-6' : 'translate-x-1'"></span>
+                                        </button>
+                                    </div>
+                                    <p x-show="groupContactNotifyOnly && !userEmailNotifyEnabled" class="text-xs text-amber-600" style="display: none;">⚠ 一般使用者通知信已關閉，此設定不會生效。</p>
+                                    <p x-show="groupContactNotifyOnly && userEmailNotifyEnabled && configuredGroupNotifyCount === 0" class="text-xs text-amber-600" style="display: none;">⚠ 開關已開啟但尚未設定任何窗口，所有通知仍寄本人。</p>
+                                    <div class="flex items-center gap-2">
+                                        <div class="relative flex-1 min-w-0">
+                                            <i class="fa-solid fa-search text-slate-400 text-sm absolute left-3 top-1/2 -translate-y-1/2 group-notify-icon"></i>
+                                            <input type="text" x-model="groupNotifySearchQuery" placeholder="搜尋組別或 Email..."
+                                                   class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm">
+                                        </div>
+                                        <span class="text-xs text-slate-500 shrink-0 tabular-nums" x-text="'已設定 ' + configuredGroupNotifyCount + ' / ' + groupNotifyCandidates.length + ' 組'"></span>
+                                    </div>
+                                    <div class="group-notify-list">
+                                        <template x-for="group in filteredGroupNotifyCandidates" :key="group">
+                                            <div class="group-notify-row">
+                                                <div class="group-notify-name text-sm text-slate-700 font-medium truncate" x-text="group" :title="group"></div>
+                                                <input type="text" x-model="groupNotifyContacts[group]" placeholder="窗口 Email，多筆以逗號分隔"
+                                                       class="group-notify-input px-3 py-1 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+                                            </div>
+                                        </template>
+                                        <p x-show="filteredGroupNotifyCandidates.length === 0" class="text-xs text-slate-500 px-4 py-2">查無組別。</p>
+                                    </div>
+                                </div>
+                                <!-- /組別窗口通知 -->
 
                                 <div class="space-y-4 pt-2">
                                     <label class="block">
