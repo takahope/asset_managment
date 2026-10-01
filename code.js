@@ -2539,8 +2539,10 @@ function getPendingApprovals(forceUserScope) {
 function processBatchApproval(appIds) {
   Logger.log("\n\n--- processBatchApproval (v3) 開始執行 ---");
   if (!appIds || appIds.length === 0) {
-    return "您沒有選擇任何項目。"; 
+    return "您沒有選擇任何項目。";
   }
+
+  let notifyCollector = null; // 提升至 try 外：迴圈中途拋錯時 catch 仍可送出已排入的通知
 
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -2564,7 +2566,7 @@ function processBatchApproval(appIds) {
       : null;
     const unauthorizedApps = []; // 🛡️ 收集無權限的申請
     // 📧 審核完成通知改經 collector，依「只通知組別窗口」設定分流（spec 2026-10-01）
-    const notifyCollector = createMailCollector_({ event: 'transferApproval', operatorEmail: currentUserEmail, appUrl: getAppUrl() });
+    notifyCollector = createMailCollector_({ event: 'transferApproval', operatorEmail: currentUserEmail, appUrl: getAppUrl() });
 
     appIds.forEach(appId => {
       const appDetails = appLogMap.get(appId);
@@ -2772,7 +2774,12 @@ function processBatchApproval(appIds) {
     });
 
     // 📧 送出本批審核完成通知（依組別窗口設定分流）
-    const notifySummary = notifyCollector.flush();
+    let notifySummary = null;
+    try {
+      notifySummary = notifyCollector.flush();
+    } catch (notifyError) {
+      Logger.log(`⚠️ 審核完成通知寄送失敗: ${notifyError.message}`);
+    }
 
     if (successCount > 0) {
       const notifyEmails = getDataUpdateEmails();
@@ -2813,6 +2820,14 @@ function processBatchApproval(appIds) {
     return message;
 
   } catch (e) {
+    // 中途拋錯時，已核准申請的通知仍需送出（舊版於迴圈內即時寄出）；flush 會清空佇列，不會重複寄送
+    if (notifyCollector) {
+      try {
+        notifyCollector.flush();
+      } catch (notifyError) {
+        Logger.log(`⚠️ 審核完成通知寄送失敗: ${notifyError.message}`);
+      }
+    }
     Logger.log(`!!!!!! processBatchApproval 發生嚴重錯誤: ${e.message} at ${e.stack}`);
     return "批次核准過程中發生嚴重錯誤: " + e.message;
   }
