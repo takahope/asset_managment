@@ -270,3 +270,93 @@ function testGroupNotifyRouting_() {
 
   return t.result('testGroupNotifyRouting_');
 }
+
+function testNotifyTemplates_() {
+  const t = createNotifyTestReporter_();
+  const items = [{ assetId: 'P001', assetName: '顯微鏡' }, { assetId: 'P002', assetName: '離心機' }];
+
+  // T1 情況1 新使用人
+  {
+    const m = renderTransferUserOnlyNewUserMail_({ newUserName: '陳大華', operatorEmail: 'op@x.com', systemLink: 'https://app' }, items);
+    t.eq('T1 subject', m.subject, '[財產轉移通知] 您有 2 筆待接收的財產（使用人變更）');
+    t.eq('T1 body', m.body, '您好 陳大華，\n\nop@x.com 已申請將您設為 2 筆財產的使用人。\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\nhttps://app\n\n此為系統自動發送郵件。');
+  }
+  // T2 情況1 原保管人
+  {
+    const m = renderTransferUserOnlyOldKeeperMail_({ newUserName: '陳大華' }, items);
+    t.eq('T2 subject', m.subject, '[財產通知] 您保管的 2 筆財產的使用人已變更');
+    t.eq('T2 body', m.body, '您好，\n\n您保管的以下財產的使用人已變更：\n\n  - P001: 顯微鏡 → 新使用人: 陳大華\n  - P002: 離心機 → 新使用人: 陳大華\n\n此為系統自動發送郵件。');
+  }
+  // T3 情況2 新保管人
+  {
+    const m = renderTransferKeeperOnlyNewKeeperMail_({ newKeeperName: '陳大華', operatorEmail: 'op@x.com', systemLink: 'https://app' }, items);
+    t.eq('T3 subject', m.subject, '[財產轉移通知] 您有 2 筆待接收的財產（保管人變更）');
+    t.eq('T3 body', m.body, '您好 陳大華，\n\nop@x.com 已申請將 2 筆財產轉移給您保管。\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\nhttps://app\n\n此為系統自動發送郵件。');
+  }
+  // T4 情況2 原使用人
+  {
+    const m = renderTransferKeeperOnlyOldUserMail_({ newKeeperName: '陳大華' }, items);
+    t.eq('T4 subject', m.subject, '[財產通知] 您使用的 2 筆財產的保管人已變更');
+    t.eq('T4 body', m.body, '您好，\n\n您使用的以下財產的保管人已變更：\n\n  - P001: 顯微鏡 → 新保管人: 陳大華\n  - P002: 離心機 → 新保管人: 陳大華\n\n此為系統自動發送郵件。');
+  }
+  // T5 情況4 新保管人（含/不含新使用人）
+  {
+    const ctx = { newKeeperName: '陳大華', operatorEmail: 'op@x.com', typeDescription: '保管人+使用人(2筆)', hasNewUser: true, newUserName: '李小美', systemLink: 'https://app' };
+    const m = renderTransferComboNewKeeperMail_(ctx, items);
+    t.eq('T5 subject', m.subject, '[財產轉移通知] 您有 2 筆待接收的財產（需審核）');
+    t.eq('T5 body', m.body, '您好 陳大華，\n\nop@x.com 已申請將 2 筆財產轉移給您保管。\n\n轉移類型：保管人+使用人(2筆)\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n新使用人：李小美\n\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\nhttps://app\n\n⚠️ 提醒：此申請需要您或新使用人審核，任一方審核即可完成轉移。\n\n此為系統自動發送郵件。');
+    const m2 = renderTransferComboNewKeeperMail_(Object.assign({}, ctx, { hasNewUser: false }), items);
+    t.eq('T5 body 無新使用人', m2.body, '您好 陳大華，\n\nop@x.com 已申請將 2 筆財產轉移給您保管。\n\n轉移類型：保管人+使用人(2筆)\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\nhttps://app\n\n⚠️ 提醒：此申請需要您或新使用人審核，任一方審核即可完成轉移。\n\n此為系統自動發送郵件。');
+  }
+  // T6 情況4 新使用人（含/不含新保管人）
+  {
+    const ctx = { newUserName: '李小美', operatorEmail: 'op@x.com', typeDescription: '保管人+使用人(2筆)', hasNewKeeper: true, newKeeperName: '陳大華', systemLink: 'https://app' };
+    const m = renderTransferComboNewUserMail_(ctx, items);
+    t.eq('T6 subject', m.subject, '[財產轉移通知] 您有 2 筆待接收的財產（需審核）');
+    t.eq('T6 body', m.body, '您好 李小美，\n\nop@x.com 已申請將 2 筆財產轉移給您使用。\n\n轉移類型：保管人+使用人(2筆)\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n新保管人：陳大華\n\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\nhttps://app\n\n⚠️ 提醒：此申請需要您或新保管人審核，任一方審核即可完成轉移。\n\n此為系統自動發送郵件。');
+    const m2 = renderTransferComboNewUserMail_(Object.assign({}, ctx, { hasNewKeeper: false }), items);
+    t.eq('T6 body 無新保管人', m2.body, '您好 李小美，\n\nop@x.com 已申請將 2 筆財產轉移給您使用。\n\n轉移類型：保管人+使用人(2筆)\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\nhttps://app\n\n⚠️ 提醒：此申請需要您或新保管人審核，任一方審核即可完成轉移。\n\n此為系統自動發送郵件。');
+  }
+  // T7 情況4 原保管人（含/不含新使用人）
+  {
+    const ctx = { oldKeeperName: '王小明', operatorEmail: 'op@x.com', newKeeperName: '陳大華', hasNewUser: true, newUserName: '李小美' };
+    const m = renderTransferComboOldKeeperMail_(ctx, items);
+    t.eq('T7 subject', m.subject, '[財產通知] 您保管的 2 筆財產已申請轉出');
+    t.eq('T7 body', m.body, '您好 王小明，\n\nop@x.com 已申請將您保管的以下財產轉移給新保管人。\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n新保管人：陳大華\n新使用人：李小美\n\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n\n此為系統自動發送郵件。');
+    const m2 = renderTransferComboOldKeeperMail_(Object.assign({}, ctx, { hasNewUser: false }), items);
+    t.eq('T7 body 無新使用人', m2.body, '您好 王小明，\n\nop@x.com 已申請將您保管的以下財產轉移給新保管人。\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n新保管人：陳大華\n\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n\n此為系統自動發送郵件。');
+  }
+  // T8 情況4 原使用人（含/不含新保管人）
+  {
+    const ctx = { oldUserName: '張舊用', operatorEmail: 'op@x.com', newUserName: '李小美', hasNewKeeper: true, newKeeperName: '陳大華' };
+    const m = renderTransferComboOldUserMail_(ctx, items);
+    t.eq('T8 subject', m.subject, '[財產通知] 您使用的 2 筆財產的使用人已變更');
+    t.eq('T8 body', m.body, '您好 張舊用，\n\nop@x.com 已申請變更以下財產的使用人。\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n新使用人：李小美\n新保管人：陳大華\n\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n\n此為系統自動發送郵件。');
+    const m2 = renderTransferComboOldUserMail_(Object.assign({}, ctx, { hasNewKeeper: false }), items);
+    t.eq('T8 body 無新保管人', m2.body, '您好 張舊用，\n\nop@x.com 已申請變更以下財產的使用人。\n\n財產清單：\n  - P001: 顯微鏡\n  - P002: 離心機\n\n新使用人：李小美\n\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n\n此為系統自動發送郵件。');
+  }
+  // T9 審核完成：另一方審核者
+  {
+    const m = renderApprovalOtherReviewerMail_({ otherReviewerName: '李小美', appId: 'APP-1', approverName: '陳大華', assetId: 'P001', newKeeperName: '陳大華', newUserName: '李小美', reviewTime: '2026/10/1 上午10:00:00' });
+    t.eq('T9 subject', m.subject, '[財產通知] 您的待審核申請已由其他審核者完成');
+    t.eq('T9 body', m.body, '您好 李小美，\n\n您收到的財產轉移審核申請（申請ID: APP-1）已由 陳大華 完成審核。\n\n資產編號：P001\n新保管人：陳大華\n新使用人：李小美\n審核時間：2026/10/1 上午10:00:00\n\n此申請已完成，您無需再進行審核。\n\n此為系統自動發送郵件。');
+  }
+  // T10 審核完成：原申請人（含/不含新使用人）
+  {
+    const ctx = { applicantName: '王小明', appId: 'APP-1', assetId: 'P001', newKeeperName: '陳大華', newUserName: '李小美', reviewTime: 'T', systemLink: 'https://app' };
+    const m = renderApprovalApplicantMail_(ctx);
+    t.eq('T10 subject', m.subject, '[財產轉移通知] 您的轉移申請已審核完成');
+    t.eq('T10 body', m.body, '您好 王小明，\n\n您提交的財產轉移申請（申請ID: APP-1）已審核完成。\n\n資產編號：P001\n新保管人：陳大華\n新使用人：李小美\n審核時間：T\n\n請點擊下方連結，前往系統主頁列印轉移申請單：\nhttps://app\n\n此為系統自動發送郵件。');
+    const m2 = renderApprovalApplicantMail_(Object.assign({}, ctx, { newUserName: '  ' }));
+    t.eq('T10 body 無新使用人', m2.body, '您好 王小明，\n\n您提交的財產轉移申請（申請ID: APP-1）已審核完成。\n\n資產編號：P001\n新保管人：陳大華\n審核時間：T\n\n請點擊下方連結，前往系統主頁列印轉移申請單：\nhttps://app\n\n此為系統自動發送郵件。');
+  }
+  // T11 同組代辦報廢：原保管人
+  {
+    const m = renderScrapProxyKeeperMail_({ keeperName: '王小明', applicantName: '林窗口', applicantEmail: 'lin@x.com', pureReason: 'A' },
+      [{ assetId: 'P001', assetName: '顯微鏡', location: 'B219', category: '儀器' }]);
+    t.eq('T11 subject', m.subject, '[資產管理通知] 同組同仁 林窗口 已代您提交 1 筆資產報廢申請');
+    t.eq('T11 body', m.body, '您好 王小明，\n\n同組同仁 林窗口 (lin@x.com) 已代您提交了 1 筆由您保管的資產報廢申請：\n\n  📦 P001 - 顯微鏡\n     地點：B219 | 類別：儀器\n\n📋 報廢原因：A\n👤 申請方式：同組代辦 (代辦人: 林窗口)\n\n若您對此申請有任何疑義，請儘速與同組同仁 (林窗口) 或資產管理窗口聯繫確認。\n\n此為系統自動發送郵件。');
+  }
+
+  return t.result('testNotifyTemplates_');
+}
