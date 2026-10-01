@@ -237,3 +237,80 @@ function formatRoutedNote_(summary) {
   if (!summary || !summary.routedGroups || summary.routedGroups.length === 0) return '';
   return `（通知已依設定改寄：${summary.routedGroups.join('、')}窗口）`;
 }
+
+// --- 設定頁（alpine_model_setting.html）支援 ---
+
+/** 讀取窗口設定原字串供設定頁編輯；損毀回傳 {} */
+function readGroupNotifyContactsForSettings_(raw) {
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+    const result = {};
+    Object.keys(obj).forEach(group => {
+      result[group] = String(obj[group] == null ? '' : obj[group]);
+    });
+    return result;
+  } catch (e) {
+    Logger.log('⚠️ GROUP_NOTIFY_CONTACTS 不是合法 JSON，設定頁以空白顯示：' + e.message);
+    return {};
+  }
+}
+
+/**
+ * 設定頁可設定組別 = 已存鍵 ∪ HR 名錄組別 ∪ AE 欄值（後兩者正規化），去重後依中文排序。
+ * 已存鍵原樣保留，避免組別改名後舊設定看不到。
+ */
+function buildGroupNotifyCandidates_(directoryGroups, aeValues, savedKeys, canonicalize) {
+  const canon = canonicalize || canonicalizeGroupName_;
+  const seen = {};
+  const result = [];
+  const push = (name, doCanon) => {
+    const raw = String(name || '').trim();
+    if (!raw || raw === '未分組') return;
+    const display = doCanon ? String(canon(raw) || raw).trim() : raw;
+    const key = display.toLowerCase();
+    if (!display || seen[key]) return;
+    seen[key] = true;
+    result.push(display);
+  };
+  (savedKeys || []).forEach(g => push(g, false));
+  (directoryGroups || []).forEach(g => push(g, true));
+  (aeValues || []).forEach(g => push(g, true));
+  return result.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+}
+
+/** 讀兩張總表 AE 欄（僅單欄）出現過的值 */
+function readDefaultGroupValues_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const values = [];
+  [[PROPERTY_MASTER_SHEET_NAME, PROPERTY_COLUMN_INDICES], [ITEM_MASTER_SHEET_NAME, ITEM_COLUMN_INDICES]].forEach(pair => {
+    const sheet = ss.getSheetByName(pair[0]);
+    const col = pair[1].DEFAULT_GROUP;
+    if (!sheet || !col || sheet.getLastRow() <= 1 || sheet.getLastColumn() < col) return;
+    sheet.getRange(2, col, sheet.getLastRow() - 1, 1).getValues().forEach(row => {
+      const v = String(row[0] || '').trim();
+      if (v && values.indexOf(v) === -1) values.push(v);
+    });
+  });
+  return values;
+}
+
+/** 設定頁候選組別（各來源失敗皆不阻斷設定頁載入） */
+function getGroupNotifyCandidates_() {
+  let directoryGroups = [];
+  try {
+    directoryGroups = Object.keys((getKeeperDirectory_() || {}).groupToMembers || {});
+  } catch (e) {
+    Logger.log('⚠️ 組別窗口候選：HR 名錄讀取失敗：' + e.message);
+  }
+  let aeValues = [];
+  try {
+    aeValues = readDefaultGroupValues_();
+  } catch (e) {
+    Logger.log('⚠️ 組別窗口候選：AE 欄讀取失敗：' + e.message);
+  }
+  const savedKeys = Object.keys(readGroupNotifyContactsForSettings_(
+    PropertiesService.getScriptProperties().getProperty('GROUP_NOTIFY_CONTACTS')));
+  return buildGroupNotifyCandidates_(directoryGroups, aeValues, savedKeys);
+}

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = ['group_notify.js', 'notify_templates.js', 'group_notify_test.js'];
-const SUITES = ['testGroupNotifyRouting_', 'testNotifyTemplates_'];
+const SUITES = ['testGroupNotifyRouting_', 'testNotifyTemplates_', 'testGroupNotifySettings_', 'runGroupNotifyTests'];
 
 function loadContext(props) {
   const store = Object.assign({}, props || {});

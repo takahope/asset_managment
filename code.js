@@ -5486,7 +5486,7 @@ function exportResolvedLocationErrors() {
 /**
  * ✨ [管理員專用] 取得系統設定（電腦回報管理員 email、通知開關、同組資產開關、盤點功能開關）。
  * 供設定視窗（alpine_model_setting.html）讀取初始值。加 admin 守衛避免非管理員讀取 email 清單。
- * @returns {{reportAdminEmails:string, dataUpdateNotifyEnabled:boolean, groupProxyEnabled:boolean, inventoryFeatureEnabled:boolean}}
+ * @returns {{reportAdminEmails:string, dataUpdateNotifyEnabled:boolean, groupProxyEnabled:boolean, inventoryFeatureEnabled:boolean, groupContactNotifyOnly:boolean, groupNotifyContacts:Object, groupNotifyCandidates:string[]}}
  */
 function getSystemSettings() {
   if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可讀取系統設定。');
@@ -5521,6 +5521,10 @@ function getSystemSettings() {
     infoComputerLocation: props.getProperty('INFO_COMPUTER_LOCATION') || '',
     stationCandidates: getStationCandidates_(),
     hrLastSyncAt: props.getProperty('HR_LAST_SYNC_AT') || '', // 唯讀，save 不處理
+    // ✨ 組別窗口通知（spec 2026-10-01）
+    groupContactNotifyOnly: props.getProperty('GROUP_CONTACT_NOTIFY_ONLY') === 'true',
+    groupNotifyContacts: readGroupNotifyContactsForSettings_(props.getProperty('GROUP_NOTIFY_CONTACTS')),
+    groupNotifyCandidates: getGroupNotifyCandidates_(),
     hrOfficialGroups: getHrOfficialGroups_()
   };
 }
@@ -5528,13 +5532,17 @@ function getSystemSettings() {
 /**
  * ✨ [管理員專用] 儲存系統設定，寫入對應 Script Property。
  * 比照 saveCopilotSettings 樣式：逐欄 if (undefined) 才寫，避免覆蓋未提交的欄位。
- * @param {{reportAdminEmails?:string, dataUpdateNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupViewEnabled?:boolean, groupProxyTransferLendEnabled?:boolean, groupProxyScrapEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string, labCommonCustodianEmail?:string, labCommonAutoApprove?:boolean}} settings
+ * @param {{reportAdminEmails?:string, dataUpdateNotifyEnabled?:boolean, userEmailNotifyEnabled?:boolean, groupViewEnabled?:boolean, groupProxyTransferLendEnabled?:boolean, groupProxyScrapEnabled?:boolean, groupProxyEnabled?:boolean, inventoryFeatureEnabled?:boolean, hrGroupNameMap?:string, infoStationCustodianEmails?:string, infoStationUserEmails?:string, intakeCustodianEmails?:string, ismsInventoryGroups?:string, labCommonCustodianEmail?:string, labCommonAutoApprove?:boolean, groupContactNotifyOnly?:boolean, groupNotifyContacts?:Object}} settings
  * @returns {{success:boolean}}
  */
 function saveSystemSettings(settings) {
   if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可變更系統設定。');
   const props = PropertiesService.getScriptProperties();
   const s = settings || {};
+  // ✨ 組別窗口設定先驗證（格式錯誤即拋錯，避免部分設定已寫入）
+  const normalizedGroupNotifyContacts = s.groupNotifyContacts !== undefined
+    ? normalizeGroupNotifyContacts_(s.groupNotifyContacts)
+    : null;
   if (s.reportAdminEmails !== undefined) {
     props.setProperty('REPORT_ADMIN_EMAILS', String(s.reportAdminEmails).trim());
   }
@@ -5577,6 +5585,14 @@ function saveSystemSettings(settings) {
   }
   if (s.labCommonAutoApprove !== undefined) {
     props.setProperty('LAB_COMMON_AUTO_APPROVE', String(!!s.labCommonAutoApprove));
+  }
+  // ✨ 組別窗口通知（spec 2026-10-01）
+  if (s.groupContactNotifyOnly !== undefined) {
+    props.setProperty('GROUP_CONTACT_NOTIFY_ONLY', String(!!s.groupContactNotifyOnly));
+  }
+  if (normalizedGroupNotifyContacts !== null) {
+    props.setProperty('GROUP_NOTIFY_CONTACTS', normalizedGroupNotifyContacts);
+    clearGroupNotifyContactsMemo_();
   }
   // ✨ 保管人/信箱 遷移設定；HR 相關鍵變更後清 directory 快取讓新值即時生效
   let hrSettingsChanged = false;

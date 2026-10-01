@@ -360,3 +360,40 @@ function testNotifyTemplates_() {
 
   return t.result('testNotifyTemplates_');
 }
+
+function testGroupNotifySettings_() {
+  const t = createNotifyTestReporter_();
+  const canon = function (g) {
+    const s = String(g || '').trim();
+    return ({ '實驗室組': '實驗組' })[s] || s;
+  };
+
+  t.eq('20-1 設定讀取：原字串保留',
+    JSON.stringify(readGroupNotifyContactsForSettings_('{"B組":"a@x.com, b@x.com"}')), '{"B組":"a@x.com, b@x.com"}');
+  t.eq('20-2 設定讀取：損毀回傳空', JSON.stringify(readGroupNotifyContactsForSettings_('nope')), '{}');
+
+  const cands = buildGroupNotifyCandidates_(['C組', 'A組', '未分組', ''], [' 實驗室組 ', 'C組', ''], ['舊B組'], canon);
+  t.eq('20-3 候選組別：聯集去重、排除未分組/空白、AE 正規化、保留已存鍵',
+    cands.slice().sort().join('|'), ['A組', 'C組', '實驗組', '舊B組'].sort().join('|'));
+  t.ok('20-4 候選組別：已排序', cands.indexOf('A組') < cands.indexOf('C組'));
+  t.eq('20-5 候選組別：全空', buildGroupNotifyCandidates_(null, undefined, [], canon).length, 0);
+
+  return t.result('testGroupNotifySettings_');
+}
+
+/**
+ * GAS 編輯器執行入口：`_` 結尾為私有函式，不會出現在執行選單，故提供此公開包裝。
+ * 純函式測試，不讀 Script Properties、不寄信。
+ */
+function runGroupNotifyTests() {
+  const suites = [testGroupNotifyRouting_, testNotifyTemplates_, testGroupNotifySettings_];
+  let passed = 0;
+  const failures = [];
+  suites.forEach(suite => {
+    const result = suite();
+    passed += result.passed;
+    result.failures.forEach(f => failures.push(f));
+  });
+  Logger.log(`=== runGroupNotifyTests：通過 ${passed}，失敗 ${failures.length} ===`);
+  return { passed: passed, failed: failures.length, failures: failures };
+}
