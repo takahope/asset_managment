@@ -2399,7 +2399,12 @@ function processBatchTransferApplication(formData) {
     }
 
     // 📧 送出本次轉移的保管人/使用人通知（依組別窗口設定分流）
-    const notifySummary = notifyCollector.flush();
+    let notifySummary = null;
+    try {
+      notifySummary = notifyCollector.flush();
+    } catch (notifyError) {
+      Logger.log(`⚠️ 轉移申請通知寄送失敗: ${notifyError.message}`);
+    }
     if (resultMessage) resultMessage += formatRoutedNote_(notifySummary);
 
     if (autoCompletedApps.length > 0 && !resultMessage) {
