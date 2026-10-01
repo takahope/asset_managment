@@ -4594,7 +4594,8 @@ function processBatchScrapping(formData) {
               assetName: asset.assetName,
               location: asset.location,
               category: asset.assetCategory,
-              keeperName: asset.leaderName
+              keeperName: asset.leaderName,
+              defaultGroup: String(asset.defaultGroup || '').trim() // 組別窗口判定用（spec 2026-10-01）
             });
           }
 
@@ -4653,26 +4654,27 @@ function processBatchScrapping(formData) {
         .setValues(scrapLogRows);
     }
 
-    // 📧 1. 發送原保管人知會信（同組代理報廢通知）
-    if (proxyNotificationMap.size > 0 && isUserEmailEnabled()) {
+    // 📧 1. 發送原保管人知會信（同組代理報廢通知；經 collector 依組別窗口分流，spec 2026-10-01）
+    let proxyNotifySummary = null;
+    if (proxyNotificationMap.size > 0) {
       try {
+        const notifyCollector = createMailCollector_({
+          event: 'scrapProxy', operatorEmail: currentUserEmail, operatorName: applicantName, appUrl: getAppUrl()
+        });
         proxyNotificationMap.forEach((assets, keeperEmail) => {
           const keeperName = (directory.emailToName && directory.emailToName[keeperEmail]) || assets[0].keeperName || keeperEmail.split('@')[0];
-          const subject = `[資產管理通知] 同組同仁 ${applicantName} 已代您提交 ${assets.length} 筆資產報廢申請`;
-          let body = `您好 ${keeperName}，\n\n`;
-          body += `同組同仁 ${applicantName} (${currentUserEmail}) 已代您提交了 ${assets.length} 筆由您保管的資產報廢申請：\n\n`;
-          assets.forEach(a => {
-            body += `  📦 ${a.assetId} - ${a.assetName}\n`;
-            body += `     地點：${a.location} | 類別：${a.category}\n\n`;
+          const keeperCtx = { keeperName: keeperName, applicantName: applicantName, applicantEmail: currentUserEmail, pureReason: pureReason };
+          notifyCollector.add({
+            email: keeperEmail,
+            items: assets.map(a => ({
+              assetId: a.assetId, assetName: a.assetName, location: a.location, category: a.category,
+              aeValue: a.defaultGroup, kind: 'notice',
+              windowLine: `${a.assetId}: ${a.assetName} → 原保管人 ${keeperName}：由 ${applicantName} 同組代辦報廢（原因：${pureReason}）`
+            })),
+            render: items => renderScrapProxyKeeperMail_(keeperCtx, items)
           });
-          body += `📋 報廢原因：${pureReason}\n`;
-          body += `👤 申請方式：同組代辦 (代辦人: ${applicantName})\n\n`;
-          body += `若您對此申請有任何疑義，請儘速與同組同仁 (${applicantName}) 或資產管理窗口聯繫確認。\n\n`;
-          body += `此為系統自動發送郵件。`;
-
-          MailApp.sendEmail(keeperEmail, subject, body);
-          Logger.log(`✅ 已發送代理報廢知會信給原保管人: ${keeperEmail}`);
         });
+        proxyNotifySummary = notifyCollector.flush();
       } catch (proxyEmailErr) {
         Logger.log(`⚠️ 原保管人知會信發送失敗: ${proxyEmailErr.message}`);
       }
@@ -4713,7 +4715,7 @@ function processBatchScrapping(formData) {
       }
     }
 
-    let resultMessage = `成功為 ${successCount} 筆財產提交報廢申請，請列印報廢申請單。`;
+    let resultMessage = `成功為 ${successCount} 筆財產提交報廢申請，請列印報廢申請單。` + formatRoutedNote_(proxyNotifySummary);
     if (unauthorizedAssets.length > 0) {
       resultMessage += `（注意：${unauthorizedAssets.length} 筆財產因權限不足已跳過）`;
     }
