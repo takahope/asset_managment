@@ -112,6 +112,18 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
+### 2026-10-01 新增「只通知組別窗口」通知分流（轉移申請／審核完成／同組代辦報廢）
+- 需求：組別人數多時，組內同仁各自收到轉移、審核、代辦報廢通知，組別負責人無法統一掌握；希望開關開啟後改寄該組窗口。
+- 規則：AE 欄優先（新方用 `resolvePostTransferAe_`、審核完成用審核後重讀的 AE），空白則依收件人 HR 組別；該組無窗口照舊寄本人；同一窗口彙整一封；窗口為操作者本人不寄；`USER_EMAIL_NOTIFY_ENABLED` 關閉時窗口也不寄。審核權限、承辦信、純地點轉移、位置有誤通知、出借皆未變動。
+- 實作：
+  1. `group_notify.js`：組別判定、`createMailCollector_` 收集器（`add()`/`flush()`，逐封 try/catch）、窗口彙整信、設定頁候選組別；設定存 Script Properties `GROUP_CONTACT_NOTIFY_ONLY`、`GROUP_NOTIFY_CONTACTS`（單行 JSON）。
+  2. `notify_templates.js`：11 個個人信件範本抽成純函式，開關關閉時與改版前逐字相同（黃金字串測試把關）。
+  3. `code.js`：`processBatchTransferApplication`、`processBatchApproval`、`processBatchScrapping` 改 `collector.add()` + `flush()`，結果訊息附「（通知已依設定改寄：X組窗口）」；`processBatchApproval` 迴圈中途拋錯時於 catch 仍送出已排入的通知（維持舊版逐筆即時寄出的語意）；`getSystemSettings`/`saveSystemSettings` 新增欄位（窗口 Email 先驗證後寫入）。
+  4. `alpine_model_setting.html`：「通知與信箱」分頁新增「組別窗口通知」卡片（開關「只通知組別窗口」＋逐組窗口清單）；清單用具名 scoped CSS（凍結 Tailwind 未收錄 `max-h-[300px]`/`w-1/2` 等）。
+- 驗證：`node scripts/test_group_notify.mjs`（路由 59／範本 27／設定 5 + 整合/效能）、`node scripts/verify_group_notify_ui_classes.mjs`；GAS 編輯器執行公開入口 `runGroupNotifyTests()`（`_` 結尾的套件為私有函式，不會出現在執行選單）。
+- 已知限制：轉出實驗組尚未移除 AE，實驗組資產轉給組外同仁後通知仍寄實驗組窗口；待另開 spec 修改 `resolvePostTransferAe_` 與 `code.js` 審核 AE 寫入。
+- 附帶發現（未修）：HR 分頁「組別名稱轉換表」清單使用的 `max-h-[300px]`、`w-1/2`、`divide-slate-200`、`hover:bg-white`、`mx-3` 未收錄於凍結 Tailwind。
+
 ### 2026-09-15 效能嚴重退化修復：消除資產迴圈內 PropertiesService RPC 呼叫（userStateMs 129.6s → 82.9s → <10ms）
 - 症狀：部署 AE 欄雙軌聯集同組協作後，首載進度條嚴重停滯（約 135 秒，`userStateMs: 129629`）；前次優化後仍達 85 秒（`userStateMs: 82970`）。
 - 根因剖析：
