@@ -2151,15 +2151,17 @@ function processBatchTransferApplication(formData) {
             applicantEmail // AL_APPLICANT_EMAIL_COLUMN_INDEX (17) - 申請操作人員 Email
           ];
           newLogsToAdd.push(newLogRow);
-          createdApplications.push({ 
-            id: asset.assetId, 
-            transferType: transferType, 
+          createdApplications.push({
+            id: asset.assetId,
+            transferType: transferType,
             needsApproval: needsApproval,
             oldKeeperEmail: asset.leaderEmail,
             oldUserEmail: oldUserEmail,
             newKeeperEmail: finalNewKeeperEmail,
             newUserEmail: finalNewUserEmail,
-            assetName: asset.assetName
+            assetName: asset.assetName,
+            defaultGroup: String(asset.defaultGroup || '').trim(),            // 舊方組別判定用（spec 2026-10-01）
+            postTransferAe: resolvePostTransferAe_(asset.defaultGroup, transferType) // 新方組別判定用
           });
         }
       }
@@ -2222,72 +2224,68 @@ function processBatchTransferApplication(formData) {
     const webAppUrl = getAppUrl();
     const systemLink = `${webAppUrl}`;
     const currentUserEmail = Session.getActiveUser().getEmail();
-    
+
+    // 📧 保管人/使用人通知改經 collector，依「只通知組別窗口」設定分流（spec 2026-10-01）
+    const notifyCollector = createMailCollector_({ event: 'transferApply', operatorEmail: currentUserEmail, appUrl: systemLink });
+    const toNotifyItem = (app, aeValue, kind, windowLine) => ({
+      assetId: app.id, assetName: app.assetName, aeValue: aeValue, kind: kind, windowLine: windowLine
+    });
+
     // ✨ 改進：根據不同情況發送不同的通知
     // 情況1：只變更使用人（change-user 勾選，其他未勾）
     if (actualNewUserEmail && !actualNewKeeperEmail && !actualNewLocation) {
       // 通知新使用人
       if (actualNewUserEmail) {
-        const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（使用人變更）`;
-        let body = `您好 ${finalNewUserName}，\n\n${currentUserEmail} 已申請將您設為 ${needsApprovalApps.length} 筆財產的使用人。\n\n`;
-        body += `財產清單：\n`;
-        needsApprovalApps.forEach(app => {
-          body += `  - ${app.id}: ${app.assetName}\n`;
+        const newUserCtx = { newUserName: finalNewUserName, operatorEmail: currentUserEmail, systemLink: systemLink };
+        notifyCollector.add({
+          email: actualNewUserEmail,
+          items: needsApprovalApps.map(app => toNotifyItem(app, app.postTransferAe, 'approve',
+            `${app.id}: ${app.assetName} → 待 ${finalNewUserName}（新使用人）審核`)),
+          render: items => renderTransferUserOnlyNewUserMail_(newUserCtx, items)
         });
-        body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
-        body += `${systemLink}\n\n此為系統自動發送郵件。`;
-        if (isUserEmailEnabled()) {
-          MailApp.sendEmail(actualNewUserEmail, subject, body);
-        }
       }
-      
+
       // 通知原保管人
       const oldKeepers = new Set(needsApprovalApps.map(app => app.oldKeeperEmail).filter(e => e));
       oldKeepers.forEach(keeperEmail => {
         const keeperAssets = needsApprovalApps.filter(app => app.oldKeeperEmail === keeperEmail);
-        const subject = `[財產通知] 您保管的 ${keeperAssets.length} 筆財產的使用人已變更`;
-        let body = `您好，\n\n您保管的以下財產的使用人已變更：\n\n`;
-        keeperAssets.forEach(app => {
-          body += `  - ${app.id}: ${app.assetName} → 新使用人: ${finalNewUserName}\n`;
+        const keeperName = emailToNameMap.get(String(keeperEmail).toLowerCase().trim()) || String(keeperEmail).split('@')[0];
+        const oldKeeperCtx = { newUserName: finalNewUserName };
+        notifyCollector.add({
+          email: keeperEmail,
+          items: keeperAssets.map(app => toNotifyItem(app, app.defaultGroup, 'notice',
+            `${app.id}: ${app.assetName} → 原保管人 ${keeperName}：使用人變更為 ${finalNewUserName}`)),
+          render: items => renderTransferUserOnlyOldKeeperMail_(oldKeeperCtx, items)
         });
-        body += `\n此為系統自動發送郵件。`;
-        if (isUserEmailEnabled()) {
-          MailApp.sendEmail(keeperEmail, subject, body);
-        }
       });
-      
+
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆使用人變更申請！已通知新使用人和原保管人。`;
     }
     // 情況2：只變更保管人（change-keeper 勾選，其他未勾）
     else if (actualNewKeeperEmail && !actualNewUserEmail && !actualNewLocation) {
       // 通知新保管人
-      const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（保管人變更）`;
-      let body = `您好 ${newKeeperName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您保管。\n\n`;
-      body += `財產清單：\n`;
-      needsApprovalApps.forEach(app => {
-        body += `  - ${app.id}: ${app.assetName}\n`;
+      const newKeeperCtx = { newKeeperName: newKeeperName, operatorEmail: currentUserEmail, systemLink: systemLink };
+      notifyCollector.add({
+        email: actualNewKeeperEmail,
+        items: needsApprovalApps.map(app => toNotifyItem(app, app.postTransferAe, 'approve',
+          `${app.id}: ${app.assetName} → 待 ${newKeeperName}（新保管人）審核`)),
+        render: items => renderTransferKeeperOnlyNewKeeperMail_(newKeeperCtx, items)
       });
-      body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
-      body += `${systemLink}\n\n此為系統自動發送郵件。`;
-      if (isUserEmailEnabled()) {
-        MailApp.sendEmail(actualNewKeeperEmail, subject, body);
-      }
-      
+
       // 通知原使用人
       const oldUsers = new Set(needsApprovalApps.map(app => app.oldUserEmail).filter(e => e));
       oldUsers.forEach(userEmail => {
         const userAssets = needsApprovalApps.filter(app => app.oldUserEmail === userEmail);
-        const subject = `[財產通知] 您使用的 ${userAssets.length} 筆財產的保管人已變更`;
-        let body = `您好，\n\n您使用的以下財產的保管人已變更：\n\n`;
-        userAssets.forEach(app => {
-          body += `  - ${app.id}: ${app.assetName} → 新保管人: ${newKeeperName}\n`;
+        const oldUserName = userEmailToNameMap.get(String(userEmail).toLowerCase().trim()) || String(userEmail).split('@')[0];
+        const oldUserCtx = { newKeeperName: newKeeperName };
+        notifyCollector.add({
+          email: userEmail,
+          items: userAssets.map(app => toNotifyItem(app, app.defaultGroup, 'notice',
+            `${app.id}: ${app.assetName} → 原使用人 ${oldUserName}：保管人變更為 ${newKeeperName}`)),
+          render: items => renderTransferKeeperOnlyOldUserMail_(oldUserCtx, items)
         });
-        body += `\n此為系統自動發送郵件。`;
-        if (isUserEmailEnabled()) {
-          MailApp.sendEmail(userEmail, subject, body);
-        }
       });
-      
+
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆保管人變更申請！已通知新保管人和原使用人。`;
     }
     // 情況3：只變更地點（change-location 勾選，其他未勾）
@@ -2313,47 +2311,34 @@ function processBatchTransferApplication(formData) {
     else if (needsApprovalApps.length > 0) {
       const notifiedEmails = new Set(); // 追蹤已發送郵件的對象，避免重複發送
 
+
       // ✅ 1. 通知新保管人（方案D：審核者之一）
       if (actualNewKeeperEmail) {
-        const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（需審核）`;
-        let body = `您好 ${newKeeperName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您保管。\n\n`;
-        body += `轉移類型：${typeDescription}\n\n`;
-        body += `財產清單：\n`;
-        needsApprovalApps.forEach(app => {
-          body += `  - ${app.id}: ${app.assetName}\n`;
+        const newKeeperCtx = {
+          newKeeperName: newKeeperName, operatorEmail: currentUserEmail, typeDescription: typeDescription,
+          hasNewUser: !!actualNewUserEmail, newUserName: finalNewUserName, systemLink: systemLink
+        };
+        notifyCollector.add({
+          email: actualNewKeeperEmail,
+          items: needsApprovalApps.map(app => toNotifyItem(app, app.postTransferAe, 'approve',
+            `${app.id}: ${app.assetName} → 待 ${newKeeperName}（新保管人）審核`)),
+          render: items => renderTransferComboNewKeeperMail_(newKeeperCtx, items)
         });
-        if (actualNewUserEmail) {
-          body += `\n新使用人：${finalNewUserName}\n`;
-        }
-        body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
-        body += `${systemLink}\n`;
-        body += `\n⚠️ 提醒：此申請需要您或新使用人審核，任一方審核即可完成轉移。\n`;
-        body += `\n此為系統自動發送郵件。`;
-        if (isUserEmailEnabled()) {
-          MailApp.sendEmail(actualNewKeeperEmail, subject, body);
-        }
         notifiedEmails.add(actualNewKeeperEmail.toLowerCase());
       }
 
       // ✅ 2. 通知新使用人（方案D：改為審核通知）
       if (actualNewUserEmail && !notifiedEmails.has(actualNewUserEmail.toLowerCase())) {
-        const subject = `[財產轉移通知] 您有 ${needsApprovalApps.length} 筆待接收的財產（需審核）`;
-        let body = `您好 ${finalNewUserName}，\n\n${currentUserEmail} 已申請將 ${needsApprovalApps.length} 筆財產轉移給您使用。\n\n`;
-        body += `轉移類型：${typeDescription}\n\n`;
-        body += `財產清單：\n`;
-        needsApprovalApps.forEach(app => {
-          body += `  - ${app.id}: ${app.assetName}\n`;
+        const newUserCtx = {
+          newUserName: finalNewUserName, operatorEmail: currentUserEmail, typeDescription: typeDescription,
+          hasNewKeeper: !!actualNewKeeperEmail, newKeeperName: newKeeperName, systemLink: systemLink
+        };
+        notifyCollector.add({
+          email: actualNewUserEmail,
+          items: needsApprovalApps.map(app => toNotifyItem(app, app.postTransferAe, 'approve',
+            `${app.id}: ${app.assetName} → 待 ${finalNewUserName}（新使用人）審核`)),
+          render: items => renderTransferComboNewUserMail_(newUserCtx, items)
         });
-        if (actualNewKeeperEmail) {
-          body += `\n新保管人：${newKeeperName}\n`;
-        }
-        body += `\n請點擊下方連結，前往系統主頁的「審核儀表板」進行批次簽核：\n`;
-        body += `${systemLink}\n`;
-        body += `\n⚠️ 提醒：此申請需要您或新保管人審核，任一方審核即可完成轉移。\n`;
-        body += `\n此為系統自動發送郵件。`;
-        if (isUserEmailEnabled()) {
-          MailApp.sendEmail(actualNewUserEmail, subject, body);
-        }
         notifiedEmails.add(actualNewUserEmail.toLowerCase());
       }
 
@@ -2367,22 +2352,16 @@ function processBatchTransferApplication(formData) {
         oldKeepers.forEach(oldKeeperEmail => {
           const keeperAssets = needsApprovalApps.filter(app => app.oldKeeperEmail === oldKeeperEmail);
           const oldKeeperName = emailToNameMap.get(oldKeeperEmail) || oldKeeperEmail.split('@')[0];
-
-          const subject = `[財產通知] 您保管的 ${keeperAssets.length} 筆財產已申請轉出`;
-          let body = `您好 ${oldKeeperName}，\n\n${currentUserEmail} 已申請將您保管的以下財產轉移給新保管人。\n\n`;
-          body += `財產清單：\n`;
-          keeperAssets.forEach(app => {
-            body += `  - ${app.id}: ${app.assetName}\n`;
+          const oldKeeperCtx = {
+            oldKeeperName: oldKeeperName, operatorEmail: currentUserEmail, newKeeperName: newKeeperName,
+            hasNewUser: !!actualNewUserEmail, newUserName: finalNewUserName
+          };
+          notifyCollector.add({
+            email: oldKeeperEmail,
+            items: keeperAssets.map(app => toNotifyItem(app, app.defaultGroup, 'notice',
+              `${app.id}: ${app.assetName} → 原保管人 ${oldKeeperName}：已申請轉出給 ${newKeeperName}`)),
+            render: items => renderTransferComboOldKeeperMail_(oldKeeperCtx, items)
           });
-          body += `\n新保管人：${newKeeperName}\n`;
-          if (actualNewUserEmail) {
-            body += `新使用人：${finalNewUserName}\n`;
-          }
-          body += `\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n`;
-          body += `\n此為系統自動發送郵件。`;
-          if (isUserEmailEnabled()) {
-            MailApp.sendEmail(oldKeeperEmail, subject, body);
-          }
           notifiedEmails.add(oldKeeperEmail.toLowerCase());
         });
       }
@@ -2397,22 +2376,16 @@ function processBatchTransferApplication(formData) {
         oldUsers.forEach(oldUserEmail => {
           const userAssets = needsApprovalApps.filter(app => app.oldUserEmail === oldUserEmail);
           const oldUserName = userEmailToNameMap.get(oldUserEmail) || oldUserEmail.split('@')[0];
-
-          const subject = `[財產通知] 您使用的 ${userAssets.length} 筆財產的使用人已變更`;
-          let body = `您好 ${oldUserName}，\n\n${currentUserEmail} 已申請變更以下財產的使用人。\n\n`;
-          body += `財產清單：\n`;
-          userAssets.forEach(app => {
-            body += `  - ${app.id}: ${app.assetName}\n`;
+          const oldUserCtx = {
+            oldUserName: oldUserName, operatorEmail: currentUserEmail, newUserName: finalNewUserName,
+            hasNewKeeper: !!actualNewKeeperEmail, newKeeperName: newKeeperName
+          };
+          notifyCollector.add({
+            email: oldUserEmail,
+            items: userAssets.map(app => toNotifyItem(app, app.defaultGroup, 'notice',
+              `${app.id}: ${app.assetName} → 原使用人 ${oldUserName}：使用人將變更為 ${finalNewUserName}`)),
+            render: items => renderTransferComboOldUserMail_(oldUserCtx, items)
           });
-          body += `\n新使用人：${finalNewUserName}\n`;
-          if (actualNewKeeperEmail) {
-            body += `新保管人：${newKeeperName}\n`;
-          }
-          body += `\n此申請正在等待新保管人或新使用人審核中（任一方審核即可完成）。\n`;
-          body += `\n此為系統自動發送郵件。`;
-          if (isUserEmailEnabled()) {
-            MailApp.sendEmail(oldUserEmail, subject, body);
-          }
           notifiedEmails.add(oldUserEmail.toLowerCase());
         });
       }
@@ -2424,7 +2397,11 @@ function processBatchTransferApplication(formData) {
 
       resultMessage = `成功提交 ${needsApprovalApps.length} 筆需要審核的申請！已通知：${notificationSummary.join('、')}。任一方審核即可完成轉移。`;
     }
-    
+
+    // 📧 送出本次轉移的保管人/使用人通知（依組別窗口設定分流）
+    const notifySummary = notifyCollector.flush();
+    if (resultMessage) resultMessage += formatRoutedNote_(notifySummary);
+
     if (autoCompletedApps.length > 0 && !resultMessage) {
       resultMessage = `${autoCompletedApps.length} 筆財產已直接完成（無需審核）！`;
     }
