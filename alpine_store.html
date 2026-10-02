@@ -124,6 +124,20 @@
         if (Array.isArray(value)) return value;
         return value ? [value] : [];
     };
+    // 下拉選單關鍵字篩選：list 為字串陣列或 [值, 顯示名稱] 陣列；不分大小寫比對名稱與值；目前已選的值永遠保留
+    var filterSelectOptions = function (list, query, selected) {
+        var items = Array.isArray(list) ? list : [];
+        var q = String(query == null ? '' : query).trim().toLowerCase();
+        if (!q) return items;
+        var keep = selected == null ? '' : String(selected);
+        return items.filter(function (item) {
+            var value = Array.isArray(item) ? item[0] : item;
+            var label = Array.isArray(item) ? item[1] : item;
+            if (keep && String(value) === keep) return true;
+            return String(label == null ? '' : label).toLowerCase().indexOf(q) !== -1 ||
+                String(value == null ? '' : value).toLowerCase().indexOf(q) !== -1;
+        });
+    };
 
     /* ============ C. requestIdleCallback polyfill(對應舊頁 App 內的 polyfill) ============ */
     if (typeof window.requestIdleCallback !== 'function') {
@@ -186,7 +200,8 @@
         getAssetAliasLabel: getAssetAliasLabel,
         getAssetAliasValue: getAssetAliasValue,
         getAssetAliasDisplay: getAssetAliasDisplay,
-        ensureArray: ensureArray
+        ensureArray: ensureArray,
+        filterSelectOptions: filterSelectOptions
     };
 
     /* ============ F. 非反應式 refs(對應舊頁 useRef,不驅動 UI) ============ */

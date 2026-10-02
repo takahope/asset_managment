@@ -38,6 +38,13 @@ document.addEventListener('alpine:init', function () {
             labType: 'personal', labTargetEmail: '',
             newLocation: '', newKeeperEmail: '', newUserEmail: '', infoOutTargetEmail: '', custodianEmail: '', stationLocation: '',
             isSubmitting: false,
+            q: { location: '', keeper: '', user: '', infoOut: '', lab: '', custodian: '', station: '' }, // 下拉選單關鍵字篩選
+            filterOpts: function (list, query, selected) { return S.filterSelectOptions(list, query, selected); },
+            noMatch: function (list, query) { return String(query || '').trim() !== '' && S.filterSelectOptions(list, query, '').length === 0; },
+            // 注音等輸入法組字期間不篩選，選字完成才更新（gas-house-patterns #4）
+            composingSearch: false,
+            onSearchInput: function (key, e) { if (this.composingSearch || (e && e.isComposing)) return; this.q[key] = e.target.value; },
+            onSearchCompositionEnd: function (key, e) { this.composingSearch = false; this.q[key] = e.target.value; },
             get options() { return this.$store.app.transferOptions; },
             get selectedAssetIds() { return this.$store.app.batchActionAssetIds; },
             get selectedAssetsDetails() { return selectedAssetsDetails(this.$store.app); },
@@ -529,28 +536,40 @@ document.addEventListener('alpine:init', function () {
                         <div>
                             <label class="flex items-center mb-2"><input type="checkbox" x-model="changeLocation" class="mr-2"><span class="font-medium text-slate-700">變更地點</span></label>
                             <template x-if="changeLocation">
-                                <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                    <option value="">請選擇新地點...</option>
-                                    <template x-for="loc in (options.locations || [])" :key="loc"><option :value="loc" x-text="loc"></option></template>
-                                </select>
+                                <div>
+                                    <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
+                                    <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">請選擇新地點...</option>
+                                        <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                    </select>
+                                </div>
                             </template>
                         </div>
                         <div>
                             <label class="flex items-center mb-2"><input type="checkbox" x-model="changeKeeper" class="mr-2"><span class="font-medium text-slate-700">變更保管人</span></label>
                             <template x-if="changeKeeper">
-                                <select x-model="newKeeperEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                    <option value="">請選擇新保管人...</option>
-                                    <template x-for="entry in availableKeepers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
-                                </select>
+                                <div>
+                                    <input type="search" :value="q.keeper" @input="onSearchInput('keeper', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('keeper', $event)" placeholder="輸入姓名或 Email 篩選保管人…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p x-show="noMatch(availableKeepers, q.keeper)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.keeper.trim() + '」的選項'"></p>
+                                    <select x-model="newKeeperEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">請選擇新保管人...</option>
+                                        <template x-for="entry in filterOpts(availableKeepers, q.keeper, newKeeperEmail)" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
+                                    </select>
+                                </div>
                             </template>
                         </div>
                         <div>
                             <label class="flex items-center mb-2"><input type="checkbox" x-model="changeUser" class="mr-2"><span class="font-medium text-slate-700">變更使用人</span></label>
                             <template x-if="changeUser">
-                                <select x-model="newUserEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                    <option value="">請選擇新使用人...</option>
-                                    <template x-for="entry in availableUsers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
-                                </select>
+                                <div>
+                                    <input type="search" :value="q.user" @input="onSearchInput('user', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('user', $event)" placeholder="輸入姓名或 Email 篩選使用人…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p x-show="noMatch(availableUsers, q.user)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.user.trim() + '」的選項'"></p>
+                                    <select x-model="newUserEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="">請選擇新使用人...</option>
+                                        <template x-for="entry in filterOpts(availableUsers, q.user, newUserEmail)" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
+                                    </select>
+                                </div>
                             </template>
                         </div>
                     </div>
@@ -565,18 +584,22 @@ document.addEventListener('alpine:init', function () {
                             <label class="block text-sm font-medium text-slate-700 mb-2">
                                 接收人員（保管人兼使用人）：<span class="text-red-600">*</span>
                             </label>
+                            <input type="search" :value="q.infoOut" @input="onSearchInput('infoOut', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('infoOut', $event)" placeholder="輸入姓名或 Email 篩選接收人員…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p x-show="noMatch(availableKeepers, q.infoOut)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.infoOut.trim() + '」的選項'"></p>
                             <select x-model="infoOutTargetEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                 <option value="">請選擇接收人員...</option>
-                                <template x-for="entry in availableKeepers" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
+                                <template x-for="entry in filterOpts(availableKeepers, q.infoOut, infoOutTargetEmail)" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">
                                 新存置地點（選填，未選則保留原地點）：
                             </label>
+                            <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
                             <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                 <option value="">請選擇新地點（未選擇則保留原地點）...</option>
-                                <template x-for="loc in (options.locations || [])" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc"><option :value="loc" x-text="loc"></option></template>
                             </select>
                         </div>
                     </div>
@@ -606,9 +629,11 @@ document.addEventListener('alpine:init', function () {
                                     <label class="block text-sm font-medium text-slate-700 mb-2">
                                         接收人員（限實驗組成員）：<span class="text-red-600">*</span>
                                     </label>
+                                    <input type="search" :value="q.lab" @input="onSearchInput('lab', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('lab', $event)" placeholder="輸入姓名或 Email 篩選實驗組接收人員…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p x-show="noMatch(availableLabKeepers, q.lab)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.lab.trim() + '」的選項'"></p>
                                     <select x-model="labTargetEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                         <option value="">請選擇實驗組接收人員...</option>
-                                        <template x-for="entry in availableLabKeepers" :key="entry[0]">
+                                        <template x-for="entry in filterOpts(availableLabKeepers, q.lab, labTargetEmail)" :key="entry[0]">
                                             <option :value="entry[0]" x-text="entry[1]"></option>
                                         </template>
                                     </select>
@@ -617,9 +642,11 @@ document.addEventListener('alpine:init', function () {
                                     <label class="block text-sm font-medium text-slate-700 mb-2">
                                         新存置地點（選填，未選則保留原地點）：
                                     </label>
+                                    <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
                                     <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                         <option value="">請選擇新地點（未選擇則保留原地點）...</option>
-                                        <template x-for="loc in uniqueLocations" :key="loc">
+                                        <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc">
                                             <option :value="loc" x-text="loc"></option>
                                         </template>
                                     </select>
@@ -650,9 +677,11 @@ document.addEventListener('alpine:init', function () {
                                     <label class="block text-sm font-medium text-slate-700 mb-2">
                                         新存置地點（選填，未選則保留原地點）：
                                     </label>
+                                    <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
                                     <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                         <option value="">請選擇新地點（未選擇則保留原地點）...</option>
-                                        <template x-for="loc in uniqueLocations" :key="loc">
+                                        <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc">
                                             <option :value="loc" x-text="loc"></option>
                                         </template>
                                     </select>
@@ -667,16 +696,20 @@ document.addEventListener('alpine:init', function () {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">轉移給駐管：<span class="text-red-600">*</span></label>
+                                <input type="search" :value="q.custodian" @input="onSearchInput('custodian', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('custodian', $event)" placeholder="輸入姓名或 Email 篩選駐管…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <p x-show="noMatch(availableCustodians, q.custodian)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.custodian.trim() + '」的選項'"></p>
                                 <select x-model="custodianEmail" @change="handleCustodianChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                     <option value="">請選擇駐管...</option>
-                                    <template x-for="entry in availableCustodians" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
+                                    <template x-for="entry in filterOpts(availableCustodians, q.custodian, custodianEmail)" :key="entry[0]"><option :value="entry[0]" x-text="entry[1]"></option></template>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">駐站地點：<span class="text-red-600">*</span></label>
+                                <input type="search" :value="q.station" @input="onSearchInput('station', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('station', $event)" placeholder="輸入關鍵字篩選駐站地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <p x-show="noMatch(availableStationLocations, q.station)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.station.trim() + '」的選項'"></p>
                                 <select x-model="stationLocation" @change="handleStationChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                                     <option value="">請選擇駐站地點...</option>
-                                    <template x-for="loc in availableStationLocations" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                                    <template x-for="loc in filterOpts(availableStationLocations, q.station, stationLocation)" :key="loc"><option :value="loc" x-text="loc"></option></template>
                                 </select>
                             </div>
                         </div>

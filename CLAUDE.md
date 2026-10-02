@@ -112,6 +112,11 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
+### 2026-10-02 轉移彈窗下拉選單支援關鍵字篩選
+- 需求：單筆／批次轉移彈窗的下拉選單只能捲動挑選，無法輸入關鍵字搜尋；要求最簡易的原生做法。
+- 實作：每個轉移下拉選單（新地點 ×4 模式、新保管人、新使用人、資訊組轉出接收人員、實驗組接收人員、駐管、駐站地點）上方加原生 `<input type="search">`，即時篩選下方原生 `<select>` 的選項；`<select>` 與 `x-model`／`@change`／送出邏輯不變，搜尋框文字永遠不會成為送出值（防誤輸入）。比對不分大小寫、包含即符合，人員同時比對姓名與 Email；目前已選的選項永遠保留，查無結果顯示「查無符合「xxx」的選項」。共用函式 `AppShared.filterSelectOptions`（`alpine_store.html`）；兩個彈窗元件各有 `q`、`filterOpts`、`noMatch`。注音等輸入法組字期間不篩選，`compositionend` 才更新（gas-house-patterns #4）。批次彈窗「一般」「資訊組轉出」地點選單改用去重後的 `uniqueLocations`。出借、報廢彈窗不在範圍內。
+- 驗證：`node scripts/test_select_filter.mjs`（11 項，直接擷取 `alpine_store.html` 實際函式）；搜尋框 class 皆收錄於凍結 Tailwind。檔案：`alpine_store.html`、`alpine_modals_single.html`、`alpine_modals_batch.html`。
+
 ### 2026-10-02 轉出實驗組時移除 AE（預設組別）與退回還原
 - 需求：AE＝實驗組 的資產轉給組外後 AE 殘留，造成實驗組仍具資產歸屬軌權限（可代為轉移／出借／報廢）、首頁組別顯示錯誤、盤點誤分派與通知誤寄；退回轉移也不還原 AE。
 - 規則（`lab_default_group.js`，申請預測／審核寫入／退回還原／清理共用）：類型含「轉移實驗組」→ 實驗組；目前 AE 為實驗組且新保管人與（財產總表）實際新使用人皆非實驗組成員 → 清空；其餘不變。實驗組成員 = HR 實驗組 ∪ 公用帳號（`LAB_COMMON_CUSTODIAN_EMAIL` ∪ 轉移紀錄中「轉移實驗組(共同)」歷任新保管人）。公用帳號為 CEO 主職的同仁帳號，HR 判定為執行長，故必須明確納入。
