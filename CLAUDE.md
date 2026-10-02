@@ -112,6 +112,15 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
+### 2026-10-02 組別窗口通知：駐站（GRP-CO-*）歸併至收案組（GRP-CO）
+- 需求：組別窗口候選清單與通知分流把每個駐站（`GRP-CO-*`、`GRP-CO-EX-*`、`GRP-CO-protable-*`）當成獨立組別，需逐站設窗口；希望 `GRP-*-*` 一律視為其上層 `GRP-*`（實務上只有駐站，上層 `GRP-CO` = 收案組）。
+- 範圍：**只影響通知分流**；同組協作權限（`getGroupMemberEmails`）、組別顯示、「保管人/信箱」同步表與子專案仍用 HR 主職原組別（`emailToGroup`）。
+- 實作：
+  1. `group_notify.js`：`rollupNotifyGroupCode_`（`GRP-` 開頭取前兩段）、`buildNotifyGroupOverrides_`（稀疏表，只存與 `emailToGroup` 不同者；歸併後代碼不在組織架構樹時不歸併）、`notifyGroupOf_`（優先 `emailToNotifyGroup`，缺欄位回退 `emailToGroup`）、`listNotifyGroups_`；`resolveNotifyGroup_` 在 AE 空白時改用 `notifyGroupOf_`，設定頁候選組別改用 `listNotifyGroups_`。
+  2. `hr_directory.js`：`buildKeeperDirectoryFromHr_` 新增 `emailToNotifyGroup`（建立失敗只 log，不影響名錄）；`KEEPER_DIRECTORY_CACHE_KEY` 升為 `keeper_directory_v3`。HR 讀取失敗走工作表備援時無代碼可歸併，行為同前。
+- 驗證：`node scripts/test_group_notify.mjs` 新增 `testNotifyGroupRollup_`（24 項）與候選清單整合案例，`runGroupNotifyTests()` 共 115 項。
+- 注意：若先前已替個別駐站設定窗口，該設定不再生效但仍留在候選清單，請於設定頁清空。
+
 ### 2026-10-01 新增「只通知組別窗口」通知分流（轉移申請／審核完成／同組代辦報廢）
 - 需求：組別人數多時，組內同仁各自收到轉移、審核、代辦報廢通知，組別負責人無法統一掌握；希望開關開啟後改寄該組窗口。
 - 規則：AE 欄優先（新方用 `resolvePostTransferAe_`、審核完成用審核後重讀的 AE），空白則依收件人 HR 組別；該組無窗口照舊寄本人；同一窗口彙整一封；窗口為操作者本人不寄；`USER_EMAIL_NOTIFY_ENABLED` 關閉時窗口也不寄。審核權限、承辦信、純地點轉移、位置有誤通知、出借皆未變動。

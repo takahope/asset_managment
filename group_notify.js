@@ -100,17 +100,74 @@ function normalizeGroupNotifyContacts_(obj) {
 }
 
 /**
- * 唯一組別判定：AE 欄優先，空白則用收件人 HR 組別。
+ * 唯一組別判定：AE 欄優先，空白則用收件人通知用組別（駐站已歸併，見 notifyGroupOf_）。
  * @returns {string} 正規化組名；查無回傳 ''
  */
 function resolveNotifyGroup_(aeValue, personEmail, directory, canonicalize) {
   const canon = canonicalize || canonicalizeGroupName_;
   const ae = String(aeValue || '').trim();
   if (ae) return String(canon(ae) || ae).trim();
-  const email = String(personEmail || '').toLowerCase().trim();
-  const group = String(((directory && directory.emailToGroup) || {})[email] || '').trim();
+  const group = notifyGroupOf_(directory, personEmail);
   if (!group || group === '未分組') return '';
   return String(canon(group) || group).trim();
+}
+
+// --- 通知用組別歸併（spec 2026-10-02）：只影響通知分流，同組權限與組別顯示仍用 emailToGroup ---
+
+/** 代碼歸併：GRP- 開頭只取前兩段（GRP-CO-A01 / GRP-CO-EX-01 → GRP-CO），其餘原樣 */
+function rollupNotifyGroupCode_(code) {
+  const c = String(code || '').trim();
+  if (c.indexOf('GRP-') !== 0) return c;
+  return c.split('-').slice(0, 2).join('-');
+}
+
+/**
+ * 建立通知用組別對照（稀疏：只存與 emailToGroup 不同者，控制名錄快取大小）。
+ * 歸併後代碼不在組織架構樹時不歸併（沿用原組別）。
+ * @param {{emailToMainCode:Object, codeToOrgName:Object, groupNameMap:Object, emailToGroup:Object}} src
+ * @returns {Object<string, string>} email → 通知用組名
+ */
+function buildNotifyGroupOverrides_(src) {
+  const s = src || {};
+  const mainCodes = s.emailToMainCode || {};
+  const orgNames = s.codeToOrgName || {};
+  const nameMap = s.groupNameMap || {};
+  const groups = s.emailToGroup || {};
+  const overrides = {};
+  Object.keys(mainCodes).forEach(email => {
+    const code = String(mainCodes[email] || '').trim();
+    const rolled = rollupNotifyGroupCode_(code);
+    if (!rolled || rolled === code) return;
+    const hrName = orgNames[rolled];
+    if (!hrName) return;
+    const groupName = nameMap[hrName] || hrName;
+    if (groupName !== groups[email]) overrides[email] = groupName;
+  });
+  return overrides;
+}
+
+/** 收件人通知用組別：駐站同仁取歸併後組別，其餘（或舊版名錄）沿用 emailToGroup */
+function notifyGroupOf_(directory, email) {
+  if (!directory) return '';
+  const key = String(email || '').toLowerCase().trim();
+  const overrides = directory.emailToNotifyGroup || {};
+  return String(overrides[key] || (directory.emailToGroup || {})[key] || '').trim();
+}
+
+/** 名錄中所有通知用組別（去重、未排序），供設定頁候選清單 */
+function listNotifyGroups_(directory) {
+  if (!directory) return [];
+  const emails = Object.keys(directory.emailToGroup || {}).concat(Object.keys(directory.emailToNotifyGroup || {}));
+  const seen = {};
+  const result = [];
+  emails.forEach(email => {
+    const group = notifyGroupOf_(directory, email);
+    if (group && !seen[group]) {
+      seen[group] = true;
+      result.push(group);
+    }
+  });
+  return result;
 }
 
 /**
@@ -258,7 +315,7 @@ function readGroupNotifyContactsForSettings_(raw) {
 }
 
 /**
- * 設定頁可設定組別 = 已存鍵 ∪ HR 名錄組別 ∪ AE 欄值（後兩者正規化），去重後依中文排序。
+ * 設定頁可設定組別 = 已存鍵 ∪ HR 名錄通知用組別（駐站已歸併）∪ AE 欄值（後兩者正規化），去重後依中文排序。
  * 已存鍵原樣保留，避免組別改名後舊設定看不到。
  */
 function buildGroupNotifyCandidates_(directoryGroups, aeValues, savedKeys, canonicalize) {
@@ -300,7 +357,7 @@ function readDefaultGroupValues_() {
 function getGroupNotifyCandidates_() {
   let directoryGroups = [];
   try {
-    directoryGroups = Object.keys((getKeeperDirectory_() || {}).groupToMembers || {});
+    directoryGroups = listNotifyGroups_(getKeeperDirectory_());
   } catch (e) {
     Logger.log('⚠️ 組別窗口候選：HR 名錄讀取失敗：' + e.message);
   }

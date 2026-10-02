@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = ['group_notify.js', 'notify_templates.js', 'group_notify_test.js'];
-const SUITES = ['testGroupNotifyRouting_', 'testNotifyTemplates_', 'testGroupNotifySettings_', 'runGroupNotifyTests'];
+const SUITES = ['testGroupNotifyRouting_', 'testNotifyTemplates_', 'testGroupNotifySettings_', 'testNotifyGroupRollup_', 'runGroupNotifyTests'];
 
-function loadContext(props) {
+function loadContext(props, directory) {
   const store = Object.assign({}, props || {});
   const reads = {};
   const sent = [];
@@ -27,7 +27,7 @@ function loadContext(props) {
     },
     canonicalizeGroupName_: g => String(g || '').trim(),
     isUserEmailEnabled: () => true,
-    getKeeperDirectory_: () => ({
+    getKeeperDirectory_: () => directory || ({
       emailToGroup: { 'chen@x.com': 'C組' },
       emailToName: { 'chen@x.com': '陳大華' },
       groupToMembers: { 'C組': ['chen@x.com'] }
@@ -99,6 +99,19 @@ function loadContext(props) {
   assert.strictEqual(reads.GROUP_NOTIFY_CONTACTS, 1, 'GROUP_NOTIFY_CONTACTS 同請求內應只讀一次');
   assert.ok(reads.GROUP_CONTACT_NOTIFY_ONLY <= 3, '開關每次 flush 至多讀一次');
   console.log('✅ 效能：500 筆 × 3 次 flush，窗口設定只讀 1 次');
+}
+
+// 5. 整合：設定頁候選組別改用通知用組別（駐站歸併為收案組，spec 2026-10-02）
+{
+  const { context } = loadContext({}, {
+    emailToGroup: { 'sta@x.com': '台北駐站', 'ex@x.com': '委外一站', 'sec@x.com': '資安組' },
+    emailToNotifyGroup: { 'sta@x.com': '收案組', 'ex@x.com': '收案組' },
+    emailToName: {},
+    groupToMembers: { '台北駐站': ['sta@x.com'], '委外一站': ['ex@x.com'], '資安組': ['sec@x.com'] }
+  });
+  const candidates = context.getGroupNotifyCandidates_();
+  assert.strictEqual(Array.from(candidates).sort().join('|'), ['收案組', '資安組'].sort().join('|'));
+  console.log('✅ 整合：設定頁候選組別只列收案組，不列個別駐站');
 }
 
 console.log('🎉 group_notify 全部測試通過');

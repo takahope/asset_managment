@@ -381,12 +381,82 @@ function testGroupNotifySettings_() {
   return t.result('testGroupNotifySettings_');
 }
 
+/** 通知用組別歸併（spec 2026-10-02）：駐站 GRP-CO-* 歸併至 GRP-CO（收案組） */
+function testNotifyGroupRollup_() {
+  const t = createNotifyTestReporter_();
+  const canon = function (g) {
+    const s = String(g || '').trim();
+    return ({ '實驗室組': '實驗組' })[s] || s;
+  };
+
+  // 案例 30：rollupNotifyGroupCode_
+  t.eq('30-1 收案駐站歸併', rollupNotifyGroupCode_('GRP-CO-A01'), 'GRP-CO');
+  t.eq('30-2 委外駐站歸併', rollupNotifyGroupCode_('GRP-CO-EX-01'), 'GRP-CO');
+  t.eq('30-3 行動駐站歸併', rollupNotifyGroupCode_('GRP-CO-protable-1'), 'GRP-CO');
+  t.eq('30-4 單層 GRP 不變', rollupNotifyGroupCode_('GRP-SEC'), 'GRP-SEC');
+  t.eq('30-5 GRP-CO 本身不變', rollupNotifyGroupCode_('GRP-CO'), 'GRP-CO');
+  t.eq('30-6 DEPT 不變', rollupNotifyGroupCode_('DEPT-OPS'), 'DEPT-OPS');
+  t.eq('30-7 PRE/CEO 不變', rollupNotifyGroupCode_('PRE') + '|' + rollupNotifyGroupCode_('CEO'), 'PRE|CEO');
+  t.eq('30-8 任務編組不受影響', rollupNotifyGroupCode_('TF-ISPI-GRP-SEC'), 'TF-ISPI-GRP-SEC');
+  t.eq('30-9 空值與前後空白', rollupNotifyGroupCode_(null) + '|' + rollupNotifyGroupCode_('  GRP-CO-B  '), '|GRP-CO');
+
+  // 案例 31：buildNotifyGroupOverrides_
+  const codeToOrgName = { 'GRP-CO': '收案組', 'GRP-CO-A01': '台北駐站', 'GRP-CO-EX-01': '委外一站', 'GRP-SEC': '資訊安全組', 'DEPT-OPS': '營運部' };
+  const emailToMainCode = { 'sta@x.com': 'GRP-CO-A01', 'ex@x.com': 'GRP-CO-EX-01', 'co@x.com': 'GRP-CO', 'sec@x.com': 'GRP-SEC', 'dept@x.com': 'DEPT-OPS' };
+  const emailToGroup = { 'sta@x.com': '台北駐站', 'ex@x.com': '委外一站', 'co@x.com': '收案組', 'sec@x.com': '資安組', 'dept@x.com': '營運部' };
+  const overrides = buildNotifyGroupOverrides_({
+    emailToMainCode: emailToMainCode, codeToOrgName: codeToOrgName, groupNameMap: { '資訊安全組': '資安組' }, emailToGroup: emailToGroup
+  });
+  t.eq('31-1 只記錄與原組別不同者（駐站同仁）', JSON.stringify(overrides), '{"sta@x.com":"收案組","ex@x.com":"收案組"}');
+  t.eq('31-2 GRP-CO 不在組織架構樹：不歸併',
+    JSON.stringify(buildNotifyGroupOverrides_({
+      emailToMainCode: { 'sta@x.com': 'GRP-CO-A01' }, codeToOrgName: { 'GRP-CO-A01': '台北駐站' }, groupNameMap: {}, emailToGroup: { 'sta@x.com': '台北駐站' }
+    })), '{}');
+  t.eq('31-3 歸併後名稱套用組別轉換表',
+    JSON.stringify(buildNotifyGroupOverrides_({
+      emailToMainCode: { 'sta@x.com': 'GRP-CO-A01' }, codeToOrgName: codeToOrgName, groupNameMap: { '收案組': '收案中心' }, emailToGroup: { 'sta@x.com': '台北駐站' }
+    })), '{"sta@x.com":"收案中心"}');
+  t.eq('31-4 缺欄位不拋錯', JSON.stringify(buildNotifyGroupOverrides_({})), '{}');
+  t.eq('31-5 null 不拋錯', JSON.stringify(buildNotifyGroupOverrides_(null)), '{}');
+
+  // 案例 32：notifyGroupOf_ / listNotifyGroups_
+  const directory = { emailToGroup: emailToGroup, emailToNotifyGroup: overrides, emailToName: {}, groupToMembers: {} };
+  t.eq('32-1 駐站同仁取通知用組別（大小寫/空白不敏感）', notifyGroupOf_(directory, ' Sta@X.com '), '收案組');
+  t.eq('32-2 非駐站沿用原組別', notifyGroupOf_(directory, 'sec@x.com'), '資安組');
+  t.eq('32-3 舊版名錄（無新欄位）回退原組別', notifyGroupOf_({ emailToGroup: emailToGroup }, 'sta@x.com'), '台北駐站');
+  t.eq('32-4 查無', notifyGroupOf_(directory, 'nobody@x.com') + '|' + notifyGroupOf_(null, 'sta@x.com'), '|');
+  t.eq('32-5 通知用組別清單不含駐站名', listNotifyGroups_(directory).slice().sort().join('|'), ['收案組', '資安組', '營運部'].sort().join('|'));
+  t.eq('32-6 舊版名錄清單沿用原組別並去重', listNotifyGroups_({ emailToGroup: { 'a@x.com': 'A組', 'b@x.com': 'A組' } }).join('|'), 'A組');
+  t.eq('32-7 空名錄', listNotifyGroups_(null).length, 0);
+
+  // 案例 33：與 resolveNotifyGroup_ / collector 整合
+  t.eq('33-1 AE 空白：駐站同仁判定為收案組', resolveNotifyGroup_('', 'sta@x.com', directory, canon), '收案組');
+  t.eq('33-2 AE 仍優先', resolveNotifyGroup_('實驗組', 'sta@x.com', directory, canon), '實驗組');
+  {
+    const sent = [];
+    const collector = createMailCollector_({
+      event: 'transferApply', operatorEmail: 'op@x.com', appUrl: 'https://app',
+      userMailEnabled: true, enabled: true, directory: directory, canonicalize: canon,
+      contacts: parseGroupNotifyContacts_(JSON.stringify({ '收案組': 'cowin@x.com' }), canon),
+      sendMail: function (to, subject) { sent.push(to + '|' + subject); }
+    });
+    const personal = function () { return { subject: 'personal', body: 'b' }; };
+    collector.add({ email: 'sta@x.com', items: [{ assetId: 'P1', assetName: 'N', aeValue: '', kind: 'approve', windowLine: 'P1 line' }], render: personal });
+    collector.add({ email: 'ex@x.com', items: [{ assetId: 'P2', assetName: 'N', aeValue: '', kind: 'notice', windowLine: 'P2 line' }], render: personal });
+    collector.flush();
+    t.eq('33-3 不同駐站同仁的通知合併寄收案組窗口', sent.join(';'),
+      'cowin@x.com|[組別窗口通知][收案組] 財產轉移申請：2 筆（其中 1 筆待接收審核）');
+  }
+
+  return t.result('testNotifyGroupRollup_');
+}
+
 /**
  * GAS 編輯器執行入口：`_` 結尾為私有函式，不會出現在執行選單，故提供此公開包裝。
  * 純函式測試，不讀 Script Properties、不寄信。
  */
 function runGroupNotifyTests() {
-  const suites = [testGroupNotifyRouting_, testNotifyTemplates_, testGroupNotifySettings_];
+  const suites = [testGroupNotifyRouting_, testNotifyTemplates_, testGroupNotifySettings_, testNotifyGroupRollup_];
   let passed = 0;
   const failures = [];
   suites.forEach(suite => {

@@ -39,8 +39,8 @@ function stationCategoryOf_(code) {
 // 同步防呆:HR 在職人數低於此門檻即中止同步,避免上游異常清空白名單
 const HR_SYNC_MIN_HEADCOUNT = 5;
 
-// v2 起 stationGroups 含 managers；升版避免沿用部署連動功能前的舊資料結構。
-const KEEPER_DIRECTORY_CACHE_KEY = 'keeper_directory_v2';
+// v2 起 stationGroups 含 managers；v3 起含 emailToNotifyGroup(駐站通知歸併)。升版避免沿用舊資料結構。
+const KEEPER_DIRECTORY_CACHE_KEY = 'keeper_directory_v3';
 const KEEPER_DIRECTORY_CACHE_SECONDS = 600; // 與白名單快取同為 10 分鐘
 
 /**
@@ -125,7 +125,7 @@ function orgCodeRank_(code) {
 
 /**
  * 從 HR 主表三張工作表組裝人員 directory(不經快取)。
- * @returns {{emailToName:Object, emailToGroup:Object, groupToMembers:Object, custodianEmails:string[], allEmails:string[]}}
+ * @returns {{emailToName:Object, emailToGroup:Object, groupToMembers:Object, emailToNotifyGroup?:Object, custodianEmails:string[], allEmails:string[]}}
  */
 function buildKeeperDirectoryFromHr_() {
   const hrSs = SpreadsheetApp.openById(getHrSpreadsheetId_());
@@ -217,10 +217,22 @@ function buildKeeperDirectoryFromHr_() {
     groupToMembers[groupName].push(email);
   });
 
+  // 5. 通知用組別(spec 2026-10-02):駐站 GRP-CO-* 歸併至 GRP-CO;稀疏表只存與 emailToGroup 不同者,
+  //    僅供通知分流(group_notify.js),同組權限與組別顯示仍用 emailToGroup
+  let emailToNotifyGroup = {};
+  try {
+    emailToNotifyGroup = buildNotifyGroupOverrides_({
+      emailToMainCode: emailToMainCode, codeToOrgName: codeToOrgName, groupNameMap: groupNameMap, emailToGroup: emailToGroup
+    });
+  } catch (e) {
+    Logger.log('⚠️ 通知用組別對照建立失敗(通知分流沿用 HR 組別):' + e.message);
+  }
+
   return {
     emailToName: emailToName,
     emailToGroup: emailToGroup,
     groupToMembers: groupToMembers,
+    emailToNotifyGroup: emailToNotifyGroup,
     custodianEmails: Object.keys(custodianSet),
     allEmails: Object.keys(emailToName),
     stationGroups: stationGroups,
@@ -255,7 +267,7 @@ function buildKeeperDirectoryFromSheetFallback_() {
 /**
  * 人員資料唯一入口(取代散落各處的「保管人/信箱」讀取)。
  * 兩層快取:同請求記憶化 + CacheService 10 分鐘;HR 失敗時回退讀舊表。
- * @returns {{emailToName:Object, emailToGroup:Object, groupToMembers:Object, custodianEmails:string[], allEmails:string[]}}
+ * @returns {{emailToName:Object, emailToGroup:Object, groupToMembers:Object, emailToNotifyGroup?:Object, custodianEmails:string[], allEmails:string[]}}
  */
 function getKeeperDirectory_() {
   if (KEEPER_DIRECTORY_MEMO_) return KEEPER_DIRECTORY_MEMO_;
