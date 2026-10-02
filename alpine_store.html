@@ -217,29 +217,57 @@
                 composing: false,
                 placeholder: cfg.placeholder || '請選擇...',
                 searchPlaceholder: cfg.searchPlaceholder || '搜尋...',
+                // 面板 fixed 浮動：彈窗內容區為 overflow 捲動容器，absolute 面板會撐高捲動區並被外框裁切
+                panelStyle: { position: 'fixed', top: '-9999px', bottom: 'auto', left: '-9999px', width: 'auto', 'z-index': '3000' },
+                listMax: 288,
                 _outsideHandler: null,
+                _repositionHandler: null,
                 get items() {
                     var list = typeof cfg.options === 'function' ? cfg.options() : cfg.options;
                     return Array.isArray(list) ? list : [];
                 },
                 get filtered() { return filterSelectOptions(this.items, this.query, ''); },
-                valueOf: function (item) { return Array.isArray(item) ? item[0] : item; },
+                optValue: function (item) { return Array.isArray(item) ? item[0] : item; },
                 labelOf: function (item) { return Array.isArray(item) ? item[1] : item; },
                 get selectedLabel() {
                     var self = this;
                     if (self.value === '' || self.value == null) return '';
-                    var hit = self.items.find(function (item) { return String(self.valueOf(item)) === String(self.value); });
+                    var hit = self.items.find(function (item) { return String(self.optValue(item)) === String(self.value); });
                     return hit ? String(self.labelOf(hit)) : String(self.value);
                 },
                 toggle: function () { if (this.open) this.close(); else this.openPanel(); },
+                // 依按鈕位置定位；下方放不下（依選項數估算高度，每列約 36px）且上方較寬時改向上展開
+                // （以 bottom 貼齊按鈕，不需量測面板高度）
+                positionPanel: function () {
+                    var btn = this.$refs.button;
+                    if (!btn) return;
+                    var rect = btn.getBoundingClientRect();
+                    var vh = window.innerHeight;
+                    var gap = 4, searchH = 60;
+                    var need = searchH + Math.min(288, (this.filtered.length + 1) * 36 + 8);
+                    var below = vh - rect.bottom - gap - 8;
+                    var above = rect.top - gap - 8;
+                    var up = below < need && above > below;
+                    this.listMax = Math.max(120, Math.min(288, (up ? above : below) - searchH));
+                    this.panelStyle = {
+                        position: 'fixed',
+                        top: up ? 'auto' : (rect.bottom + gap) + 'px',
+                        bottom: up ? (vh - rect.top + gap) + 'px' : 'auto',
+                        left: rect.left + 'px',
+                        width: rect.width + 'px',
+                        'z-index': '3000'
+                    };
+                },
                 openPanel: function () {
                     var self = this;
                     self.query = '';
+                    self.positionPanel();
                     self.open = true;
                     self.$nextTick(function () {
-                        // 彈窗內容區為捲動容器：自動捲到面板可見，避免靠底的選單被遮住
-                        if (self.$refs.panel && self.$refs.panel.scrollIntoView) self.$refs.panel.scrollIntoView({ block: 'nearest' });
-                        if (self.$refs.search) self.$refs.search.focus();
+                        // x-show 以 requestAnimationFrame 延後顯示，聚焦需排在其後；preventScroll 避免捲動彈窗
+                        window.requestAnimationFrame(function () {
+                            if (self.open && self.$refs.search) self.$refs.search.focus({ preventScroll: true });
+                        });
                     });
                 },
                 close: function () { this.open = false; this.query = ''; this.composing = false; },
@@ -254,7 +282,7 @@
                 onEnter: function (e) {
                     if (e && (e.isComposing || e.keyCode === 229)) return;
                     var first = this.filtered[0];
-                    if (first !== undefined) this.pick(this.valueOf(first));
+                    if (first !== undefined) this.pick(this.optValue(first));
                 },
                 init: function () {
                     var self = this;
@@ -262,9 +290,17 @@
                         if (self.open && !self.$root.contains(event.target)) self.close();
                     };
                     document.addEventListener('mousedown', this._outsideHandler);
+                    // 彈窗捲動或視窗縮放時跟隨按鈕重新定位（不收起：手機鍵盤彈出也會觸發）
+                    this._repositionHandler = function () { if (self.open) self.positionPanel(); };
+                    window.addEventListener('scroll', this._repositionHandler, true);
+                    window.addEventListener('resize', this._repositionHandler);
                 },
                 destroy: function () {
                     if (this._outsideHandler) document.removeEventListener('mousedown', this._outsideHandler);
+                    if (this._repositionHandler) {
+                        window.removeEventListener('scroll', this._repositionHandler, true);
+                        window.removeEventListener('resize', this._repositionHandler);
+                    }
                 }
             };
         });
