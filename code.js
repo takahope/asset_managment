@@ -3031,6 +3031,8 @@ function processBatchTransferRollback(assetIds) {
     const appLogLastRow = appLogSheet.getLastRow();
     const appLogLastCol = appLogSheet.getLastColumn();
     const appLogData = appLogSheet.getRange(2, 1, appLogLastRow - 1, appLogLastCol).getValues();
+    // 實驗組成員判定：沿用已讀取的轉移紀錄（spec 2026-10-02）
+    const isLabMemberLazy = email => getLabMemberChecker_(appLogData)(email);
 
     // 針對每一個資產，找出最新一筆狀態為「已完成」的轉移紀錄 (rowIndex = index + 2)
     const assetToLatestCompleted = new Map();
@@ -3061,6 +3063,7 @@ function processBatchTransferRollback(assetIds) {
             newUserEmail: String(row[AL_NEW_USER_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim(),
             applicantEmail: String(row[AL_APPLICANT_EMAIL_COLUMN_INDEX - 1] || '').toLowerCase().trim(),
             transferType: String(row[AL_TRANSFER_TYPE_COLUMN_INDEX - 1] || '').trim(),
+            oldAe: row.length > AL_OLD_AE_COLUMN_INDEX - 1 ? String(row[AL_OLD_AE_COLUMN_INDEX - 1] || '').trim() : '', // 舊紀錄無 S 欄
             reviewTime: reviewTime
           });
         }
@@ -3135,11 +3138,13 @@ function processBatchTransferRollback(assetIds) {
       location.sheet.getRange(location.rowIndex, indices.LEADER_EMAIL).setValue(restoredKeeperEmail);
 
       // 3. 若為財產總表，還原使用人姓名與 Email
+      let restoredUserEmailForAe = '';
       if (location.sheetName === PROPERTY_MASTER_SHEET_NAME) {
         const restoredUserName = logEntry.oldUser || '';
         const restoredUserEmail = restoredUserName ? (nameToEmailMap.get(restoredUserName) || '') : '';
         location.sheet.getRange(location.rowIndex, indices.USER_NAME).setValue(restoredUserName);
         location.sheet.getRange(location.rowIndex, indices.USER_EMAIL).setValue(restoredUserEmail);
+        restoredUserEmailForAe = restoredUserEmail;
       }
 
       // 4. 還原狀態與時間戳記
@@ -3155,6 +3160,20 @@ function processBatchTransferRollback(assetIds) {
       const isStation = isStationLocation_(restoredLocation);
       const isActuallyComputer = indices.IS_ACTUALLY_COMPUTER ? assetRow[indices.IS_ACTUALLY_COMPUTER - 1] === '是' : false;
       location.sheet.getRange(location.rowIndex, indices.IS_COMPUTER).setValue(isStation && isActuallyComputer ? '是' : '');
+
+      // 6b. 還原 AE 欄：優先用申請時記錄的原 AE，部署前舊紀錄才依規則推算（spec 2026-10-02）
+      const rollbackAe = computeRollbackAe_({
+        recordedOldAe: logEntry.oldAe,
+        transferType: logEntry.transferType,
+        restoredKeeperEmail: restoredKeeperEmail,
+        restoredUserEmail: restoredUserEmailForAe,
+        hasUserColumn: location.sheetName === PROPERTY_MASTER_SHEET_NAME,
+        isLabMember: isLabMemberLazy
+      });
+      const aeBeforeRollback = String(asset.defaultGroup == null ? '' : asset.defaultGroup).trim();
+      if (rollbackAe !== null && rollbackAe !== aeBeforeRollback) {
+        location.sheet.getRange(location.rowIndex, indices.DEFAULT_GROUP).setValue(rollbackAe);
+      }
 
       // 7. 更新轉移申請紀錄
       appLogSheet.getRange(logEntry.rowIndex, AL_STATUS_COLUMN_INDEX).setValue('已退回');
