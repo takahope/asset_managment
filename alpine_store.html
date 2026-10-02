@@ -204,6 +204,72 @@
         filterSelectOptions: filterSelectOptions
     };
 
+    /* ============ E2. 可搜尋單選下拉(轉移彈窗用;外觀比照主頁篩選區下拉) ============ */
+    // 用法：<div x-data="searchSelect({ options: function () { return list; }, placeholder, searchPlaceholder })" x-modelable="value" x-model="欄位">
+    // 選項為字串或 [值, 顯示名稱]；只能從清單點選；選定時 $dispatch('search-select-change', 值)
+    document.addEventListener('alpine:init', function () {
+        Alpine.data('searchSelect', function (config) {
+            var cfg = config || {};
+            return {
+                value: '',
+                open: false,
+                query: '',
+                composing: false,
+                placeholder: cfg.placeholder || '請選擇...',
+                searchPlaceholder: cfg.searchPlaceholder || '搜尋...',
+                _outsideHandler: null,
+                get items() {
+                    var list = typeof cfg.options === 'function' ? cfg.options() : cfg.options;
+                    return Array.isArray(list) ? list : [];
+                },
+                get filtered() { return filterSelectOptions(this.items, this.query, ''); },
+                valueOf: function (item) { return Array.isArray(item) ? item[0] : item; },
+                labelOf: function (item) { return Array.isArray(item) ? item[1] : item; },
+                get selectedLabel() {
+                    var self = this;
+                    if (self.value === '' || self.value == null) return '';
+                    var hit = self.items.find(function (item) { return String(self.valueOf(item)) === String(self.value); });
+                    return hit ? String(self.labelOf(hit)) : String(self.value);
+                },
+                toggle: function () { if (this.open) this.close(); else this.openPanel(); },
+                openPanel: function () {
+                    var self = this;
+                    self.query = '';
+                    self.open = true;
+                    self.$nextTick(function () {
+                        // 彈窗內容區為捲動容器：自動捲到面板可見，避免靠底的選單被遮住
+                        if (self.$refs.panel && self.$refs.panel.scrollIntoView) self.$refs.panel.scrollIntoView({ block: 'nearest' });
+                        if (self.$refs.search) self.$refs.search.focus();
+                    });
+                },
+                close: function () { this.open = false; this.query = ''; this.composing = false; },
+                pick: function (v) {
+                    this.value = v;
+                    this.close();
+                    this.$dispatch('search-select-change', v);
+                },
+                // 注音等輸入法組字期間不篩選，選字完成才更新（gas-house-patterns #4）
+                onInput: function (e) { if (this.composing || (e && e.isComposing)) return; this.query = e.target.value; },
+                onCompositionEnd: function (e) { this.composing = false; this.query = e.target.value; },
+                onEnter: function (e) {
+                    if (e && (e.isComposing || e.keyCode === 229)) return;
+                    var first = this.filtered[0];
+                    if (first !== undefined) this.pick(this.valueOf(first));
+                },
+                init: function () {
+                    var self = this;
+                    this._outsideHandler = function (event) {
+                        if (self.open && !self.$root.contains(event.target)) self.close();
+                    };
+                    document.addEventListener('mousedown', this._outsideHandler);
+                },
+                destroy: function () {
+                    if (this._outsideHandler) document.removeEventListener('mousedown', this._outsideHandler);
+                }
+            };
+        });
+    });
+
     /* ============ F. 非反應式 refs(對應舊頁 useRef,不驅動 UI) ============ */
     var refs = {
         viewModeInitialized: false,          // viewModeInitializedRef

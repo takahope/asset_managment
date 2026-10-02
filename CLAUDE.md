@@ -112,10 +112,10 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
-### 2026-10-02 轉移彈窗下拉選單支援關鍵字篩選
-- 需求：單筆／批次轉移彈窗的下拉選單只能捲動挑選，無法輸入關鍵字搜尋；要求最簡易的原生做法。
-- 實作：每個轉移下拉選單（新地點 ×4 模式、新保管人、新使用人、資訊組轉出接收人員、實驗組接收人員、駐管、駐站地點）上方加原生 `<input type="search">`，即時篩選下方原生 `<select>` 的選項；`<select>` 與 `x-model`／`@change`／送出邏輯不變，搜尋框文字永遠不會成為送出值（防誤輸入）。比對不分大小寫、包含即符合，人員同時比對姓名與 Email；目前已選的選項永遠保留，查無結果顯示「查無符合「xxx」的選項」。共用函式 `AppShared.filterSelectOptions`（`alpine_store.html`）；兩個彈窗元件各有 `q`、`filterOpts`、`noMatch`。注音等輸入法組字期間不篩選，`compositionend` 才更新（gas-house-patterns #4）。批次彈窗「一般」「資訊組轉出」地點選單改用去重後的 `uniqueLocations`。出借、報廢彈窗不在範圍內。
-- 驗證：`node scripts/test_select_filter.mjs`（11 項，直接擷取 `alpine_store.html` 實際函式）；搜尋框 class 皆收錄於凍結 Tailwind。檔案：`alpine_store.html`、`alpine_modals_single.html`、`alpine_modals_batch.html`。
+### 2026-10-02 轉移彈窗下拉選單改為可搜尋單選下拉（比照主頁篩選區）
+- 需求：單筆／批次轉移彈窗的下拉選單只能捲動挑選；希望與主頁篩選區下拉一樣，點開後搜尋框就在下拉面板內，輸入關鍵字即時看到篩選結果。
+- 實作：新增共用 Alpine 元件 `searchSelect`（`alpine_store.html` E2 節，`x-modelable="value"` + 外部 `x-model`，選項為字串或 `[值, 顯示名稱]`），取代 20 個原生 `<select>`（新地點 ×4 模式、新保管人、新使用人、資訊組轉出接收人員、實驗組接收人員、駐管、駐站地點）。按鈕顯示已選名稱；點開浮出面板，頂部搜尋框自動聚焦，即時篩選（`AppShared.filterSelectOptions`：不分大小寫、包含即符合、人員比對姓名與 Email），查無顯示「查無符合「xxx」的選項」；最上列「請選擇…」可清除；選定／Esc／點外部收起並清空搜尋；開啟時 `scrollIntoView` 避免靠底面板被彈窗捲動區遮住。只能點選清單項目（搜尋文字不會成為送出值）；注音組字期間不篩選、組字中 Enter 不選取（gas-house-patterns #4），Enter 選第一筆符合項。駐管／駐站連動改由 `@search-select-change` 事件觸發原 handler。凍結 Tailwind 未收錄 `border-blue-500`/`ring-blue-500`/`focus:ring-1`/`max-h-60`/`hover:border-slate-400`（主頁篩選下拉亦使用前者，屬既有缺漏），本元件改用已收錄的 `border-blue-400 ring-1 ring-blue-200`、`focus:ring-2`、`max-h-72`、`hover:bg-slate-50`。出借、報廢彈窗不在範圍內。
+- 驗證：`node scripts/test_select_filter.mjs`（篩選 11 項 + 元件 21 項，皆擷取 `alpine_store.html` 實際程式碼）。檔案：`alpine_store.html`、`alpine_modals_single.html`、`alpine_modals_batch.html`。
 
 ### 2026-10-02 轉出實驗組時移除 AE（預設組別）與退回還原
 - 需求：AE＝實驗組 的資產轉給組外後 AE 殘留，造成實驗組仍具資產歸屬軌權限（可代為轉移／出借／報廢）、首頁組別顯示錯誤、盤點誤分派與通知誤寄；退回轉移也不還原 AE。

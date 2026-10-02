@@ -23,13 +23,6 @@ document.addEventListener('alpine:init', function () {
             custodianEmail: '',
             stationLocation: '',
             isSubmitting: false,
-            q: { location: '', keeper: '', user: '', infoOut: '', lab: '', custodian: '', station: '' }, // 下拉選單關鍵字篩選
-            filterOpts: function (list, query, selected) { return S.filterSelectOptions(list, query, selected); },
-            noMatch: function (list, query) { return String(query || '').trim() !== '' && S.filterSelectOptions(list, query, '').length === 0; },
-            // 注音等輸入法組字期間不篩選，選字完成才更新（gas-house-patterns #4）
-            composingSearch: false,
-            onSearchInput: function (key, e) { if (this.composingSearch || (e && e.isComposing)) return; this.q[key] = e.target.value; },
-            onSearchCompositionEnd: function (key, e) { this.composingSearch = false; this.q[key] = e.target.value; },
 
             get asset() { return this.$store.app.selectedAsset; },
             get options() { return this.$store.app.transferOptions; },
@@ -552,14 +545,30 @@ document.addEventListener('alpine:init', function () {
                             </label>
                             <template x-if="changeLocation">
                                 <div>
-                                    <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
-                                    <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">請選擇新地點...</option>
-                                        <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc">
-                                            <option :value="loc" x-text="loc"></option>
-                                        </template>
-                                    </select>
+                                    <div x-data="searchSelect({ options: function () { return uniqueLocations; }, placeholder: '請選擇新地點...', searchPlaceholder: '搜尋地點...' })" x-modelable="value" x-model="newLocation" class="relative">
+                                        <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                            <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                            <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                        </button>
+                                        <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                            <div class="p-2 border-b border-slate-100 bg-white">
+                                                <div class="relative">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                    <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            <div class="max-h-72 overflow-y-auto p-1">
+                                                <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                                <template x-for="item in filtered" :key="valueOf(item)">
+                                                    <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                        <span class="flex-1" x-text="labelOf(item)"></span>
+                                                        <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                    </div>
+                                                </template>
+                                                <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
                         </div>
@@ -570,14 +579,30 @@ document.addEventListener('alpine:init', function () {
                             </label>
                             <template x-if="changeKeeper">
                                 <div>
-                                    <input type="search" :value="q.keeper" @input="onSearchInput('keeper', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('keeper', $event)" placeholder="輸入姓名或 Email 篩選保管人…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <p x-show="noMatch(availableKeepers, q.keeper)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.keeper.trim() + '」的選項'"></p>
-                                    <select x-model="newKeeperEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">請選擇新保管人...</option>
-                                        <template x-for="entry in filterOpts(availableKeepers, q.keeper, newKeeperEmail)" :key="entry[0]">
-                                            <option :value="entry[0]" x-text="entry[1]"></option>
-                                        </template>
-                                    </select>
+                                    <div x-data="searchSelect({ options: function () { return availableKeepers; }, placeholder: '請選擇新保管人...', searchPlaceholder: '搜尋姓名或 Email...' })" x-modelable="value" x-model="newKeeperEmail" class="relative">
+                                        <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                            <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                            <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                        </button>
+                                        <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                            <div class="p-2 border-b border-slate-100 bg-white">
+                                                <div class="relative">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                    <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            <div class="max-h-72 overflow-y-auto p-1">
+                                                <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                                <template x-for="item in filtered" :key="valueOf(item)">
+                                                    <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                        <span class="flex-1" x-text="labelOf(item)"></span>
+                                                        <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                    </div>
+                                                </template>
+                                                <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
                         </div>
@@ -588,14 +613,30 @@ document.addEventListener('alpine:init', function () {
                             </label>
                             <template x-if="changeUser">
                                 <div>
-                                    <input type="search" :value="q.user" @input="onSearchInput('user', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('user', $event)" placeholder="輸入姓名或 Email 篩選使用人…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <p x-show="noMatch(availableUsers, q.user)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.user.trim() + '」的選項'"></p>
-                                    <select x-model="newUserEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">請選擇新使用人...</option>
-                                        <template x-for="entry in filterOpts(availableUsers, q.user, newUserEmail)" :key="entry[0]">
-                                            <option :value="entry[0]" x-text="entry[1]"></option>
-                                        </template>
-                                    </select>
+                                    <div x-data="searchSelect({ options: function () { return availableUsers; }, placeholder: '請選擇新使用人...', searchPlaceholder: '搜尋姓名或 Email...' })" x-modelable="value" x-model="newUserEmail" class="relative">
+                                        <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                            <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                            <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                        </button>
+                                        <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                            <div class="p-2 border-b border-slate-100 bg-white">
+                                                <div class="relative">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                    <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            <div class="max-h-72 overflow-y-auto p-1">
+                                                <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                                <template x-for="item in filtered" :key="valueOf(item)">
+                                                    <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                        <span class="flex-1" x-text="labelOf(item)"></span>
+                                                        <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                    </div>
+                                                </template>
+                                                <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
                         </div>
@@ -611,27 +652,59 @@ document.addEventListener('alpine:init', function () {
                             <label class="block text-sm font-medium text-slate-700 mb-2">
                                 接收人員（保管人兼使用人）：<span class="text-red-600">*</span>
                             </label>
-                            <input type="search" :value="q.infoOut" @input="onSearchInput('infoOut', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('infoOut', $event)" placeholder="輸入姓名或 Email 篩選接收人員…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p x-show="noMatch(availableKeepers, q.infoOut)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.infoOut.trim() + '」的選項'"></p>
-                            <select x-model="infoOutTargetEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="">請選擇接收人員...</option>
-                                <template x-for="entry in filterOpts(availableKeepers, q.infoOut, infoOutTargetEmail)" :key="entry[0]">
-                                    <option :value="entry[0]" x-text="entry[1]"></option>
-                                </template>
-                            </select>
+                            <div x-data="searchSelect({ options: function () { return availableKeepers; }, placeholder: '請選擇接收人員...', searchPlaceholder: '搜尋姓名或 Email...' })" x-modelable="value" x-model="infoOutTargetEmail" class="relative">
+                                <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                    <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                    <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                </button>
+                                <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                    <div class="p-2 border-b border-slate-100 bg-white">
+                                        <div class="relative">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                            <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                    </div>
+                                    <div class="max-h-72 overflow-y-auto p-1">
+                                        <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                        <template x-for="item in filtered" :key="valueOf(item)">
+                                            <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                <span class="flex-1" x-text="labelOf(item)"></span>
+                                                <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                            </div>
+                                        </template>
+                                        <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">
                                 新存置地點（選填，未選則保留原地點）：
                             </label>
-                            <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
-                            <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="">請選擇新地點（未選擇則保留原地點）...</option>
-                                <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc">
-                                    <option :value="loc" x-text="loc"></option>
-                                </template>
-                            </select>
+                            <div x-data="searchSelect({ options: function () { return uniqueLocations; }, placeholder: '請選擇新地點（未選擇則保留原地點）...', searchPlaceholder: '搜尋地點...' })" x-modelable="value" x-model="newLocation" class="relative">
+                                <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                    <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                    <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                </button>
+                                <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                    <div class="p-2 border-b border-slate-100 bg-white">
+                                        <div class="relative">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                            <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        </div>
+                                    </div>
+                                    <div class="max-h-72 overflow-y-auto p-1">
+                                        <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                        <template x-for="item in filtered" :key="valueOf(item)">
+                                            <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                <span class="flex-1" x-text="labelOf(item)"></span>
+                                                <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                            </div>
+                                        </template>
+                                        <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -660,27 +733,59 @@ document.addEventListener('alpine:init', function () {
                                     <label class="block text-sm font-medium text-slate-700 mb-2">
                                         接收人員（限實驗組成員）：<span class="text-red-600">*</span>
                                     </label>
-                                    <input type="search" :value="q.lab" @input="onSearchInput('lab', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('lab', $event)" placeholder="輸入姓名或 Email 篩選實驗組接收人員…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <p x-show="noMatch(availableLabKeepers, q.lab)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.lab.trim() + '」的選項'"></p>
-                                    <select x-model="labTargetEmail" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">請選擇實驗組接收人員...</option>
-                                        <template x-for="entry in filterOpts(availableLabKeepers, q.lab, labTargetEmail)" :key="entry[0]">
-                                            <option :value="entry[0]" x-text="entry[1]"></option>
-                                        </template>
-                                    </select>
+                                    <div x-data="searchSelect({ options: function () { return availableLabKeepers; }, placeholder: '請選擇實驗組接收人員...', searchPlaceholder: '搜尋姓名或 Email...' })" x-modelable="value" x-model="labTargetEmail" class="relative">
+                                        <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                            <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                            <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                        </button>
+                                        <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                            <div class="p-2 border-b border-slate-100 bg-white">
+                                                <div class="relative">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                    <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            <div class="max-h-72 overflow-y-auto p-1">
+                                                <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                                <template x-for="item in filtered" :key="valueOf(item)">
+                                                    <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                        <span class="flex-1" x-text="labelOf(item)"></span>
+                                                        <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                    </div>
+                                                </template>
+                                                <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-2">
                                         新存置地點（選填，未選則保留原地點）：
                                     </label>
-                                    <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
-                                    <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">請選擇新地點（未選擇則保留原地點）...</option>
-                                        <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc">
-                                            <option :value="loc" x-text="loc"></option>
-                                        </template>
-                                    </select>
+                                    <div x-data="searchSelect({ options: function () { return uniqueLocations; }, placeholder: '請選擇新地點（未選擇則保留原地點）...', searchPlaceholder: '搜尋地點...' })" x-modelable="value" x-model="newLocation" class="relative">
+                                        <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                            <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                            <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                        </button>
+                                        <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                            <div class="p-2 border-b border-slate-100 bg-white">
+                                                <div class="relative">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                    <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            <div class="max-h-72 overflow-y-auto p-1">
+                                                <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                                <template x-for="item in filtered" :key="valueOf(item)">
+                                                    <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                        <span class="flex-1" x-text="labelOf(item)"></span>
+                                                        <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                    </div>
+                                                </template>
+                                                <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -708,14 +813,30 @@ document.addEventListener('alpine:init', function () {
                                     <label class="block text-sm font-medium text-slate-700 mb-2">
                                         新存置地點（選填，未選則保留原地點）：
                                     </label>
-                                    <input type="search" :value="q.location" @input="onSearchInput('location', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('location', $event)" placeholder="輸入關鍵字篩選地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <p x-show="noMatch(uniqueLocations, q.location)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.location.trim() + '」的選項'"></p>
-                                    <select x-model="newLocation" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">請選擇新地點（未選擇則保留原地點）...</option>
-                                        <template x-for="loc in filterOpts(uniqueLocations, q.location, newLocation)" :key="loc">
-                                            <option :value="loc" x-text="loc"></option>
-                                        </template>
-                                    </select>
+                                    <div x-data="searchSelect({ options: function () { return uniqueLocations; }, placeholder: '請選擇新地點（未選擇則保留原地點）...', searchPlaceholder: '搜尋地點...' })" x-modelable="value" x-model="newLocation" class="relative">
+                                        <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                            <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                            <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                        </button>
+                                        <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                            <div class="p-2 border-b border-slate-100 bg-white">
+                                                <div class="relative">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                    <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </div>
+                                            <div class="max-h-72 overflow-y-auto p-1">
+                                                <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                                <template x-for="item in filtered" :key="valueOf(item)">
+                                                    <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                        <span class="flex-1" x-text="labelOf(item)"></span>
+                                                        <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                    </div>
+                                                </template>
+                                                <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -732,27 +853,59 @@ document.addEventListener('alpine:init', function () {
                                 <label class="block text-sm font-medium text-slate-700 mb-2">
                                     轉移給駐管：<span class="text-red-600">*</span>
                                 </label>
-                                <input type="search" :value="q.custodian" @input="onSearchInput('custodian', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('custodian', $event)" placeholder="輸入姓名或 Email 篩選駐管…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <p x-show="noMatch(availableCustodians, q.custodian)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.custodian.trim() + '」的選項'"></p>
-                                <select x-model="custodianEmail" @change="handleCustodianChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="">請選擇駐管...</option>
-                                    <template x-for="entry in filterOpts(availableCustodians, q.custodian, custodianEmail)" :key="entry[0]">
-                                        <option :value="entry[0]" x-text="entry[1]"></option>
-                                    </template>
-                                </select>
+                                <div x-data="searchSelect({ options: function () { return availableCustodians; }, placeholder: '請選擇駐管...', searchPlaceholder: '搜尋姓名或 Email...' })" x-modelable="value" x-model="custodianEmail" @search-select-change="handleCustodianChange($event.detail)" class="relative">
+                                    <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                        <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                    </button>
+                                    <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                        <div class="p-2 border-b border-slate-100 bg-white">
+                                            <div class="relative">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            </div>
+                                        </div>
+                                        <div class="max-h-72 overflow-y-auto p-1">
+                                            <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                            <template x-for="item in filtered" :key="valueOf(item)">
+                                                <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                    <span class="flex-1" x-text="labelOf(item)"></span>
+                                                    <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                </div>
+                                            </template>
+                                            <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">
                                     駐站地點：<span class="text-red-600">*</span>
                                 </label>
-                                <input type="search" :value="q.station" @input="onSearchInput('station', $event)" @compositionstart="composingSearch = true" @compositionend="onSearchCompositionEnd('station', $event)" placeholder="輸入關鍵字篩選駐站地點…" class="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <p x-show="noMatch(availableStationLocations, q.station)" style="display: none;" class="text-xs text-amber-600 mb-2" x-text="'查無符合「' + q.station.trim() + '」的選項'"></p>
-                                <select x-model="stationLocation" @change="handleStationChange($event.target.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="">請選擇駐站地點...</option>
-                                    <template x-for="loc in filterOpts(availableStationLocations, q.station, stationLocation)" :key="loc">
-                                        <option :value="loc" x-text="loc"></option>
-                                    </template>
-                                </select>
+                                <div x-data="searchSelect({ options: function () { return availableStationLocations; }, placeholder: '請選擇駐站地點...', searchPlaceholder: '搜尋駐站地點...' })" x-modelable="value" x-model="stationLocation" @search-select-change="handleStationChange($event.detail)" class="relative">
+                                    <button type="button" @click="toggle()" class="flex items-center justify-between gap-2 w-full px-3 py-2 border rounded-lg text-sm bg-white transition-colors text-left" :class="open ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-300 hover:bg-slate-50'">
+                                        <span class="truncate flex-1" :class="value ? 'text-slate-800' : 'text-slate-400'" x-text="selectedLabel || placeholder"></span>
+                                        <i class="fa-solid fa-chevron-down text-slate-400 text-[10px] transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                                    </button>
+                                    <div x-show="open" x-ref="panel" style="display: none;" class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-xl">
+                                        <div class="p-2 border-b border-slate-100 bg-white">
+                                            <div class="relative">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                <input type="text" x-ref="search" :value="query" @input="onInput($event)" @compositionstart="composing = true" @compositionend="onCompositionEnd($event)" @keydown.escape.prevent.stop="close()" @keydown.enter.prevent="onEnter($event)" :placeholder="searchPlaceholder" class="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            </div>
+                                        </div>
+                                        <div class="max-h-72 overflow-y-auto p-1">
+                                            <div x-show="!query.trim()" @click="pick('')" class="px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm text-slate-400" x-text="placeholder"></div>
+                                            <template x-for="item in filtered" :key="valueOf(item)">
+                                                <div @click="pick(valueOf(item))" class="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-slate-50 text-sm" :class="valueOf(item) === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700'">
+                                                    <span class="flex-1" x-text="labelOf(item)"></span>
+                                                    <i class="fa-solid fa-check text-blue-600 text-xs" x-show="valueOf(item) === value"></i>
+                                                </div>
+                                            </template>
+                                            <div x-show="filtered.length === 0" class="py-4 text-center text-sm text-slate-500" x-text="'查無符合「' + query.trim() + '」的選項'"></div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
