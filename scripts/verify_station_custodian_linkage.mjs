@@ -89,7 +89,8 @@ async function verifyOldDirectoryCacheIsIgnored() {
     email: linkedCustodianEmail,
     name: '站點管理人'
   }], '部署雙向連動後，舊 schema 的 directory 快取不可再被讀取');
-  assert.deepEqual(cacheReads, ['keeper_directory_v2']);
+  // 2026-10-02 名錄新增 emailToNotifyGroup（駐站歸併收案組），快取鍵升為 v3
+  assert.deepEqual(cacheReads, ['keeper_directory_v3']);
 }
 
 await verifyTransferOptionsIncludeLinkedCustodians();
