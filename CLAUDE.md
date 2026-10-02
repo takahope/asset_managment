@@ -112,6 +112,16 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
+### 2026-10-02 轉出實驗組時移除 AE（預設組別）與退回還原
+- 需求：AE＝實驗組 的資產轉給組外後 AE 殘留，造成實驗組仍具資產歸屬軌權限（可代為轉移／出借／報廢）、首頁組別顯示錯誤、盤點誤分派與通知誤寄；退回轉移也不還原 AE。
+- 規則（`lab_default_group.js`，申請預測／審核寫入／退回還原／清理共用）：類型含「轉移實驗組」→ 實驗組；目前 AE 為實驗組且新保管人與（財產總表）實際新使用人皆非實驗組成員 → 清空；其餘不變。實驗組成員 = HR 實驗組 ∪ 公用帳號（`LAB_COMMON_CUSTODIAN_EMAIL` ∪ 轉移紀錄中「轉移實驗組(共同)」歷任新保管人）。公用帳號為 CEO 主職的同仁帳號，HR 判定為執行長，故必須明確納入。
+- 實作：
+  1. `code.js`：新增 `AL_OLD_AE_COLUMN_INDEX = 19`（S 欄「原預設組別(AE)」，空白寫「（空白）」；`ensureAppLogOldAeColumn_` 自動補欄位與表頭）；`processBatchTransferApplication` 記錄原 AE 並以新規則預測新方 AE；`processBatchApproval` 以 `computePostTransferAe_` 寫入（僅值改變時），部署前送出、S 欄為空的申請於審核時先回填審核前 AE；`processBatchTransferRollback` 以 `computeRollbackAe_` 還原（S 欄仍為空的舊紀錄：實驗組類型依還原者判斷，其他類型不動）。
+  2. `group_notify.js`：`resolvePostTransferAe_` 改委派 `computePostTransferAe_`。
+  3. 清理工具：GAS 編輯器執行 `previewLabAeCleanup()` 預覽、`applyLabAeCleanup()` 只清「保管人與使用人皆 HR 在職且非實驗組」者；「需人工確認」不自動修改；名錄人數低於 5 時中止；兩者皆需管理員。
+- 驗證：`node scripts/test_lab_default_group.mjs`（41 項 + 整合）、`node scripts/test_group_notify.mjs`；GAS 編輯器執行 `runLabDefaultGroupTests()`。
+- 未處理（後續）：「執行長」組其他成員對共同財產的同組權限（人員保管軌）；更換公用帳號時舊帳號資產移轉；一般轉移是否自動加 AE。
+
 ### 2026-10-02 組別窗口通知：駐站（GRP-CO-*）歸併至收案組（GRP-CO）
 - 需求：組別窗口候選清單與通知分流把每個駐站（`GRP-CO-*`、`GRP-CO-EX-*`、`GRP-CO-protable-*`）當成獨立組別，需逐站設窗口；希望 `GRP-*-*` 一律視為其上層 `GRP-*`（實務上只有駐站，上層 `GRP-CO` = 收案組）。
 - 範圍：**只影響通知分流**；同組協作權限（`getGroupMemberEmails`）、組別顯示、「保管人/信箱」同步表與子專案仍用 HR 主職原組別（`emailToGroup`）。
