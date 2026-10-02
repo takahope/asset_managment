@@ -8,7 +8,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FILES = ['group_notify.js', 'notify_templates.js', 'group_notify_test.js'];
+const FILES = ['group_notify.js', 'lab_default_group.js', 'notify_templates.js', 'group_notify_test.js'];
 const SUITES = ['testGroupNotifyRouting_', 'testNotifyTemplates_', 'testGroupNotifySettings_', 'testNotifyGroupRollup_', 'runGroupNotifyTests'];
 
 function loadContext(props, directory) {

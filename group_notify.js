@@ -171,12 +171,11 @@ function listNotifyGroups_(directory) {
 }
 
 /**
- * 預測轉移後 AE 欄（新方組別判定用）。
- * 轉出實驗組移除 AE 尚未實作（spec §12），補上時只需改此函式與審核時的 AE 寫入。
+ * 預測轉移後 AE 欄（新方組別判定用）；規則委派 lab_default_group.js 的 computePostTransferAe_。
+ * @param {Object} [ctx] { newKeeperEmail, newUserEmail, hasUserColumn, isLabMember, canonicalize }；省略時不判斷轉出
  */
-function resolvePostTransferAe_(currentAe, transferType) {
-  if (String(transferType || '').indexOf('轉移實驗組') !== -1) return '實驗組';
-  return String(currentAe || '').trim();
+function resolvePostTransferAe_(currentAe, transferType, ctx) {
+  return computePostTransferAe_(Object.assign({ currentAe: currentAe, transferType: transferType }, ctx || {}));
 }
 
 /**
