@@ -87,6 +87,10 @@ function testLabDefaultGroup_() {
     rb({ recordedOldAe: '', transferType: '轉移實驗組(共同)', restoredKeeperEmail: 'out@x.com', restoredUserEmail: 'out2@x.com' }), '');
   t.eq('43-6 舊紀錄＋他類型不改動',
     rb({ recordedOldAe: '', transferType: '保管人+使用人', restoredKeeperEmail: 'out@x.com' }), null);
+  t.eq('43-8 舊紀錄＋實驗組類型＋還原保管人未知 → 不改動',
+    rb({ recordedOldAe: '', transferType: '轉移實驗組(個人)', restoredKeeperEmail: '', restoredUserEmail: '' }), null);
+  t.eq('43-9 舊紀錄＋實驗組類型＋保管人未知但使用人為成員 → 實驗組',
+    rb({ recordedOldAe: '', transferType: '轉移實驗組(個人)', restoredKeeperEmail: '', restoredUserEmail: 'lab1@x.com' }), '實驗組');
   t.eq('43-7 encodeOldAeForLog_',
     encodeOldAeForLog_('') + '|' + encodeOldAeForLog_(null) + '|' + encodeOldAeForLog_(' 實驗組 '), '（空白）|（空白）|實驗組');
 
@@ -109,6 +113,16 @@ function testLabDefaultGroup_() {
     cls({ hasUserColumn: false, keeperEmail: 'out@x.com', userEmail: 'lab1@x.com' }) + '|' +
     cls({ hasUserColumn: false, keeperEmail: 'lab1@x.com' }), 'remove|ok');
   t.eq('44-11 AE 別名辨識', cls({ ae: ' 實驗室組 ', keeperEmail: 'out@x.com', userEmail: 'out2@x.com' }), 'remove');
+
+  // 案例 46：isLabDirectoryHealthy_（HR 組別對照失效防護）
+  const fiveEmails = ['a@x.com', 'b@x.com', 'c@x.com', 'd@x.com', 'e@x.com'];
+  t.eq('46-1 人數達門檻且有實驗組（含別名）',
+    isLabDirectoryHealthy_({ emailToGroup: { 'a@x.com': '實驗室組' }, allEmails: fiveEmails }, canon), true);
+  t.eq('46-2 人數不足',
+    isLabDirectoryHealthy_({ emailToGroup: { 'a@x.com': '實驗組' }, allEmails: ['a@x.com'] }, canon), false);
+  t.eq('46-3 無人屬實驗組',
+    isLabDirectoryHealthy_({ emailToGroup: { 'a@x.com': 'B組' }, allEmails: fiveEmails }, canon), false);
+  t.eq('46-4 null', isLabDirectoryHealthy_(null, canon), false);
 
   // 案例 45：與通知分流 resolvePostTransferAe_ 銜接
   t.eq('45-1 未傳 ctx 維持舊行為', resolvePostTransferAe_('實驗組', '保管人+使用人'), '實驗組');

@@ -1959,7 +1959,7 @@ function processBatchTransferApplication(formData) {
     const newLogsToAdd = [];
     const createdApplications = [];
     // 實驗組成員判定（惰性：只有 AE＝實驗組 且非實驗組轉移時才讀轉移紀錄，spec 2026-10-02）
-    const isLabMemberLazy = email => getLabMemberChecker_()(email);
+    const isLabMemberLazy = makeLazyLabMemberChecker_();
     const unauthorizedAssets = []; // 🛡️ 安全性修復：收集無權限的資產
 
     assetIds.forEach(assetId => {
@@ -2584,7 +2584,7 @@ function processBatchApproval(appIds) {
     // 📧 審核完成通知改經 collector，依「只通知組別窗口」設定分流（spec 2026-10-01）
     notifyCollector = createMailCollector_({ event: 'transferApproval', operatorEmail: currentUserEmail, appUrl: getAppUrl() });
     // 實驗組成員判定：沿用已讀取的整份轉移紀錄推得歷任公用帳號（spec 2026-10-02）
-    const isLabMemberLazy = email => getLabMemberChecker_(appLogData)(email);
+    const isLabMemberLazy = makeLazyLabMemberChecker_(appLogData);
     let appLogOldAeColumnReady = false; // 舊紀錄回填 S 欄前確保欄位存在（每次審核至多一次）
 
     appIds.forEach(appId => {
@@ -2675,7 +2675,8 @@ function processBatchApproval(appIds) {
 
           // ✨ AE 欄（DEFAULT_GROUP）：轉入實驗組寫入「實驗組」、轉出實驗組清空（與申請時預測共用規則，spec 2026-10-02）
           const aeCell = location.sheet.getRange(location.rowIndex, indices.DEFAULT_GROUP);
-          const currentAe = String(aeCell.getValue() == null ? '' : aeCell.getValue()).trim();
+          const aeRaw = aeCell.getValue();
+          const currentAe = String(aeRaw == null ? '' : aeRaw).trim();
           // 部署前送出的申請沒有 S 欄：審核當下回填原 AE，退回時才能還原
           const recordedOldAe = appDetails.row.length > AL_OLD_AE_COLUMN_INDEX - 1
             ? String(appDetails.row[AL_OLD_AE_COLUMN_INDEX - 1] || '').trim()
@@ -3032,7 +3033,7 @@ function processBatchTransferRollback(assetIds) {
     const appLogLastCol = appLogSheet.getLastColumn();
     const appLogData = appLogSheet.getRange(2, 1, appLogLastRow - 1, appLogLastCol).getValues();
     // 實驗組成員判定：沿用已讀取的轉移紀錄（spec 2026-10-02）
-    const isLabMemberLazy = email => getLabMemberChecker_(appLogData)(email);
+    const isLabMemberLazy = makeLazyLabMemberChecker_(appLogData);
 
     // 針對每一個資產，找出最新一筆狀態為「已完成」的轉移紀錄 (rowIndex = index + 2)
     const assetToLatestCompleted = new Map();

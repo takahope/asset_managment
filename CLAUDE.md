@@ -115,11 +115,12 @@ return {
 ### 2026-10-02 轉出實驗組時移除 AE（預設組別）與退回還原
 - 需求：AE＝實驗組 的資產轉給組外後 AE 殘留，造成實驗組仍具資產歸屬軌權限（可代為轉移／出借／報廢）、首頁組別顯示錯誤、盤點誤分派與通知誤寄；退回轉移也不還原 AE。
 - 規則（`lab_default_group.js`，申請預測／審核寫入／退回還原／清理共用）：類型含「轉移實驗組」→ 實驗組；目前 AE 為實驗組且新保管人與（財產總表）實際新使用人皆非實驗組成員 → 清空；其餘不變。實驗組成員 = HR 實驗組 ∪ 公用帳號（`LAB_COMMON_CUSTODIAN_EMAIL` ∪ 轉移紀錄中「轉移實驗組(共同)」歷任新保管人）。公用帳號為 CEO 主職的同仁帳號，HR 判定為執行長，故必須明確納入。
+- 防護：HR 名錄人數低於 5 或無人屬實驗組（組別對照失效）時，成員判定一律視為成員，審核／退回不移除 AE、清理工具直接中止；成員判定建立失敗時同樣視為成員並記錄（`makeLazyLabMemberChecker_`）。
 - 實作：
-  1. `code.js`：新增 `AL_OLD_AE_COLUMN_INDEX = 19`（S 欄「原預設組別(AE)」，空白寫「（空白）」；`ensureAppLogOldAeColumn_` 自動補欄位與表頭）；`processBatchTransferApplication` 記錄原 AE 並以新規則預測新方 AE；`processBatchApproval` 以 `computePostTransferAe_` 寫入（僅值改變時），部署前送出、S 欄為空的申請於審核時先回填審核前 AE；`processBatchTransferRollback` 以 `computeRollbackAe_` 還原（S 欄仍為空的舊紀錄：實驗組類型依還原者判斷，其他類型不動）。
+  1. `code.js`：新增 `AL_OLD_AE_COLUMN_INDEX = 19`（S 欄「原預設組別(AE)」，空白寫「（空白）」；`ensureAppLogOldAeColumn_` 自動補欄位與表頭；`deploy.js` 的 `APPLICATION_LOG_HEADERS` 同步補第 19 欄）；`processBatchTransferApplication` 記錄原 AE 並以新規則預測新方 AE；`processBatchApproval` 以 `computePostTransferAe_` 寫入（僅值改變時），部署前送出、S 欄為空的申請於審核時先回填審核前 AE；`processBatchTransferRollback` 以 `computeRollbackAe_` 還原（S 欄仍為空的舊紀錄：實驗組類型依還原者判斷、還原保管人未知則不動，其他類型不動）。
   2. `group_notify.js`：`resolvePostTransferAe_` 改委派 `computePostTransferAe_`。
-  3. 清理工具：GAS 編輯器執行 `previewLabAeCleanup()` 預覽、`applyLabAeCleanup()` 只清「保管人與使用人皆 HR 在職且非實驗組」者；「需人工確認」不自動修改；名錄人數低於 5 時中止；兩者皆需管理員。
-- 驗證：`node scripts/test_lab_default_group.mjs`（41 項 + 整合）、`node scripts/test_group_notify.mjs`；GAS 編輯器執行 `runLabDefaultGroupTests()`。
+  3. 清理工具：GAS 編輯器執行 `previewLabAeCleanup()` 預覽、`applyLabAeCleanup()` 只清「保管人與（財產總表）使用人皆 HR 在職且非實驗組」者，「轉移中」「已報廢」略過，寫入前以最新整列重新判定並核對所在總表；「需人工確認」不自動修改；兩者皆需管理員。
+- 驗證：`node scripts/test_lab_default_group.mjs`（47 項 + 整合）、`node scripts/test_group_notify.mjs`；GAS 編輯器執行 `runLabDefaultGroupTests()`。
 - 未處理（後續）：「執行長」組其他成員對共同財產的同組權限（人員保管軌）；更換公用帳號時舊帳號資產移轉；一般轉移是否自動加 AE。
 
 ### 2026-10-02 組別窗口通知：駐站（GRP-CO-*）歸併至收案組（GRP-CO）
@@ -140,7 +141,7 @@ return {
   3. `code.js`：`processBatchTransferApplication`、`processBatchApproval`、`processBatchScrapping` 改 `collector.add()` + `flush()`，結果訊息附「（通知已依設定改寄：X組窗口）」；`processBatchApproval` 迴圈中途拋錯時於 catch 仍送出已排入的通知（維持舊版逐筆即時寄出的語意）；`getSystemSettings`/`saveSystemSettings` 新增欄位（窗口 Email 先驗證後寫入）。
   4. `alpine_model_setting.html`：「通知與信箱」分頁新增「組別窗口通知」卡片（開關「只通知組別窗口」＋逐組窗口清單）；清單用具名 scoped CSS（凍結 Tailwind 未收錄 `max-h-[300px]`/`w-1/2` 等）。
 - 驗證：`node scripts/test_group_notify.mjs`（路由 59／範本 27／設定 5 + 整合/效能）、`node scripts/verify_group_notify_ui_classes.mjs`；GAS 編輯器執行公開入口 `runGroupNotifyTests()`（`_` 結尾的套件為私有函式，不會出現在執行選單）。
-- 已知限制：轉出實驗組尚未移除 AE，實驗組資產轉給組外同仁後通知仍寄實驗組窗口；待另開 spec 修改 `resolvePostTransferAe_` 與 `code.js` 審核 AE 寫入。
+- 已知限制：轉出實驗組尚未移除 AE，實驗組資產轉給組外同仁後通知仍寄實驗組窗口；待另開 spec 修改 `resolvePostTransferAe_` 與 `code.js` 審核 AE 寫入。（已於 2026-10-02 處理，見「轉出實驗組時移除 AE」條目）
 - 附帶發現（未修）：HR 分頁「組別名稱轉換表」清單使用的 `max-h-[300px]`、`w-1/2`、`divide-slate-200`、`hover:bg-white`、`mx-3` 未收錄於凍結 Tailwind。
 
 ### 2026-09-15 效能嚴重退化修復：消除資產迴圈內 PropertiesService RPC 呼叫（userStateMs 129.6s → 82.9s → <10ms）

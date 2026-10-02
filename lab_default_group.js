@@ -48,6 +48,13 @@ function buildLabMemberChecker_(src) {
   };
 }
 
+/** HR 名錄是否足以判定實驗組成員：人數達門檻且至少一人 HR 組別為實驗組（防組別對照失效時誤刪 AE） */
+function isLabDirectoryHealthy_(directory, canonicalize) {
+  if (!directory || !directory.allEmails || directory.allEmails.length < HR_SYNC_MIN_HEADCOUNT) return false;
+  const groups = directory.emailToGroup || {};
+  return Object.keys(groups).some(email => isLabGroupName_(groups[email], canonicalize));
+}
+
 /** 保管人或（有使用人欄時）實際使用人是否為成員；使用人空白視為保管人 */
 function labPartiesIncludeMember_(keeperEmail, userEmail, hasUserColumn, isLabMember) {
   if (isLabMember(keeperEmail)) return true;
@@ -86,9 +93,11 @@ function computeRollbackAe_(p) {
   if (recorded) return recorded;
   if (String(o.transferType || '').indexOf(LAB_TRANSFER_TYPE_MARK_) === -1) return null;
   if (typeof o.isLabMember !== 'function') return null;
-  return labPartiesIncludeMember_(o.restoredKeeperEmail, o.restoredUserEmail, o.hasUserColumn, o.isLabMember)
-    ? LAB_DEFAULT_GROUP_NAME_
-    : '';
+  if (labPartiesIncludeMember_(o.restoredKeeperEmail, o.restoredUserEmail, o.hasUserColumn, o.isLabMember)) {
+    return LAB_DEFAULT_GROUP_NAME_;
+  }
+  // 還原保管人 Email 未知時不據以清空（避免依缺漏資料誤刪 AE）
+  return String(o.restoredKeeperEmail == null ? '' : o.restoredKeeperEmail).trim() ? '' : null;
 }
 
 /**
@@ -133,10 +142,17 @@ function readLabLogRows_() {
  */
 function getLabMemberChecker_(appLogValues) {
   if (LAB_MEMBER_CHECKER_MEMO_) return LAB_MEMBER_CHECKER_MEMO_;
+  const directory = getKeeperDirectory_();
+  if (!isLabDirectoryHealthy_(directory, canonicalizeGroupName_)) {
+    // HR 名錄無法判定實驗組成員：一律視為成員，本請求不移除任何 AE（保守，避免誤刪）
+    Logger.log('⚠️ HR 名錄人數不足或無人屬實驗組，實驗組成員判定改為一律視為成員（本次不移除 AE）');
+    LAB_MEMBER_CHECKER_MEMO_ = function () { return true; };
+    return LAB_MEMBER_CHECKER_MEMO_;
+  }
   const logRows = appLogValues ? toLabLogRows_(appLogValues) : readLabLogRows_();
   const setting = PropertiesService.getScriptProperties().getProperty('LAB_COMMON_CUSTODIAN_EMAIL');
   LAB_MEMBER_CHECKER_MEMO_ = buildLabMemberChecker_({
-    directory: getKeeperDirectory_(),
+    directory: directory,
     commonAccounts: collectLabCommonAccounts_(setting, logRows),
     canonicalize: canonicalizeGroupName_
   });
@@ -146,6 +162,22 @@ function getLabMemberChecker_(appLogValues) {
 /** 清除成員判定記憶化（測試用） */
 function clearLabMemberCheckerMemo_() {
   LAB_MEMBER_CHECKER_MEMO_ = null;
+}
+
+/**
+ * 惰性且容錯的成員判定（寫入點使用）：首次呼叫才建立判定；建立失敗時視為成員（不移除 AE）並記錄。
+ * @param {Array<Array>} [appLogValues] 呼叫端已讀取的轉移申請紀錄原始列；省略時自行讀取
+ * @returns {function(string): boolean}
+ */
+function makeLazyLabMemberChecker_(appLogValues) {
+  return function (email) {
+    try {
+      return getLabMemberChecker_(appLogValues)(email);
+    } catch (e) {
+      Logger.log('⚠️ 實驗組成員判定失敗，視為成員（不移除 AE）：' + e.message);
+      return true;
+    }
+  };
 }
 
 /** 確保「轉移申請紀錄」有 S 欄並補表頭「原預設組別(AE)」（申請與審核共用，免先執行 deployAllSheets） */
@@ -174,8 +206,8 @@ function applyLabAeCleanup() {
 function runLabAeCleanup_(apply) {
   if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可執行實驗組 AE 清理。');
   const directory = getKeeperDirectory_();
-  if (!directory || !directory.allEmails || directory.allEmails.length < HR_SYNC_MIN_HEADCOUNT) {
-    throw new Error('HR 名錄人數異常（低於 ' + HR_SYNC_MIN_HEADCOUNT + '），中止實驗組 AE 清理。');
+  if (!isLabDirectoryHealthy_(directory)) {
+    throw new Error('HR 名錄人數異常或無人屬實驗組（需達 ' + HR_SYNC_MIN_HEADCOUNT + ' 人且至少一人為實驗組），中止實驗組 AE 清理。');
   }
   const isLabMember = getLabMemberChecker_();
   const names = directory.emailToName || {};
@@ -212,7 +244,7 @@ function runLabAeCleanup_(apply) {
   });
 
   Logger.log(`=== 實驗組 AE 殘留${apply ? '清理' : '預覽'}：可移除 ${remove.length}／需人工確認 ${review.length}／正常 ${okCount} ===`);
-  remove.forEach(i => Logger.log(`🗑️ 可移除 ${i.assetId} ${i.assetName}｜${i.sourceSheet}｜${i.status}｜保管人 ${i.keeper}｜使用人 ${i.user}`));
+  remove.forEach(i => Logger.log(`🗑️ 可移除 ${i.assetId} ${i.assetName}｜${i.sourceSheet}｜${i.status}｜保管人 ${i.keeper}｜使用人 ${i.user}｜${i.reason}`));
   review.forEach(i => Logger.log(`🔍 需人工確認 ${i.assetId} ${i.assetName}｜${i.sourceSheet}｜${i.status}｜保管人 ${i.keeper}｜使用人 ${i.user}｜${i.reason}`));
   if (!apply) return { remove: remove, review: review, okCount: okCount };
 
@@ -223,13 +255,29 @@ function runLabAeCleanup_(apply) {
       Logger.log(`⚠️ 找不到資產 ${i.assetId}，略過`);
       return;
     }
-    const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
-    const cell = location.sheet.getRange(location.rowIndex, indices.DEFAULT_GROUP);
-    if (!isLabGroupName_(cell.getValue())) {
-      Logger.log(`⏭️ ${i.assetId} 的 AE 已非實驗組，略過`);
+    if (location.sheetName !== i.sourceSheet) {
+      Logger.log(`⏭️ ${i.assetId} 位於 ${location.sheetName}，與判定時的 ${i.sourceSheet} 不符，略過`);
       return;
     }
-    cell.setValue('');
+    const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+    // 寫入前以最新整列重新判定（執行期間狀態、保管人、使用人或 AE 可能已變動）
+    const freshRow = location.sheet.getRange(location.rowIndex, 1, 1, location.sheet.getLastColumn()).getValues()[0];
+    const fresh = mapRowToAssetObject(freshRow, indices, location.sheetName);
+    const hasUserColumn = location.sheetName === PROPERTY_MASTER_SHEET_NAME;
+    const recheck = classifyLabAeResidue_({
+      ae: fresh.defaultGroup,
+      status: fresh.assetStatus,
+      keeperEmail: fresh.leaderEmail,
+      userEmail: hasUserColumn ? fresh.userEmail : '',
+      hasUserColumn: hasUserColumn,
+      isLabMember: isLabMember,
+      isActiveHrMember: isActiveHrMember
+    });
+    if (recheck !== 'remove') {
+      Logger.log(`⏭️ ${i.assetId} 重新判定為 ${recheck}，略過`);
+      return;
+    }
+    location.sheet.getRange(location.rowIndex, indices.DEFAULT_GROUP).setValue('');
     updated++;
     Logger.log(`✅ 已清除 ${i.assetId} 的 AE（實驗組）`);
   });

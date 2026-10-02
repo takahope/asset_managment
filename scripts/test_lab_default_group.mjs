@@ -22,7 +22,8 @@ function loadContext(props, directory, extra) {
     canonicalizeGroupName_: g => String(g || '').trim(),
     getKeeperDirectory_: () => directory || { emailToGroup: {}, emailToName: {}, allEmails: [] },
     AL_NEW_LEADER_EMAIL_COLUMN_INDEX: 9,
-    AL_TRANSFER_TYPE_COLUMN_INDEX: 15
+    AL_TRANSFER_TYPE_COLUMN_INDEX: 15,
+    HR_SYNC_MIN_HEADCOUNT: 5
   }, extra || {});
   vm.createContext(context);
   FILES.forEach(file => {
@@ -45,7 +46,8 @@ function loadContext(props, directory, extra) {
 {
   const context = loadContext({ LAB_COMMON_CUSTODIAN_EMAIL: 'CEO@x.com' }, {
     emailToGroup: { 'lab@x.com': '實驗組', 'ceo@x.com': '執行長', 'out@x.com': 'B組' },
-    emailToName: {}
+    emailToName: {},
+    allEmails: ['lab@x.com', 'ceo@x.com', 'out@x.com', 'k@x.com', 'x@x.com']
   });
   const row = (keeper, type) => {
     const r = new Array(15).fill('');
@@ -81,6 +83,18 @@ function loadContext(props, directory, extra) {
   context.ensureAppLogOldAeColumn_(sheet);
   context.ensureAppLogOldAeColumn_(sheet);
   assert.strictEqual(calls.join('|'), 'insert:18:1|set:1,19:原預設組別(AE)');
+  const calls2 = [];
+  const header2 = {};
+  const sheet2 = {
+    getMaxColumns: () => 26,
+    insertColumnsAfter: () => { calls2.push('insert'); },
+    getRange: (r, c) => ({
+      getValue: () => header2[`${r},${c}`] || '',
+      setValue: v => { header2[`${r},${c}`] = v; calls2.push(`set:${r},${c}:${v}`); }
+    })
+  };
+  context.ensureAppLogOldAeColumn_(sheet2);
+  assert.strictEqual(calls2.join('|'), 'set:1,19:原預設組別(AE)', '已有 S 欄時只補表頭');
   console.log('✅ 整合：ensureAppLogOldAeColumn_ 補欄位與表頭且可重複呼叫');
 }
 
@@ -88,25 +102,32 @@ function loadContext(props, directory, extra) {
 function makeCleanupContext(options) {
   const opts = options || {};
   const aeCells = Object.assign({}, opts.aeCells);
+  const liveOverrides = opts.liveOverrides || {}; // row → 執行期間變動的欄位
+  const locationSheet = opts.locationSheet || {};  // assetId → findAssetLocation 回報的總表
   const writes = [];
+  const assets = opts.assets || [];
   const masterSheet = {
-    getRange: (row) => ({
-      getValue: () => aeCells[row],
-      setValue: v => { aeCells[row] = v; writes.push({ row: row, value: v }); }
+    getLastColumn: () => 31,
+    getRange: (row, col) => ({
+      getValues: () => {
+        const base = assets.find(x => x.row === row) || {};
+        return [Object.assign({}, base, { defaultGroup: aeCells[row] }, liveOverrides[row] || {})];
+      },
+      setValue: v => { aeCells[row] = v; writes.push({ row: row, col: col, value: v }); }
     })
   };
   const logSheet = {
     getLastRow: () => (opts.logRows || []).length + 1,
     getRange: (r, c, n, w) => ({ getValues: () => (opts.logRows || []).map(x => x.slice(0, w)) })
   };
-  const assets = opts.assets || [];
   const context = loadContext({ LAB_COMMON_CUSTODIAN_EMAIL: 'ceo@x.com' }, opts.directory, {
     checkAdminPermissions: () => opts.admin !== false,
     getAllAssets: () => assets,
     findAssetLocation: id => {
       const a = assets.find(x => String(x.assetId) === String(id));
-      return a ? { sheet: masterSheet, rowIndex: a.row, sheetName: a.sourceSheet } : null;
+      return a ? { sheet: masterSheet, rowIndex: a.row, sheetName: locationSheet[id] || a.sourceSheet } : null;
     },
+    mapRowToAssetObject: r => r, // stub：getValues 已回傳資產物件
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => logSheet }) },
     SPREADSHEET_ID: 'sid',
     APPLICATION_LOG_SHEET_NAME: '轉移申請紀錄',
@@ -120,7 +141,7 @@ function makeCleanupContext(options) {
 
 {
   const directory = {
-    emailToGroup: { 'lab@x.com': '實驗組', 'ceo@x.com': '執行長', 'out@x.com': 'B組', 'out2@x.com': 'C組' },
+    emailToGroup: { 'lab@x.com': '實驗組', 'ceo@x.com': '執行長', 'out@x.com': 'B組', 'out2@x.com': 'C組', 'out3@x.com': 'D組' },
     emailToName: { 'lab@x.com': '甲', 'ceo@x.com': '執行長', 'out@x.com': '丙', 'out2@x.com': '丁', 'x1@x.com': '戊', 'x2@x.com': '己' },
     allEmails: ['lab@x.com', 'ceo@x.com', 'out@x.com', 'out2@x.com', 'x1@x.com', 'x2@x.com']
   };
@@ -130,30 +151,37 @@ function makeCleanupContext(options) {
   }, extra);
   const assets = [
     asset('A1', 2, { leaderEmail: 'ceo@x.com', userEmail: 'ceo@x.com' }),                    // 公用帳號名下 → ok
-    asset('A2', 3, { leaderEmail: 'out@x.com', userEmail: 'out2@x.com' }),                   // → remove
+    asset('A2', 3, { leaderEmail: 'out@x.com', userEmail: 'out2@x.com' }),                   // → remove，實際清除
     asset('A3', 4, { leaderEmail: 'gone@x.com' }),                                           // 不在 HR → review
     asset('A4', 5, { defaultGroup: '', leaderEmail: 'out@x.com' }),                          // AE 空白 → skip
     asset('A5', 6, { assetStatus: '轉移中', leaderEmail: 'out@x.com', userEmail: 'out2@x.com' }), // 轉移中 → skip
-    asset('A6', 7, { leaderEmail: 'out@x.com', userEmail: 'out2@x.com' })                    // 快照為 remove，但格子已被改掉
+    asset('A6', 7, { leaderEmail: 'out@x.com', userEmail: 'out2@x.com' }),                   // 快照 remove，執行中 AE 已被清空
+    asset('A7', 8, { leaderEmail: 'out@x.com', userEmail: 'out2@x.com' }),                   // 快照 remove，執行中變為轉移中
+    asset('A8', 9, { leaderEmail: 'out@x.com', userEmail: 'out2@x.com' })                    // 快照 remove，所在總表不符
   ];
-  const aeCells = { 2: '實驗組', 3: '實驗組', 4: '實驗組', 5: '', 6: '實驗組', 7: '' };
+  const aeCells = { 2: '實驗組', 3: '實驗組', 4: '實驗組', 5: '', 6: '實驗組', 7: '', 8: '實驗組', 9: '實驗組' };
+  const liveOverrides = { 8: { assetStatus: '轉移中' } };
+  const locationSheet = { A8: '物品總表' };
 
-  const preview = makeCleanupContext({ directory: directory, assets: assets, aeCells: aeCells });
+  const preview = makeCleanupContext({ directory: directory, assets: assets, aeCells: aeCells, liveOverrides: liveOverrides, locationSheet: locationSheet });
   const p = preview.context.previewLabAeCleanup();
-  assert.strictEqual(Array.from(p.remove).map(i => i.assetId).join('|'), 'A2|A6');
+  assert.strictEqual(Array.from(p.remove).map(i => i.assetId).join('|'), 'A2|A6|A7|A8');
   assert.strictEqual(Array.from(p.review).map(i => i.assetId).join('|'), 'A3');
   assert.strictEqual(p.okCount, 1);
   assert.strictEqual(preview.writes.length, 0, '預覽不得寫入');
   console.log('✅ 整合：previewLabAeCleanup 分類正確且不寫入（公用帳號名下資產列為正常）');
 
-  const apply = makeCleanupContext({ directory: directory, assets: assets, aeCells: aeCells });
+  const apply = makeCleanupContext({ directory: directory, assets: assets, aeCells: aeCells, liveOverrides: liveOverrides, locationSheet: locationSheet });
   const a = apply.context.applyLabAeCleanup();
   assert.strictEqual(a.updated, 1);
   assert.strictEqual(apply.aeCells[3], '', 'A2 清除');
   assert.strictEqual(apply.aeCells[2], '實驗組', 'A1 公用帳號名下保留');
   assert.strictEqual(apply.aeCells[4], '實驗組', 'A3 需人工確認不動');
-  assert.strictEqual(apply.writes.length, 1, '只寫入一格（A6 寫入前重讀已非實驗組而略過）');
-  console.log('✅ 整合：applyLabAeCleanup 只清除可安全移除者，寫入前重讀');
+  assert.strictEqual(apply.aeCells[8], '實驗組', 'A7 執行中變為轉移中 → 重新判定略過');
+  assert.strictEqual(apply.aeCells[9], '實驗組', 'A8 所在總表不符 → 略過');
+  assert.strictEqual(apply.writes.length, 1, '只寫入一格');
+  assert.strictEqual(apply.writes[0].col, 31, '寫入 AE 欄（DEFAULT_GROUP）');
+  console.log('✅ 整合：applyLabAeCleanup 寫入前以最新整列重新判定並核對總表，只清除可安全移除者');
 
   const denied = makeCleanupContext({ admin: false, directory: directory, assets: assets, aeCells: aeCells });
   assert.throws(() => denied.context.previewLabAeCleanup(), /權限不足/);
@@ -161,7 +189,29 @@ function makeCleanupContext(options) {
   const degraded = makeCleanupContext({ directory: Object.assign({}, directory, { allEmails: ['a@x.com'] }), assets: assets, aeCells: aeCells });
   assert.throws(() => degraded.context.applyLabAeCleanup(), /HR 名錄人數異常/);
   assert.strictEqual(degraded.writes.length, 0);
-  console.log('✅ 整合：非管理員與名錄異常時中止');
+  const noLabGroup = makeCleanupContext({
+    directory: Object.assign({}, directory, { emailToGroup: { 'out@x.com': 'B組', 'out2@x.com': 'C組' } }), assets: assets, aeCells: aeCells
+  });
+  assert.throws(() => noLabGroup.context.previewLabAeCleanup(), /HR 名錄人數異常或無人屬實驗組/);
+  assert.throws(() => noLabGroup.context.applyLabAeCleanup(), /HR 名錄人數異常或無人屬實驗組/);
+  assert.strictEqual(noLabGroup.writes.length, 0);
+  console.log('✅ 整合：非管理員、名錄人數不足或無人屬實驗組時中止');
+}
+
+// 5. 整合：HR 名錄無法判定實驗組成員或判定失敗時，一律視為成員（不移除 AE）
+{
+  const noGroups = loadContext({ LAB_COMMON_CUSTODIAN_EMAIL: 'ceo@x.com' }, {
+    emailToGroup: {}, emailToName: {}, allEmails: ['a@x.com', 'b@x.com', 'c@x.com', 'd@x.com', 'e@x.com']
+  });
+  const checker = noGroups.getLabMemberChecker_([]);
+  assert.strictEqual(checker('out@x.com'), true, '無人屬實驗組 → 一律視為成員');
+  assert.strictEqual(noGroups.computePostTransferAe_({
+    currentAe: '實驗組', transferType: '保管人', newKeeperEmail: 'out@x.com', hasUserColumn: true, isLabMember: checker
+  }), '實驗組', '不移除 AE');
+  const failing = loadContext({}, null, { getKeeperDirectory_: () => { throw new Error('HR down'); } });
+  const lazy = failing.makeLazyLabMemberChecker_([]);
+  assert.strictEqual(lazy('out@x.com'), true, '判定建立失敗 → 視為成員且不拋錯');
+  console.log('✅ 整合：HR 名錄異常或判定失敗時一律視為成員，不移除 AE');
 }
 
 console.log('🎉 lab_default_group 全部測試通過');
