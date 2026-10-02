@@ -88,7 +88,8 @@ const APPLICATION_LOG_HEADERS = [
   '轉移類型',
   '審核者Email',
   '申請操作人員Email',
-  '轉移文件連結'
+  '轉移文件連結',
+  '原預設組別(AE)'
 ];
 
 const LENDING_LOG_HEADERS = [

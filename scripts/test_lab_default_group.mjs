@@ -64,4 +64,24 @@ function loadContext(props, directory, extra) {
   console.log('✅ 整合：getLabMemberChecker_ 合併三個來源且同請求記憶化');
 }
 
+// 3. 整合：ensureAppLogOldAeColumn_ 補欄位與表頭，可重複呼叫（spec 2026-10-02 R4）
+{
+  const calls = [];
+  const header = {};
+  let maxCols = 18;
+  const sheet = {
+    getMaxColumns: () => maxCols,
+    insertColumnsAfter: (after, n) => { calls.push(`insert:${after}:${n}`); maxCols += n; },
+    getRange: (r, c) => ({
+      getValue: () => header[`${r},${c}`] || '',
+      setValue: v => { header[`${r},${c}`] = v; calls.push(`set:${r},${c}:${v}`); }
+    })
+  };
+  const context = loadContext({}, null, { AL_OLD_AE_COLUMN_INDEX: 19 });
+  context.ensureAppLogOldAeColumn_(sheet);
+  context.ensureAppLogOldAeColumn_(sheet);
+  assert.strictEqual(calls.join('|'), 'insert:18:1|set:1,19:原預設組別(AE)');
+  console.log('✅ 整合：ensureAppLogOldAeColumn_ 補欄位與表頭且可重複呼叫');
+}
+
 console.log('🎉 lab_default_group 全部測試通過');

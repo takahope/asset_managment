@@ -147,3 +147,13 @@ function getLabMemberChecker_(appLogValues) {
 function clearLabMemberCheckerMemo_() {
   LAB_MEMBER_CHECKER_MEMO_ = null;
 }
+
+/** 確保「轉移申請紀錄」有 S 欄並補表頭「原預設組別(AE)」（申請與審核共用，免先執行 deployAllSheets） */
+function ensureAppLogOldAeColumn_(appLogSheet) {
+  if (appLogSheet.getMaxColumns() < AL_OLD_AE_COLUMN_INDEX) {
+    appLogSheet.insertColumnsAfter(appLogSheet.getMaxColumns(), AL_OLD_AE_COLUMN_INDEX - appLogSheet.getMaxColumns());
+  }
+  if (!appLogSheet.getRange(1, AL_OLD_AE_COLUMN_INDEX).getValue()) {
+    appLogSheet.getRange(1, AL_OLD_AE_COLUMN_INDEX).setValue('原預設組別(AE)');
+  }
+}

@@ -148,6 +148,7 @@ const AL_TRANSFER_TYPE_COLUMN_INDEX = 15;    // ✨ 新增：轉移類型（地�
 const AL_APPROVER_EMAIL_COLUMN_INDEX = 16;  // ✨ 新增：實際審核者Email（方案D）
 const AL_APPLICANT_EMAIL_COLUMN_INDEX = 17;  // Q 欄：申請操作人員 Email
 const AL_DOC_URL_COLUMN_INDEX = 18;  // R 欄：轉移文件連結
+const AL_OLD_AE_COLUMN_INDEX = 19;   // S 欄：申請當下的 AE（預設組別），退回轉移還原用（spec 2026-10-02）
 
 // --- ✨ **新增：「盤點紀錄」工作表中的欄位索引** ---
 const IL_INVENTORY_ID_COLUMN_INDEX = 1;        // A欄: 盤點ID
@@ -1957,6 +1958,8 @@ function processBatchTransferApplication(formData) {
     const isLabCommonAutoApproveConfig = PropertiesService.getScriptProperties().getProperty('LAB_COMMON_AUTO_APPROVE') === 'true';
     const newLogsToAdd = [];
     const createdApplications = [];
+    // 實驗組成員判定（惰性：只有 AE＝實驗組 且非實驗組轉移時才讀轉移紀錄，spec 2026-10-02）
+    const isLabMemberLazy = email => getLabMemberChecker_()(email);
     const unauthorizedAssets = []; // 🛡️ 安全性修復：收集無權限的資產
 
     assetIds.forEach(assetId => {
@@ -2148,7 +2151,9 @@ function processBatchTransferApplication(formData) {
             finalNewUserEmail, // AL_NEW_USER_EMAIL_COLUMN_INDEX (14)
             transferType, // AL_TRANSFER_TYPE_COLUMN_INDEX (15)
             "", // AL_APPROVER_EMAIL_COLUMN_INDEX (16) - 審核者 Email（審核時填入）
-            applicantEmail // AL_APPLICANT_EMAIL_COLUMN_INDEX (17) - 申請操作人員 Email
+            applicantEmail, // AL_APPLICANT_EMAIL_COLUMN_INDEX (17) - 申請操作人員 Email
+            "", // AL_DOC_URL_COLUMN_INDEX (18) - 轉移文件連結（列印時填入）
+            encodeOldAeForLog_(asset.defaultGroup) // AL_OLD_AE_COLUMN_INDEX (19) - 申請當下 AE（退回還原用）
           ];
           newLogsToAdd.push(newLogRow);
           createdApplications.push({
@@ -2161,7 +2166,12 @@ function processBatchTransferApplication(formData) {
             newUserEmail: finalNewUserEmail,
             assetName: asset.assetName,
             defaultGroup: String(asset.defaultGroup || '').trim(),            // 舊方組別判定用（spec 2026-10-01）
-            postTransferAe: resolvePostTransferAe_(asset.defaultGroup, transferType) // 新方組別判定用
+            postTransferAe: resolvePostTransferAe_(asset.defaultGroup, transferType, { // 新方組別判定用（轉出實驗組預測為空白）
+              newKeeperEmail: finalNewKeeperEmail,
+              newUserEmail: finalNewUserEmail,
+              hasUserColumn: location.sheetName === PROPERTY_MASTER_SHEET_NAME,
+              isLabMember: isLabMemberLazy
+            })
           });
         }
       }
@@ -2175,6 +2185,7 @@ function processBatchTransferApplication(formData) {
     }
     
     if (newLogsToAdd.length > 0) {
+      ensureAppLogOldAeColumn_(appLogSheet); // S 欄「原預設組別(AE)」（spec 2026-10-02）
       appLogSheet.getRange(appLogSheet.getLastRow() + 1, 1, newLogsToAdd.length, newLogsToAdd[0].length)
                  .setValues(newLogsToAdd);
     }
@@ -2572,6 +2583,9 @@ function processBatchApproval(appIds) {
     const unauthorizedApps = []; // 🛡️ 收集無權限的申請
     // 📧 審核完成通知改經 collector，依「只通知組別窗口」設定分流（spec 2026-10-01）
     notifyCollector = createMailCollector_({ event: 'transferApproval', operatorEmail: currentUserEmail, appUrl: getAppUrl() });
+    // 實驗組成員判定：沿用已讀取的整份轉移紀錄推得歷任公用帳號（spec 2026-10-02）
+    const isLabMemberLazy = email => getLabMemberChecker_(appLogData)(email);
+    let appLogOldAeColumnReady = false; // 舊紀錄回填 S 欄前確保欄位存在（每次審核至多一次）
 
     appIds.forEach(appId => {
       const appDetails = appLogMap.get(appId);
@@ -2659,9 +2673,30 @@ function processBatchApproval(appIds) {
             }
           }
 
-          // ✨ 若為實驗組轉移（個人或共同），將 AE 欄（DEFAULT_GROUP）寫入「實驗組」
-          if (transferTypeRaw && transferTypeRaw.includes('轉移實驗組')) {
-            location.sheet.getRange(location.rowIndex, indices.DEFAULT_GROUP).setValue('實驗組');
+          // ✨ AE 欄（DEFAULT_GROUP）：轉入實驗組寫入「實驗組」、轉出實驗組清空（與申請時預測共用規則，spec 2026-10-02）
+          const aeCell = location.sheet.getRange(location.rowIndex, indices.DEFAULT_GROUP);
+          const currentAe = String(aeCell.getValue() == null ? '' : aeCell.getValue()).trim();
+          // 部署前送出的申請沒有 S 欄：審核當下回填原 AE，退回時才能還原
+          const recordedOldAe = appDetails.row.length > AL_OLD_AE_COLUMN_INDEX - 1
+            ? String(appDetails.row[AL_OLD_AE_COLUMN_INDEX - 1] || '').trim()
+            : '';
+          if (!recordedOldAe) {
+            if (!appLogOldAeColumnReady) {
+              ensureAppLogOldAeColumn_(appLogSheet);
+              appLogOldAeColumnReady = true;
+            }
+            appLogSheet.getRange(appRowIndex, AL_OLD_AE_COLUMN_INDEX).setValue(encodeOldAeForLog_(currentAe));
+          }
+          const nextAe = computePostTransferAe_({
+            currentAe: currentAe,
+            transferType: transferTypeRaw,
+            newKeeperEmail: newLeaderEmail,
+            newUserEmail: newUserEmail,
+            hasUserColumn: location.sheetName === PROPERTY_MASTER_SHEET_NAME,
+            isLabMember: isLabMemberLazy
+          });
+          if (nextAe !== currentAe) {
+            aeCell.setValue(nextAe);
           }
 
           const isStation = isStationLocation_(newLocation);
