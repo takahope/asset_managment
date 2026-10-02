@@ -157,3 +157,82 @@ function ensureAppLogOldAeColumn_(appLogSheet) {
     appLogSheet.getRange(1, AL_OLD_AE_COLUMN_INDEX).setValue('原預設組別(AE)');
   }
 }
+
+// --- 殘留 AE 清理（GAS 編輯器手動執行，spec §6） ---
+
+/** [管理員・GAS 編輯器] 預覽殘留 AE（不修改） */
+function previewLabAeCleanup() {
+  return runLabAeCleanup_(false);
+}
+
+/** [管理員・GAS 編輯器] 清除「可安全移除」類殘留 AE；「需人工確認」永不自動修改。建議離峰執行。 */
+function applyLabAeCleanup() {
+  return runLabAeCleanup_(true);
+}
+
+/** 清理共用流程：每次都重新計算，不沿用前次預覽 */
+function runLabAeCleanup_(apply) {
+  if (!checkAdminPermissions()) throw new Error('權限不足：僅管理員可執行實驗組 AE 清理。');
+  const directory = getKeeperDirectory_();
+  if (!directory || !directory.allEmails || directory.allEmails.length < HR_SYNC_MIN_HEADCOUNT) {
+    throw new Error('HR 名錄人數異常（低於 ' + HR_SYNC_MIN_HEADCOUNT + '），中止實驗組 AE 清理。');
+  }
+  const isLabMember = getLabMemberChecker_();
+  const names = directory.emailToName || {};
+  const isActiveHrMember = email => Object.prototype.hasOwnProperty.call(names, String(email == null ? '' : email).toLowerCase().trim());
+  const remove = [];
+  const review = [];
+  let okCount = 0;
+
+  getAllAssets().forEach(asset => {
+    const hasUserColumn = asset.sourceSheet === PROPERTY_MASTER_SHEET_NAME;
+    const result = classifyLabAeResidue_({
+      ae: asset.defaultGroup,
+      status: asset.assetStatus,
+      keeperEmail: asset.leaderEmail,
+      userEmail: hasUserColumn ? asset.userEmail : '',
+      hasUserColumn: hasUserColumn,
+      isLabMember: isLabMember,
+      isActiveHrMember: isActiveHrMember
+    });
+    if (result === 'ok') { okCount++; return; }
+    if (result !== 'remove' && result !== 'review') return;
+    const item = {
+      assetId: String(asset.assetId),
+      assetName: String(asset.assetName || ''),
+      sourceSheet: String(asset.sourceSheet || ''),
+      status: String(asset.assetStatus || ''),
+      keeper: `${asset.leaderName || ''} (${asset.leaderEmail || ''})`,
+      user: hasUserColumn ? `${asset.userName || ''} (${asset.userEmail || ''})` : '-',
+      reason: result === 'remove'
+        ? '保管人與使用人皆為 HR 在職且非實驗組成員'
+        : '保管人空白，或保管人／使用人不在 HR 在職名錄，請人工確認'
+    };
+    (result === 'remove' ? remove : review).push(item);
+  });
+
+  Logger.log(`=== 實驗組 AE 殘留${apply ? '清理' : '預覽'}：可移除 ${remove.length}／需人工確認 ${review.length}／正常 ${okCount} ===`);
+  remove.forEach(i => Logger.log(`🗑️ 可移除 ${i.assetId} ${i.assetName}｜${i.sourceSheet}｜${i.status}｜保管人 ${i.keeper}｜使用人 ${i.user}`));
+  review.forEach(i => Logger.log(`🔍 需人工確認 ${i.assetId} ${i.assetName}｜${i.sourceSheet}｜${i.status}｜保管人 ${i.keeper}｜使用人 ${i.user}｜${i.reason}`));
+  if (!apply) return { remove: remove, review: review, okCount: okCount };
+
+  let updated = 0;
+  remove.forEach(i => {
+    const location = findAssetLocation(i.assetId);
+    if (!location) {
+      Logger.log(`⚠️ 找不到資產 ${i.assetId}，略過`);
+      return;
+    }
+    const indices = location.sheetName === PROPERTY_MASTER_SHEET_NAME ? PROPERTY_COLUMN_INDICES : ITEM_COLUMN_INDICES;
+    const cell = location.sheet.getRange(location.rowIndex, indices.DEFAULT_GROUP);
+    if (!isLabGroupName_(cell.getValue())) {
+      Logger.log(`⏭️ ${i.assetId} 的 AE 已非實驗組，略過`);
+      return;
+    }
+    cell.setValue('');
+    updated++;
+    Logger.log(`✅ 已清除 ${i.assetId} 的 AE（實驗組）`);
+  });
+  Logger.log(`=== 實驗組 AE 清理完成：實際清除 ${updated} 筆 ===`);
+  return { updated: updated };
+}
