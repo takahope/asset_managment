@@ -112,6 +112,13 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
+### 2026-10-19 一般使用者隱藏「待列印報廢／轉移申請單」待辦卡片與計數
+- 需求：實務上申請後由資料更新承辦窗口或管理員列印，一般使用者不需自行列印；兩張待列印卡與其計入的紅色待辦數字造成誤解。
+- 規則：兩張卡（`scrapPending`、`transferPending`）只在 `isAdminView` 顯示；承辦窗口因 `checkAdminPermissions()` 已含 `DATA_UPDATE_EMAILS` 而自動包含；組別窗口比照一般使用者；管理員切到使用者視角時同樣隱藏。
+- 實作：`alpine_store.html` 新增 `isTodoCardVisible(cardId)`，`sidebarPendingTotal` 只加總可見卡片；`alpine_views.html` 的 `dashboardCards` 保留 7 張定義，側邊欄改迴圈 `visibleCards`。`cardCounts`、就緒判斷、後端與列印彈窗皆未變動（待列印資料仍照常載入）。
+- 已接受的副作用：一般使用者失去列印彈窗內的「退回轉移」（接收後唯一入口，改由承辦窗口／管理員代為退回）與「批次取消報廢」（資產列仍可逐筆取消）。後端權限未收緊。
+- 驗證：`node scripts/test_todo_card_visibility.mjs`（6 項）。規格：`docs/superpowers/specs/2026-10-19-hide-print-todo-cards-design.md`。
+
 ### 2026-10-02 轉移彈窗下拉選單改為可搜尋單選下拉（比照主頁篩選區）
 - 需求：單筆／批次轉移彈窗的下拉選單只能捲動挑選；希望與主頁篩選區下拉一樣，點開後搜尋框就在下拉面板內，輸入關鍵字即時看到篩選結果。
 - 實作：新增共用 Alpine 元件 `searchSelect`（`alpine_store.html` E2 節，`x-modelable="value"` + 外部 `x-model`，選項為字串或 `[值, 顯示名稱]`），取代 20 個原生 `<select>`（新地點 ×4 模式、新保管人、新使用人、資訊組轉出接收人員、實驗組接收人員、駐管、駐站地點）。按鈕顯示已選名稱；點開浮出面板，頂部搜尋框自動聚焦，即時篩選（`AppShared.filterSelectOptions`：不分大小寫、包含即符合、人員比對姓名與 Email），查無顯示「查無符合「xxx」的選項」；最上列「請選擇…」可清除；選定／Esc／點外部收起並清空搜尋；面板以 `position: fixed` 依按鈕位置浮動（見下方修復）。只能點選清單項目（搜尋文字不會成為送出值）；注音組字期間不篩選、組字中 Enter 不選取（gas-house-patterns #4），Enter 選第一筆符合項。駐管／駐站連動改由 `@search-select-change` 事件觸發原 handler。凍結 Tailwind 未收錄 `border-blue-500`/`ring-blue-500`/`focus:ring-1`/`max-h-60`/`hover:border-slate-400`（主頁篩選下拉亦使用前者，屬既有缺漏），本元件改用已收錄的 `border-blue-400 ring-1 ring-blue-200`、`focus:ring-2`、`hover:bg-slate-50`。出借、報廢彈窗不在範圍內。
