@@ -537,7 +537,12 @@ document.addEventListener('alpine:init', function () {
                 { id: 'transferPending', label: '待列印轉移申請單', countKey: 'transferPending', dataSource: 'secondary', color: 'bg-purple-500', icon: '🔄', description: '已被接收的資產（需列印轉移申請單）' },
                 { id: 'inventory', label: '待盤點', countKey: 'inventory', dataSource: 'secondary', color: 'bg-red-500', icon: '📋', description: '需要您完成的盤點任務' },
                 { id: 'locationError', label: '需確認財產', countKey: 'locationError', dataSource: 'locationError', color: 'bg-amber-500', icon: '📍', description: '系統顯示位置或保管人有誤，需確認或申請轉移' }
-            ]
+            ],
+            // 依 store 顯示規則過濾（維持原相對順序）
+            get visibleCards() {
+                var app = Alpine.store('app');
+                return this.cards.filter(function (card) { return app.isTodoCardVisible(card.id); });
+            }
         };
     });
 });
@@ -891,7 +896,7 @@ document.addEventListener('alpine:init', function () {
                     </button>
                 </div>
                 <div class="sidebar-drawer__body">
-                    <template x-for="card in cards" :key="card.id">
+                    <template x-for="card in visibleCards" :key="card.id">
                         <button @click="$store.app.handleCardClick(card.id); $store.app.sidebarOpen = false;"
                                 class="status-card sidebar-card rounded-2xl px-4 py-3 cursor-pointer text-left group focus:outline-none focus:ring-2 focus:ring-teal-200 w-full">
                             <div class="flex items-center gap-3">

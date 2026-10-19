@@ -595,12 +595,21 @@
                     locationError: this.locationErrorCount
                 };
             },
-            // 左側抽屜待辦總數
+            // 待辦卡片顯示規則：待列印報廢／轉移申請單僅限管理員視角（列印由承辦窗口／管理員負責）
+            isTodoCardVisible: function (cardId) {
+                if (cardId === 'scrapPending' || cardId === 'transferPending') {
+                    return this.isAdminView;
+                }
+                return true;
+            },
+            // 左側抽屜待辦總數（只加總可見卡片）
             get sidebarPendingTotal() {
                 var c = this.cardCounts;
-                return (c.transferring || 0) + (c.pending || 0) + (c.lent || 0)
-                     + (c.scrapPending || 0) + (c.transferPending || 0) + (c.inventory || 0)
-                     + (c.locationError || 0);
+                var self = this;
+                return ['transferring', 'pending', 'lent', 'scrapPending', 'transferPending', 'inventory', 'locationError']
+                    .reduce(function (sum, key) {
+                        return self.isTodoCardVisible(key) ? sum + (c[key] || 0) : sum;
+                    }, 0);
             },
             // 抽屜卡片全部數字是否就緒（transferOverview 與次要資料皆到齊）
             get sidebarCountsReady() {
