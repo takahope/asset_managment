@@ -2316,7 +2316,10 @@ function processBatchTransferApplication(formData) {
         body += `\n此為系統自動發送郵件。`;
         MailApp.sendEmail(notifyEmails.join(','), subject, body);
       }
-      resultMessage = `${autoCompletedApps.length} 筆財產地點已變更！請列印轉移申請單。`;
+      // 列印由承辦窗口／管理員負責：非管理員改提示由承辦窗口統一列印（前端以「請列印」字樣判斷是否顯示列印按鈕）
+      resultMessage = isAdmin
+        ? `${autoCompletedApps.length} 筆財產地點已變更！請列印轉移申請單。`
+        : `${autoCompletedApps.length} 筆財產地點已變更！轉移申請單將由資料更新承辦窗口統一列印。`;
     }
     // 情況4：組合變更（其他情況）
     else if (needsApprovalApps.length > 0) {
@@ -4775,7 +4778,9 @@ function processBatchScrapping(formData) {
       }
     }
 
-    let resultMessage = `成功為 ${successCount} 筆財產提交報廢申請，請列印報廢申請單。` + formatRoutedNote_(proxyNotifySummary);
+    // 列印由承辦窗口／管理員負責：非管理員改提示由承辦窗口統一列印
+    const printNote = isAdmin ? '請列印報廢申請單。' : '報廢申請單將由資料更新承辦窗口統一列印。';
+    let resultMessage = `成功為 ${successCount} 筆財產提交報廢申請，${printNote}` + formatRoutedNote_(proxyNotifySummary);
     if (unauthorizedAssets.length > 0) {
       resultMessage += `（注意：${unauthorizedAssets.length} 筆財產因權限不足已跳過）`;
     }

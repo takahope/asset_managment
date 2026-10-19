@@ -22,7 +22,8 @@ function extractMember(src, head) {
 const members = [
   extractMember(storeHtml, 'get isAdminView()'),
   extractMember(storeHtml, 'isTodoCardVisible: function'),
-  extractMember(storeHtml, 'get sidebarPendingTotal()')
+  extractMember(storeHtml, 'get sidebarPendingTotal()'),
+  extractMember(storeHtml, 'showSuccessPrompt: function')
 ].join('\n');
 
 const comp = viewsHtml.match(/Alpine\.data\('dashboardCards'[\s\S]*?\n    \}\);\n/);
@@ -95,5 +96,25 @@ check(() => {
   assert.strictEqual(setup('admin', sparse).store.sidebarPendingTotal, 8);
   assert.strictEqual(setup('user', sparse).store.sidebarPendingTotal, 8);
 }, '數字缺值（undefined／null）視為 0');
+
+check(() => {
+  const extended = Object.assign({}, counts, { newCard: 128 });
+  assert.strictEqual(setup('admin', extended).store.sidebarPendingTotal, 255);
+  assert.strictEqual(setup('user', extended).store.sidebarPendingTotal, 231);
+}, 'cardCounts 新增的卡片 key（預設可見）自動計入待辦總數');
+
+check(() => {
+  const { store } = setup('user', counts);
+  store.showSuccessPrompt({ actionType: 'TRANSFER', requiresPrint: true });
+  assert.strictEqual(store.successPromptData.requiresPrint, false);
+}, '使用者視角：成功提示不顯示「前往列印申請單」');
+
+check(() => {
+  const { store } = setup('admin', counts);
+  store.showSuccessPrompt({ actionType: 'SCRAP', requiresPrint: true });
+  assert.strictEqual(store.successPromptData.requiresPrint, true);
+  store.showSuccessPrompt({ actionType: 'SCRAP' });
+  assert.strictEqual(store.successPromptData.requiresPrint, false);
+}, '管理員視角：成功提示依 requiresPrint 顯示列印按鈕');
 
 console.log('✅ 待辦卡片顯示規則：' + passed + ' 項通過');

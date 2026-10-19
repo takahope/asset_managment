@@ -115,9 +115,10 @@ return {
 ### 2026-10-19 一般使用者隱藏「待列印報廢／轉移申請單」待辦卡片與計數
 - 需求：實務上申請後由資料更新承辦窗口或管理員列印，一般使用者不需自行列印；兩張待列印卡與其計入的紅色待辦數字造成誤解。
 - 規則：兩張卡（`scrapPending`、`transferPending`）只在 `isAdminView` 顯示；承辦窗口因 `checkAdminPermissions()` 已含 `DATA_UPDATE_EMAILS` 而自動包含；組別窗口比照一般使用者；管理員切到使用者視角時同樣隱藏。
-- 實作：`alpine_store.html` 新增 `isTodoCardVisible(cardId)`，`sidebarPendingTotal` 只加總可見卡片；`alpine_views.html` 的 `dashboardCards` 保留 7 張定義，側邊欄改迴圈 `visibleCards`。`cardCounts`、就緒判斷、後端與列印彈窗皆未變動（待列印資料仍照常載入）。
+- 實作：`alpine_store.html` 新增 `isTodoCardVisible(cardId)`，`sidebarPendingTotal` 改為迭代 `cardCounts` 的 key（即卡片 id）只加總可見卡片；`alpine_views.html` 的 `dashboardCards` 保留 7 張定義，側邊欄改迴圈 `visibleCards`。`cardCounts`、就緒判斷與列印彈窗皆未變動（待列印資料仍照常載入）。
+- 連帶：成功提示的「前往列印申請單」按鈕由 `showSuccessPrompt` 集中把關（`requiresPrint` 僅 `isAdminView` 時為真）；`code.js` 結果訊息（純地點轉移、報廢申請）非管理員改為「轉移／報廢申請單將由資料更新承辦窗口統一列印。」，管理員維持「請列印…申請單」（前端以此字樣判斷 `requiresPrint`，新字樣刻意不含「請列印」「需列印」）；`operation_manual_srcdoc.html` 標註兩張卡僅管理員／承辦窗口可見並修正錯字「待列印報轉移申請單」。後端僅改訊息文字，權限與資料未變。
 - 已接受的副作用：一般使用者失去列印彈窗內的「退回轉移」（接收後唯一入口，改由承辦窗口／管理員代為退回）與「批次取消報廢」（資產列仍可逐筆取消）。後端權限未收緊。
-- 驗證：`node scripts/test_todo_card_visibility.mjs`（6 項）。規格：`docs/superpowers/specs/2026-10-19-hide-print-todo-cards-design.md`。
+- 驗證：`node scripts/test_todo_card_visibility.mjs`（9 項）。規格：`docs/superpowers/specs/2026-10-19-hide-print-todo-cards-design.md`。
 
 ### 2026-10-02 轉移彈窗下拉選單改為可搜尋單選下拉（比照主頁篩選區）
 - 需求：單筆／批次轉移彈窗的下拉選單只能捲動挑選；希望與主頁篩選區下拉一樣，點開後搜尋框就在下拉面板內，輸入關鍵字即時看到篩選結果。

@@ -602,11 +602,11 @@
                 }
                 return true;
             },
-            // 左側抽屜待辦總數（只加總可見卡片）
+            // 左側抽屜待辦總數（只加總可見卡片；cardCounts 的 key 即卡片 id）
             get sidebarPendingTotal() {
                 var c = this.cardCounts;
                 var self = this;
-                return ['transferring', 'pending', 'lent', 'scrapPending', 'transferPending', 'inventory', 'locationError']
+                return Object.keys(c)
                     .reduce(function (sum, key) {
                         return self.isTodoCardVisible(key) ? sum + (c[key] || 0) : sum;
                     }, 0);
@@ -2659,7 +2659,8 @@
                     title: params.title || '申請已成功送出',
                     message: params.message || '',
                     actionType: params.actionType || null,
-                    requiresPrint: params.requiresPrint || false,
+                    // 列印由承辦窗口／管理員負責：非管理員視角不顯示「前往列印申請單」
+                    requiresPrint: !!params.requiresPrint && this.isAdminView,
                     waitReview: params.waitReview || false
                 };
             },
