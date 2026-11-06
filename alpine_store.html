@@ -1837,7 +1837,9 @@
                     type: (cached && cached.type) || detailType,
                     detail: (cached && cached.detail) || null,
                     isLoading: !hasCached,
-                    error: ''
+                    error: '',
+                    // 彈窗只存精簡資產欄位(無保管人 Email),取消權限需在此以完整資產先算好
+                    canCancel: this.canCancelAsset(asset)
                 };
                 google.script.run
                     .withSuccessHandler(function (response) {
@@ -1868,7 +1870,8 @@
                             type: response.type || prev.type,
                             detail: response.detail || prev.detail,
                             isLoading: false,
-                            error: ''
+                            error: '',
+                            canCancel: prev.canCancel
                         };
                     })
                     .withFailureHandler(function (error) {
@@ -1890,6 +1893,33 @@
             },
 
             /* ── 取消/回溯(舊頁 15682-15742) ── */
+            // 取消權限判斷的共用輸入(列表「取消」鈕與狀態詳情彈窗共用;列表每頁只建一次)
+            getCancelContext: function () {
+                var opts = this.transferOptions || {};
+                return {
+                    currentEmail: normalizeEmail(this.currentUserEmail),
+                    isAdmin: this.isAdminView,
+                    groupViewEnabled: (opts.groupViewEnabled !== undefined ? opts.groupViewEnabled : opts.groupProxyEnabled) || false,
+                    groupTransferLendEnabled: (opts.groupProxyTransferLendEnabled !== undefined ? opts.groupProxyTransferLendEnabled : opts.groupProxyEnabled) || false,
+                    groupScrapEnabled: (opts.groupProxyScrapEnabled !== undefined ? opts.groupProxyScrapEnabled : opts.groupProxyEnabled) || false,
+                    groupMemberEmailsLower: opts.groupMemberEmailsLower || []
+                };
+            },
+            // 是否可取消該資產的「待接收/轉移中/報廢中」申請:管理員、保管人/使用人、
+            // 同組代理(報廢與轉移出借各看各的開關);「僅限盤點」資產不可。後端 cancelTransferOrScrap 仍會再驗一次。
+            canCancelAsset: function (asset, ctx) {
+                if (!asset || this.isInventoryTaskOnly(asset)) return false;
+                ctx = ctx || this.getCancelContext();
+                if (ctx.isAdmin) return true;
+                var leaderEmail = normalizeEmail(asset.leaderEmail);
+                var userEmail = normalizeEmail(asset.userEmail);
+                if (ctx.currentEmail && (ctx.currentEmail === leaderEmail || ctx.currentEmail === userEmail)) return true;
+                var isGroupMemberAsset = ctx.groupViewEnabled &&
+                    leaderEmail !== ctx.currentEmail &&
+                    ctx.groupMemberEmailsLower.indexOf(leaderEmail) !== -1;
+                if (!isGroupMemberAsset) return false;
+                return asset.status === '報廢中' ? !!ctx.groupScrapEnabled : !!ctx.groupTransferLendEnabled;
+            },
             handleCancel: function (assetId, status) {
                 var self = this;
                 var confirmation = confirm(

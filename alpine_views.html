@@ -353,20 +353,16 @@ document.addEventListener('alpine:init', function () {
                 var store = this.$store.app;
                 var normalizedCurrentEmail = String(store.currentUserEmail || '').toLowerCase().trim();
                 var groupViewEnabled = (store.transferOptions && (store.transferOptions.groupViewEnabled !== undefined ? store.transferOptions.groupViewEnabled : store.transferOptions.groupProxyEnabled)) || false;
-                var groupTransferLendEnabled = (store.transferOptions && (store.transferOptions.groupProxyTransferLendEnabled !== undefined ? store.transferOptions.groupProxyTransferLendEnabled : store.transferOptions.groupProxyEnabled)) || false;
-                var groupScrapEnabled = (store.transferOptions && (store.transferOptions.groupProxyScrapEnabled !== undefined ? store.transferOptions.groupProxyScrapEnabled : store.transferOptions.groupProxyEnabled)) || false;
                 var groupMemberEmailsLower = (store.transferOptions && store.transferOptions.groupMemberEmailsLower) || [];
-                var isAdmin = store.isAdminView;
+                // 取消權限與「報廢中資訊」彈窗共用同一套判斷(store.canCancelAsset),每頁只建一次 ctx
+                var cancelCtx = store.getCancelContext();
                 return this.paginatedAssets.map(function (asset, index) {
                     var isTask = store.isInventoryTaskOnly(asset);
-                    var isOwner = normalizedCurrentEmail &&
-                        (normalizedCurrentEmail === String(asset.leaderEmail || '').toLowerCase().trim() ||
-                            normalizedCurrentEmail === String(asset.userEmail || '').toLowerCase().trim());
                     var assetLeaderEmail = String(asset.leaderEmail || '').toLowerCase().trim();
                     var isGroupMemberAsset = groupViewEnabled &&
                         assetLeaderEmail !== normalizedCurrentEmail &&
                         groupMemberEmailsLower.indexOf(assetLeaderEmail) !== -1;
-                    var canCancel = !isTask && (isAdmin || isOwner || (isGroupMemberAsset && ((asset.status === '報廢中' && groupScrapEnabled) || (asset.status !== '報廢中' && groupTransferLendEnabled))));
+                    var canCancel = store.canCancelAsset(asset, cancelCtx);
                     var isSelectable = asset.status === '在庫';
                     // 注意:選取/展開狀態刻意「不」放進 row 物件 — 否則每次勾選都會重建
                     // 整頁 row 物件並重算所有列綁定(~500ms 停頓)。markup 改用
@@ -446,7 +442,69 @@ document.addEventListener('alpine:init', function () {
             return (oldText || '-') + ' → ' + newText;
         };
         return {
+            // 取消報廢申請(僅「報廢中」彈窗):按鈕 → 頁尾確認列 → 呼叫既有 cancelTransferOrScrap
+            confirmingCancel: false,
+            isCancelling: false,
+            cancelError: '',
             get state() { return this.$store.app.statusDetailState; },
+            get canCancelScrap() {
+                var s = this.state;
+                return !!(s && s.canCancel && s.type === 'scrap' && s.asset && s.asset.status === '報廢中');
+            },
+            get cancelPrompt() {
+                var a = this.state && this.state.asset;
+                if (!a) return '';
+                return (a.assetId || '') + (a.assetName ? ' ' + a.assetName : '') + ' 將恢復為「在庫」，報廢原因會一併清除。';
+            },
+            startCancel: function () {
+                var self = this;
+                this.cancelError = '';
+                this.confirmingCancel = true;
+                // 預設聚焦在較安全的「返回」,避免連按 Enter 直接確認。
+                // x-show 以 requestAnimationFrame 延後顯示,$nextTick 時確認列仍隱藏,故再排一個 rAF 才聚焦。
+                this.$nextTick(function () {
+                    requestAnimationFrame(function () {
+                        if (self.$refs.cancelBack) self.$refs.cancelBack.focus({ preventScroll: true });
+                    });
+                });
+            },
+            abortCancel: function () {
+                if (this.isCancelling) return;
+                this.confirmingCancel = false;
+                this.cancelError = '';
+            },
+            submitCancel: function () {
+                var self = this;
+                var store = this.$store.app;
+                var s = this.state;
+                if (this.isCancelling || !s || !s.asset) return;
+                var assetId = s.asset.assetId;
+                this.isCancelling = true;
+                this.cancelError = '';
+                store.addProcessingAsset(assetId);
+                var finish = function () {
+                    store.removeProcessingAsset(assetId);
+                    self.isCancelling = false;
+                };
+                google.script.run
+                    .withSuccessHandler(function (response) {
+                        finish();
+                        if (response && response.success) {
+                            store.updateAssetLocalStatus(assetId, '在庫');
+                            // 回應前使用者若已關掉彈窗並改開別筆,不可誤關別筆的彈窗
+                            var cur = store.statusDetailState;
+                            if (cur && cur.asset && cur.asset.assetId === assetId) store.handleCloseStatusDetail();
+                            store.toastOrAlert('✅ 報廢申請已取消，財產已恢復為「在庫」。', 'success');
+                        } else {
+                            self.cancelError = (response && response.error) || '取消失敗，請稍後再試。';
+                        }
+                    })
+                    .withFailureHandler(function (error) {
+                        finish();
+                        self.cancelError = (error && error.message) || '取消失敗，請稍後再試。';
+                    })
+                    .cancelTransferOrScrap(assetId);
+            },
             get theme() {
                 var type = this.state && this.state.type;
                 return S.STATUS_DETAIL_THEMES[type] || {
@@ -687,6 +745,36 @@ document.addEventListener('alpine:init', function () {
         width: 12rem;        /* = 原本想要的 w-48 */
         z-index: 50;         /* 於 .page-shell(z-index:0) 內壓過表格/篩選列;低於 modal(60/1050) */
     }
+
+    /*
+     * 狀態詳情彈窗「取消報廢申請」(頁尾按鈕 + 內嵌確認列)。
+     * 預建 css_tailwind 未收錄 bg-rose-600 / text-rose-800 / disabled: 等,改具名 CSS。
+     */
+    .status-detail-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .status-detail-close-btn { margin-left: auto; }   /* 取消鈕隱藏時「關閉」仍靠右 */
+    .status-detail-cancel-btn {
+        display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+        padding: 6px 14px; border: 1px solid #fecdd3; background: #fff1f2; color: #be123c;
+        border-radius: 8px; font-size: 14px; font-weight: 600; transition: background-color .15s;
+    }
+    .status-detail-cancel-btn:hover { background: #ffe4e6; }
+    .status-detail-cancel-confirm { background: #fff1f2; border-top: 1px solid #fecdd3; }
+    .status-detail-cancel-title { color: #9f1239; font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .status-detail-cancel-text { color: #be123c; font-size: 13px; margin-bottom: 10px; word-break: break-all; }
+    .status-detail-cancel-error {
+        background: #fff; border: 1px solid #fda4af; color: #9f1239;
+        border-radius: 6px; padding: 6px 10px; font-size: 13px; margin-bottom: 10px;
+    }
+    .status-detail-cancel-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .status-detail-cancel-back { padding: 6px 14px; color: #475569; border-radius: 8px; font-size: 14px; }
+    .status-detail-cancel-back:hover { background: #ffe4e6; }
+    .status-detail-cancel-submit {
+        display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+        background: #e11d48; color: #fff; border-radius: 8px; font-size: 14px; font-weight: 600;
+    }
+    .status-detail-cancel-submit:hover { background: #be123c; }
+    .status-detail-cancel-back:disabled,
+    .status-detail-cancel-submit:disabled { opacity: .55; cursor: not-allowed; }
 
     /* 頁首卡片按鈕版面重構 (避免依賴 frozen tailwind) */
     /* 頁首卡片按鈕版面重構 (避免依賴 frozen tailwind) */
@@ -1931,8 +2019,25 @@ document.addEventListener('alpine:init', function () {
                             </div>
                         </template>
                     </div>
-                    <div class="px-6 py-4 border-t bg-slate-50 flex justify-end">
-                        <button @click="$store.app.handleCloseStatusDetail()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">關閉</button>
+                    <div class="border-t bg-slate-50">
+                        <div x-show="!confirmingCancel" class="status-detail-footer px-6 py-4">
+                            <button type="button" x-show="canCancelScrap" @click="startCancel()" class="status-detail-cancel-btn">
+                                <i class="fa-solid fa-ban"></i><span>取消報廢申請</span>
+                            </button>
+                            <button type="button" @click="$store.app.handleCloseStatusDetail()" class="status-detail-close-btn px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">關閉</button>
+                        </div>
+                        <div x-show="confirmingCancel" class="status-detail-cancel-confirm px-6 py-4" role="group" aria-label="確認取消報廢申請">
+                            <div class="status-detail-cancel-title">確定取消這筆報廢申請？</div>
+                            <div class="status-detail-cancel-text" x-text="cancelPrompt"></div>
+                            <div class="status-detail-cancel-error" role="alert" x-show="cancelError" x-text="cancelError"></div>
+                            <div class="status-detail-cancel-actions">
+                                <button type="button" x-ref="cancelBack" @click="abortCancel()" :disabled="isCancelling" class="status-detail-cancel-back">返回</button>
+                                <button type="button" @click="submitCancel()" :disabled="isCancelling" class="status-detail-cancel-submit">
+                                    <i class="fa-solid" :class="isCancelling ? 'fa-spinner fa-spin' : 'fa-ban'"></i>
+                                    <span x-text="isCancelling ? '取消中...' : '確定取消報廢申請'"></span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -112,6 +112,17 @@ return {
 4. `clasp deploy` 建新版本
 5. 更新 Web App 部署設定(必要時)
 
+### 2026-11-06 「報廢中資訊」彈窗新增「取消報廢申請」（使用者選錯財產時就地撤回）
+- 需求：使用者申請報廢時選錯財產，打開「報廢中資訊」彈窗（`statusDetailModal`）核對編號後，希望直接在彈窗取消，讓資產恢復「在庫」。原本只有列表每列的「取消」鈕，彈窗頁尾只有「關閉」。
+- 做法（後端零改動，沿用 `cancelTransferOrScrap`：狀態還原、清備註／最後修改日、報廢紀錄標「已取消」，權限仍由後端再驗一次）：
+  1. `alpine_store.html`：取消權限抽成共用的 `getCancelContext()` + `canCancelAsset(asset, ctx)`（管理員／保管人或使用人／同組代理，報廢與轉移出借各看各的開關；「僅限盤點」資產不可）。列表 `rows` 改走共用判斷（每頁只建一次 ctx），與改版前逐項等價。
+  2. 彈窗 state 只存精簡資產欄位（無保管人 Email），故 `handleOpenStatusDetail` 開啟時以完整資產先算 `canCancel` 放進 state，背景更新重建 state 時保留。
+  3. `alpine_views.html`：`statusDetailModal` 新增 `canCancelScrap`（僅 type=scrap、狀態仍為報廢中、有權限）、`startCancel/abortCancel/submitCancel`。頁尾左「取消報廢申請」、右「關閉」；按下後頁尾換成彈窗內嵌確認列（再列財產編號與名稱、「恢復為在庫、報廢原因一併清除」，游標預設落在「返回」），確定後按鈕禁用並顯示「取消中...」、列表該列鎖定；成功 → 關彈窗、列表該筆立即變回「在庫」、成功提示；失敗 → 錯誤顯示在確認列、彈窗不關、可重試。回應時若彈窗已換成別筆，不誤關。樣式用具名 CSS（`.status-detail-cancel-*`，凍結 Tailwind 未收錄 `bg-rose-600`/`text-rose-800`/`disabled:`）。
+  4. 聚焦：`x-show` 以 `requestAnimationFrame` 延後顯示，`$nextTick` 時確認列仍隱藏，需再排 rAF 才能 `focus()`（同 searchSelect 的教訓）。
+- 範圍外：轉移中／出借中彈窗不加（本次只做報廢）；列表既有「取消」鈕維持原生確認框。
+- 已接受的邊界：列印報廢申請單後若管理員在確認框選「取消」（僅列印、不更新狀態）或狀態更新失敗，資產仍為「報廢中」且已有文件連結／列印時間，此時使用者仍可取消（與列表取消鈕一致，不另外攔阻），已印出的紙本由承辦窗口自行作廢。正常流程列印確認後資產即為「已報廢」，不會出現取消鈕。
+- 驗證：`node scripts/test_cancel_scrap_detail.mjs`（10 組：共用判斷與改版前列表邏輯全排列組合等價、開啟帶入 canCancel、取消流程成功／失敗／重試／重複點擊／彈窗已換成別筆）；`node scripts/test_cancel_scrap_detail_browser.mjs`（無頭 Chrome + 真實 Alpine，15 項：markup 繫結、版面左右、確認列、聚焦、禁用／鎖定、失敗訊息、成功關閉、無權限與轉移彈窗不顯示；無 Chrome 時略過）。檔案：`alpine_store.html`、`alpine_views.html`、`operation_manual_srcdoc.html`。
+
 ### 2026-10-19 一般使用者隱藏「待列印報廢／轉移申請單」待辦卡片與計數
 - 需求：實務上申請後由資料更新承辦窗口或管理員列印，一般使用者不需自行列印；兩張待列印卡與其計入的紅色待辦數字造成誤解。
 - 規則：兩張卡（`scrapPending`、`transferPending`）只在 `isAdminView` 顯示；承辦窗口因 `checkAdminPermissions()` 已含 `DATA_UPDATE_EMAILS` 而自動包含；組別窗口比照一般使用者；管理員切到使用者視角時同樣隱藏。
